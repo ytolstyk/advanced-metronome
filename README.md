@@ -2,6 +2,8 @@
 
 > A step sequencer that really knows how to **hit** it.
 
+![Drumma Llama screenshot](public/screenshot.png)
+
 Drumma Llama is a browser-based drum machine and step sequencer built with React 19, TypeScript, and the Web Audio API. No plugins, no dependencies on your patience — just beats.
 
 ---
