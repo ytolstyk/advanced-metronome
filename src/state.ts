@@ -53,7 +53,43 @@ function createDefaultMeasures(): Measure[] {
   }));
 }
 
+const STORAGE_KEY = 'drum-machine-state';
+
+interface PersistedState {
+  config: AppState['config'];
+  pattern: Pattern;
+}
+
+export function saveState(config: AppState['config'], pattern: Pattern): void {
+  try {
+    const persisted: PersistedState = { config, pattern };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+  } catch {
+    // storage full or unavailable — silently ignore
+  }
+}
+
+function loadPersistedState(): PersistedState | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PersistedState;
+  } catch {
+    return null;
+  }
+}
+
 export function createInitialState(): AppState {
+  const persisted = loadPersistedState();
+  if (persisted) {
+    return {
+      config: persisted.config,
+      pattern: persisted.pattern,
+      isPlaying: false,
+      currentBeat: 0,
+      currentLoop: 0,
+    };
+  }
   const measures = createDefaultMeasures();
   return {
     config: {

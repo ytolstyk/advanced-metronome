@@ -1,5 +1,5 @@
 import { useReducer, useEffect } from 'react';
-import { reducer, createInitialState } from './state';
+import { reducer, createInitialState, saveState } from './state';
 import { useAudioEngine } from './hooks/useAudioEngine';
 import { DrumGrid } from './components/DrumGrid/DrumGrid';
 import { TransportControls } from './components/TransportControls/TransportControls';
@@ -8,6 +8,11 @@ import './App.css';
 function App() {
   const [state, dispatch] = useReducer(reducer, null, createInitialState);
   const { togglePlayback, stop } = useAudioEngine(state, dispatch);
+
+  const { config, pattern } = state;
+  useEffect(() => {
+    saveState(config, pattern);
+  }, [config, pattern]);
 
   // Space bar shortcut
   useEffect(() => {
