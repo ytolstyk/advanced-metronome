@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { AppState } from '../../types';
 import type { Action } from '../../state';
 import { MIN_BPM, MAX_BPM, MAX_MEASURES } from '../../constants';
+import { PRESETS } from '../../presets';
 import './TransportControls.css';
 
 interface TransportControlsProps {
@@ -21,6 +22,7 @@ export function TransportControls({
 
   const [bpmDraft, setBpmDraft] = useState('');
   const [bpmFocused, setBpmFocused] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState('');
 
   const commitBpm = () => {
     const parsed = parseInt(bpmDraft, 10);
@@ -120,6 +122,34 @@ export function TransportControls({
             }
           />
         </label>
+      </div>
+
+      <div className="preset-row">
+        <span className="preset-row-label">Preset</span>
+        <select
+          className="preset-select"
+          value={selectedPreset}
+          onChange={(e) => setSelectedPreset(e.target.value)}
+        >
+          <option value="">— select —</option>
+          {PRESETS.map((p) => (
+            <option key={p.name} value={p.name}>{p.name}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="preset-apply-btn"
+          disabled={!selectedPreset}
+          onClick={() => {
+            const preset = PRESETS.find((p) => p.name === selectedPreset);
+            if (preset) {
+              dispatch({ type: 'APPLY_PRESET', preset });
+              setSelectedPreset('');
+            }
+          }}
+        >
+          Apply
+        </button>
       </div>
     </div>
   );

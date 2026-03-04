@@ -5,6 +5,7 @@ import type {
   Pattern,
   TimeSignature,
 } from './types';
+import type { Preset } from './presets';
 import {
   DEFAULT_BPM,
   DEFAULT_LOOP_COUNT,
@@ -118,7 +119,8 @@ export type Action =
   | { type: 'SET_CURRENT_BEAT'; beat: number }
   | { type: 'SET_CURRENT_LOOP'; loop: number }
   | { type: 'CLEAR_PATTERN' }
-  | { type: 'COPY_MEASURE'; from: number; to: number };
+  | { type: 'COPY_MEASURE'; from: number; to: number }
+  | { type: 'APPLY_PRESET'; preset: Preset };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -224,6 +226,30 @@ export function reducer(state: AppState, action: Action): AppState {
         newPattern[id] = arr;
       }
       return { ...state, pattern: newPattern };
+    }
+
+    case 'APPLY_PRESET': {
+      const { preset } = action;
+      const measures: Measure[] = [
+        { timeSignature: { beats: preset.beats, subdivision: preset.subdivision } },
+      ];
+      const pattern = {} as Pattern;
+      for (const id of INSTRUMENT_IDS) {
+        const hits = preset.pattern[id] ?? [];
+        const arr = new Array(preset.beats).fill(false);
+        for (const step of hits) {
+          if (step < preset.beats) arr[step] = true;
+        }
+        pattern[id] = arr;
+      }
+      return {
+        ...state,
+        config: { ...state.config, measures },
+        pattern,
+        isPlaying: false,
+        currentBeat: 0,
+        currentLoop: 0,
+      };
     }
 
     default:
