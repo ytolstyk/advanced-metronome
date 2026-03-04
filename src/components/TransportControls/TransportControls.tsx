@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { AppState } from '../../types';
 import type { Action } from '../../state';
 import { MIN_BPM, MAX_BPM, MAX_MEASURES } from '../../constants';
@@ -17,6 +18,15 @@ export function TransportControls({
   onStop,
 }: TransportControlsProps) {
   const { bpm, loopCount, measures } = state.config;
+
+  const [bpmDraft, setBpmDraft] = useState('');
+  const [bpmFocused, setBpmFocused] = useState(false);
+
+  const commitBpm = () => {
+    const parsed = parseInt(bpmDraft, 10);
+    const clamped = isNaN(parsed) ? bpm : Math.min(MAX_BPM, Math.max(MIN_BPM, parsed));
+    dispatch({ type: 'SET_BPM', bpm: clamped });
+  };
 
   return (
     <div className="transport-controls">
@@ -46,7 +56,25 @@ export function TransportControls({
 
       <div className="transport-controls-group">
         <label className="transport-label">
-          BPM: {bpm}
+          <span className="bpm-label-row">
+            BPM
+            <input
+              type="number"
+              className="bpm-number-input"
+              min={MIN_BPM}
+              max={MAX_BPM}
+              value={bpmFocused ? bpmDraft : String(bpm)}
+              onChange={(e) => setBpmDraft(e.target.value)}
+              onFocus={() => { setBpmDraft(String(bpm)); setBpmFocused(true); }}
+              onBlur={() => { setBpmFocused(false); commitBpm(); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  commitBpm();
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+            />
+          </span>
           <input
             type="range"
             className="transport-slider"
