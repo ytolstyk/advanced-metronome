@@ -7,7 +7,7 @@ import { MeasureHeaders } from '../MeasureHeaders/MeasureHeaders';
 import { InstrumentRow } from '../InstrumentRow/InstrumentRow';
 import './DrumGrid.css';
 
-const CELL_WIDTH = 40;
+const CELL_WIDTH = 56;
 const GRID_PADDING = 12;
 const LABEL_COL_WIDTH = 80;
 const GRID_GAP = 3;
