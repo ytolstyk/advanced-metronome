@@ -26,7 +26,7 @@ function MeasureHeaderCell({
   onCopy,
   onPaste,
 }: MeasureHeaderCellProps) {
-  const { beats, subdivision } = measure.timeSignature;
+  const { beats, subdivision, stepsPerBeat = 1 } = measure.timeSignature;
 
   const [beatsDraft, setBeatsDraft] = useState('');
   const [beatsFocused, setBeatsFocused] = useState(false);
@@ -36,19 +36,19 @@ function MeasureHeaderCell({
   const commitBeats = () => {
     const parsed = parseInt(beatsDraft, 10);
     const clamped = isNaN(parsed) ? beats : Math.min(MAX_BEATS, Math.max(MIN_BEATS, parsed));
-    onTimeSignatureChange(index, { beats: clamped, subdivision });
+    onTimeSignatureChange(index, { beats: clamped, subdivision, stepsPerBeat });
   };
 
   const commitSubdiv = () => {
     const parsed = parseInt(subdivDraft, 10);
     const clamped = isNaN(parsed) ? subdivision : Math.min(MAX_SUBDIV, Math.max(MIN_SUBDIV, parsed));
-    onTimeSignatureChange(index, { beats, subdivision: clamped });
+    onTimeSignatureChange(index, { beats, subdivision: clamped, stepsPerBeat });
   };
 
   return (
     <div
       className={['measure-header', isCopySource ? 'measure-header--copy-source' : ''].filter(Boolean).join(' ')}
-      style={{ gridColumn: `span ${beats}` }}
+      style={{ gridColumn: `span ${beats * stepsPerBeat}` }}
     >
       <span className="measure-number">M{index + 1}</span>
       <div className="time-sig-inputs">
@@ -82,6 +82,20 @@ function MeasureHeaderCell({
           }}
         />
       </div>
+      <div className="spb-group">
+        {([1, 2, 3] as const).map((n) => (
+          <button
+            key={n}
+            type="button"
+            className={['spb-btn', stepsPerBeat === n ? 'spb-btn--active' : ''].filter(Boolean).join(' ')}
+            title={n === 1 ? 'Straight' : n === 2 ? 'Half beats' : 'Triplets'}
+            onClick={() => onTimeSignatureChange(index, { beats, subdivision, stepsPerBeat: n })}
+          >
+            {n === 1 ? '1' : n === 2 ? '½' : '⅓'}
+          </button>
+        ))}
+      </div>
+
       <div className="measure-header-actions">
         {copyActive && !isCopySource ? (
           <button

@@ -16,7 +16,10 @@ import {
 } from './constants';
 
 export function getTotalBeats(measures: Measure[]): number {
-  return measures.reduce((sum, m) => sum + m.timeSignature.beats, 0);
+  return measures.reduce(
+    (sum, m) => sum + m.timeSignature.beats * (m.timeSignature.stepsPerBeat ?? 1),
+    0,
+  );
 }
 
 function createEmptyPattern(totalBeats: number): Pattern {
@@ -47,6 +50,58 @@ function resizePattern(
     resized[id] = arr;
   }
   return resized;
+}
+
+// When a measure's time signature changes, remap beats in that measure
+// proportionally so they land on the nearest equivalent position in the new grid.
+// Other measures are copied verbatim.
+function remapPatternForMeasureChange(
+  pattern: Pattern,
+  oldMeasures: Measure[],
+  newMeasures: Measure[],
+  changedIndex: number,
+): Pattern {
+  const newTotal = getTotalBeats(newMeasures);
+  const result = {} as Pattern;
+
+  for (const id of INSTRUMENT_IDS) {
+    const newArr = new Array(newTotal).fill(false);
+    let oldOffset = 0;
+    let newOffset = 0;
+
+    for (let mi = 0; mi < newMeasures.length; mi++) {
+      const oldTs = oldMeasures[mi].timeSignature;
+      const newTs = newMeasures[mi].timeSignature;
+      const oldSteps = oldTs.beats * (oldTs.stepsPerBeat ?? 1);
+      const newSteps = newTs.beats * (newTs.stepsPerBeat ?? 1);
+
+      if (mi === changedIndex) {
+        // Map each active step to the proportionally equivalent position in the new grid.
+        // Beat-boundary steps land exactly; subdivision steps snap to nearest.
+        for (let i = 0; i < oldSteps; i++) {
+          if (pattern[id][oldOffset + i]) {
+            const newStep = Math.min(
+              newSteps - 1,
+              Math.round((i / oldSteps) * newSteps),
+            );
+            newArr[newOffset + newStep] = true;
+          }
+        }
+      } else {
+        // Unchanged measure: copy as-is
+        for (let i = 0; i < Math.min(oldSteps, newSteps); i++) {
+          newArr[newOffset + i] = pattern[id][oldOffset + i] ?? false;
+        }
+      }
+
+      oldOffset += oldSteps;
+      newOffset += newSteps;
+    }
+
+    result[id] = newArr;
+  }
+
+  return result;
 }
 
 function createDefaultMeasures(): Measure[] {
@@ -180,7 +235,12 @@ export function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         config: { ...state.config, measures: newMeasures },
-        pattern: resizePattern(state.pattern, oldMeasures, newMeasures),
+        pattern: remapPatternForMeasureChange(
+          state.pattern,
+          oldMeasures,
+          newMeasures,
+          action.measureIndex,
+        ),
         isPlaying: false,
         currentBeat: 0,
         currentLoop: 0,
@@ -208,13 +268,15 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'COPY_MEASURE': {
       const measures = state.config.measures;
+      const stepsOf = (i: number) =>
+        measures[i].timeSignature.beats * (measures[i].timeSignature.stepsPerBeat ?? 1);
       let fromOffset = 0;
-      for (let i = 0; i < action.from; i++) fromOffset += measures[i].timeSignature.beats;
-      const fromBeats = measures[action.from].timeSignature.beats;
+      for (let i = 0; i < action.from; i++) fromOffset += stepsOf(i);
+      const fromBeats = stepsOf(action.from);
 
       let toOffset = 0;
-      for (let i = 0; i < action.to; i++) toOffset += measures[i].timeSignature.beats;
-      const toBeats = measures[action.to].timeSignature.beats;
+      for (let i = 0; i < action.to; i++) toOffset += stepsOf(i);
+      const toBeats = stepsOf(action.to);
 
       const copyCount = Math.min(fromBeats, toBeats);
       const newPattern = { ...state.pattern };

@@ -64,12 +64,13 @@ export class AudioEngine {
   private getBeatDuration(beatIndex: number): number {
     let offset = 0;
     for (const measure of this.measures) {
-      const mBeats = measure.timeSignature.beats;
-      if (beatIndex < offset + mBeats) {
+      const stepsPerBeat = measure.timeSignature.stepsPerBeat ?? 1;
+      const mSteps = measure.timeSignature.beats * stepsPerBeat;
+      if (beatIndex < offset + mSteps) {
         const subdivision = measure.timeSignature.subdivision;
-        return (60 / this.bpm) * (4 / subdivision);
+        return (60 / this.bpm) * (4 / subdivision) / stepsPerBeat;
       }
-      offset += mBeats;
+      offset += mSteps;
     }
     // Fallback
     return 60 / this.bpm;

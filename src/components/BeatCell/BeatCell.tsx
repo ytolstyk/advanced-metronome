@@ -5,6 +5,7 @@ interface BeatCellProps {
   color: string;
   isCurrentBeat: boolean;
   isMeasureStart: boolean;
+  isSubdivision: boolean;
   onClick: () => void;
 }
 
@@ -13,6 +14,7 @@ export function BeatCell({
   color,
   isCurrentBeat,
   isMeasureStart,
+  isSubdivision,
   onClick,
 }: BeatCellProps) {
   return (
@@ -22,6 +24,7 @@ export function BeatCell({
         active ? 'beat-cell--active' : '',
         isCurrentBeat ? 'beat-cell--current' : '',
         isMeasureStart ? 'beat-cell--measure-start' : '',
+        isSubdivision ? 'beat-cell--subdivision' : '',
       ]
         .filter(Boolean)
         .join(' ')}

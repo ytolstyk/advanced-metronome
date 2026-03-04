@@ -10,6 +10,7 @@ export type InstrumentId =
 export interface TimeSignature {
   beats: number;
   subdivision: number;
+  stepsPerBeat?: number; // 1=straight (default), 2=half beats, 3=triplets
 }
 
 export interface Measure {

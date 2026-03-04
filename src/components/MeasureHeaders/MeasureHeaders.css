@@ -120,3 +120,43 @@
   border-color: #3d8a3d;
   background: #243e2e;
 }
+
+.spb-group {
+  display: flex;
+  border: 1px solid #3e3f58;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.spb-btn {
+  font-size: 0.72rem;
+  font-family: inherit;
+  font-weight: 700;
+  color: #5a5a80;
+  background: #252636;
+  border: none;
+  border-right: 1px solid #3e3f58;
+  padding: 2px 7px;
+  cursor: pointer;
+  line-height: 1.6;
+  transition: color 0.12s, background-color 0.12s;
+  user-select: none;
+}
+
+.spb-btn:last-child {
+  border-right: none;
+}
+
+.spb-btn:hover {
+  color: #9090c0;
+  background: #30324a;
+}
+
+.spb-btn--active {
+  color: #c0c4ff;
+  background: #363880;
+}
+
+.spb-btn--active:hover {
+  background: #404298;
+}
