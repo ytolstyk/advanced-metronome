@@ -1,9 +1,13 @@
+.drum-grid-scroll {
+  overflow-x: auto;
+  width: 100%;
+  background: #1a1a1a;
+  border-radius: 8px;
+}
+
 .drum-grid {
   display: grid;
   gap: 3px;
   padding: 12px;
-  background: #1a1a1a;
-  border-radius: 8px;
-  width: 100%;
   box-sizing: border-box;
 }

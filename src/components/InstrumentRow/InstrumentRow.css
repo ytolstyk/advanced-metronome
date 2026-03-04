@@ -8,4 +8,8 @@
   color: #aaa;
   white-space: nowrap;
   user-select: none;
+  position: sticky;
+  left: 12px;
+  z-index: 1;
+  background: #1a1a1a;
 }
