@@ -1,6 +1,7 @@
 import type {
   AppState,
   InstrumentId,
+  LoopConfig,
   Measure,
   Pattern,
   TimeSignature,
@@ -121,7 +122,8 @@ export type Action =
   | { type: 'CLEAR_PATTERN' }
   | { type: 'COPY_MEASURE'; from: number; to: number }
   | { type: 'APPLY_PRESET'; preset: Preset }
-  | { type: 'RESTORE_STATE'; state: AppState };
+  | { type: 'RESTORE_STATE'; state: AppState }
+  | { type: 'APPLY_USER_PRESET'; config: LoopConfig; pattern: Pattern };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -252,6 +254,16 @@ export function reducer(state: AppState, action: Action): AppState {
         currentLoop: 0,
       };
     }
+
+    case 'APPLY_USER_PRESET':
+      return {
+        ...state,
+        config: action.config,
+        pattern: action.pattern,
+        isPlaying: false,
+        currentBeat: 0,
+        currentLoop: 0,
+      };
 
     case 'RESTORE_STATE':
       return {

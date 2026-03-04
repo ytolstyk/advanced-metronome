@@ -219,3 +219,61 @@
   opacity: 0.35;
   cursor: default;
 }
+
+.preset-delete-btn {
+  background: #3a1e22;
+  color: #e07878;
+  border: 1px solid #683336;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.preset-delete-btn:hover {
+  background: #502628;
+  border-color: #854244;
+  transform: translateY(-1px);
+}
+
+.preset-delete-btn:active {
+  transform: translateY(1px);
+}
+
+.save-preset-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 100%;
+}
+
+.save-preset-input {
+  flex: 1;
+  background: #2e2f42;
+  color: #d0d0e8;
+  border: 1px solid #464768;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.save-preset-input::placeholder {
+  color: #5a5a80;
+}
+
+.save-preset-input:hover {
+  border-color: #6668a0;
+}
+
+.save-preset-input:focus {
+  outline: none;
+  border-color: #646cff;
+  background: #26285a;
+  color: #f0f0ff;
+}

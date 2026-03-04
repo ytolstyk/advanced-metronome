@@ -18,6 +18,7 @@ const UNDOABLE: Set<Action['type']> = new Set([
   'CLEAR_PATTERN',
   'COPY_MEASURE',
   'APPLY_PRESET',
+  'APPLY_USER_PRESET',
 ]);
 
 function App() {
