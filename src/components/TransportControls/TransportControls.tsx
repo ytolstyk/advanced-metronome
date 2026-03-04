@@ -10,6 +10,8 @@ interface TransportControlsProps {
   dispatch: React.Dispatch<Action>;
   onTogglePlayback: () => void;
   onStop: () => void;
+  onUndo: () => void;
+  canUndo: boolean;
 }
 
 export function TransportControls({
@@ -17,6 +19,8 @@ export function TransportControls({
   dispatch,
   onTogglePlayback,
   onStop,
+  onUndo,
+  canUndo,
 }: TransportControlsProps) {
   const { bpm, loopCount, measures } = state.config;
 
@@ -46,6 +50,15 @@ export function TransportControls({
           type="button"
         >
           ⏹
+        </button>
+        <button
+          className="transport-btn transport-btn--undo"
+          onClick={onUndo}
+          disabled={!canUndo}
+          type="button"
+          title="Undo (Ctrl+Z)"
+        >
+          ↩
         </button>
         <button
           className="transport-btn transport-btn--clear"

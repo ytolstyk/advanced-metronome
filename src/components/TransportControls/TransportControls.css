@@ -66,6 +66,17 @@
   border-color: #854244;
 }
 
+.transport-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.transport-btn--undo {
+  font-size: 1.1rem;
+}
+
 .transport-btn--clear {
   font-size: 0.8rem;
   font-weight: 700;

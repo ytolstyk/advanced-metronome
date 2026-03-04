@@ -120,7 +120,8 @@ export type Action =
   | { type: 'SET_CURRENT_LOOP'; loop: number }
   | { type: 'CLEAR_PATTERN' }
   | { type: 'COPY_MEASURE'; from: number; to: number }
-  | { type: 'APPLY_PRESET'; preset: Preset };
+  | { type: 'APPLY_PRESET'; preset: Preset }
+  | { type: 'RESTORE_STATE'; state: AppState };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -251,6 +252,14 @@ export function reducer(state: AppState, action: Action): AppState {
         currentLoop: 0,
       };
     }
+
+    case 'RESTORE_STATE':
+      return {
+        ...action.state,
+        isPlaying: state.isPlaying,
+        currentBeat: 0,
+        currentLoop: state.currentLoop,
+      };
 
     default:
       return state;

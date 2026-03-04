@@ -1,42 +1,92 @@
-import { useReducer, useEffect } from 'react';
+import { useReducer, useEffect, useRef, useCallback, useState } from 'react';
 import { reducer, createInitialState, saveState } from './state';
+import type { Action } from './state';
+import type { AppState } from './types';
 import { useAudioEngine } from './hooks/useAudioEngine';
 import { DrumGrid } from './components/DrumGrid/DrumGrid';
 import { TransportControls } from './components/TransportControls/TransportControls';
 import './App.css';
 
+const MAX_HISTORY = 10;
+
+const UNDOABLE: Set<Action['type']> = new Set([
+  'TOGGLE_BEAT',
+  'SET_BPM',
+  'SET_LOOP_COUNT',
+  'SET_MEASURE_COUNT',
+  'SET_TIME_SIGNATURE',
+  'CLEAR_PATTERN',
+  'COPY_MEASURE',
+  'APPLY_PRESET',
+]);
+
 function App() {
   const [state, dispatch] = useReducer(reducer, null, createInitialState);
-  const { togglePlayback, stop } = useAudioEngine(state, dispatch);
+
+  // Refs let dispatchWithHistory / undo stay stable without re-creating on every render
+  const stateRef = useRef<AppState>(state);
+  useEffect(() => {
+    stateRef.current = state;
+  });
+
+  const historyRef = useRef<AppState[]>([]);
+  const [historyLen, setHistoryLen] = useState(0);
+
+  const dispatchWithHistory = useCallback((action: Action) => {
+    if (UNDOABLE.has(action.type)) {
+      const next = [...historyRef.current.slice(-(MAX_HISTORY - 1)), stateRef.current];
+      historyRef.current = next;
+      setHistoryLen(next.length);
+    }
+    dispatch(action);
+  }, []);
+
+  const undo = useCallback(() => {
+    const h = historyRef.current;
+    if (h.length === 0) return;
+    const prev = h[h.length - 1];
+    const next = h.slice(0, -1);
+    historyRef.current = next;
+    setHistoryLen(next.length);
+    dispatch({ type: 'RESTORE_STATE', state: prev });
+  }, []);
+
+  const { togglePlayback, stop } = useAudioEngine(state, dispatchWithHistory);
 
   const { config, pattern } = state;
   useEffect(() => {
     saveState(config, pattern);
   }, [config, pattern]);
 
-  // Space bar shortcut
+  // Space = play/pause, Ctrl/Cmd+Z = undo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && e.target === document.body) {
         e.preventDefault();
         togglePlayback();
       }
+      if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlayback]);
+  }, [togglePlayback, undo]);
 
   return (
     <div className="app">
       <h1 className="app-title">Drum Machine</h1>
-      <DrumGrid state={state} dispatch={dispatch} />
+      <DrumGrid state={state} dispatch={dispatchWithHistory} />
       <TransportControls
         state={state}
-        dispatch={dispatch}
+        dispatch={dispatchWithHistory}
         onTogglePlayback={togglePlayback}
         onStop={stop}
+        onUndo={undo}
+        canUndo={historyLen > 0}
       />
-      <p className="app-hint">Press Space to play/pause</p>
+      <p className="app-hint">Space to play/pause · Ctrl+Z to undo</p>
     </div>
   );
 }
