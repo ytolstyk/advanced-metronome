@@ -2,7 +2,7 @@
   position: sticky;
   left: 14px;
   z-index: 1;
-  background: #1a1a1a;
+  background: #262736;
 }
 
 .measure-header {
@@ -11,7 +11,7 @@
   justify-content: center;
   gap: 8px;
   padding: 6px 0;
-  border-bottom: 1px solid #303030;
+  border-bottom: 1px solid #363750;
   user-select: none;
 }
 
@@ -21,7 +21,7 @@
 
 .measure-number {
   font-size: 0.8rem;
-  color: #777;
+  color: #8080aa;
   font-weight: 700;
   letter-spacing: 0.3px;
 }
@@ -34,7 +34,7 @@
 
 .time-sig-sep {
   font-size: 0.9rem;
-  color: #555;
+  color: #6060a0;
   user-select: none;
   line-height: 1;
   font-weight: 600;
@@ -42,9 +42,9 @@
 
 .time-sig-input {
   width: 34px;
-  background: #252525;
-  color: #d0d0d0;
-  border: 1px solid #3a3a3a;
+  background: #2e2f42;
+  color: #d0d0e8;
+  border: 1px solid #464768;
   border-radius: 6px;
   padding: 3px 4px;
   font-size: 0.85rem;
@@ -61,14 +61,14 @@
 }
 
 .time-sig-input:hover {
-  border-color: #555;
+  border-color: #6668a0;
 }
 
 .time-sig-input:focus {
   outline: none;
   border-color: #646cff;
-  background: #22224a;
-  color: #f0f0f0;
+  background: #26285a;
+  color: #f0f0ff;
 }
 
 .measure-header-actions {
@@ -81,7 +81,7 @@
   font-weight: 700;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  color: #555;
+  color: #6060a0;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 5px;
@@ -92,31 +92,31 @@
 }
 
 .measure-action-btn:hover {
-  color: #aaa;
-  border-color: #484848;
-  background: #2a2a2a;
+  color: #a0a0c8;
+  border-color: #565878;
+  background: #30324a;
 }
 
 .measure-action-btn--active {
   color: #8080ff;
   border-color: #646cff;
-  background: #1e1e3a;
+  background: #242456;
 }
 
 .measure-action-btn--active:hover {
   color: #9999ff;
   border-color: #8080ff;
-  background: #252550;
+  background: #2c2c66;
 }
 
 .measure-action-btn--paste {
   color: #4ade80;
   border-color: #2d6b2d;
-  background: #1a2e1a;
+  background: #1e3428;
 }
 
 .measure-action-btn--paste:hover {
   color: #6aee98;
   border-color: #3d8a3d;
-  background: #203820;
+  background: #243e2e;
 }

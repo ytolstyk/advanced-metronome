@@ -5,12 +5,12 @@
   padding-right: 14px;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #c0c0c0;
+  color: #c4c4d8;
   white-space: nowrap;
   user-select: none;
   position: sticky;
   left: 14px;
   z-index: 1;
-  background: #1a1a1a;
+  background: #262736;
   letter-spacing: 0.2px;
 }

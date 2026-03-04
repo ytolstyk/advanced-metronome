@@ -1,9 +1,9 @@
 .drum-grid-scroll {
   overflow-x: auto;
   width: 100%;
-  background: #1a1a1a;
+  background: #262736;
   border-radius: 12px;
-  border: 1px solid #272727;
+  border: 1px solid #353650;
 }
 
 .drum-grid {
