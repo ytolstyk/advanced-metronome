@@ -18,14 +18,6 @@ export const INSTRUMENTS: InstrumentConfig[] = [
 
 export const INSTRUMENT_IDS: InstrumentId[] = INSTRUMENTS.map((i) => i.id);
 
-export const TIME_SIGNATURE_OPTIONS: TimeSignature[] = [
-  { beats: 3, subdivision: 4 },
-  { beats: 4, subdivision: 4 },
-  { beats: 5, subdivision: 4 },
-  { beats: 6, subdivision: 8 },
-  { beats: 7, subdivision: 8 },
-];
-
 export const DEFAULT_TIME_SIGNATURE: TimeSignature = { beats: 4, subdivision: 4 };
 
 export const DEFAULT_MEASURE: Measure = {
