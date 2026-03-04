@@ -1,24 +1,24 @@
-import { useReducer, useEffect, useRef, useCallback, useState } from 'react';
-import { reducer, createInitialState, saveState } from './state';
-import type { Action } from './state';
-import type { AppState } from './types';
-import { useAudioEngine } from './hooks/useAudioEngine';
-import { DrumGrid } from './components/DrumGrid/DrumGrid';
-import { TransportControls } from './components/TransportControls/TransportControls';
-import './App.css';
+import { useReducer, useEffect, useRef, useCallback, useState } from "react";
+import { reducer, createInitialState, saveState } from "./state";
+import type { Action } from "./state";
+import type { AppState } from "./types";
+import { useAudioEngine } from "./hooks/useAudioEngine";
+import { DrumGrid } from "./components/DrumGrid/DrumGrid";
+import { TransportControls } from "./components/TransportControls/TransportControls";
+import "./App.css";
 
 const MAX_HISTORY = 10;
 
-const UNDOABLE: Set<Action['type']> = new Set([
-  'TOGGLE_BEAT',
-  'SET_BPM',
-  'SET_LOOP_COUNT',
-  'SET_MEASURE_COUNT',
-  'SET_TIME_SIGNATURE',
-  'CLEAR_PATTERN',
-  'COPY_MEASURE',
-  'APPLY_PRESET',
-  'APPLY_USER_PRESET',
+const UNDOABLE: Set<Action["type"]> = new Set([
+  "TOGGLE_BEAT",
+  "SET_BPM",
+  "SET_LOOP_COUNT",
+  "SET_MEASURE_COUNT",
+  "SET_TIME_SIGNATURE",
+  "CLEAR_PATTERN",
+  "COPY_MEASURE",
+  "APPLY_PRESET",
+  "APPLY_USER_PRESET",
 ]);
 
 function App() {
@@ -35,7 +35,10 @@ function App() {
 
   const dispatchWithHistory = useCallback((action: Action) => {
     if (UNDOABLE.has(action.type)) {
-      const next = [...historyRef.current.slice(-(MAX_HISTORY - 1)), stateRef.current];
+      const next = [
+        ...historyRef.current.slice(-(MAX_HISTORY - 1)),
+        stateRef.current,
+      ];
       historyRef.current = next;
       setHistoryLen(next.length);
     }
@@ -49,7 +52,7 @@ function App() {
     const next = h.slice(0, -1);
     historyRef.current = next;
     setHistoryLen(next.length);
-    dispatch({ type: 'RESTORE_STATE', state: prev });
+    dispatch({ type: "RESTORE_STATE", state: prev });
   }, []);
 
   const { togglePlayback, stop } = useAudioEngine(state, dispatchWithHistory);
@@ -62,22 +65,22 @@ function App() {
   // Space = play/pause, Ctrl/Cmd+Z = undo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && e.target === document.body) {
+      if (e.code === "Space" && e.target === document.body) {
         e.preventDefault();
         togglePlayback();
       }
-      if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+      if (e.code === "KeyZ" && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
         e.preventDefault();
         undo();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [togglePlayback, undo]);
 
   return (
     <div className="app">
-      <h1 className="app-title">Drum Machine</h1>
+      <h1 className="app-title">Drumma Llama</h1>
       <DrumGrid state={state} dispatch={dispatchWithHistory} />
       <TransportControls
         state={state}
