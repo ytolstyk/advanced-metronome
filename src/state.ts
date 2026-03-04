@@ -117,7 +117,8 @@ export type Action =
   | { type: 'SET_PLAYING'; isPlaying: boolean }
   | { type: 'SET_CURRENT_BEAT'; beat: number }
   | { type: 'SET_CURRENT_LOOP'; loop: number }
-  | { type: 'CLEAR_PATTERN' };
+  | { type: 'CLEAR_PATTERN' }
+  | { type: 'COPY_MEASURE'; from: number; to: number };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -199,6 +200,31 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         pattern: createEmptyPattern(getTotalBeats(state.config.measures)),
       };
+
+    case 'COPY_MEASURE': {
+      const measures = state.config.measures;
+      let fromOffset = 0;
+      for (let i = 0; i < action.from; i++) fromOffset += measures[i].timeSignature.beats;
+      const fromBeats = measures[action.from].timeSignature.beats;
+
+      let toOffset = 0;
+      for (let i = 0; i < action.to; i++) toOffset += measures[i].timeSignature.beats;
+      const toBeats = measures[action.to].timeSignature.beats;
+
+      const copyCount = Math.min(fromBeats, toBeats);
+      const newPattern = { ...state.pattern };
+      for (const id of INSTRUMENT_IDS) {
+        const arr = [...newPattern[id]];
+        for (let i = 0; i < copyCount; i++) {
+          arr[toOffset + i] = state.pattern[id][fromOffset + i];
+        }
+        for (let i = copyCount; i < toBeats; i++) {
+          arr[toOffset + i] = false;
+        }
+        newPattern[id] = arr;
+      }
+      return { ...state, pattern: newPattern };
+    }
 
     default:
       return state;

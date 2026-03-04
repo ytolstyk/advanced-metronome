@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import type { AppState, InstrumentId, TimeSignature } from '../../types';
 import type { Action } from '../../state';
 import { INSTRUMENTS } from '../../constants';
@@ -21,6 +21,7 @@ export function DrumGrid({ state, dispatch }: DrumGridProps) {
   const totalBeats = getTotalBeats(state.config.measures);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevBeatRef = useRef(0);
+  const [copiedMeasure, setCopiedMeasure] = useState<number | null>(null);
 
   const handleToggle = (instrument: InstrumentId, beat: number) => {
     dispatch({ type: 'TOGGLE_BEAT', instrument, beat });
@@ -55,6 +56,14 @@ export function DrumGrid({ state, dispatch }: DrumGridProps) {
         <MeasureHeaders
           measures={state.config.measures}
           onTimeSignatureChange={handleTimeSignatureChange}
+          copiedMeasure={copiedMeasure}
+          onCopyMeasure={(i) => setCopiedMeasure(i === copiedMeasure ? null : i)}
+          onPasteMeasure={(to) => {
+            if (copiedMeasure !== null) {
+              dispatch({ type: 'COPY_MEASURE', from: copiedMeasure, to });
+              setCopiedMeasure(null);
+            }
+          }}
         />
         {INSTRUMENTS.map((instrument) => (
           <InstrumentRow

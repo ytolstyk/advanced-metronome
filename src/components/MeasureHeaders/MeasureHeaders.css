@@ -15,6 +15,10 @@
   user-select: none;
 }
 
+.measure-header--copy-source {
+  border-bottom-color: #646cff;
+}
+
 .measure-number {
   font-size: 0.7rem;
   color: #888;
@@ -61,4 +65,47 @@
   outline: none;
   border-color: #646cff;
   color: #eee;
+}
+
+.measure-header-actions {
+  display: flex;
+}
+
+.measure-action-btn {
+  font-size: 0.65rem;
+  font-family: inherit;
+  font-weight: 600;
+  color: #666;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 1px 5px;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+.measure-action-btn:hover {
+  color: #aaa;
+  border-color: #555;
+}
+
+.measure-action-btn--active {
+  color: #646cff;
+  border-color: #646cff;
+}
+
+.measure-action-btn--active:hover {
+  color: #888f ff;
+  border-color: #888;
+}
+
+.measure-action-btn--paste {
+  color: #4a8a40;
+  border-color: #4a8a40;
+}
+
+.measure-action-btn--paste:hover {
+  color: #5aaa50;
+  border-color: #5aaa50;
 }

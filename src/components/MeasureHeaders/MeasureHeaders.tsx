@@ -11,9 +11,21 @@ interface MeasureHeaderCellProps {
   measure: Measure;
   index: number;
   onTimeSignatureChange: (index: number, ts: TimeSignature) => void;
+  isCopySource: boolean;
+  copyActive: boolean;
+  onCopy: () => void;
+  onPaste: () => void;
 }
 
-function MeasureHeaderCell({ measure, index, onTimeSignatureChange }: MeasureHeaderCellProps) {
+function MeasureHeaderCell({
+  measure,
+  index,
+  onTimeSignatureChange,
+  isCopySource,
+  copyActive,
+  onCopy,
+  onPaste,
+}: MeasureHeaderCellProps) {
   const { beats, subdivision } = measure.timeSignature;
 
   const [beatsDraft, setBeatsDraft] = useState('');
@@ -34,7 +46,10 @@ function MeasureHeaderCell({ measure, index, onTimeSignatureChange }: MeasureHea
   };
 
   return (
-    <div className="measure-header" style={{ gridColumn: `span ${beats}` }}>
+    <div
+      className={['measure-header', isCopySource ? 'measure-header--copy-source' : ''].filter(Boolean).join(' ')}
+      style={{ gridColumn: `span ${beats}` }}
+    >
       <span className="measure-number">M{index + 1}</span>
       <div className="time-sig-inputs">
         <input
@@ -67,6 +82,27 @@ function MeasureHeaderCell({ measure, index, onTimeSignatureChange }: MeasureHea
           }}
         />
       </div>
+      <div className="measure-header-actions">
+        {copyActive && !isCopySource ? (
+          <button
+            type="button"
+            className="measure-action-btn measure-action-btn--paste"
+            title="Paste pattern here"
+            onClick={onPaste}
+          >
+            paste
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={['measure-action-btn', isCopySource ? 'measure-action-btn--active' : ''].filter(Boolean).join(' ')}
+            title={isCopySource ? 'Cancel copy' : 'Copy pattern'}
+            onClick={onCopy}
+          >
+            copy
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -74,9 +110,18 @@ function MeasureHeaderCell({ measure, index, onTimeSignatureChange }: MeasureHea
 interface MeasureHeadersProps {
   measures: Measure[];
   onTimeSignatureChange: (index: number, ts: TimeSignature) => void;
+  copiedMeasure: number | null;
+  onCopyMeasure: (index: number) => void;
+  onPasteMeasure: (index: number) => void;
 }
 
-export function MeasureHeaders({ measures, onTimeSignatureChange }: MeasureHeadersProps) {
+export function MeasureHeaders({
+  measures,
+  onTimeSignatureChange,
+  copiedMeasure,
+  onCopyMeasure,
+  onPasteMeasure,
+}: MeasureHeadersProps) {
   return (
     <>
       <div className="measure-header-spacer" />
@@ -86,6 +131,10 @@ export function MeasureHeaders({ measures, onTimeSignatureChange }: MeasureHeade
           measure={measure}
           index={i}
           onTimeSignatureChange={onTimeSignatureChange}
+          isCopySource={copiedMeasure === i}
+          copyActive={copiedMeasure !== null}
+          onCopy={() => onCopyMeasure(i)}
+          onPaste={() => onPasteMeasure(i)}
         />
       ))}
     </>
