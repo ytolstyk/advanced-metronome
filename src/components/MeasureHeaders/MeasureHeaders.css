@@ -1,0 +1,34 @@
+.measure-header-spacer {
+  /* Occupies the label column */
+}
+
+.measure-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid #3a3a3a;
+  user-select: none;
+}
+
+.measure-number {
+  font-size: 0.7rem;
+  color: #888;
+  font-weight: 600;
+}
+
+.time-sig-select {
+  background: #333;
+  color: #ccc;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.time-sig-select:hover {
+  border-color: #777;
+}

@@ -1,0 +1,170 @@
+import type {
+  AppState,
+  InstrumentId,
+  Measure,
+  Pattern,
+  TimeSignature,
+} from './types';
+import {
+  DEFAULT_BPM,
+  DEFAULT_LOOP_COUNT,
+  DEFAULT_MEASURE,
+  DEFAULT_MEASURE_COUNT,
+  INSTRUMENT_IDS,
+} from './constants';
+
+export function getTotalBeats(measures: Measure[]): number {
+  return measures.reduce((sum, m) => sum + m.timeSignature.beats, 0);
+}
+
+function createEmptyPattern(totalBeats: number): Pattern {
+  const pattern = {} as Pattern;
+  for (const id of INSTRUMENT_IDS) {
+    pattern[id] = new Array(totalBeats).fill(false);
+  }
+  return pattern;
+}
+
+function resizePattern(
+  pattern: Pattern,
+  oldMeasures: Measure[],
+  newMeasures: Measure[],
+): Pattern {
+  const newTotal = getTotalBeats(newMeasures);
+  const oldTotal = getTotalBeats(oldMeasures);
+
+  if (newTotal === oldTotal) return pattern;
+
+  const resized = {} as Pattern;
+  for (const id of INSTRUMENT_IDS) {
+    const old = pattern[id];
+    const arr = new Array(newTotal).fill(false);
+    for (let i = 0; i < Math.min(oldTotal, newTotal); i++) {
+      arr[i] = old[i];
+    }
+    resized[id] = arr;
+  }
+  return resized;
+}
+
+function createDefaultMeasures(): Measure[] {
+  return Array.from({ length: DEFAULT_MEASURE_COUNT }, () => ({
+    timeSignature: { ...DEFAULT_MEASURE.timeSignature },
+  }));
+}
+
+export function createInitialState(): AppState {
+  const measures = createDefaultMeasures();
+  return {
+    config: {
+      measures,
+      bpm: DEFAULT_BPM,
+      loopCount: DEFAULT_LOOP_COUNT,
+    },
+    pattern: createEmptyPattern(getTotalBeats(measures)),
+    isPlaying: false,
+    currentBeat: 0,
+    currentLoop: 0,
+  };
+}
+
+export type Action =
+  | { type: 'TOGGLE_BEAT'; instrument: InstrumentId; beat: number }
+  | { type: 'SET_BPM'; bpm: number }
+  | { type: 'SET_LOOP_COUNT'; loopCount: number }
+  | { type: 'SET_MEASURE_COUNT'; count: number }
+  | {
+      type: 'SET_TIME_SIGNATURE';
+      measureIndex: number;
+      timeSignature: TimeSignature;
+    }
+  | { type: 'SET_PLAYING'; isPlaying: boolean }
+  | { type: 'SET_CURRENT_BEAT'; beat: number }
+  | { type: 'SET_CURRENT_LOOP'; loop: number }
+  | { type: 'CLEAR_PATTERN' };
+
+export function reducer(state: AppState, action: Action): AppState {
+  switch (action.type) {
+    case 'TOGGLE_BEAT': {
+      const newPattern = { ...state.pattern };
+      const arr = [...newPattern[action.instrument]];
+      arr[action.beat] = !arr[action.beat];
+      newPattern[action.instrument] = arr;
+      return { ...state, pattern: newPattern };
+    }
+
+    case 'SET_BPM':
+      return {
+        ...state,
+        config: { ...state.config, bpm: action.bpm },
+      };
+
+    case 'SET_LOOP_COUNT':
+      return {
+        ...state,
+        config: { ...state.config, loopCount: action.loopCount },
+      };
+
+    case 'SET_MEASURE_COUNT': {
+      const current = state.config.measures;
+      let newMeasures: Measure[];
+      if (action.count > current.length) {
+        newMeasures = [
+          ...current,
+          ...Array.from({ length: action.count - current.length }, () => ({
+            timeSignature: { ...DEFAULT_MEASURE.timeSignature },
+          })),
+        ];
+      } else {
+        newMeasures = current.slice(0, action.count);
+      }
+      return {
+        ...state,
+        config: { ...state.config, measures: newMeasures },
+        pattern: resizePattern(state.pattern, current, newMeasures),
+        isPlaying: false,
+        currentBeat: 0,
+        currentLoop: 0,
+      };
+    }
+
+    case 'SET_TIME_SIGNATURE': {
+      const oldMeasures = state.config.measures;
+      const newMeasures = oldMeasures.map((m, i) =>
+        i === action.measureIndex
+          ? { timeSignature: action.timeSignature }
+          : m,
+      );
+      return {
+        ...state,
+        config: { ...state.config, measures: newMeasures },
+        pattern: resizePattern(state.pattern, oldMeasures, newMeasures),
+        isPlaying: false,
+        currentBeat: 0,
+        currentLoop: 0,
+      };
+    }
+
+    case 'SET_PLAYING':
+      return {
+        ...state,
+        isPlaying: action.isPlaying,
+        ...(action.isPlaying ? {} : {}),
+      };
+
+    case 'SET_CURRENT_BEAT':
+      return { ...state, currentBeat: action.beat };
+
+    case 'SET_CURRENT_LOOP':
+      return { ...state, currentLoop: action.loop };
+
+    case 'CLEAR_PATTERN':
+      return {
+        ...state,
+        pattern: createEmptyPattern(getTotalBeats(state.config.measures)),
+      };
+
+    default:
+      return state;
+  }
+}

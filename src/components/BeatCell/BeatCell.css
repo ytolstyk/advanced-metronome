@@ -1,0 +1,33 @@
+.beat-cell {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  background-color: #2a2a2a;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.1s, transform 0.05s;
+  min-width: 0;
+}
+
+.beat-cell:hover {
+  background-color: #3a3a3a;
+  border-color: #555;
+}
+
+.beat-cell--active {
+  border-color: transparent;
+}
+
+.beat-cell--active:hover {
+  filter: brightness(1.2);
+}
+
+.beat-cell--current {
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+  transform: scale(1.05);
+}
+
+.beat-cell--measure-start {
+  border-left: 2px solid #666;
+}

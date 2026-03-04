@@ -1,0 +1,182 @@
+import type { Measure, Pattern } from '../types';
+import { INSTRUMENT_IDS } from '../constants';
+import { getTotalBeats } from '../state';
+import { drumSynths } from './drumSynths';
+
+const SCHEDULE_AHEAD_TIME = 0.1; // seconds
+const SCHEDULER_INTERVAL = 25; // ms
+
+export type BeatCallback = (beat: number, time: number) => void;
+export type StopCallback = () => void;
+
+export class AudioEngine {
+  private ctx: AudioContext | null = null;
+  private schedulerTimer: ReturnType<typeof setInterval> | null = null;
+  private currentBeat = 0;
+  private nextBeatTime = 0;
+  private isRunning = false;
+  private pattern: Pattern | null = null;
+  private measures: Measure[] = [];
+  private bpm = 120;
+  private loopCount = 0;
+  private currentLoop = 0;
+  private onBeat: BeatCallback | null = null;
+  private onStop: StopCallback | null = null;
+
+  getAudioContext(): AudioContext {
+    if (!this.ctx) {
+      this.ctx = new AudioContext();
+    }
+    return this.ctx;
+  }
+
+  getCurrentTime(): number {
+    return this.ctx ? this.ctx.currentTime : 0;
+  }
+
+  getNextBeatTime(): number {
+    return this.nextBeatTime;
+  }
+
+  getCurrentBeat(): number {
+    return this.currentBeat;
+  }
+
+  getIsRunning(): boolean {
+    return this.isRunning;
+  }
+
+  setOnBeat(cb: BeatCallback) {
+    this.onBeat = cb;
+  }
+
+  setOnStop(cb: StopCallback) {
+    this.onStop = cb;
+  }
+
+  updateConfig(pattern: Pattern, measures: Measure[], bpm: number, loopCount: number) {
+    this.pattern = pattern;
+    this.measures = measures;
+    this.bpm = bpm;
+    this.loopCount = loopCount;
+  }
+
+  private getBeatDuration(beatIndex: number): number {
+    let offset = 0;
+    for (const measure of this.measures) {
+      const mBeats = measure.timeSignature.beats;
+      if (beatIndex < offset + mBeats) {
+        const subdivision = measure.timeSignature.subdivision;
+        return (60 / this.bpm) * (4 / subdivision);
+      }
+      offset += mBeats;
+    }
+    // Fallback
+    return 60 / this.bpm;
+  }
+
+  private scheduleBeat() {
+    if (!this.pattern || !this.ctx) return;
+
+    const totalBeats = getTotalBeats(this.measures);
+    if (totalBeats === 0) return;
+
+    for (const id of INSTRUMENT_IDS) {
+      if (this.pattern[id][this.currentBeat]) {
+        drumSynths[id](this.ctx, this.nextBeatTime);
+      }
+    }
+
+    this.onBeat?.(this.currentBeat, this.nextBeatTime);
+
+    const duration = this.getBeatDuration(this.currentBeat);
+    this.nextBeatTime += duration;
+    this.currentBeat++;
+
+    if (this.currentBeat >= totalBeats) {
+      this.currentBeat = 0;
+      this.currentLoop++;
+
+      if (this.loopCount > 0 && this.currentLoop >= this.loopCount) {
+        // Schedule stop after last beat finishes
+        const stopTime = (this.nextBeatTime - this.ctx.currentTime) * 1000;
+        setTimeout(() => {
+          this.stop();
+          this.onStop?.();
+        }, stopTime);
+      }
+    }
+  }
+
+  private scheduler() {
+    const ctx = this.ctx;
+    if (!ctx) return;
+
+    while (this.nextBeatTime < ctx.currentTime + SCHEDULE_AHEAD_TIME) {
+      this.scheduleBeat();
+      if (!this.isRunning) break;
+    }
+  }
+
+  start(pattern: Pattern, measures: Measure[], bpm: number, loopCount: number, startBeat = 0) {
+    const ctx = this.getAudioContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+
+    this.pattern = pattern;
+    this.measures = measures;
+    this.bpm = bpm;
+    this.loopCount = loopCount;
+    this.currentBeat = startBeat;
+    this.currentLoop = 0;
+    this.isRunning = true;
+    this.nextBeatTime = ctx.currentTime;
+
+    this.schedulerTimer = setInterval(() => this.scheduler(), SCHEDULER_INTERVAL);
+  }
+
+  stop() {
+    this.isRunning = false;
+    if (this.schedulerTimer !== null) {
+      clearInterval(this.schedulerTimer);
+      this.schedulerTimer = null;
+    }
+    this.currentBeat = 0;
+    this.currentLoop = 0;
+  }
+
+  pause() {
+    this.isRunning = false;
+    if (this.schedulerTimer !== null) {
+      clearInterval(this.schedulerTimer);
+      this.schedulerTimer = null;
+    }
+  }
+
+  resume(pattern: Pattern, measures: Measure[], bpm: number, loopCount: number) {
+    if (this.isRunning) return;
+
+    const ctx = this.getAudioContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+
+    this.pattern = pattern;
+    this.measures = measures;
+    this.bpm = bpm;
+    this.loopCount = loopCount;
+    this.isRunning = true;
+    this.nextBeatTime = ctx.currentTime;
+
+    this.schedulerTimer = setInterval(() => this.scheduler(), SCHEDULER_INTERVAL);
+  }
+
+  dispose() {
+    this.stop();
+    if (this.ctx) {
+      this.ctx.close();
+      this.ctx = null;
+    }
+  }
+}
