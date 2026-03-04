@@ -2,77 +2,97 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
+  gap: 20px;
+  padding: 16px 20px;
   background: #1a1a1a;
-  border-radius: 8px;
+  border-radius: 12px;
+  border: 1px solid #272727;
 }
 
 .transport-buttons {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 .transport-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 6px;
-  border: 1px solid #444;
-  background: #2a2a2a;
-  color: #eee;
-  font-size: 1.2rem;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  border: 1px solid #383838;
+  background: #252525;
+  color: #ddd;
+  font-size: 1.25rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: background-color 0.15s;
+  transition: background-color 0.15s, transform 0.1s, box-shadow 0.12s, border-color 0.15s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  user-select: none;
 }
 
 .transport-btn:hover {
-  background: #3a3a3a;
-  border-color: #666;
+  background: #303030;
+  border-color: #505050;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.transport-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .transport-btn--play {
-  background: #2d5a27;
-  border-color: #4a8a40;
+  background: #1a3a1a;
+  border-color: #2e602e;
+  color: #5ddb7a;
 }
 
 .transport-btn--play:hover {
-  background: #3a7030;
+  background: #225022;
+  border-color: #3d803d;
 }
 
 .transport-btn--stop {
-  background: #5a2727;
-  border-color: #8a4040;
+  background: #3a1a1a;
+  border-color: #60302e;
+  color: #e07070;
 }
 
 .transport-btn--stop:hover {
-  background: #703030;
+  background: #502222;
+  border-color: #80403d;
 }
 
 .transport-btn--clear {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
   width: auto;
-  padding: 0 12px;
+  padding: 0 16px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #999;
 }
 
 .transport-controls-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 20px;
   flex: 1;
 }
 
 .transport-label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.75rem;
-  color: #aaa;
-  font-weight: 600;
-  min-width: 100px;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: #666;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  min-width: 110px;
 }
 
 .transport-slider {
@@ -88,18 +108,18 @@
 }
 
 .bpm-number-input {
-  width: 56px;
-  background: #2a2a2a;
-  color: #eee;
-  border: 1px solid #444;
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 0.85rem;
+  width: 64px;
+  background: #252525;
+  color: #f0f0f0;
+  border: 1px solid #383838;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 1rem;
   font-family: inherit;
-  font-weight: 600;
+  font-weight: 700;
   text-align: center;
-  /* hide spin buttons */
   appearance: textfield;
+  transition: border-color 0.15s, background-color 0.15s;
 }
 
 .bpm-number-input::-webkit-inner-spin-button,
@@ -107,7 +127,12 @@
   appearance: none;
 }
 
+.bpm-number-input:hover {
+  border-color: #555;
+}
+
 .bpm-number-input:focus {
   outline: none;
   border-color: #646cff;
+  background: #22224a;
 }

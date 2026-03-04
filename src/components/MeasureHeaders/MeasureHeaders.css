@@ -1,6 +1,6 @@
 .measure-header-spacer {
   position: sticky;
-  left: 12px;
+  left: 14px;
   z-index: 1;
   background: #1a1a1a;
 }
@@ -9,9 +9,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 4px 0;
-  border-bottom: 1px solid #3a3a3a;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #303030;
   user-select: none;
 }
 
@@ -20,36 +20,39 @@
 }
 
 .measure-number {
-  font-size: 0.7rem;
-  color: #888;
-  font-weight: 600;
+  font-size: 0.8rem;
+  color: #777;
+  font-weight: 700;
+  letter-spacing: 0.3px;
 }
 
 .time-sig-inputs {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 
 .time-sig-sep {
-  font-size: 0.85rem;
-  color: #666;
+  font-size: 0.9rem;
+  color: #555;
   user-select: none;
   line-height: 1;
+  font-weight: 600;
 }
 
 .time-sig-input {
-  width: 32px;
-  background: #2a2a2a;
-  color: #ccc;
-  border: 1px solid #444;
-  border-radius: 4px;
-  padding: 2px 4px;
-  font-size: 0.8rem;
+  width: 34px;
+  background: #252525;
+  color: #d0d0d0;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 3px 4px;
+  font-size: 0.85rem;
   font-family: inherit;
-  font-weight: 600;
+  font-weight: 700;
   text-align: center;
   appearance: textfield;
+  transition: border-color 0.15s, background-color 0.15s;
 }
 
 .time-sig-input::-webkit-inner-spin-button,
@@ -58,13 +61,14 @@
 }
 
 .time-sig-input:hover {
-  border-color: #666;
+  border-color: #555;
 }
 
 .time-sig-input:focus {
   outline: none;
   border-color: #646cff;
-  color: #eee;
+  background: #22224a;
+  color: #f0f0f0;
 }
 
 .measure-header-actions {
@@ -72,40 +76,47 @@
 }
 
 .measure-action-btn {
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-family: inherit;
-  font-weight: 600;
-  color: #666;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #555;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 3px;
-  padding: 1px 5px;
+  border-radius: 5px;
+  padding: 2px 7px;
   cursor: pointer;
-  line-height: 1.4;
-  transition: color 0.1s, border-color 0.1s;
+  line-height: 1.5;
+  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
 }
 
 .measure-action-btn:hover {
   color: #aaa;
-  border-color: #555;
+  border-color: #484848;
+  background: #2a2a2a;
 }
 
 .measure-action-btn--active {
-  color: #646cff;
+  color: #8080ff;
   border-color: #646cff;
+  background: #1e1e3a;
 }
 
 .measure-action-btn--active:hover {
-  color: #888f ff;
-  border-color: #888;
+  color: #9999ff;
+  border-color: #8080ff;
+  background: #252550;
 }
 
 .measure-action-btn--paste {
-  color: #4a8a40;
-  border-color: #4a8a40;
+  color: #4ade80;
+  border-color: #2d6b2d;
+  background: #1a2e1a;
 }
 
 .measure-action-btn--paste:hover {
-  color: #5aaa50;
-  border-color: #5aaa50;
+  color: #6aee98;
+  border-color: #3d8a3d;
+  background: #203820;
 }

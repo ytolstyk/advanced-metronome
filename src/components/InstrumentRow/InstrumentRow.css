@@ -2,14 +2,15 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding-right: 12px;
-  font-size: 0.8rem;
+  padding-right: 14px;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: #aaa;
+  color: #c0c0c0;
   white-space: nowrap;
   user-select: none;
   position: sticky;
-  left: 12px;
+  left: 14px;
   z-index: 1;
   background: #1a1a1a;
+  letter-spacing: 0.2px;
 }

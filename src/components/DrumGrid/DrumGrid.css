@@ -2,12 +2,13 @@
   overflow-x: auto;
   width: 100%;
   background: #1a1a1a;
-  border-radius: 8px;
+  border-radius: 12px;
+  border: 1px solid #272727;
 }
 
 .drum-grid {
   display: grid;
-  gap: 3px;
-  padding: 12px;
+  gap: 4px;
+  padding: 14px;
   box-sizing: border-box;
 }

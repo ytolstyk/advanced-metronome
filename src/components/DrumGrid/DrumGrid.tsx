@@ -8,9 +8,9 @@ import { InstrumentRow } from '../InstrumentRow/InstrumentRow';
 import './DrumGrid.css';
 
 const CELL_WIDTH = 56;
-const GRID_PADDING = 12;
+const GRID_PADDING = 14;
 const LABEL_COL_WIDTH = 80;
-const GRID_GAP = 3;
+const GRID_GAP = 4;
 
 interface DrumGridProps {
   state: AppState;
