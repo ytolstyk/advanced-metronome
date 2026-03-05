@@ -232,7 +232,7 @@ export function TransportControls({
         >
           {exporting ? '⏳' : '⬇ WAV'}
         </Button>
-        <div className="flex flex-col gap-2 min-w-0 w-[180px]">
+        <div className="flex flex-col gap-2 min-w-0 w-[180px] max-sm:w-auto max-sm:flex-1">
           <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
             Human: {humanize}%
           </Label>
