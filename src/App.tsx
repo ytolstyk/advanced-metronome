@@ -5,6 +5,7 @@ import type { AppState } from "./types";
 import { useAudioEngine } from "./hooks/useAudioEngine";
 import { DrumGrid } from "./components/DrumGrid/DrumGrid";
 import { TransportControls } from "./components/TransportControls/TransportControls";
+import { PianoKeyboard } from "./components/PianoKeyboard/PianoKeyboard";
 import "./App.css";
 
 const MAX_HISTORY = 10;
@@ -90,6 +91,7 @@ function App() {
         onUndo={undo}
         canUndo={historyLen > 0}
       />
+      <PianoKeyboard />
       <p className="app-hint">Space to play/pause · Ctrl+Z to undo</p>
     </div>
   );

@@ -1,0 +1,124 @@
+.piano-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px 20px;
+  background: #262736;
+  border-radius: 12px;
+  border: 1px solid #353650;
+  overflow-x: auto;
+}
+
+.piano-hint {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #7070a0;
+  white-space: nowrap;
+}
+
+.piano-hint kbd {
+  display: inline-block;
+  background: #2e2f42;
+  border: 1px solid #464768;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.7rem;
+  font-family: inherit;
+  color: #a0a0c8;
+}
+
+/* ─── keyboard wrapper ─────────────────────────────────────── */
+
+.piano-keyboard {
+  position: relative;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+/* ─── white keys ───────────────────────────────────────────── */
+
+.piano-key--white {
+  position: absolute;
+  top: 0;
+  height: 120px;
+  border: 1px solid #5a5a80;
+  border-radius: 0 0 6px 6px;
+  background: linear-gradient(180deg, #d8d8ea 0%, #eeeef8 30%, #f4f4fc 100%);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 6px;
+  gap: 2px;
+  user-select: none;
+  transition: background 0.06s;
+  box-shadow: 1px 3px 6px rgba(0, 0, 0, 0.5);
+}
+
+.piano-key--white:hover {
+  background: linear-gradient(180deg, #cccce0 0%, #e2e2f2 30%, #ebebfa 100%);
+}
+
+.piano-key--active-white {
+  background: linear-gradient(180deg, #9090d8 0%, #b8b8f0 30%, #c8c8ff 100%) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.piano-key-note {
+  font-size: 0.55rem;
+  color: #8080a8;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.piano-key-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #6060a0;
+  letter-spacing: 0.3px;
+}
+
+/* ─── black keys ───────────────────────────────────────────── */
+
+.piano-key--black {
+  position: absolute;
+  top: 0;
+  width: 28px;
+  height: 72px;
+  background: linear-gradient(180deg, #1a1b2c 0%, #252640 60%, #2a2b48 100%);
+  border: 1px solid #3a3a60;
+  border-radius: 0 0 5px 5px;
+  cursor: pointer;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 5px;
+  user-select: none;
+  transition: background 0.06s;
+  box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.7);
+}
+
+.piano-key--black:hover {
+  background: linear-gradient(180deg, #222338 0%, #2e2f50 60%, #333360 100%);
+}
+
+.piano-key--active-black {
+  background: linear-gradient(180deg, #3a3a9a 0%, #5050c8 60%, #6060e0 100%) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.piano-key-label--black {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #6060a0;
+  letter-spacing: 0.3px;
+}
+
+.piano-key--active-black .piano-key-label--black {
+  color: #a0a8ff;
+}
