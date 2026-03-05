@@ -18,6 +18,27 @@
   letter-spacing: -0.5px;
 }
 
+.piano-toggle-row {
+  display: flex;
+  justify-content: center;
+}
+
+.piano-toggle-btn {
+  background: none;
+  border: 1px solid #444;
+  color: #aaa;
+  font-size: 0.85rem;
+  padding: 5px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.piano-toggle-btn:hover {
+  border-color: #888;
+  color: #eee;
+}
+
 .app-hint {
   text-align: center;
   font-size: 0.8rem;

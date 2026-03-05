@@ -56,6 +56,8 @@ function App() {
     dispatch({ type: "RESTORE_STATE", state: prev });
   }, []);
 
+  const [showPiano, setShowPiano] = useState(false);
+
   const { togglePlayback, stop } = useAudioEngine(state, dispatchWithHistory);
 
   const { config, pattern } = state;
@@ -91,7 +93,16 @@ function App() {
         onUndo={undo}
         canUndo={historyLen > 0}
       />
-      <PianoKeyboard />
+      <div className="piano-toggle-row">
+        <button
+          className="piano-toggle-btn"
+          onClick={() => setShowPiano((v) => !v)}
+          aria-expanded={showPiano}
+        >
+          {showPiano ? "Hide Piano" : "Show Piano"}
+        </button>
+      </div>
+      {showPiano && <PianoKeyboard />}
       <p className="app-hint">Space to play/pause · Ctrl+Z to undo</p>
     </div>
   );
