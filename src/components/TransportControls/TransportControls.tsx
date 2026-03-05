@@ -28,6 +28,8 @@ interface TransportControlsProps {
   onStop: () => void;
   onUndo: () => void;
   canUndo: boolean;
+  humanize: number;
+  onHumanizeChange: (v: number) => void;
 }
 
 export function TransportControls({
@@ -37,6 +39,8 @@ export function TransportControls({
   onStop,
   onUndo,
   canUndo,
+  humanize,
+  onHumanizeChange,
 }: TransportControlsProps) {
   const { bpm, loopCount, measures } = state.config;
 
@@ -209,6 +213,19 @@ export function TransportControls({
             onValueChange={([v]) =>
               dispatch({ type: 'SET_LOOP_COUNT', loopCount: v })
             }
+          />
+        </div>
+
+        <div className="flex flex-col gap-2 flex-1 min-w-0">
+          <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
+            Human: {humanize}%
+          </Label>
+          <Slider
+            min={0}
+            max={100}
+            step={1}
+            value={[humanize]}
+            onValueChange={([v]) => onHumanizeChange(v)}
           />
         </div>
       </div>

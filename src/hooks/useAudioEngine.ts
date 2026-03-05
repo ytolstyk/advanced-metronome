@@ -6,6 +6,7 @@ import type { Action } from '../state';
 export function useAudioEngine(
   state: AppState,
   dispatch: React.Dispatch<Action>,
+  humanize: number,
 ) {
   const engineRef = useRef<AudioEngine | null>(null);
 
@@ -93,6 +94,10 @@ export function useAudioEngine(
       );
     }
   }, [state.pattern, state.config, state.isPlaying]);
+
+  useEffect(() => {
+    engineRef.current?.setHumanize(humanize);
+  }, [humanize]);
 
   return {
     play,

@@ -22,6 +22,7 @@ export class AudioEngine {
   private currentLoop = 0;
   private onBeat: BeatCallback | null = null;
   private onStop: StopCallback | null = null;
+  private humanize = 0; // 0–100
 
   getAudioContext(): AudioContext {
     if (!this.ctx) {
@@ -54,6 +55,10 @@ export class AudioEngine {
     this.onStop = cb;
   }
 
+  setHumanize(pct: number) {
+    this.humanize = pct;
+  }
+
   updateConfig(pattern: Pattern, measures: Measure[], bpm: number, loopCount: number) {
     this.pattern = pattern;
     this.measures = measures;
@@ -84,7 +89,15 @@ export class AudioEngine {
 
     for (const id of INSTRUMENT_IDS) {
       if (this.pattern[id][this.currentBeat]) {
-        drumSynths[id](this.ctx, this.nextBeatTime);
+        if (this.humanize > 0) {
+          const h = this.humanize / 100;
+          const jitter = (Math.random() - 0.5) * 0.030 * h; // up to ±15ms
+          const vel = 1 - 0.40 * h * Math.random();          // down to 60% at 100%
+          const pitch = 1 + (Math.random() - 0.5) * 0.10 * h; // up to ±5% at 100%
+          drumSynths[id](this.ctx, this.nextBeatTime + jitter, vel, pitch);
+        } else {
+          drumSynths[id](this.ctx, this.nextBeatTime);
+        }
       }
     }
 
