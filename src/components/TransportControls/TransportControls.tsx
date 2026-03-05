@@ -136,26 +136,10 @@ export function TransportControls({
         >
           ↩
         </Button>
-        <Button
-          variant="outline"
-          className="h-[52px] rounded-xl px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground"
-          onClick={() => dispatch({ type: 'CLEAR_PATTERN' })}
-        >
-          Clear
-        </Button>
-        <Button
-          variant="outline"
-          className="h-[52px] rounded-xl px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground"
-          onClick={() => { void handleExport(); }}
-          disabled={exporting}
-          title="Download drum loop as WAV"
-        >
-          {exporting ? '⏳' : '⬇ WAV'}
-        </Button>
       </div>
 
       <div className="transport-controls-group">
-        <div className="flex flex-col gap-2 flex-1 min-w-0">
+        <div className="flex flex-col gap-2 flex-1 min-w-0 max-sm:basis-full">
           <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
             <span className="flex items-center justify-between">
               BPM
@@ -186,37 +170,69 @@ export function TransportControls({
           />
         </div>
 
-        <div className="flex flex-col gap-2 flex-1 min-w-0">
-          <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
-            Measures: {measures.length}
-          </Label>
-          <Slider
-            min={1}
-            max={MAX_MEASURES}
-            step={1}
-            value={[measures.length]}
-            onValueChange={([v]) =>
-              dispatch({ type: 'SET_MEASURE_COUNT', count: v })
-            }
-          />
-        </div>
+        <div className="flex flex-1 min-w-0 max-sm:basis-full gap-5">
+          <div className="flex flex-col gap-2 flex-1 min-w-0">
+            <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-between">
+              Measures: {measures.length}
+              <span className="flex gap-1">
+                <button
+                  className="w-5 h-5 rounded text-xs leading-none bg-secondary border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  onClick={() => dispatch({ type: 'SET_MEASURE_COUNT', count: measures.length - 1 })}
+                  disabled={measures.length <= 1}
+                >−</button>
+                <button
+                  className="w-5 h-5 rounded text-xs leading-none bg-secondary border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  onClick={() => dispatch({ type: 'SET_MEASURE_COUNT', count: measures.length + 1 })}
+                  disabled={measures.length >= MAX_MEASURES}
+                >+</button>
+              </span>
+            </Label>
+            <Slider
+              min={1}
+              max={MAX_MEASURES}
+              step={1}
+              value={[measures.length]}
+              onValueChange={([v]) =>
+                dispatch({ type: 'SET_MEASURE_COUNT', count: v })
+              }
+            />
+          </div>
 
-        <div className="flex flex-col gap-2 flex-1 min-w-0">
-          <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
-            Loops: {loopCount === 0 ? '∞' : loopCount}
-          </Label>
-          <Slider
-            min={0}
-            max={16}
-            step={1}
-            value={[loopCount]}
-            onValueChange={([v]) =>
-              dispatch({ type: 'SET_LOOP_COUNT', loopCount: v })
-            }
-          />
+          <div className="flex flex-col gap-2 flex-1 min-w-0">
+            <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
+              Loops: {loopCount === 0 ? '∞' : loopCount}
+            </Label>
+            <Slider
+              min={0}
+              max={16}
+              step={1}
+              value={[loopCount]}
+              onValueChange={([v]) =>
+                dispatch({ type: 'SET_LOOP_COUNT', loopCount: v })
+              }
+            />
+          </div>
         </div>
+      </div>
 
-        <div className="flex flex-col gap-2 flex-1 min-w-0">
+      <div className="secondary-controls-row">
+        <Button
+          variant="outline"
+          className="h-9 rounded-lg px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+          onClick={() => dispatch({ type: 'CLEAR_PATTERN' })}
+        >
+          Clear
+        </Button>
+        <Button
+          variant="outline"
+          className="h-9 rounded-lg px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+          onClick={() => { void handleExport(); }}
+          disabled={exporting}
+          title="Download drum loop as WAV"
+        >
+          {exporting ? '⏳' : '⬇ WAV'}
+        </Button>
+        <div className="flex flex-col gap-2 min-w-0 w-[180px]">
           <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
             Human: {humanize}%
           </Label>

@@ -16,10 +16,20 @@
 
 .transport-controls-group {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 20px;
   flex: 1;
   min-width: 0;
+}
+
+.secondary-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 100%;
+  padding-top: 14px;
+  border-top: 1px solid #353650;
 }
 
 .preset-row {
