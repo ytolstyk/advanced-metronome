@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { AppState } from '../../types';
 import type { Action } from '../../state';
 import { MIN_BPM, MAX_BPM, MAX_MEASURES } from '../../constants';
+import { exportDrumLoop } from '../../audio/exportAudio';
 import { PRESETS } from '../../presets';
 import { loadUserPresets, saveUserPresets } from '../../userPresets';
 import type { UserPreset } from '../../userPresets';
@@ -41,6 +42,16 @@ export function TransportControls({
 
   const [bpmDraft, setBpmDraft] = useState('');
   const [bpmFocused, setBpmFocused] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportDrumLoop(state.pattern, state.config.measures, state.config.bpm);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Preset select — values are prefixed: "builtin:<name>" or "user:<id>"
   const [selectedPreset, setSelectedPreset] = useState('');
@@ -127,6 +138,15 @@ export function TransportControls({
           onClick={() => dispatch({ type: 'CLEAR_PATTERN' })}
         >
           Clear
+        </Button>
+        <Button
+          variant="outline"
+          className="h-[52px] rounded-xl px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+          onClick={() => { void handleExport(); }}
+          disabled={exporting}
+          title="Download drum loop as WAV"
+        >
+          {exporting ? '⏳' : '⬇ WAV'}
         </Button>
       </div>
 
