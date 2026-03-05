@@ -269,11 +269,127 @@ const bass: InstrumentSynth = (ctx, frequency) => {
   };
 };
 
+// Shared helper: pluck noise burst (pick/finger attack transient)
+function pluckNoise(ctx: AudioContext, t: number, gain: number, duration: number, freq: number) {
+  const bufSize = Math.ceil(ctx.sampleRate * duration);
+  const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const f = ctx.createBiquadFilter();
+  f.type = 'bandpass';
+  f.frequency.value = freq * 3;
+  f.Q.value = 1.5;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  src.connect(f); f.connect(g); g.connect(ctx.destination);
+  src.start(t); src.stop(t + duration);
+}
+
+const harp: InstrumentSynth = (ctx, frequency) => {
+  const t = ctx.currentTime;
+
+  // Body resonance — sine fundamental with fast decay
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.5, t);
+  env.gain.exponentialRampToValueAtTime(0.001, t + 3.5);
+
+  const osc = ctx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.value = frequency;
+
+  // 2nd harmonic — decays faster, gives the bright pluck character
+  const osc2 = ctx.createOscillator();
+  osc2.type = 'sine';
+  osc2.frequency.value = frequency * 2;
+  const env2 = ctx.createGain();
+  env2.gain.setValueAtTime(0.25, t);
+  env2.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+
+  // 3rd harmonic — very brief sparkle
+  const osc3 = ctx.createOscillator();
+  osc3.type = 'sine';
+  osc3.frequency.value = frequency * 3;
+  const env3 = ctx.createGain();
+  env3.gain.setValueAtTime(0.1, t);
+  env3.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+
+  osc.connect(env);   env.connect(ctx.destination);
+  osc2.connect(env2); env2.connect(ctx.destination);
+  osc3.connect(env3); env3.connect(ctx.destination);
+  osc.start(t);  osc.stop(t + 4);
+  osc2.start(t); osc2.stop(t + 1);
+  osc3.start(t); osc3.stop(t + 0.4);
+
+  pluckNoise(ctx, t, 0.08, 0.04, frequency);
+
+  return () => {
+    const now = ctx.currentTime;
+    env.gain.cancelScheduledValues(now);
+    env.gain.setValueAtTime(env.gain.value, now);
+    env.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+  };
+};
+
+const acousticGuitar: InstrumentSynth = (ctx, frequency) => {
+  const t = ctx.currentTime;
+
+  // Steel string: brighter, more harmonics, medium-fast decay
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.4, t);
+  env.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = frequency * 9;
+  filter.Q.value = 0.5;
+
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.value = frequency;
+
+  const osc2 = ctx.createOscillator();
+  osc2.type = 'triangle';
+  osc2.frequency.value = frequency * 1.002;
+  const g2 = ctx.createGain();
+  g2.gain.value = 0.4;
+
+  // 2nd harmonic bright pop
+  const osc3 = ctx.createOscillator();
+  osc3.type = 'sine';
+  osc3.frequency.value = frequency * 2;
+  const env3 = ctx.createGain();
+  env3.gain.setValueAtTime(0.22, t);
+  env3.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+
+  osc.connect(env); osc2.connect(g2); g2.connect(env);
+  env.connect(filter); filter.connect(ctx.destination);
+  osc3.connect(env3); env3.connect(ctx.destination);
+  osc.start(t);  osc.stop(t + 2);
+  osc2.start(t); osc2.stop(t + 2);
+  osc3.start(t); osc3.stop(t + 0.7);
+
+  pluckNoise(ctx, t, 0.12, 0.025, frequency);
+
+  return () => {
+    const now = ctx.currentTime;
+    env.gain.cancelScheduledValues(now);
+    env.gain.setValueAtTime(env.gain.value, now);
+    env.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+  };
+};
+
+
+
 export const INSTRUMENT_PRESETS: InstrumentPreset[] = [
-  { id: 'piano',   label: 'Piano',   play: piano   },
-  { id: 'organ',   label: 'Organ',   play: organ   },
-  { id: 'strings', label: 'Strings', play: strings },
-  { id: 'marimba', label: 'Marimba', play: marimba },
-  { id: 'synth',   label: 'Synth',   play: synth   },
-  { id: 'bass',    label: 'Bass',    play: bass    },
+  { id: 'piano',    label: 'Piano',           play: piano          },
+  { id: 'harp',     label: 'Harp',            play: harp           },
+  { id: 'aguitar',  label: 'Acoustic Guitar',  play: acousticGuitar  },
+  { id: 'organ',    label: 'Organ',            play: organ          },
+  { id: 'strings',  label: 'Strings',          play: strings        },
+  { id: 'marimba',  label: 'Marimba',          play: marimba        },
+  { id: 'synth',    label: 'Synth',            play: synth          },
+  { id: 'bass',     label: 'Bass',             play: bass           },
 ];

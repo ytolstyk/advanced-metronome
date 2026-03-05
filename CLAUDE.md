@@ -57,4 +57,5 @@ Strict mode enabled. Notable settings in `tsconfig.app.json`:
 Make sure all these checks pass before accepting changes:
 
 1. **Lint** `npm run lint`
-2. **Build** `npm run build`
+2. **Types** `npm run type-check`
+3. **Build** `npm run build`
