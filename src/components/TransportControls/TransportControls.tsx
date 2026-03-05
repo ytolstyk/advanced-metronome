@@ -170,7 +170,7 @@ export function TransportControls({
           />
         </div>
 
-        <div className="flex flex-1 min-w-0 max-sm:basis-full gap-5">
+        <div className="flex flex-1 min-w-0 max-sm:basis-full max-sm:flex-col gap-5">
           <div className="flex flex-col gap-2 flex-1 min-w-0">
             <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-between">
               Measures: {measures.length}
