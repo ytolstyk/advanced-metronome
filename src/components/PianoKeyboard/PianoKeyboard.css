@@ -11,11 +11,44 @@
 }
 
 .piano-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.5px;
   color: #7070a0;
-  white-space: nowrap;
+  flex-wrap: wrap;
+}
+
+.piano-presets {
+  display: flex;
+  gap: 4px;
+}
+
+.piano-preset-btn {
+  background: #2e2f42;
+  border: 1px solid #464768;
+  border-radius: 5px;
+  color: #7070a0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.piano-preset-btn:hover {
+  background: #383950;
+  color: #a0a0c8;
+}
+
+.piano-preset-btn--active {
+  background: #1e3a52;
+  border-color: #3368a0;
+  color: #5daadb;
 }
 
 .piano-hint kbd {

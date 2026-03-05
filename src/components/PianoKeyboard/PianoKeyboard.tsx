@@ -1,41 +1,25 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { playPianoNote } from '../../audio/pianoSynth';
 import './PianoKeyboard.css';
 
 // White key width in pixels — used to compute black key positions
 const WKW = 44;
 
-interface WhiteKeyDef {
-  code: string;
-  label: string;
-  note: string;
-  freq: number;
-  index: number; // left position = index * WKW
-}
-
-interface BlackKeyDef {
-  code: string;
-  label: string;
-  note: string;
-  freq: number;
-  // left = whiteOffset * WKW
-  whiteOffset: number;
-}
-
-const WHITE_KEYS: WhiteKeyDef[] = [
-  { code: 'KeyA',     label: 'A', note: 'C4', freq: 261.63, index: 0 },
-  { code: 'KeyS',     label: 'S', note: 'D4', freq: 293.66, index: 1 },
-  { code: 'KeyD',     label: 'D', note: 'E4', freq: 329.63, index: 2 },
-  { code: 'KeyF',     label: 'F', note: 'F4', freq: 349.23, index: 3 },
-  { code: 'KeyG',     label: 'G', note: 'G4', freq: 392.00, index: 4 },
-  { code: 'KeyH',     label: 'H', note: 'A4', freq: 440.00, index: 5 },
-  { code: 'KeyJ',     label: 'J', note: 'B4', freq: 493.88, index: 6 },
-  { code: 'KeyK',     label: 'K', note: 'C5', freq: 523.25, index: 7 },
-  { code: 'KeyL',     label: 'L', note: 'D5', freq: 587.33, index: 8 },
-  { code: 'Semicolon',label: ';', note: 'E5', freq: 659.25, index: 9 },
+// Base definitions at octave 4 (offset 0)
+const BASE_WHITE_KEYS = [
+  { code: 'KeyA',      label: 'A', note: 'C4',  freq: 261.63, index: 0 },
+  { code: 'KeyS',      label: 'S', note: 'D4',  freq: 293.66, index: 1 },
+  { code: 'KeyD',      label: 'D', note: 'E4',  freq: 329.63, index: 2 },
+  { code: 'KeyF',      label: 'F', note: 'F4',  freq: 349.23, index: 3 },
+  { code: 'KeyG',      label: 'G', note: 'G4',  freq: 392.00, index: 4 },
+  { code: 'KeyH',      label: 'H', note: 'A4',  freq: 440.00, index: 5 },
+  { code: 'KeyJ',      label: 'J', note: 'B4',  freq: 493.88, index: 6 },
+  { code: 'KeyK',      label: 'K', note: 'C5',  freq: 523.25, index: 7 },
+  { code: 'KeyL',      label: 'L', note: 'D5',  freq: 587.33, index: 8 },
+  { code: 'Semicolon', label: ';', note: 'E5',  freq: 659.25, index: 9 },
 ];
 
-const BLACK_KEYS: BlackKeyDef[] = [
+const BASE_BLACK_KEYS = [
   { code: 'KeyW', label: 'W', note: 'C#4', freq: 277.18, whiteOffset: 0.65 },
   { code: 'KeyE', label: 'E', note: 'D#4', freq: 311.13, whiteOffset: 1.65 },
   { code: 'KeyT', label: 'T', note: 'F#4', freq: 369.99, whiteOffset: 3.65 },
@@ -45,9 +29,18 @@ const BLACK_KEYS: BlackKeyDef[] = [
   { code: 'KeyP', label: 'P', note: 'D#5', freq: 622.25, whiteOffset: 8.65 },
 ];
 
-const ALL_KEYS = new Map<string, { freq: number }>(
-  [...WHITE_KEYS, ...BLACK_KEYS].map((k) => [k.code, { freq: k.freq }])
-);
+// Octave presets: label shown in UI → offset from base (octave 4)
+const OCTAVE_PRESETS = [
+  { label: 'C2', offset: -2 },
+  { label: 'C3', offset: -1 },
+  { label: 'C4', offset:  0 },
+  { label: 'C5', offset:  1 },
+  { label: 'C6', offset:  2 },
+];
+
+function shiftNote(note: string, offset: number): string {
+  return note.replace(/\d/, (n) => String(Number(n) + offset));
+}
 
 function getAudioContext(ref: React.MutableRefObject<AudioContext | null>): AudioContext {
   if (!ref.current) {
@@ -61,12 +54,32 @@ function getAudioContext(ref: React.MutableRefObject<AudioContext | null>): Audi
 
 export function PianoKeyboard() {
   const audioCtxRef = useRef<AudioContext | null>(null);
-  // Map from key code → stop function
   const activeNotesRef = useRef<Map<string, () => void>>(new Map());
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
+  const [octaveOffset, setOctaveOffset] = useState(0);
+
+  const WHITE_KEYS = useMemo(() =>
+    BASE_WHITE_KEYS.map((k) => ({
+      ...k,
+      note: shiftNote(k.note, octaveOffset),
+      freq: k.freq * Math.pow(2, octaveOffset),
+    })),
+  [octaveOffset]);
+
+  const BLACK_KEYS = useMemo(() =>
+    BASE_BLACK_KEYS.map((k) => ({
+      ...k,
+      note: shiftNote(k.note, octaveOffset),
+      freq: k.freq * Math.pow(2, octaveOffset),
+    })),
+  [octaveOffset]);
+
+  const allKeys = useMemo(() =>
+    new Map([...WHITE_KEYS, ...BLACK_KEYS].map((k) => [k.code, { freq: k.freq }])),
+  [WHITE_KEYS, BLACK_KEYS]);
 
   const pressKey = useCallback((code: string) => {
-    const def = ALL_KEYS.get(code);
+    const def = allKeys.get(code);
     if (!def) return;
     if (activeNotesRef.current.has(code)) return; // already playing
 
@@ -78,7 +91,7 @@ export function PianoKeyboard() {
       next.add(code);
       return next;
     });
-  }, []);
+  }, [allKeys]);
 
   const releaseKey = useCallback((code: string) => {
     const stop = activeNotesRef.current.get(code);
@@ -119,12 +132,30 @@ export function PianoKeyboard() {
     };
   }, []);
 
+  const releaseAllAndSetOctave = useCallback((offset: number) => {
+    activeNotesRef.current.forEach((stop) => stop());
+    activeNotesRef.current.clear();
+    setPressedKeys(new Set());
+    setOctaveOffset(offset);
+  }, []);
+
   const totalWidth = WHITE_KEYS.length * WKW;
 
   return (
     <div className="piano-container">
       <div className="piano-hint">
-        Piano · <kbd>A–;</kbd> white keys · <kbd>W E T Y U O P</kbd> black keys
+        <span>Piano · <kbd>A–;</kbd> white · <kbd>W E T Y U O P</kbd> black</span>
+        <span className="piano-presets">
+          {OCTAVE_PRESETS.map(({ label, offset }) => (
+            <button
+              key={label}
+              className={`piano-preset-btn${octaveOffset === offset ? ' piano-preset-btn--active' : ''}`}
+              onClick={() => releaseAllAndSetOctave(offset)}
+            >
+              {label}
+            </button>
+          ))}
+        </span>
       </div>
       <div className="piano-keyboard" style={{ width: totalWidth }}>
         {/* White keys */}
