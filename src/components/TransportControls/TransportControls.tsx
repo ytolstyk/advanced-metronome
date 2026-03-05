@@ -151,7 +151,7 @@ export function TransportControls({
       </div>
 
       <div className="transport-controls-group">
-        <div className="flex flex-col gap-2 min-w-[110px]">
+        <div className="flex flex-col gap-2 flex-1 min-w-0">
           <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
             <span className="flex items-center justify-between">
               BPM
@@ -182,7 +182,7 @@ export function TransportControls({
           />
         </div>
 
-        <div className="flex flex-col gap-2 min-w-[110px]">
+        <div className="flex flex-col gap-2 flex-1 min-w-0">
           <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
             Measures: {measures.length}
           </Label>
@@ -197,7 +197,7 @@ export function TransportControls({
           />
         </div>
 
-        <div className="flex flex-col gap-2 min-w-[110px]">
+        <div className="flex flex-col gap-2 flex-1 min-w-0">
           <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
             Loops: {loopCount === 0 ? '∞' : loopCount}
           </Label>

@@ -16,9 +16,10 @@
 
 .transport-controls-group {
   display: flex;
-  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 20px;
   flex: 1;
+  min-width: 0;
 }
 
 .preset-row {
