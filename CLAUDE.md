@@ -18,7 +18,9 @@ Drum machine / step sequencer built with React 19 + TypeScript + Vite + Web Audi
 - **Build:** ES2022 target, ESNext modules, bundler module resolution
 - **JSX:** Automatic transform (react-jsx), no React import needed
 - **Lint:** ESLint 9.x flat config with TypeScript, react-hooks, react-refresh plugins
-- **CSS:** Vanilla CSS — `src/index.css` for globals, component-level `.css` files alongside components
+- **CSS:** Tailwind CSS v4 (via `@tailwindcss/vite` plugin) + vanilla CSS for domain-specific components (beat grid, instrument rows, drum grid)
+- **UI components:** shadcn/ui (New York style) — reusable primitives in `src/components/ui/` (Button, Input, Label, Slider, Select, ToggleGroup). Uses Radix UI primitives, `class-variance-authority`, `clsx`, `tailwind-merge`.
+- **Path alias:** `@/*` maps to `./src/*` (configured in `tsconfig.app.json` + `vite.config.ts`)
 
 ## State management
 

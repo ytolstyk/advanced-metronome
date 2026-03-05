@@ -5,6 +5,19 @@ import { MIN_BPM, MAX_BPM, MAX_MEASURES } from '../../constants';
 import { PRESETS } from '../../presets';
 import { loadUserPresets, saveUserPresets } from '../../userPresets';
 import type { UserPreset } from '../../userPresets';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import './TransportControls.css';
 
 interface TransportControlsProps {
@@ -82,166 +95,168 @@ export function TransportControls({
   return (
     <div className="transport-controls">
       <div className="transport-buttons">
-        <button
-          className="transport-btn transport-btn--play"
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-[52px] w-[52px] rounded-xl bg-[#1e3a22] border-[#336833] text-[#5ddb7a] hover:bg-[#265030] hover:border-[#428542] hover:text-[#5ddb7a] text-xl"
           onClick={onTogglePlayback}
-          type="button"
         >
           {state.isPlaying ? '⏸' : '▶'}
-        </button>
-        <button
-          className="transport-btn transport-btn--stop"
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-[52px] w-[52px] rounded-xl bg-[#3a1e22] border-[#683336] text-[#e07878] hover:bg-[#502628] hover:border-[#854244] hover:text-[#e07878] text-xl"
           onClick={onStop}
-          type="button"
         >
           ⏹
-        </button>
-        <button
-          className="transport-btn transport-btn--undo"
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-[52px] w-[52px] rounded-xl text-lg"
           onClick={onUndo}
           disabled={!canUndo}
-          type="button"
           title="Undo (Ctrl+Z)"
         >
           ↩
-        </button>
-        <button
-          className="transport-btn transport-btn--clear"
+        </Button>
+        <Button
+          variant="outline"
+          className="h-[52px] rounded-xl px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground"
           onClick={() => dispatch({ type: 'CLEAR_PATTERN' })}
-          type="button"
         >
           Clear
-        </button>
+        </Button>
       </div>
 
       <div className="transport-controls-group">
-        <label className="transport-label">
-          <span className="bpm-label-row">
-            BPM
-            <input
-              type="number"
-              className="bpm-number-input"
-              min={MIN_BPM}
-              max={MAX_BPM}
-              value={bpmFocused ? bpmDraft : String(bpm)}
-              onChange={(e) => setBpmDraft(e.target.value)}
-              onFocus={() => { setBpmDraft(String(bpm)); setBpmFocused(true); }}
-              onBlur={() => { setBpmFocused(false); commitBpm(); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  commitBpm();
-                  (e.target as HTMLInputElement).blur();
-                }
-              }}
-            />
-          </span>
-          <input
-            type="range"
-            className="transport-slider"
+        <div className="flex flex-col gap-2 min-w-[110px]">
+          <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
+            <span className="flex items-center justify-between">
+              BPM
+              <Input
+                type="number"
+                className="w-16 h-7 text-center font-bold text-base bg-secondary border-border [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                min={MIN_BPM}
+                max={MAX_BPM}
+                value={bpmFocused ? bpmDraft : String(bpm)}
+                onChange={(e) => setBpmDraft(e.target.value)}
+                onFocus={() => { setBpmDraft(String(bpm)); setBpmFocused(true); }}
+                onBlur={() => { setBpmFocused(false); commitBpm(); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    commitBpm();
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+              />
+            </span>
+          </Label>
+          <Slider
             min={MIN_BPM}
             max={MAX_BPM}
-            value={bpm}
-            onChange={(e) =>
-              dispatch({ type: 'SET_BPM', bpm: Number(e.target.value) })
-            }
+            step={1}
+            value={[bpm]}
+            onValueChange={([v]) => dispatch({ type: 'SET_BPM', bpm: v })}
           />
-        </label>
+        </div>
 
-        <label className="transport-label">
-          Measures: {measures.length}
-          <input
-            type="range"
-            className="transport-slider"
+        <div className="flex flex-col gap-2 min-w-[110px]">
+          <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
+            Measures: {measures.length}
+          </Label>
+          <Slider
             min={1}
             max={MAX_MEASURES}
-            value={measures.length}
-            onChange={(e) =>
-              dispatch({
-                type: 'SET_MEASURE_COUNT',
-                count: Number(e.target.value),
-              })
+            step={1}
+            value={[measures.length]}
+            onValueChange={([v]) =>
+              dispatch({ type: 'SET_MEASURE_COUNT', count: v })
             }
           />
-        </label>
+        </div>
 
-        <label className="transport-label">
-          Loops: {loopCount === 0 ? '∞' : loopCount}
-          <input
-            type="range"
-            className="transport-slider"
+        <div className="flex flex-col gap-2 min-w-[110px]">
+          <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
+            Loops: {loopCount === 0 ? '∞' : loopCount}
+          </Label>
+          <Slider
             min={0}
             max={16}
-            value={loopCount}
-            onChange={(e) =>
-              dispatch({
-                type: 'SET_LOOP_COUNT',
-                loopCount: Number(e.target.value),
-              })
+            step={1}
+            value={[loopCount]}
+            onValueChange={([v]) =>
+              dispatch({ type: 'SET_LOOP_COUNT', loopCount: v })
             }
           />
-        </label>
+        </div>
       </div>
 
       <div className="preset-row">
         <span className="preset-row-label">Preset</span>
-        <select
-          className="preset-select"
-          value={selectedPreset}
-          onChange={(e) => setSelectedPreset(e.target.value)}
-        >
-          <option value="">— select —</option>
-          <optgroup label="Built-in">
-            {PRESETS.map((p) => (
-              <option key={p.name} value={`builtin:${p.name}`}>{p.name}</option>
-            ))}
-          </optgroup>
-          {userPresets.length > 0 && (
-            <optgroup label="Saved">
-              {userPresets.map((p) => (
-                <option key={p.id} value={`user:${p.id}`}>{p.name}</option>
+        <Select value={selectedPreset} onValueChange={setSelectedPreset}>
+          <SelectTrigger className="flex-1 bg-secondary border-border">
+            <SelectValue placeholder="— select —" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectLabel>Built-in</SelectLabel>
+              {PRESETS.map((p) => (
+                <SelectItem key={p.name} value={`builtin:${p.name}`}>{p.name}</SelectItem>
               ))}
-            </optgroup>
-          )}
-        </select>
-        <button
-          type="button"
-          className="preset-apply-btn"
+            </SelectGroup>
+            {userPresets.length > 0 && (
+              <SelectGroup>
+                <SelectLabel>Saved</SelectLabel>
+                {userPresets.map((p) => (
+                  <SelectItem key={p.id} value={`user:${p.id}`}>{p.name}</SelectItem>
+                ))}
+              </SelectGroup>
+            )}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="font-bold uppercase tracking-wider text-xs"
           disabled={!selectedPreset}
           onClick={applySelectedPreset}
         >
           Apply
-        </button>
+        </Button>
         {isUserPresetSelected && (
-          <button
-            type="button"
-            className="preset-delete-btn"
+          <Button
+            variant="destructive"
+            size="sm"
             onClick={deleteSelectedPreset}
             title="Delete this preset"
           >
             ✕
-          </button>
+          </Button>
         )}
       </div>
 
       <div className="save-preset-row">
         <span className="preset-row-label">Save</span>
-        <input
+        <Input
           type="text"
-          className="save-preset-input"
+          className="flex-1 bg-secondary border-border"
           placeholder="Name this beat…"
           value={presetName}
           maxLength={40}
           onChange={(e) => setPresetName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') handleSavePreset(); }}
         />
-        <button
-          type="button"
-          className="preset-apply-btn"
+        <Button
+          variant="secondary"
+          size="sm"
+          className="font-bold uppercase tracking-wider text-xs"
           disabled={!presetName.trim()}
           onClick={handleSavePreset}
         >
           Save
-        </button>
+        </Button>
       </div>
     </div>
   );

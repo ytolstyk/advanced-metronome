@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import type { Measure, TimeSignature } from '../../types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import './MeasureHeaders.css';
 
 const MIN_BEATS = 1;
@@ -52,9 +55,9 @@ function MeasureHeaderCell({
     >
       <span className="measure-number">M{index + 1}</span>
       <div className="time-sig-inputs">
-        <input
+        <Input
           type="number"
-          className="time-sig-input"
+          className="w-[34px] h-6 px-1 text-center text-[0.85rem] font-bold bg-secondary border-border [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           title="Beats per measure"
           min={MIN_BEATS}
           max={MAX_BEATS}
@@ -67,9 +70,9 @@ function MeasureHeaderCell({
           }}
         />
         <span className="time-sig-sep">/</span>
-        <input
+        <Input
           type="number"
-          className="time-sig-input"
+          className="w-[34px] h-6 px-1 text-center text-[0.85rem] font-bold bg-secondary border-border [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           title="Subdivision (note value)"
           min={MIN_SUBDIV}
           max={MAX_SUBDIV}
@@ -82,39 +85,51 @@ function MeasureHeaderCell({
           }}
         />
       </div>
-      <div className="spb-group">
+      <ToggleGroup
+        type="single"
+        value={String(stepsPerBeat)}
+        onValueChange={(val) => {
+          if (val) onTimeSignatureChange(index, { beats, subdivision, stepsPerBeat: Number(val) as 1 | 2 | 3 });
+        }}
+        className="gap-0 border border-border rounded-md overflow-hidden"
+      >
         {([1, 2, 3] as const).map((n) => (
-          <button
+          <ToggleGroupItem
             key={n}
-            type="button"
-            className={['spb-btn', stepsPerBeat === n ? 'spb-btn--active' : ''].filter(Boolean).join(' ')}
+            value={String(n)}
+            className="rounded-none h-6 px-1.5 text-[0.72rem] font-bold min-w-0 data-[state=on]:bg-[#363880] data-[state=on]:text-[#c0c4ff]"
             title={n === 1 ? 'Straight' : n === 2 ? 'Half beats' : 'Triplets'}
-            onClick={() => onTimeSignatureChange(index, { beats, subdivision, stepsPerBeat: n })}
           >
             {n === 1 ? '1' : n === 2 ? '½' : '⅓'}
-          </button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
 
       <div className="measure-header-actions">
         {copyActive && !isCopySource ? (
-          <button
-            type="button"
-            className="measure-action-btn measure-action-btn--paste"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[0.68rem] font-bold uppercase tracking-wider text-green-400 hover:text-green-300 hover:bg-[#1e3428]"
             title="Paste pattern here"
             onClick={onPaste}
           >
             paste
-          </button>
+          </Button>
         ) : (
-          <button
-            type="button"
-            className={['measure-action-btn', isCopySource ? 'measure-action-btn--active' : ''].filter(Boolean).join(' ')}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-6 px-2 text-[0.68rem] font-bold uppercase tracking-wider ${
+              isCopySource
+                ? 'text-[#8080ff] bg-[#242456] border border-primary'
+                : 'text-muted-foreground'
+            }`}
             title={isCopySource ? 'Cancel copy' : 'Copy pattern'}
             onClick={onCopy}
           >
             copy
-          </button>
+          </Button>
         )}
       </div>
     </div>
