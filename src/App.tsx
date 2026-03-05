@@ -84,7 +84,6 @@ function App() {
 
   return (
     <div className="app">
-      <h1 className="app-title">Drumma Llama</h1>
       <DrumGrid state={state} dispatch={dispatchWithHistory} />
       <TransportControls
         state={state}
