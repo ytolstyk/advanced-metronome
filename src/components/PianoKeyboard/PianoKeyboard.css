@@ -23,6 +23,28 @@
   flex-wrap: wrap;
 }
 
+.piano-hint-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.piano-instrument-select {
+  background: #2e2f42;
+  border: 1px solid #464768;
+  border-radius: 5px;
+  color: #a0a0c8;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  cursor: pointer;
+  outline: none;
+}
+
+.piano-instrument-select:focus {
+  border-color: #3368a0;
+}
+
 .piano-presets {
   display: flex;
   gap: 4px;

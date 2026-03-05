@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
-import { playPianoNote } from '../../audio/pianoSynth';
+import { INSTRUMENT_PRESETS } from '../../audio/pianoPresets';
 import './PianoKeyboard.css';
 
 // White key width in pixels — used to compute black key positions
@@ -57,6 +57,12 @@ export function PianoKeyboard() {
   const activeNotesRef = useRef<Map<string, () => void>>(new Map());
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
   const [octaveOffset, setOctaveOffset] = useState(0);
+  const [presetId, setPresetId] = useState('piano');
+
+  const preset = useMemo(
+    () => INSTRUMENT_PRESETS.find((p) => p.id === presetId) ?? INSTRUMENT_PRESETS[0],
+    [presetId],
+  );
 
   const WHITE_KEYS = useMemo(() =>
     BASE_WHITE_KEYS.map((k) => ({
@@ -84,14 +90,14 @@ export function PianoKeyboard() {
     if (activeNotesRef.current.has(code)) return; // already playing
 
     const ctx = getAudioContext(audioCtxRef);
-    const stop = playPianoNote(ctx, def.freq);
+    const stop = preset.play(ctx, def.freq);
     activeNotesRef.current.set(code, stop);
     setPressedKeys((prev) => {
       const next = new Set(prev);
       next.add(code);
       return next;
     });
-  }, [allKeys]);
+  }, [allKeys, preset]);
 
   const releaseKey = useCallback((code: string) => {
     const stop = activeNotesRef.current.get(code);
@@ -144,7 +150,18 @@ export function PianoKeyboard() {
   return (
     <div className="piano-container">
       <div className="piano-hint">
-        <span>Piano · <kbd>A–;</kbd> white · <kbd>W E T Y U O P</kbd> black</span>
+        <span className="piano-hint-controls">
+          <select
+            className="piano-instrument-select"
+            value={presetId}
+            onChange={(e) => setPresetId(e.target.value)}
+          >
+            {INSTRUMENT_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+          </select>
+          <span><kbd>A–;</kbd> white · <kbd>W E T Y U O P</kbd> black</span>
+        </span>
         <span className="piano-presets">
           {OCTAVE_PRESETS.map(({ label, offset }) => (
             <button
@@ -157,6 +174,7 @@ export function PianoKeyboard() {
           ))}
         </span>
       </div>
+
       <div className="piano-keyboard" style={{ width: totalWidth }}>
         {/* White keys */}
         {WHITE_KEYS.map((k) => (
