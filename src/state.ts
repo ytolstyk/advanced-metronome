@@ -268,29 +268,56 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'COPY_MEASURE': {
       const measures = state.config.measures;
-      const stepsOf = (i: number) =>
-        measures[i].timeSignature.beats * (measures[i].timeSignature.stepsPerBeat ?? 1);
+      const stepsOf = (m: Measure) =>
+        m.timeSignature.beats * (m.timeSignature.stepsPerBeat ?? 1);
+
+      // Copy the source time signature onto the destination measure so that
+      // stepsPerBeat (half-beats, triplets) is preserved exactly.
+      const fromTs = measures[action.from].timeSignature;
+      const newMeasures = measures.map((m, i) =>
+        i === action.to ? { timeSignature: { ...fromTs } } : m,
+      );
+
+      // Locate the source beat data in the existing pattern.
       let fromOffset = 0;
-      for (let i = 0; i < action.from; i++) fromOffset += stepsOf(i);
-      const fromBeats = stepsOf(action.from);
+      for (let i = 0; i < action.from; i++) fromOffset += stepsOf(measures[i]);
+      const fromSteps = stepsOf(measures[action.from]);
 
-      let toOffset = 0;
-      for (let i = 0; i < action.to; i++) toOffset += stepsOf(i);
-      const toBeats = stepsOf(action.to);
-
-      const copyCount = Math.min(fromBeats, toBeats);
-      const newPattern = { ...state.pattern };
+      // Rebuild the full pattern array for the new measure layout.
+      const newPattern = {} as Pattern;
       for (const id of INSTRUMENT_IDS) {
-        const arr = [...newPattern[id]];
-        for (let i = 0; i < copyCount; i++) {
-          arr[toOffset + i] = state.pattern[id][fromOffset + i];
+        const oldArr = state.pattern[id];
+        const newArr = new Array(getTotalBeats(newMeasures)).fill(false);
+        let oldOff = 0;
+        let newOff = 0;
+        for (let mi = 0; mi < newMeasures.length; mi++) {
+          const oldSteps = stepsOf(measures[mi]);
+          const newSteps = stepsOf(newMeasures[mi]);
+          if (mi === action.to) {
+            for (let i = 0; i < fromSteps; i++) {
+              newArr[newOff + i] = oldArr[fromOffset + i] ?? false;
+            }
+          } else {
+            for (let i = 0; i < oldSteps; i++) {
+              newArr[newOff + i] = oldArr[oldOff + i] ?? false;
+            }
+          }
+          oldOff += oldSteps;
+          newOff += newSteps;
         }
-        for (let i = copyCount; i < toBeats; i++) {
-          arr[toOffset + i] = false;
-        }
-        newPattern[id] = arr;
+        newPattern[id] = newArr;
       }
-      return { ...state, pattern: newPattern };
+
+      const stepCountChanged =
+        stepsOf(measures[action.to]) !== stepsOf(newMeasures[action.to]);
+      return {
+        ...state,
+        config: { ...state.config, measures: newMeasures },
+        pattern: newPattern,
+        ...(stepCountChanged
+          ? { isPlaying: false, currentBeat: 0, currentLoop: 0 }
+          : {}),
+      };
     }
 
     case 'APPLY_PRESET': {
