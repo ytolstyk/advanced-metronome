@@ -6,7 +6,7 @@
 
 ![Drumma Llama screenshot](public/screenshot.png)
 
-Drumma Llama is a browser-based drum machine and step sequencer built with React 19, TypeScript, and the Web Audio API. No plugins, no dependencies on your patience — just beats.
+Drumma Llama is a browser-based drum machine, step sequencer, and guitar tuner built with React 19, TypeScript, and the Web Audio API. No plugins, no dependencies on your patience — just beats.
 
 ---
 
@@ -23,6 +23,8 @@ Drumma Llama is a browser-based drum machine and step sequencer built with React
 
 - **Play / Pause / Stop** transport controls
 - **BPM control** — slider for feel, number input for precision (40–300 BPM)
+- **Volume control** — master output level for the drum loop
+- **Humanize** — adds subtle timing, velocity, and pitch variation to make the loop feel less robotic
 - **Configurable loop count** — or loop infinitely, because some grooves never get old
 - **Configurable measure count** — up to 8 measures per loop
 - **Space bar** shortcut to play/pause
@@ -76,12 +78,38 @@ npm run preview  # Preview production build locally
 
 ---
 
+## Guitar Tuner
+
+Navigate to the **Tuner** tab to tune your guitar using your microphone.
+
+- **Chromatic detection** — identifies the closest note to the incoming signal in real time
+- **Vertical meter** — cursor moves up when sharp, down when flat, sits at centre when in tune
+- **Direction guidance** — shows "Tune up" or "Tune down" so you know which way to turn the peg
+- **6, 7, and 8-string support**
+- **Tuning presets** for each string count:
+
+| 6-string | 7-string | 8-string |
+|---|---|---|
+| Standard (EADGBe) | Standard (BEADGBe) | Standard (F#BEADGBe) |
+| Drop D | Drop A | Drop E |
+| Open G | Eb Standard | Eb Standard |
+| Open D | D Standard | |
+| Open E | | |
+| DADGAD | | |
+| Eb Standard | | |
+| D Standard | | |
+| Drop C | | |
+
+---
+
 ## Tech Stack
 
 - **React 19** + **TypeScript** + **Vite**
-- **Web Audio API** — lookahead scheduler (25ms interval, 100ms lookahead), fire-and-forget synthesis
-- **`useReducer`** — all state in one place, pure reducer, no external state library
-- **Vanilla CSS** — component-scoped stylesheets, no CSS-in-JS
+- **React Router** — client-side routing between Drum Machine and Tuner screens
+- **Web Audio API** — lookahead drum scheduler (25ms interval, 100ms lookahead), fire-and-forget synthesis, microphone pitch detection via `getUserMedia`
+- **`useReducer`** — all drum machine state in one place, pure reducer, no external state library
+- **Tailwind CSS v4** + vanilla CSS — component-scoped stylesheets, no CSS-in-JS
+- **shadcn/ui** — Radix UI-based component primitives
 - **localStorage** — auto-saves your current loop and user presets
 
 ---
@@ -90,23 +118,32 @@ npm run preview  # Preview production build locally
 
 ```
 src/
-├── App.tsx              # Root: useReducer, undo history, keyboard shortcuts
-├── state.ts             # Reducer + Action union (11 actions)
+├── main.tsx             # BrowserRouter, Nav, top-level routes
+├── App.tsx              # Drum machine: useReducer, undo history, keyboard shortcuts
+├── state.ts             # Reducer + Action union
 ├── types.ts             # AppState, Pattern, LoopConfig, TimeSignature
 ├── presets.ts           # 8 built-in beat patterns
 ├── userPresets.ts       # Custom preset persistence (localStorage)
 ├── constants.ts         # Instruments, defaults, limits
 ├── audio/
-│   ├── AudioEngine.ts   # Web Audio scheduler class
-│   └── drumSynths.ts    # Per-instrument synthesis functions
+│   ├── AudioEngine.ts   # Web Audio scheduler class (master GainNode for volume)
+│   ├── drumSynths.ts    # Per-instrument synthesis functions
+│   ├── exportAudio.ts   # WAV export via OfflineAudioContext
+│   ├── pianoSynth.ts    # Piano synthesis
+│   └── pianoPresets.ts  # Piano preset definitions
 ├── hooks/
-│   └── useAudioEngine.ts  # React bridge: callbacks → dispatch
+│   ├── useAudioEngine.ts    # React bridge: callbacks → dispatch, volume/humanize sync
+│   └── usePlaybackCursor.ts # Auto-scroll logic for the beat grid
+├── pages/
+│   └── TunerPage.tsx    # Guitar tuner: pitch detection (NSDF/MPM), vertical meter
 └── components/
+    ├── Nav/               # Sticky top navigation
     ├── DrumGrid/          # Scrollable step sequencer grid
     ├── MeasureHeaders/    # Time signature editors + copy/paste
     ├── InstrumentRow/     # One row per instrument
     ├── BeatCell/          # Individual step button
-    └── TransportControls/ # Playback, BPM, presets, undo
+    ├── TransportControls/ # Playback, BPM, volume, humanize, presets, undo
+    └── PianoKeyboard/     # Playable piano with presets
 ```
 
 ---
