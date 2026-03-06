@@ -6,7 +6,7 @@
 
 ![Drumma Llama screenshot](public/screenshot.png)
 
-Drumma Llama is a browser-based drum machine, step sequencer, and guitar tuner built with React 19, TypeScript, and the Web Audio API. No plugins, no dependencies on your patience — just beats.
+Drumma Llama is a browser-based drum machine, step sequencer, guitar tuner, chord library, and music theory tool built with React 19, TypeScript, and the Web Audio API. No plugins, no dependencies on your patience — just beats.
 
 ---
 
@@ -102,10 +102,34 @@ Navigate to the **Tuner** tab to tune your guitar using your microphone.
 
 ---
 
+## Chord Library
+
+Navigate to the **Chords** tab to browse guitar chord diagrams and tab notation.
+
+- **Full chord database** — major, minor, dominant 7th, major 7th, minor 7th, sus2, sus4, augmented, diminished, and more
+- **Filter by key and chord type** — narrow down to exactly what you need
+- **Fretboard diagrams and tab view** — toggle between visual fretboard diagrams and text tab notation
+- **Playback** — click any chord card to hear it strummed with a guitar-like timbre via Web Audio synthesis
+
+---
+
+## Circle of Fifths
+
+Navigate to the **Circle of 5ths** tab for an interactive music theory reference.
+
+- **Full 12-key diagram** — all major keys in the outer ring, relative minors in the inner ring
+- **Color-coded** — each key position has a unique hue for quick visual reference
+- **Hover highlighting** — hovering a key lights up that key and its immediate neighbours
+- **Click to select** — selecting a key draws connection lines to related keys (solid to 1-step neighbours, dashed to 2-step)
+- **Info panel** — shows the relative minor, key signature, and neighbouring keys for the selected key
+- **Rotate orientation** — toolbar lets you set any key to the 12 o'clock position
+
+---
+
 ## Tech Stack
 
 - **React 19** + **TypeScript** + **Vite**
-- **React Router** — client-side routing between Drum Machine and Tuner screens
+- **React Router** — client-side routing between Drum Machine, Tuner, Chords, and Circle of Fifths screens
 - **Web Audio API** — lookahead drum scheduler (25ms interval, 100ms lookahead), fire-and-forget synthesis, microphone pitch detection via `getUserMedia`
 - **`useReducer`** — all drum machine state in one place, pure reducer, no external state library
 - **Tailwind CSS v4** + vanilla CSS — component-scoped stylesheets, no CSS-in-JS
@@ -135,7 +159,9 @@ src/
 │   ├── useAudioEngine.ts    # React bridge: callbacks → dispatch, volume/humanize sync
 │   └── usePlaybackCursor.ts # Auto-scroll logic for the beat grid
 ├── pages/
-│   └── TunerPage.tsx    # Guitar tuner: pitch detection (NSDF/MPM), vertical meter
+│   ├── TunerPage.tsx           # Guitar tuner: pitch detection (NSDF/MPM), vertical meter
+│   ├── ChordsPage.tsx          # Chord library: diagrams, tab view, playback
+│   └── CircleOfFifthsPage.tsx  # Interactive circle of fifths diagram
 └── components/
     ├── Nav/               # Sticky top navigation
     ├── DrumGrid/          # Scrollable step sequencer grid
