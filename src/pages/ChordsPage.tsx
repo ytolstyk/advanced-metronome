@@ -7,27 +7,32 @@ import {
   ROOT_NOTES,
   chordName,
 } from '../data/chords';
-import './ChordsPage.css';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 // ── SVG constants ───────────────────────────────────────────────────────────
 const SVG_H = 120;
-const SVG_TOTAL_W = 118; // wider than fretboard to give room for fret label
-const STRING_X_START = 14;  // low E (string index 0)
+const SVG_TOTAL_W = 118;
+const STRING_X_START = 14;
 const STRING_SPACING = 14.4;
 const FRET_Y_START = 18;
 const FRET_SPACING = 21;
 const FRETS_SHOWN = 5;
 const NUT_Y = FRET_Y_START;
 
-// String x position: string 0 = low E (left), string 5 = high e (right)
 function stringX(idx: number): number {
   return STRING_X_START + idx * STRING_SPACING;
 }
 
-// Fret y position (center of the fret space above that fret line)
 function dotY(fretNum: number, visibleStart: number): number {
   return FRET_Y_START + (fretNum - visibleStart) * FRET_SPACING + FRET_SPACING / 2;
 }
+
+// ── Shared ToggleGroupItem className ────────────────────────────────────────
+const FILTER_ITEM_CLS =
+  'h-auto px-3 py-1 text-[0.82rem] font-semibold rounded-md ' +
+  'border border-[#353650] bg-[#1e1f2c] text-[#777] ' +
+  'hover:bg-[#1e1f2c] hover:border-[#555] hover:text-[#bbb] ' +
+  'data-[state=on]:border-[#5b7fff] data-[state=on]:bg-[#252850] data-[state=on]:text-[#8eaaff]';
 
 // ── FretboardDiagram ────────────────────────────────────────────────────────
 function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
@@ -35,7 +40,6 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
   const visibleStart = startFret;
   const isOpenPosition = startFret <= 1;
 
-  // String lines (vertical)
   const stringLines = frets.map((_, i) => (
     <line
       key={`s${i}`}
@@ -45,7 +49,6 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
     />
   ));
 
-  // Fret lines (horizontal)
   const fretLines = Array.from({ length: FRETS_SHOWN + 1 }, (_, f) => {
     const y = FRET_Y_START + f * FRET_SPACING;
     const isNut = f === 0 && isOpenPosition;
@@ -60,7 +63,6 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
     );
   });
 
-  // Open / muted markers above nut
   const markers = frets.map((fret, i) => {
     if (fret === 0) {
       return (
@@ -77,7 +79,6 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
     return null;
   });
 
-  // Barre bar
   const barreEl = barre ? (() => {
     const x1 = stringX(barre.fromString - 1);
     const x2 = stringX(barre.toString - 1);
@@ -92,22 +93,14 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
     );
   })() : null;
 
-  // Finger dots
   const dots = frets.map((fret, i) => {
     if (fret <= 0) return null;
-    // Skip strings already covered by barre visually (the barre rect covers them)
-    // Still render so they show on top of the barre for clarity at higher frets
     if (barre && fret === barre.fret && i >= barre.fromString - 1 && i <= barre.toString - 1) {
-      return null; // barre rect handles these
+      return null;
     }
-    const cx = stringX(i);
-    const cy = dotY(fret, visibleStart);
-    return (
-      <circle key={`d${i}`} cx={cx} cy={cy} r={5.5} fill="#5b7fff" />
-    );
+    return <circle key={`d${i}`} cx={stringX(i)} cy={dotY(fret, visibleStart)} r={5.5} fill="#5b7fff" />;
   });
 
-  // Fret label (e.g. "3fr") when not open position
   const fretLabel = !isOpenPosition ? (
     <text x={SVG_TOTAL_W - 2} y={FRET_Y_START + FRET_SPACING / 2}
       textAnchor="end" fontSize="14" fill="#888" dominantBaseline="middle">
@@ -116,8 +109,7 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
   ) : null;
 
   return (
-    <svg viewBox={`0 0 ${SVG_TOTAL_W} ${SVG_H}`} className="chord-diagram-svg"
-      aria-hidden="true">
+    <svg viewBox={`0 0 ${SVG_TOTAL_W} ${SVG_H}`} className="w-full max-w-[140px]" aria-hidden="true">
       {stringLines}
       {fretLines}
       {markers}
@@ -129,22 +121,24 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
 }
 
 // ── TabView ─────────────────────────────────────────────────────────────────
-const STRING_NAMES = ['e', 'B', 'G', 'D', 'A', 'E']; // high to low
+const STRING_NAMES = ['e', 'B', 'G', 'D', 'A', 'E'];
 
 function TabView({ voicing }: { voicing: ChordVoicing }) {
   const { frets } = voicing;
-  // frets[5] = high e, frets[0] = low E — display high to low
-  const lines = STRING_NAMES.map((name, i) => {
-    const fret = frets[5 - i];
-    const label = fret === -1 ? 'x' : String(fret);
-    return (
-      <div key={name} className="chord-tab-line">
-        <span className="chord-tab-string">{name}</span>
-        <span className="chord-tab-fret">{`|--${label.padEnd(2, '-')}|`}</span>
-      </div>
-    );
-  });
-  return <div className="chord-tab">{lines}</div>;
+  return (
+    <div className="font-mono text-[0.9rem] leading-relaxed bg-[#14141e] rounded-md px-2.5 py-2 w-full">
+      {STRING_NAMES.map((name, i) => {
+        const fret = frets[5 - i];
+        const label = fret === -1 ? 'x' : String(fret);
+        return (
+          <div key={name} className="flex whitespace-pre">
+            <span className="text-[#7070a0] font-bold">{name}</span>
+            <span className="text-[#c8d8ff]">{`|--${label.padEnd(2, '-')}|`}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ── ChordCard ────────────────────────────────────────────────────────────────
@@ -157,8 +151,10 @@ function ChordCard({
   viewMode: 'fretboard' | 'tab';
 }) {
   return (
-    <div className="chord-card">
-      <div className="chord-card-name">{chordName(root, type)}</div>
+    <div className="bg-[#1e1f2c] border border-[#353650] rounded-xl p-3.5 flex flex-col items-center gap-2.5">
+      <div className="text-[1.05rem] font-bold text-[#8eaaff] text-center">
+        {chordName(root, type)}
+      </div>
       {viewMode === 'fretboard'
         ? <FretboardDiagram voicing={voicing} />
         : <TabView voicing={voicing} />
@@ -182,71 +178,57 @@ export function ChordsPage() {
   );
 
   return (
-    <div className="chords-page">
-      <div className="chords-filter-bar">
+    <div className="flex flex-col gap-4 px-4 pt-6 pb-12 max-w-[1100px] mx-auto">
 
-        {/* Key selector */}
-        <div className="chords-key-btns">
-          <span className="chords-section-label" style={{ alignSelf: 'center', marginRight: 4 }}>Key</span>
-          <button
-            className={`chord-key-btn${selectedKey === 'all' ? ' active' : ''}`}
-            onClick={() => setSelectedKey('all')}
-          >
-            All
-          </button>
+      {/* Key filter */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#7070a0] mr-1">Key</span>
+        <ToggleGroup
+          type="single"
+          value={selectedKey}
+          onValueChange={v => { if (v) setSelectedKey(v as RootNote | 'all'); }}
+          className="flex flex-wrap justify-start gap-1"
+        >
+          <ToggleGroupItem value="all" className={FILTER_ITEM_CLS}>All</ToggleGroupItem>
           {ROOT_NOTES.map(note => (
-            <button
-              key={note}
-              className={`chord-key-btn${selectedKey === note ? ' active' : ''}`}
-              onClick={() => setSelectedKey(note)}
-            >
-              {note}
-            </button>
+            <ToggleGroupItem key={note} value={note} className={FILTER_ITEM_CLS}>{note}</ToggleGroupItem>
           ))}
-        </div>
-
-        {/* Type filter */}
-        <div className="chords-key-btns">
-          <span className="chords-section-label" style={{ alignSelf: 'center', marginRight: 4 }}>Type</span>
-          <button
-            className={`chord-key-btn${selectedType === 'all' ? ' active' : ''}`}
-            onClick={() => setSelectedType('all')}
-          >
-            All
-          </button>
-          {CHORD_TYPES.map(t => (
-            <button
-              key={t}
-              className={`chord-key-btn${selectedType === t ? ' active' : ''}`}
-              onClick={() => setSelectedType(t)}
-            >
-              {CHORD_TYPE_LABELS[t]}
-            </button>
-          ))}
-        </div>
-
-        {/* View toggle */}
-        <div className="chords-type-row">
-          <div className="chords-view-toggle">
-            <button
-              className={`chords-view-btn${viewMode === 'fretboard' ? ' active' : ''}`}
-              onClick={() => setViewMode('fretboard')}
-            >
-              Diagram
-            </button>
-            <button
-              className={`chords-view-btn${viewMode === 'tab' ? ' active' : ''}`}
-              onClick={() => setViewMode('tab')}
-            >
-              Tab
-            </button>
-          </div>
-        </div>
+        </ToggleGroup>
       </div>
 
-      <div className="chords-grid">
+      {/* Type filter */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#7070a0] mr-1">Type</span>
+        <ToggleGroup
+          type="single"
+          value={selectedType}
+          onValueChange={v => { if (v) setSelectedType(v as ChordType | 'all'); }}
+          className="flex flex-wrap justify-start gap-1"
+        >
+          <ToggleGroupItem value="all" className={FILTER_ITEM_CLS}>All</ToggleGroupItem>
+          {CHORD_TYPES.map(t => (
+            <ToggleGroupItem key={t} value={t} className={FILTER_ITEM_CLS}>{CHORD_TYPE_LABELS[t]}</ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+
+      {/* View toggle */}
+      <div>
+        <ToggleGroup
+          type="single"
+          value={viewMode}
+          onValueChange={v => { if (v) setViewMode(v as 'fretboard' | 'tab'); }}
+          className="justify-start gap-0.5"
+        >
+          <ToggleGroupItem value="fretboard" className={FILTER_ITEM_CLS}>Diagram</ToggleGroupItem>
+          <ToggleGroupItem value="tab" className={FILTER_ITEM_CLS}>Tab</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
+      {/* Grid */}
+      <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]">
         {filtered.length === 0 && (
-          <div className="chords-empty">No chords found.</div>
+          <div className="col-span-full text-center text-[#555] py-10">No chords found.</div>
         )}
         {filtered.map(entry => (
           <ChordCard
