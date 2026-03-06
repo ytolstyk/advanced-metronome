@@ -145,16 +145,6 @@ export function TunerPage() {
   const target = preset.strings[safeStringIdx];
   const targetFreq = noteToFreq(target.note, target.octave);
 
-  // Reset selections when string count changes
-  useEffect(() => {
-    setPresetIdx(0);
-    setSelectedString(0);
-  }, [stringCount]);
-
-  useEffect(() => {
-    setSelectedString(s => Math.min(s, preset.strings.length - 1));
-  }, [preset]);
-
   // ── Audio lifecycle ────────────────────────────────────────────────────
   const stopListening = useCallback(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);

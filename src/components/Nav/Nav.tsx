@@ -12,6 +12,9 @@ export function Nav() {
         <NavLink to="/tuner" className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
           Tuner
         </NavLink>
+        <NavLink to="/chords" className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
+          Chords
+        </NavLink>
       </div>
     </nav>
   );
