@@ -81,7 +81,7 @@ export async function exportDrumLoop(
     for (const id of INSTRUMENT_IDS) {
       if (pattern[id][beat]) {
         // OfflineAudioContext shares the BaseAudioContext API used by drumSynths
-        drumSynths[id](offlineCtx as unknown as AudioContext, beatTimes[beat]);
+        drumSynths[id](offlineCtx as unknown as AudioContext, offlineCtx.destination, beatTimes[beat]);
       }
     }
   }

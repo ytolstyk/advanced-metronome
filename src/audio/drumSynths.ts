@@ -1,8 +1,8 @@
 // vel: volume multiplier (1 = normal), pitch: frequency multiplier (1 = normal)
-type DrumSynth = (ctx: AudioContext, time: number, vel?: number, pitch?: number) => void;
+type DrumSynth = (ctx: AudioContext, dest: AudioNode, time: number, vel?: number, pitch?: number) => void;
 
 export const drumSynths: Record<string, DrumSynth> = {
-  kick(ctx, time, vel = 1, pitch = 1) {
+  kick(ctx, dest, time, vel = 1, pitch = 1) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -11,12 +11,12 @@ export const drumSynths: Record<string, DrumSynth> = {
     gain.gain.setValueAtTime(vel, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(dest);
     osc.start(time);
     osc.stop(time + 0.4);
   },
 
-  snare(ctx, time, vel = 1, pitch = 1) {
+  snare(ctx, dest, time, vel = 1, pitch = 1) {
     // Triangle oscillator body
     const osc = ctx.createOscillator();
     const oscGain = ctx.createGain();
@@ -25,7 +25,7 @@ export const drumSynths: Record<string, DrumSynth> = {
     oscGain.gain.setValueAtTime(0.7 * vel, time);
     oscGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
     osc.connect(oscGain);
-    oscGain.connect(ctx.destination);
+    oscGain.connect(dest);
     osc.start(time);
     osc.stop(time + 0.15);
 
@@ -46,12 +46,12 @@ export const drumSynths: Record<string, DrumSynth> = {
     noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
-    noiseGain.connect(ctx.destination);
+    noiseGain.connect(dest);
     noise.start(time);
     noise.stop(time + 0.15);
   },
 
-  hihat(ctx, time, vel = 1, ) {
+  hihat(ctx, dest, time, vel = 1) {
     const bufferSize = ctx.sampleRate * 0.05;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -69,12 +69,12 @@ export const drumSynths: Record<string, DrumSynth> = {
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
     noise.connect(filter);
     filter.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(dest);
     noise.start(time);
     noise.stop(time + 0.05);
   },
 
-  openhat(ctx, time, vel = 1, ) {
+  openhat(ctx, dest, time, vel = 1) {
     const bufferSize = ctx.sampleRate * 0.3;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -92,12 +92,12 @@ export const drumSynths: Record<string, DrumSynth> = {
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
     noise.connect(filter);
     filter.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(dest);
     noise.start(time);
     noise.stop(time + 0.3);
   },
 
-  clap(ctx, time, vel = 1, ) {
+  clap(ctx, dest, time, vel = 1) {
     const bufferSize = ctx.sampleRate * 0.15;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -120,12 +120,12 @@ export const drumSynths: Record<string, DrumSynth> = {
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
     noise.connect(filter);
     filter.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(dest);
     noise.start(time);
     noise.stop(time + 0.15);
   },
 
-  rim(ctx, time, vel = 1, pitch = 1) {
+  rim(ctx, dest, time, vel = 1, pitch = 1) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -133,12 +133,12 @@ export const drumSynths: Record<string, DrumSynth> = {
     gain.gain.setValueAtTime(0.6 * vel, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(dest);
     osc.start(time);
     osc.stop(time + 0.03);
   },
 
-  tom(ctx, time, vel = 1, pitch = 1) {
+  tom(ctx, dest, time, vel = 1, pitch = 1) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -147,7 +147,7 @@ export const drumSynths: Record<string, DrumSynth> = {
     gain.gain.setValueAtTime(0.8 * vel, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(dest);
     osc.start(time);
     osc.stop(time + 0.3);
   },

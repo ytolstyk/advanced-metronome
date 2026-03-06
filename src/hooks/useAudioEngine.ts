@@ -7,6 +7,7 @@ export function useAudioEngine(
   state: AppState,
   dispatch: React.Dispatch<Action>,
   humanize: number,
+  volume: number,
 ) {
   const engineRef = useRef<AudioEngine | null>(null);
 
@@ -98,6 +99,10 @@ export function useAudioEngine(
   useEffect(() => {
     engineRef.current?.setHumanize(humanize);
   }, [humanize]);
+
+  useEffect(() => {
+    engineRef.current?.setVolume(volume);
+  }, [volume]);
 
   return {
     play,

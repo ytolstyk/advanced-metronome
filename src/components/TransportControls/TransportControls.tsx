@@ -1,15 +1,15 @@
-import { useState } from 'react';
-import type { AppState } from '../../types';
-import type { Action } from '../../state';
-import { MIN_BPM, MAX_BPM, MAX_MEASURES } from '../../constants';
-import { exportDrumLoop } from '../../audio/exportAudio';
-import { PRESETS } from '../../presets';
-import { loadUserPresets, saveUserPresets } from '../../userPresets';
-import type { UserPreset } from '../../userPresets';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
+import { useState } from "react";
+import type { AppState } from "../../types";
+import type { Action } from "../../state";
+import { MIN_BPM, MAX_BPM, MAX_MEASURES } from "../../constants";
+import { exportDrumLoop } from "../../audio/exportAudio";
+import { PRESETS } from "../../presets";
+import { loadUserPresets, saveUserPresets } from "../../userPresets";
+import type { UserPreset } from "../../userPresets";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -18,8 +18,8 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import './TransportControls.css';
+} from "@/components/ui/select";
+import "./TransportControls.css";
 
 interface TransportControlsProps {
   state: AppState;
@@ -30,6 +30,8 @@ interface TransportControlsProps {
   canUndo: boolean;
   humanize: number;
   onHumanizeChange: (v: number) => void;
+  volume: number;
+  onVolumeChange: (v: number) => void;
 }
 
 export function TransportControls({
@@ -41,53 +43,68 @@ export function TransportControls({
   canUndo,
   humanize,
   onHumanizeChange,
+  volume,
+  onVolumeChange,
 }: TransportControlsProps) {
   const { bpm, loopCount, measures } = state.config;
 
-  const [bpmDraft, setBpmDraft] = useState('');
+  const [bpmDraft, setBpmDraft] = useState("");
   const [bpmFocused, setBpmFocused] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      await exportDrumLoop(state.pattern, state.config.measures, state.config.bpm);
+      await exportDrumLoop(
+        state.pattern,
+        state.config.measures,
+        state.config.bpm,
+      );
     } finally {
       setExporting(false);
     }
   };
 
   // Preset select — values are prefixed: "builtin:<name>" or "user:<id>"
-  const [selectedPreset, setSelectedPreset] = useState('');
-  const [userPresets, setUserPresets] = useState<UserPreset[]>(() => loadUserPresets());
-  const [presetName, setPresetName] = useState('');
+  const [selectedPreset, setSelectedPreset] = useState("");
+  const [userPresets, setUserPresets] = useState<UserPreset[]>(() =>
+    loadUserPresets(),
+  );
+  const [presetName, setPresetName] = useState("");
 
   const commitBpm = () => {
     const parsed = parseInt(bpmDraft, 10);
-    const clamped = isNaN(parsed) ? bpm : Math.min(MAX_BPM, Math.max(MIN_BPM, parsed));
-    dispatch({ type: 'SET_BPM', bpm: clamped });
+    const clamped = isNaN(parsed)
+      ? bpm
+      : Math.min(MAX_BPM, Math.max(MIN_BPM, parsed));
+    dispatch({ type: "SET_BPM", bpm: clamped });
   };
 
   const applySelectedPreset = () => {
-    if (selectedPreset.startsWith('builtin:')) {
+    if (selectedPreset.startsWith("builtin:")) {
       const name = selectedPreset.slice(8);
       const preset = PRESETS.find((p) => p.name === name);
-      if (preset) dispatch({ type: 'APPLY_PRESET', preset });
-    } else if (selectedPreset.startsWith('user:')) {
+      if (preset) dispatch({ type: "APPLY_PRESET", preset });
+    } else if (selectedPreset.startsWith("user:")) {
       const id = selectedPreset.slice(5);
       const up = userPresets.find((p) => p.id === id);
-      if (up) dispatch({ type: 'APPLY_USER_PRESET', config: up.config, pattern: up.pattern });
+      if (up)
+        dispatch({
+          type: "APPLY_USER_PRESET",
+          config: up.config,
+          pattern: up.pattern,
+        });
     }
-    setSelectedPreset('');
+    setSelectedPreset("");
   };
 
   const deleteSelectedPreset = () => {
-    if (!selectedPreset.startsWith('user:')) return;
+    if (!selectedPreset.startsWith("user:")) return;
     const id = selectedPreset.slice(5);
     const updated = userPresets.filter((p) => p.id !== id);
     setUserPresets(updated);
     saveUserPresets(updated);
-    setSelectedPreset('');
+    setSelectedPreset("");
   };
 
   const handleSavePreset = () => {
@@ -102,10 +119,10 @@ export function TransportControls({
     const updated = [...userPresets, newPreset];
     setUserPresets(updated);
     saveUserPresets(updated);
-    setPresetName('');
+    setPresetName("");
   };
 
-  const isUserPresetSelected = selectedPreset.startsWith('user:');
+  const isUserPresetSelected = selectedPreset.startsWith("user:");
 
   return (
     <div className="transport-controls">
@@ -116,7 +133,7 @@ export function TransportControls({
           className="h-[52px] w-[52px] rounded-xl bg-[#1e3a22] border-[#336833] text-[#5ddb7a] hover:bg-[#265030] hover:border-[#428542] hover:text-[#5ddb7a] text-xl"
           onClick={onTogglePlayback}
         >
-          {state.isPlaying ? '⏸' : '▶'}
+          {state.isPlaying ? "⏸" : "▶"}
         </Button>
         <Button
           variant="outline"
@@ -150,10 +167,16 @@ export function TransportControls({
                 max={MAX_BPM}
                 value={bpmFocused ? bpmDraft : String(bpm)}
                 onChange={(e) => setBpmDraft(e.target.value)}
-                onFocus={() => { setBpmDraft(String(bpm)); setBpmFocused(true); }}
-                onBlur={() => { setBpmFocused(false); commitBpm(); }}
+                onFocus={() => {
+                  setBpmDraft(String(bpm));
+                  setBpmFocused(true);
+                }}
+                onBlur={() => {
+                  setBpmFocused(false);
+                  commitBpm();
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === "Enter") {
                     commitBpm();
                     (e.target as HTMLInputElement).blur();
                   }
@@ -166,52 +189,64 @@ export function TransportControls({
             max={MAX_BPM}
             step={1}
             value={[bpm]}
-            onValueChange={([v]) => dispatch({ type: 'SET_BPM', bpm: v })}
+            onValueChange={([v]) => dispatch({ type: "SET_BPM", bpm: v })}
           />
         </div>
 
-        <div className="flex flex-1 min-w-0 max-sm:basis-full max-sm:flex-col gap-5">
-          <div className="flex flex-col gap-2 flex-1 min-w-0">
-            <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-between">
-              Measures: {measures.length}
-              <span className="flex gap-1">
-                <button
-                  className="w-5 h-5 rounded text-xs leading-none bg-secondary border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
-                  onClick={() => dispatch({ type: 'SET_MEASURE_COUNT', count: measures.length - 1 })}
-                  disabled={measures.length <= 1}
-                >−</button>
-                <button
-                  className="w-5 h-5 rounded text-xs leading-none bg-secondary border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
-                  onClick={() => dispatch({ type: 'SET_MEASURE_COUNT', count: measures.length + 1 })}
-                  disabled={measures.length >= MAX_MEASURES}
-                >+</button>
-              </span>
-            </Label>
-            <Slider
-              min={1}
-              max={MAX_MEASURES}
-              step={1}
-              value={[measures.length]}
-              onValueChange={([v]) =>
-                dispatch({ type: 'SET_MEASURE_COUNT', count: v })
-              }
-            />
-          </div>
+        <div className="flex flex-col gap-2 flex-1 min-w-0 max-sm:basis-full">
+          <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-between">
+            Measures: {measures.length}
+            <span className="flex gap-1">
+              <button
+                className="w-5 h-5 rounded text-xs leading-none bg-secondary border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
+                onClick={() =>
+                  dispatch({
+                    type: "SET_MEASURE_COUNT",
+                    count: measures.length - 1,
+                  })
+                }
+                disabled={measures.length <= 1}
+              >
+                −
+              </button>
+              <button
+                className="w-5 h-5 rounded text-xs leading-none bg-secondary border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
+                onClick={() =>
+                  dispatch({
+                    type: "SET_MEASURE_COUNT",
+                    count: measures.length + 1,
+                  })
+                }
+                disabled={measures.length >= MAX_MEASURES}
+              >
+                +
+              </button>
+            </span>
+          </Label>
+          <Slider
+            min={1}
+            max={MAX_MEASURES}
+            step={1}
+            value={[measures.length]}
+            onValueChange={([v]) =>
+              dispatch({ type: "SET_MEASURE_COUNT", count: v })
+            }
+          />
+        </div>
 
-          <div className="flex flex-col gap-2 flex-1 min-w-0">
-            <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
-              Loops: {loopCount === 0 ? '∞' : loopCount}
-            </Label>
-            <Slider
-              min={0}
-              max={16}
-              step={1}
-              value={[loopCount]}
-              onValueChange={([v]) =>
-                dispatch({ type: 'SET_LOOP_COUNT', loopCount: v })
-              }
-            />
-          </div>
+        <div className="flex flex-col gap-2 flex-1 min-w-0 max-sm:basis-full">
+          <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
+            Loops: {loopCount === 0 ? "∞" : loopCount}
+          </Label>
+          <Slider
+            min={0}
+            max={16}
+            step={1}
+            value={[loopCount]}
+            onValueChange={([v]) =>
+              dispatch({ type: "SET_LOOP_COUNT", loopCount: v })
+            }
+          />
         </div>
       </div>
 
@@ -219,18 +254,20 @@ export function TransportControls({
         <Button
           variant="outline"
           className="h-9 rounded-lg px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground"
-          onClick={() => dispatch({ type: 'CLEAR_PATTERN' })}
+          onClick={() => dispatch({ type: "CLEAR_PATTERN" })}
         >
           Clear
         </Button>
         <Button
           variant="outline"
           className="h-9 rounded-lg px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground"
-          onClick={() => { void handleExport(); }}
+          onClick={() => {
+            void handleExport();
+          }}
           disabled={exporting}
           title="Download drum loop as WAV"
         >
-          {exporting ? '⏳' : '⬇ WAV'}
+          {exporting ? "⏳" : "⬇ WAV"}
         </Button>
         <div className="flex flex-col gap-2 min-w-0 w-[180px] max-sm:w-auto max-sm:flex-1">
           <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
@@ -242,6 +279,18 @@ export function TransportControls({
             step={1}
             value={[humanize]}
             onValueChange={([v]) => onHumanizeChange(v)}
+          />
+        </div>
+        <div className="flex flex-col gap-2 min-w-0 w-[180px] max-sm:basis-full max-sm:w-auto">
+          <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
+            Volume: {volume}%
+          </Label>
+          <Slider
+            min={0}
+            max={100}
+            step={1}
+            value={[volume]}
+            onValueChange={([v]) => onVolumeChange(v)}
           />
         </div>
       </div>
@@ -256,14 +305,18 @@ export function TransportControls({
             <SelectGroup>
               <SelectLabel>Built-in</SelectLabel>
               {PRESETS.map((p) => (
-                <SelectItem key={p.name} value={`builtin:${p.name}`}>{p.name}</SelectItem>
+                <SelectItem key={p.name} value={`builtin:${p.name}`}>
+                  {p.name}
+                </SelectItem>
               ))}
             </SelectGroup>
             {userPresets.length > 0 && (
               <SelectGroup>
                 <SelectLabel>Saved</SelectLabel>
                 {userPresets.map((p) => (
-                  <SelectItem key={p.id} value={`user:${p.id}`}>{p.name}</SelectItem>
+                  <SelectItem key={p.id} value={`user:${p.id}`}>
+                    {p.name}
+                  </SelectItem>
                 ))}
               </SelectGroup>
             )}
@@ -299,7 +352,9 @@ export function TransportControls({
           value={presetName}
           maxLength={40}
           onChange={(e) => setPresetName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleSavePreset(); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSavePreset();
+          }}
         />
         <Button
           variant="secondary"

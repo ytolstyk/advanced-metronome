@@ -11,6 +11,7 @@ export type StopCallback = () => void;
 
 export class AudioEngine {
   private ctx: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
   private currentBeat = 0;
   private nextBeatTime = 0;
@@ -23,10 +24,14 @@ export class AudioEngine {
   private onBeat: BeatCallback | null = null;
   private onStop: StopCallback | null = null;
   private humanize = 0; // 0–100
+  private volume = 1;   // 0–1
 
   getAudioContext(): AudioContext {
     if (!this.ctx) {
       this.ctx = new AudioContext();
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.value = this.volume;
+      this.masterGain.connect(this.ctx.destination);
     }
     return this.ctx;
   }
@@ -59,6 +64,11 @@ export class AudioEngine {
     this.humanize = pct;
   }
 
+  setVolume(v: number) {
+    this.volume = v;
+    if (this.masterGain) this.masterGain.gain.value = v;
+  }
+
   updateConfig(pattern: Pattern, measures: Measure[], bpm: number, loopCount: number) {
     this.pattern = pattern;
     this.measures = measures;
@@ -87,6 +97,7 @@ export class AudioEngine {
     const totalBeats = getTotalBeats(this.measures);
     if (totalBeats === 0) return;
 
+    const dest = this.masterGain ?? this.ctx.destination;
     for (const id of INSTRUMENT_IDS) {
       if (this.pattern[id][this.currentBeat]) {
         if (this.humanize > 0) {
@@ -94,9 +105,9 @@ export class AudioEngine {
           const jitter = (Math.random() - 0.5) * 0.030 * h; // up to ±15ms
           const vel = 1 - 0.40 * h * Math.random();          // down to 60% at 100%
           const pitch = 1 + (Math.random() - 0.5) * 0.10 * h; // up to ±5% at 100%
-          drumSynths[id](this.ctx, this.nextBeatTime + jitter, vel, pitch);
+          drumSynths[id](this.ctx, dest, this.nextBeatTime + jitter, vel, pitch);
         } else {
-          drumSynths[id](this.ctx, this.nextBeatTime);
+          drumSynths[id](this.ctx, dest, this.nextBeatTime);
         }
       }
     }
