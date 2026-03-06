@@ -7,6 +7,7 @@ const LINKS = [
   { to: "/", label: "Drum Machine", end: true },
   { to: "/tuner", label: "Tuner" },
   { to: "/chords", label: "Chords" },
+  { to: "/circle", label: "Circle of 5ths" },
 ];
 
 function linkCls(isActive: boolean, mobile = false) {

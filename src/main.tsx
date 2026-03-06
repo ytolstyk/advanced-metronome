@@ -6,6 +6,7 @@ import App from './App.tsx'
 import { Nav } from './components/Nav/Nav.tsx'
 import { TunerPage } from './pages/TunerPage.tsx'
 import { ChordsPage } from './pages/ChordsPage.tsx'
+import { CircleOfFifthsPage } from './pages/CircleOfFifthsPage.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -15,6 +16,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<App />} />
         <Route path="/tuner" element={<TunerPage />} />
         <Route path="/chords" element={<ChordsPage />} />
+        <Route path="/circle" element={<CircleOfFifthsPage />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
