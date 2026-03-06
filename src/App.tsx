@@ -57,9 +57,8 @@ function App() {
   }, []);
 
   const [showPiano, setShowPiano] = useState(false);
-  const [humanize, setHumanize] = useState(0);
-  const [volume, setVolume] = useState(80);
 
+  const { humanize, volume } = state.config;
   const { togglePlayback, stop } = useAudioEngine(state, dispatchWithHistory, humanize, volume / 100);
 
   const { config, pattern } = state;
@@ -94,9 +93,9 @@ function App() {
         onUndo={undo}
         canUndo={historyLen > 0}
         humanize={humanize}
-        onHumanizeChange={setHumanize}
+        onHumanizeChange={(v) => dispatchWithHistory({ type: 'SET_HUMANIZE', humanize: v })}
         volume={volume}
-        onVolumeChange={setVolume}
+        onVolumeChange={(v) => dispatchWithHistory({ type: 'SET_VOLUME', volume: v })}
       />
       <div className="piano-toggle-row">
         <button

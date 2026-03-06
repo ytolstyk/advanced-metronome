@@ -9,9 +9,11 @@ import type {
 import type { Preset } from './presets';
 import {
   DEFAULT_BPM,
+  DEFAULT_HUMANIZE,
   DEFAULT_LOOP_COUNT,
   DEFAULT_MEASURE,
   DEFAULT_MEASURE_COUNT,
+  DEFAULT_VOLUME,
   INSTRUMENT_IDS,
 } from './constants';
 
@@ -113,7 +115,7 @@ function createDefaultMeasures(): Measure[] {
 const STORAGE_KEY = 'drum-machine-state';
 
 interface PersistedState {
-  config: AppState['config'];
+  config: Omit<LoopConfig, 'humanize' | 'volume'> & { humanize?: number; volume?: number };
   pattern: Pattern;
 }
 
@@ -140,7 +142,11 @@ export function createInitialState(): AppState {
   const persisted = loadPersistedState();
   if (persisted) {
     return {
-      config: persisted.config,
+      config: {
+        humanize: DEFAULT_HUMANIZE,
+        volume: DEFAULT_VOLUME,
+        ...persisted.config,
+      },
       pattern: persisted.pattern,
       isPlaying: false,
       currentBeat: 0,
@@ -153,6 +159,8 @@ export function createInitialState(): AppState {
       measures,
       bpm: DEFAULT_BPM,
       loopCount: DEFAULT_LOOP_COUNT,
+      humanize: DEFAULT_HUMANIZE,
+      volume: DEFAULT_VOLUME,
     },
     pattern: createEmptyPattern(getTotalBeats(measures)),
     isPlaying: false,
@@ -179,7 +187,9 @@ export type Action =
   | { type: 'DELETE_MEASURE'; index: number }
   | { type: 'APPLY_PRESET'; preset: Preset }
   | { type: 'RESTORE_STATE'; state: AppState }
-  | { type: 'APPLY_USER_PRESET'; config: LoopConfig; pattern: Pattern };
+  | { type: 'APPLY_USER_PRESET'; config: LoopConfig; pattern: Pattern }
+  | { type: 'SET_HUMANIZE'; humanize: number }
+  | { type: 'SET_VOLUME'; volume: number };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -386,6 +396,12 @@ export function reducer(state: AppState, action: Action): AppState {
         currentBeat: 0,
         currentLoop: 0,
       };
+
+    case 'SET_HUMANIZE':
+      return { ...state, config: { ...state.config, humanize: action.humanize } };
+
+    case 'SET_VOLUME':
+      return { ...state, config: { ...state.config, volume: action.volume } };
 
     case 'RESTORE_STATE':
       return {

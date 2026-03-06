@@ -31,3 +31,6 @@ export const DEFAULT_LOOP_COUNT = 0; // infinite
 export const MIN_BPM = 40;
 export const MAX_BPM = 300;
 export const MAX_MEASURES = 8;
+
+export const DEFAULT_HUMANIZE = 0;
+export const DEFAULT_VOLUME = 80;

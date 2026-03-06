@@ -23,6 +23,8 @@ export interface LoopConfig {
   measures: Measure[];
   bpm: number;
   loopCount: number; // 0 = infinite
+  humanize: number;  // 0–100
+  volume: number;    // 0–100
 }
 
 export interface AppState {
