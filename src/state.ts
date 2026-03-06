@@ -176,6 +176,7 @@ export type Action =
   | { type: 'SET_CURRENT_LOOP'; loop: number }
   | { type: 'CLEAR_PATTERN' }
   | { type: 'COPY_MEASURE'; from: number; to: number }
+  | { type: 'DELETE_MEASURE'; index: number }
   | { type: 'APPLY_PRESET'; preset: Preset }
   | { type: 'RESTORE_STATE'; state: AppState }
   | { type: 'APPLY_USER_PRESET'; config: LoopConfig; pattern: Pattern };
@@ -317,6 +318,38 @@ export function reducer(state: AppState, action: Action): AppState {
         ...(stepCountChanged
           ? { isPlaying: false, currentBeat: 0, currentLoop: 0 }
           : {}),
+      };
+    }
+
+    case 'DELETE_MEASURE': {
+      const measures = state.config.measures;
+      if (measures.length <= 1) return state;
+      const newMeasures = measures.filter((_, i) => i !== action.index);
+      const stepsOf = (m: Measure) =>
+        m.timeSignature.beats * (m.timeSignature.stepsPerBeat ?? 1);
+      const newPattern = {} as Pattern;
+      for (const id of INSTRUMENT_IDS) {
+        const oldArr = state.pattern[id];
+        const newArr: boolean[] = [];
+        let offset = 0;
+        for (let mi = 0; mi < measures.length; mi++) {
+          const steps = stepsOf(measures[mi]);
+          if (mi !== action.index) {
+            for (let i = 0; i < steps; i++) {
+              newArr.push(oldArr[offset + i] ?? false);
+            }
+          }
+          offset += steps;
+        }
+        newPattern[id] = newArr;
+      }
+      return {
+        ...state,
+        config: { ...state.config, measures: newMeasures },
+        pattern: newPattern,
+        isPlaying: false,
+        currentBeat: 0,
+        currentLoop: 0,
       };
     }
 

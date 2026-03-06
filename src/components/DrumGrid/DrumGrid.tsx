@@ -64,6 +64,7 @@ export function DrumGrid({ state, dispatch }: DrumGridProps) {
               setCopiedMeasure(null);
             }
           }}
+          onDeleteMeasure={(i) => dispatch({ type: 'DELETE_MEASURE', index: i })}
         />
         {INSTRUMENTS.map((instrument) => (
           <InstrumentRow
