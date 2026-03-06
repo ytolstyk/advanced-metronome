@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import type { RootNote, ChordType, ChordVoicing } from '../data/chords';
+import type { Frets } from '../data/chords';
 import {
   CHORD_DATABASE,
   CHORD_TYPE_LABELS,
@@ -25,6 +26,40 @@ function stringX(idx: number): number {
 
 function dotY(fretNum: number, visibleStart: number): number {
   return FRET_Y_START + (fretNum - visibleStart) * FRET_SPACING + FRET_SPACING / 2;
+}
+
+// ── Audio ────────────────────────────────────────────────────────────────────
+// Standard tuning open-string MIDI notes: low E → high e
+const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
+
+function pluckString(ctx: AudioContext, freq: number, startTime: number, vol: number) {
+  const env = ctx.createGain();
+  env.connect(ctx.destination);
+  env.gain.setValueAtTime(0.001, startTime);
+  env.gain.linearRampToValueAtTime(vol, startTime + 0.008);
+  env.gain.exponentialRampToValueAtTime(0.001, startTime + 2.2);
+
+  // Harmonic series — gives a guitar-like plucked timbre
+  for (let h = 1; h <= 6; h++) {
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq * h;
+    const hg = ctx.createGain();
+    hg.gain.value = 0.5 / (h * h);
+    osc.connect(hg);
+    hg.connect(env);
+    osc.start(startTime);
+    osc.stop(startTime + 2.5);
+  }
+}
+
+function strumChord(ctx: AudioContext, frets: Frets) {
+  const now = ctx.currentTime;
+  frets.forEach((fret, i) => {
+    if (fret < 0) return;
+    const freq = 440 * Math.pow(2, (OPEN_MIDI[i] + fret - 69) / 12);
+    pluckString(ctx, freq, now + i * 0.025, 0.22);
+  });
 }
 
 // ── Shared ToggleGroupItem className ────────────────────────────────────────
@@ -143,15 +178,36 @@ function TabView({ voicing }: { voicing: ChordVoicing }) {
 
 // ── ChordCard ────────────────────────────────────────────────────────────────
 function ChordCard({
-  root, type, voicing, viewMode,
+  root, type, voicing, viewMode, onPlay,
 }: {
   root: RootNote;
   type: ChordType;
   voicing: ChordVoicing;
   viewMode: 'fretboard' | 'tab';
+  onPlay: (frets: Frets) => void;
 }) {
+  const [lit, setLit] = useState(false);
+
+  function handleClick() {
+    onPlay(voicing.frets);
+    setLit(true);
+    setTimeout(() => setLit(false), 400);
+  }
+
   return (
-    <div className="bg-[#1e1f2c] border border-[#353650] rounded-xl p-3.5 flex flex-col items-center gap-2.5">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }}
+      className={[
+        'bg-[#1e1f2c] border rounded-xl p-3.5 flex flex-col items-center gap-2.5',
+        'cursor-pointer select-none transition-colors duration-150',
+        lit
+          ? 'border-[#5b7fff] bg-[#252850]'
+          : 'border-[#353650] hover:border-[#4a4d70] hover:bg-[#23243a]',
+      ].join(' ')}
+    >
       <div className="text-[1.05rem] font-bold text-[#8eaaff] text-center">
         {chordName(root, type)}
       </div>
@@ -168,6 +224,16 @@ export function ChordsPage() {
   const [selectedKey, setSelectedKey] = useState<RootNote | 'all'>('all');
   const [selectedType, setSelectedType] = useState<ChordType | 'all'>('all');
   const [viewMode, setViewMode] = useState<'fretboard' | 'tab'>('fretboard');
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  const playChord = useCallback((frets: Frets) => {
+    if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+      audioCtxRef.current = new AudioContext();
+    }
+    const ctx = audioCtxRef.current;
+    if (ctx.state === 'suspended') void ctx.resume();
+    strumChord(ctx, frets);
+  }, []);
 
   const filtered = useMemo(() =>
     CHORD_DATABASE.filter(e =>
@@ -237,6 +303,7 @@ export function ChordsPage() {
             type={entry.type}
             voicing={entry.voicings[0]}
             viewMode={viewMode}
+            onPlay={playChord}
           />
         ))}
       </div>
