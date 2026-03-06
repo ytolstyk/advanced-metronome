@@ -21,7 +21,7 @@
 
 .measure-number {
   font-size: 0.8rem;
-  color: #8080aa;
+  color: #a8a8cc;
   font-weight: 700;
   letter-spacing: 0.3px;
 }
@@ -34,7 +34,7 @@
 
 .time-sig-sep {
   font-size: 0.9rem;
-  color: #6060a0;
+  color: #9090c8;
   user-select: none;
   line-height: 1;
   font-weight: 600;

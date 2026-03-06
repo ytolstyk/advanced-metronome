@@ -7,6 +7,7 @@ interface BeatCellProps {
   isMeasureStart: boolean;
   isSubdivision: boolean;
   onClick: () => void;
+  label: string;
 }
 
 export function BeatCell({
@@ -16,6 +17,7 @@ export function BeatCell({
   isMeasureStart,
   isSubdivision,
   onClick,
+  label,
 }: BeatCellProps) {
   return (
     <button
@@ -31,6 +33,8 @@ export function BeatCell({
       style={active ? { backgroundColor: color } : undefined}
       onClick={onClick}
       type="button"
+      aria-label={label}
+      aria-pressed={active}
     />
   );
 }

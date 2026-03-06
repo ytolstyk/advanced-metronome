@@ -155,6 +155,7 @@ export function PianoKeyboard() {
             className="piano-instrument-select"
             value={presetId}
             onChange={(e) => setPresetId(e.target.value)}
+            aria-label="Instrument"
           >
             {INSTRUMENT_PRESETS.map((p) => (
               <option key={p.id} value={p.id}>{p.label}</option>
@@ -166,8 +167,11 @@ export function PianoKeyboard() {
           {OCTAVE_PRESETS.map(({ label, offset }) => (
             <button
               key={label}
+              type="button"
               className={`piano-preset-btn${octaveOffset === offset ? ' piano-preset-btn--active' : ''}`}
               onClick={() => releaseAllAndSetOctave(offset)}
+              aria-pressed={octaveOffset === offset}
+              aria-label={`Octave ${label}`}
             >
               {label}
             </button>
@@ -180,14 +184,20 @@ export function PianoKeyboard() {
         {WHITE_KEYS.map((k) => (
           <div
             key={k.code}
+            role="button"
+            tabIndex={0}
+            aria-label={k.note}
+            aria-pressed={pressedKeys.has(k.code)}
             className={`piano-key piano-key--white${pressedKeys.has(k.code) ? ' piano-key--active-white' : ''}`}
             style={{ left: k.index * WKW, width: WKW }}
             onMouseDown={() => pressKey(k.code)}
             onMouseUp={() => releaseKey(k.code)}
             onMouseLeave={() => releaseKey(k.code)}
+            onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); pressKey(k.code); } }}
+            onKeyUp={(e) => { if (e.key === ' ' || e.key === 'Enter') releaseKey(k.code); }}
           >
-            <span className="piano-key-note">{k.note}</span>
-            <span className="piano-key-label">{k.label}</span>
+            <span className="piano-key-note" aria-hidden="true">{k.note}</span>
+            <span className="piano-key-label" aria-hidden="true">{k.label}</span>
           </div>
         ))}
 
@@ -195,13 +205,19 @@ export function PianoKeyboard() {
         {BLACK_KEYS.map((k) => (
           <div
             key={k.code}
+            role="button"
+            tabIndex={0}
+            aria-label={k.note}
+            aria-pressed={pressedKeys.has(k.code)}
             className={`piano-key piano-key--black${pressedKeys.has(k.code) ? ' piano-key--active-black' : ''}`}
             style={{ left: k.whiteOffset * WKW }}
             onMouseDown={(e) => { e.stopPropagation(); pressKey(k.code); }}
             onMouseUp={(e) => { e.stopPropagation(); releaseKey(k.code); }}
             onMouseLeave={() => releaseKey(k.code)}
+            onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); pressKey(k.code); } }}
+            onKeyUp={(e) => { if (e.key === ' ' || e.key === 'Enter') releaseKey(k.code); }}
           >
-            <span className="piano-key-label piano-key-label--black">{k.label}</span>
+            <span className="piano-key-label piano-key-label--black" aria-hidden="true">{k.label}</span>
           </div>
         ))}
       </div>

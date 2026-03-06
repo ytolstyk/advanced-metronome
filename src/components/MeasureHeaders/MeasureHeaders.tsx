@@ -58,6 +58,7 @@ function MeasureHeaderCell({
         <Input
           type="number"
           className="w-[34px] h-6 px-1 text-center text-[0.85rem] font-bold bg-secondary border-border [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          aria-label={`Measure ${index + 1} beats`}
           title="Beats per measure"
           min={MIN_BEATS}
           max={MAX_BEATS}
@@ -69,10 +70,11 @@ function MeasureHeaderCell({
             if (e.key === 'Enter') { commitBeats(); (e.target as HTMLInputElement).blur(); }
           }}
         />
-        <span className="time-sig-sep">/</span>
+        <span className="time-sig-sep" aria-hidden="true">/</span>
         <Input
           type="number"
           className="w-[34px] h-6 px-1 text-center text-[0.85rem] font-bold bg-secondary border-border [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          aria-label={`Measure ${index + 1} subdivision`}
           title="Subdivision (note value)"
           min={MIN_SUBDIV}
           max={MAX_SUBDIV}

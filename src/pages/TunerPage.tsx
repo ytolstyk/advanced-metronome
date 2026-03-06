@@ -233,25 +233,29 @@ export function TunerPage() {
   const statusClass = inTune ? 'in-tune' : isFlat ? 'flat' : isSharp ? 'sharp' : '';
 
   return (
-    <div className="tuner-page">
+    <main className="tuner-page" aria-label="Guitar tuner">
 
       {/* ── Config row ────────────────────────────────────────────────── */}
       <div className="tuner-config">
         <div className="tuner-config-group">
-          <span className="tuner-config-label">Strings</span>
-          <div className="string-count-btns">
+          <span id="strings-label" className="tuner-config-label">Strings</span>
+          <div className="string-count-btns" role="group" aria-labelledby="strings-label">
             {([6, 7, 8] as StringCount[]).map(c => (
               <button
                 key={c}
+                type="button"
                 className={`sc-btn${stringCount === c ? ' active' : ''}`}
                 onClick={() => setStringCount(c)}
+                aria-pressed={stringCount === c}
+                aria-label={`${c}-string`}
               >{c}</button>
             ))}
           </div>
         </div>
         <div className="tuner-config-group">
-          <span className="tuner-config-label">Tuning</span>
+          <label htmlFor="tuning-select" className="tuner-config-label">Tuning</label>
           <select
+            id="tuning-select"
             className="tuner-select"
             value={safePresetIdx}
             onChange={e => setPresetIdx(Number(e.target.value))}
@@ -264,15 +268,18 @@ export function TunerPage() {
       </div>
 
       {/* ── String selector ───────────────────────────────────────────── */}
-      <div className="string-selector">
+      <div className="string-selector" role="group" aria-label="Select string to tune">
         {preset.strings.map((s, i) => (
           <button
             key={i}
+            type="button"
             className={`str-btn${safeStringIdx === i ? ' active' : ''}`}
             onClick={() => setSelectedString(i)}
+            aria-pressed={safeStringIdx === i}
+            aria-label={`String ${i + 1}: ${s.note}${s.octave}`}
           >
-            <span className="str-num">{i + 1}</span>
-            <span className="str-note">{s.note}{s.octave}</span>
+            <span className="str-num" aria-hidden="true">{i + 1}</span>
+            <span className="str-note" aria-hidden="true">{s.note}{s.octave}</span>
           </button>
         ))}
       </div>
@@ -314,32 +321,39 @@ export function TunerPage() {
         </div>
 
         {/* Right: note readout */}
-        <div className="tuner-readout">
-          <div className={`detected-note ${statusClass}`}>
+        <div className="tuner-readout" aria-live="polite" aria-atomic="true">
+          <div className={`detected-note ${statusClass}`} aria-hidden="true">
             {closestNote ?? '—'}
             {closestOctave !== null && <span className="detected-octave">{closestOctave}</span>}
           </div>
-          <div className="detected-cents">
+          <div className="detected-cents" aria-hidden="true">
             {cents !== null ? `${cents > 0 ? '+' : ''}${cents} ¢` : '—'}
           </div>
-          <div className="detected-hz">
+          <div className="detected-hz" aria-hidden="true">
             {detectedHz ? `${detectedHz} Hz` : '—'}
           </div>
-          <div className="target-info">
+          <div className="target-info" aria-hidden="true">
             Target: {target.note}{target.octave} · {targetFreq.toFixed(1)} Hz
           </div>
+          <span className="sr-only">
+            {hasSignal && closestNote
+              ? `${closestNote}${closestOctave ?? ''}, ${inTune ? 'in tune' : isSharp ? `${cents} cents sharp, tune down` : `${Math.abs(cents ?? 0)} cents flat, tune up`}`
+              : 'No signal detected'}
+          </span>
         </div>
       </div>
 
       {/* ── Start / Stop ──────────────────────────────────────────────── */}
       <button
+        type="button"
         className={`tuner-mic-btn${isListening ? ' listening' : ''}`}
         onClick={() => isListening ? stopListening() : void startListening()}
+        aria-pressed={isListening}
       >
         {isListening ? 'Stop' : 'Start Tuner'}
       </button>
 
-      {permissionError && <p className="tuner-error">{permissionError}</p>}
-    </div>
+      {permissionError && <p className="tuner-error" role="alert">{permissionError}</p>}
+    </main>
   );
 }

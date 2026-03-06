@@ -84,8 +84,8 @@ function textPoint(cx: number, cy: number, r: number, angle: number) {
 
 const FILTER_ITEM_CLS =
   'h-auto px-3 py-1 text-[0.82rem] font-semibold rounded-md ' +
-  'border border-[#353650] bg-[#1e1f2c] text-[#777] ' +
-  'hover:bg-[#1e1f2c] hover:border-[#555] hover:text-[#bbb] ' +
+  'border border-[#505270] bg-[#1e1f2c] text-[#aaa] ' +
+  'hover:bg-[#1e1f2c] hover:border-[#7070a0] hover:text-[#ddd] ' +
   'data-[state=on]:border-[#5b7fff] data-[state=on]:bg-[#252850] data-[state=on]:text-[#8eaaff]';
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -122,11 +122,11 @@ export function CircleOfFifthsPage() {
     : [];
 
   return (
-    <div className="flex flex-col gap-5 px-4 pt-6 pb-12 max-w-[700px] mx-auto">
+    <main className="flex flex-col gap-5 px-4 pt-6 pb-12 max-w-[700px] mx-auto" aria-label="Circle of fifths">
 
       {/* Orientation toolbar */}
       <div className="flex flex-wrap items-center gap-1">
-        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#7070a0] mr-1 whitespace-nowrap">
+        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8] mr-1 whitespace-nowrap">
           Root at top
         </span>
         <ToggleGroup
@@ -193,10 +193,15 @@ export function CircleOfFifthsPage() {
             return (
               <g
                 key={entry.major}
-                style={{ cursor: 'pointer' }}
+                role="button"
+                tabIndex={0}
+                aria-label={`${entry.major} major / ${entry.minor} — ${keySigLabel(entry.sharps, entry.flats)}`}
+                aria-pressed={isSelected}
+                style={{ cursor: 'pointer', outline: 'none' }}
                 onClick={() => handleSegmentClick(i)}
                 onMouseEnter={() => setHoveredKey(i)}
                 onMouseLeave={() => setHoveredKey(null)}
+                onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); handleSegmentClick(i); } }}
               >
                 {/* Major ring */}
                 <path
@@ -270,7 +275,7 @@ export function CircleOfFifthsPage() {
                 textAnchor="middle"
                 dominantBaseline="central"
                 fontSize="16"
-                fill="#aaa"
+                fill="#d0d0d0"
                 style={{ userSelect: 'none' }}
               >
                 {keySigLabel(selectedEntry.sharps, selectedEntry.flats)}
@@ -282,7 +287,7 @@ export function CircleOfFifthsPage() {
               textAnchor="middle"
               dominantBaseline="central"
               fontSize="13"
-              fill="#555"
+              fill="#999"
               style={{ userSelect: 'none' }}
             >
               select a key
@@ -298,18 +303,18 @@ export function CircleOfFifthsPage() {
             {selectedEntry.major} Major
           </span>
           <span>
-            <span className="text-[#888]">relative minor: </span>
+            <span className="text-[#b8b8b8]">relative minor: </span>
             <span className="text-[#8eaaff] font-semibold">{selectedEntry.minor}</span>
           </span>
           <span>
-            <span className="text-[#888]">key signature: </span>
+            <span className="text-[#b8b8b8]">key signature: </span>
             <span className="text-[#f0f0f0] font-semibold">
               {keySigLabel(selectedEntry.sharps, selectedEntry.flats)}
             </span>
           </span>
           {neighbours.length > 0 && (
             <span>
-              <span className="text-[#888]">neighbours: </span>
+              <span className="text-[#b8b8b8]">neighbours: </span>
               <span className="text-[#f0f0f0] font-semibold">
                 {neighbours.map(n => n.major).join(' · ')}
               </span>
@@ -317,6 +322,6 @@ export function CircleOfFifthsPage() {
           )}
         </div>
       )}
-    </div>
+    </main>
   );
 }

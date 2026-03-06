@@ -14,12 +14,12 @@
   --color-secondary: hsl(235 18% 22%);
   --color-secondary-foreground: hsl(240 20% 92%);
   --color-muted: hsl(235 18% 22%);
-  --color-muted-foreground: hsl(237 20% 55%);
+  --color-muted-foreground: hsl(237 22% 70%);
   --color-accent: hsl(235 18% 25%);
   --color-accent-foreground: hsl(240 20% 92%);
-  --color-destructive: hsl(0 60% 45%);
+  --color-destructive: hsl(0 62% 52%);
   --color-destructive-foreground: hsl(0 0% 100%);
-  --color-border: hsl(237 18% 29%);
+  --color-border: hsl(237 18% 36%);
   --color-input: hsl(237 18% 29%);
   --color-ring: hsl(237 100% 69%);
   --color-chart-1: hsl(237 100% 69%);

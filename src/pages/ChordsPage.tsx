@@ -65,8 +65,8 @@ function strumChord(ctx: AudioContext, frets: Frets) {
 // ── Shared ToggleGroupItem className ────────────────────────────────────────
 const FILTER_ITEM_CLS =
   'h-auto px-3 py-1 text-[0.82rem] font-semibold rounded-md ' +
-  'border border-[#353650] bg-[#1e1f2c] text-[#777] ' +
-  'hover:bg-[#1e1f2c] hover:border-[#555] hover:text-[#bbb] ' +
+  'border border-[#505270] bg-[#1e1f2c] text-[#aaa] ' +
+  'hover:bg-[#1e1f2c] hover:border-[#7070a0] hover:text-[#ddd] ' +
   'data-[state=on]:border-[#5b7fff] data-[state=on]:bg-[#252850] data-[state=on]:text-[#8eaaff]';
 
 // ── FretboardDiagram ────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
       key={`s${i}`}
       x1={stringX(i)} y1={FRET_Y_START}
       x2={stringX(i)} y2={FRET_Y_START + FRET_SPACING * FRETS_SHOWN}
-      stroke="#555" strokeWidth="1"
+      stroke="#888" strokeWidth="1"
     />
   ));
 
@@ -92,7 +92,7 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
         key={`f${f}`}
         x1={stringX(0)} y1={y}
         x2={stringX(5)} y2={y}
-        stroke={isNut ? '#ccc' : '#555'}
+        stroke={isNut ? '#eee' : '#888'}
         strokeWidth={isNut ? 3 : 1}
       />
     );
@@ -102,13 +102,13 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
     if (fret === 0) {
       return (
         <text key={`m${i}`} x={stringX(i)} y={NUT_Y - 4}
-          textAnchor="middle" fontSize="14" fill="#888">○</text>
+          textAnchor="middle" fontSize="14" fill="#bbb">○</text>
       );
     }
     if (fret === -1) {
       return (
         <text key={`m${i}`} x={stringX(i)} y={NUT_Y - 4}
-          textAnchor="middle" fontSize="14" fill="#666">×</text>
+          textAnchor="middle" fontSize="14" fill="#999">×</text>
       );
     }
     return null;
@@ -138,7 +138,7 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
 
   const fretLabel = !isOpenPosition ? (
     <text x={SVG_TOTAL_W - 2} y={FRET_Y_START + FRET_SPACING / 2}
-      textAnchor="end" fontSize="14" fill="#888" dominantBaseline="middle">
+      textAnchor="end" fontSize="14" fill="#bbb" dominantBaseline="middle">
       {startFret}fr
     </text>
   ) : null;
@@ -167,7 +167,7 @@ function TabView({ voicing }: { voicing: ChordVoicing }) {
         const label = fret === -1 ? 'x' : String(fret);
         return (
           <div key={name} className="flex whitespace-pre">
-            <span className="text-[#7070a0] font-bold">{name}</span>
+            <span className="text-[#9898c8] font-bold">{name}</span>
             <span className="text-[#c8d8ff]">{`|--${label.padEnd(2, '-')}|`}</span>
           </div>
         );
@@ -205,7 +205,7 @@ function ChordCard({
         'cursor-pointer select-none transition-colors duration-150',
         lit
           ? 'border-[#5b7fff] bg-[#252850]'
-          : 'border-[#353650] hover:border-[#4a4d70] hover:bg-[#23243a]',
+          : 'border-[#505270] hover:border-[#7070a0] hover:bg-[#23243a]',
       ].join(' ')}
     >
       <div className="text-[1.05rem] font-bold text-[#8eaaff] text-center">
@@ -244,11 +244,11 @@ export function ChordsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-4 px-4 pt-6 pb-12 max-w-[1100px] mx-auto">
+    <main className="flex flex-col gap-4 px-4 pt-6 pb-12 max-w-[1100px] mx-auto" aria-label="Chord library">
 
       {/* Key filter */}
       <div className="flex flex-wrap items-center gap-1">
-        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#7070a0] mr-1">Key</span>
+        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8] mr-1">Key</span>
         <ToggleGroup
           type="single"
           value={selectedKey}
@@ -264,7 +264,7 @@ export function ChordsPage() {
 
       {/* Type filter */}
       <div className="flex flex-wrap items-center gap-1">
-        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#7070a0] mr-1">Type</span>
+        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8] mr-1">Type</span>
         <ToggleGroup
           type="single"
           value={selectedType}
@@ -294,7 +294,7 @@ export function ChordsPage() {
       {/* Grid */}
       <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]">
         {filtered.length === 0 && (
-          <div className="col-span-full text-center text-[#555] py-10">No chords found.</div>
+          <div className="col-span-full text-center text-[#999] py-10">No chords found.</div>
         )}
         {filtered.map(entry => (
           <ChordCard
@@ -307,6 +307,6 @@ export function ChordsPage() {
           />
         ))}
       </div>
-    </div>
+    </main>
   );
 }

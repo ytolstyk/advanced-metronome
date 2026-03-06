@@ -25,8 +25,8 @@
 
 .piano-toggle-btn {
   background: none;
-  border: 1px solid #444;
-  color: #aaa;
+  border: 1px solid #666;
+  color: #c0c0c0;
   font-size: 0.85rem;
   padding: 5px 14px;
   border-radius: 6px;
@@ -35,14 +35,14 @@
 }
 
 .piano-toggle-btn:hover {
-  border-color: #888;
+  border-color: #999;
   color: #eee;
 }
 
 .app-hint {
   text-align: center;
   font-size: 0.8rem;
-  color: #555;
+  color: #888;
   margin: 0;
   letter-spacing: 0.3px;
 }

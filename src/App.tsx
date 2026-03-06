@@ -84,7 +84,7 @@ function App() {
   }, [togglePlayback, undo]);
 
   return (
-    <div className="app">
+    <main className="app" aria-label="Drum machine">
       <DrumGrid state={state} dispatch={dispatchWithHistory} />
       <TransportControls
         state={state}
@@ -109,7 +109,7 @@ function App() {
       </div>
       {showPiano && <PianoKeyboard />}
       <p className="app-hint">Space to play/pause · Ctrl+Z to undo</p>
-    </div>
+    </main>
   );
 }
 

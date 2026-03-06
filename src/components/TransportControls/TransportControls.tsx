@@ -132,16 +132,18 @@ export function TransportControls({
           size="icon"
           className="h-[52px] w-[52px] rounded-xl bg-[#1e3a22] border-[#336833] text-[#5ddb7a] hover:bg-[#265030] hover:border-[#428542] hover:text-[#5ddb7a] text-xl"
           onClick={onTogglePlayback}
+          aria-label={state.isPlaying ? "Pause" : "Play"}
         >
-          {state.isPlaying ? "⏸" : "▶"}
+          <span aria-hidden="true">{state.isPlaying ? "⏸" : "▶"}</span>
         </Button>
         <Button
           variant="outline"
           size="icon"
           className="h-[52px] w-[52px] rounded-xl bg-[#3a1e22] border-[#683336] text-[#e07878] hover:bg-[#502628] hover:border-[#854244] hover:text-[#e07878] text-xl"
           onClick={onStop}
+          aria-label="Stop"
         >
-          ⏹
+          <span aria-hidden="true">⏹</span>
         </Button>
         <Button
           variant="outline"
@@ -149,18 +151,20 @@ export function TransportControls({
           className="h-[52px] w-[52px] rounded-xl text-lg"
           onClick={onUndo}
           disabled={!canUndo}
+          aria-label="Undo"
           title="Undo (Ctrl+Z)"
         >
-          ↩
+          <span aria-hidden="true">↩</span>
         </Button>
       </div>
 
       <div className="transport-controls-group">
         <div className="flex flex-col gap-2 flex-1 min-w-0 max-sm:basis-full">
-          <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
+          <Label htmlFor="bpm-input" className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
             <span className="flex items-center justify-between">
               BPM
               <Input
+                id="bpm-input"
                 type="number"
                 className="w-16 h-7 text-center font-bold text-base bg-secondary border-border [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 min={MIN_BPM}
@@ -190,6 +194,7 @@ export function TransportControls({
             step={1}
             value={[bpm]}
             onValueChange={([v]) => dispatch({ type: "SET_BPM", bpm: v })}
+            aria-label="BPM"
           />
         </div>
 
@@ -198,6 +203,7 @@ export function TransportControls({
             Measures: {measures.length}
             <span className="flex gap-1">
               <button
+                type="button"
                 className="w-5 h-5 rounded text-xs leading-none bg-secondary border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
                 onClick={() =>
                   dispatch({
@@ -206,10 +212,12 @@ export function TransportControls({
                   })
                 }
                 disabled={measures.length <= 1}
+                aria-label="Remove measure"
               >
-                −
+                <span aria-hidden="true">−</span>
               </button>
               <button
+                type="button"
                 className="w-5 h-5 rounded text-xs leading-none bg-secondary border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
                 onClick={() =>
                   dispatch({
@@ -218,8 +226,9 @@ export function TransportControls({
                   })
                 }
                 disabled={measures.length >= MAX_MEASURES}
+                aria-label="Add measure"
               >
-                +
+                <span aria-hidden="true">+</span>
               </button>
             </span>
           </Label>
@@ -231,6 +240,7 @@ export function TransportControls({
             onValueChange={([v]) =>
               dispatch({ type: "SET_MEASURE_COUNT", count: v })
             }
+            aria-label="Number of measures"
           />
         </div>
 
@@ -246,6 +256,7 @@ export function TransportControls({
             onValueChange={([v]) =>
               dispatch({ type: "SET_LOOP_COUNT", loopCount: v })
             }
+            aria-label="Loop count"
           />
         </div>
       </div>
@@ -265,9 +276,10 @@ export function TransportControls({
             void handleExport();
           }}
           disabled={exporting}
+          aria-label={exporting ? "Exporting WAV…" : "Export as WAV"}
           title="Download drum loop as WAV"
         >
-          {exporting ? "⏳" : "⬇ WAV"}
+          <span aria-hidden="true">{exporting ? "⏳" : "⬇ WAV"}</span>
         </Button>
         <div className="flex flex-col gap-2 min-w-0 w-[180px] max-sm:w-auto max-sm:flex-1">
           <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
@@ -279,6 +291,7 @@ export function TransportControls({
             step={1}
             value={[humanize]}
             onValueChange={([v]) => onHumanizeChange(v)}
+            aria-label="Humanize amount"
           />
         </div>
         <div className="flex flex-col gap-2 min-w-0 w-[180px] max-sm:basis-full max-sm:w-auto">
@@ -291,6 +304,7 @@ export function TransportControls({
             step={1}
             value={[volume]}
             onValueChange={([v]) => onVolumeChange(v)}
+            aria-label="Volume"
           />
         </div>
       </div>
@@ -336,9 +350,10 @@ export function TransportControls({
             variant="destructive"
             size="sm"
             onClick={deleteSelectedPreset}
+            aria-label="Delete preset"
             title="Delete this preset"
           >
-            ✕
+            <span aria-hidden="true">✕</span>
           </Button>
         )}
       </div>

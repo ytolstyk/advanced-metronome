@@ -29,7 +29,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  color: #7070a0;
+  color: #9898c8;
   white-space: nowrap;
 }
 
@@ -41,9 +41,9 @@
 .sc-btn {
   padding: 4px 14px;
   border-radius: 6px;
-  border: 1px solid #353650;
+  border: 1px solid #505270;
   background: #1e1f2c;
-  color: #777;
+  color: #aaa;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -51,8 +51,8 @@
 }
 
 .sc-btn:hover {
-  border-color: #555;
-  color: #bbb;
+  border-color: #7070a0;
+  color: #d0d0d0;
 }
 
 .sc-btn.active {
@@ -63,8 +63,8 @@
 
 .tuner-select {
   background: #1e1f2c;
-  border: 1px solid #353650;
-  color: #bbb;
+  border: 1px solid #505270;
+  color: #d0d0d0;
   padding: 5px 10px;
   border-radius: 6px;
   font-size: 0.85rem;
@@ -91,14 +91,14 @@
   padding: 6px 10px;
   min-width: 46px;
   border-radius: 8px;
-  border: 1px solid #353650;
+  border: 1px solid #505270;
   background: #1e1f2c;
   cursor: pointer;
   transition: all 0.12s;
 }
 
 .str-btn:hover {
-  border-color: #555;
+  border-color: #7070a0;
 }
 
 .str-btn.active {
@@ -108,18 +108,18 @@
 
 .str-num {
   font-size: 0.6rem;
-  color: #555;
+  color: #909090;
   font-weight: 600;
 }
 
 .str-btn.active .str-num {
-  color: #5b7fff80;
+  color: #7b9fff;
 }
 
 .str-note {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #999;
+  color: #c0c0c0;
 }
 
 .str-btn.active .str-note {
@@ -203,8 +203,8 @@
   letter-spacing: 0.6px;
 }
 
-.sharp-label { color: #e0787880; }
-.flat-label  { color: #e0787880; }
+.sharp-label { color: #e07878; }
+.flat-label  { color: #e07878; }
 
 .meter-track {
   position: relative;
@@ -272,7 +272,7 @@
   top: 50%;
   transform: translateY(-50%);
   font-size: 0.55rem;
-  color: #555;
+  color: #999;
   font-variant-numeric: tabular-nums;
 }
 
@@ -332,22 +332,22 @@
 .detected-cents {
   font-size: 1.1rem;
   font-weight: 600;
-  color: #888;
+  color: #b8b8b8;
   font-variant-numeric: tabular-nums;
 }
 
 .detected-hz {
   font-size: 0.8rem;
-  color: #555;
+  color: #999;
   font-variant-numeric: tabular-nums;
 }
 
 .target-info {
   font-size: 0.75rem;
-  color: #555;
+  color: #999;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid #353650;
+  border-top: 1px solid #505270;
 }
 
 /* ── Mic button ──────────────────────────────────────────────────────────── */

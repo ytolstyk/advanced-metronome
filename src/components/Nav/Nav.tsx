@@ -15,7 +15,7 @@ function linkCls(isActive: boolean, mobile = false) {
   const size = mobile ? "block px-4 py-2.5 w-full" : "px-3.5 py-1.5";
   const state = isActive
     ? "bg-[#1e1e1e] text-[#f0f0f0]"
-    : "text-[#888] hover:text-[#eee] hover:bg-[#1a1a1a]";
+    : "text-[#b0b0b0] hover:text-[#eee] hover:bg-[#1a1a1a]";
   return `${base} ${size} ${state}`;
 }
 

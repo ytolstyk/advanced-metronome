@@ -19,7 +19,7 @@
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.5px;
-  color: #7070a0;
+  color: #9898c8;
   flex-wrap: wrap;
 }
 
@@ -31,9 +31,9 @@
 
 .piano-instrument-select {
   background: #2e2f42;
-  border: 1px solid #464768;
+  border: 1px solid #5a5c80;
   border-radius: 5px;
-  color: #a0a0c8;
+  color: #c4c4e4;
   font-size: 0.72rem;
   font-weight: 700;
   padding: 2px 6px;
@@ -42,7 +42,7 @@
 }
 
 .piano-instrument-select:focus {
-  border-color: #3368a0;
+  border-color: #5b7fff;
 }
 
 .piano-presets {
@@ -52,9 +52,9 @@
 
 .piano-preset-btn {
   background: #2e2f42;
-  border: 1px solid #464768;
+  border: 1px solid #5a5c80;
   border-radius: 5px;
-  color: #7070a0;
+  color: #9898c8;
   font-size: 0.68rem;
   font-weight: 700;
   padding: 2px 8px;
@@ -63,8 +63,8 @@
 }
 
 .piano-preset-btn:hover {
-  background: #383950;
-  color: #a0a0c8;
+  background: #3c3e58;
+  color: #c4c4e4;
 }
 
 .piano-preset-btn--active {
@@ -76,12 +76,12 @@
 .piano-hint kbd {
   display: inline-block;
   background: #2e2f42;
-  border: 1px solid #464768;
+  border: 1px solid #5a5c80;
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 0.7rem;
   font-family: inherit;
-  color: #a0a0c8;
+  color: #c4c4e4;
 }
 
 /* ─── keyboard wrapper ─────────────────────────────────────── */
@@ -124,7 +124,7 @@
 
 .piano-key-note {
   font-size: 0.55rem;
-  color: #8080a8;
+  color: #383890;
   font-weight: 600;
   letter-spacing: 0.3px;
 }
@@ -132,7 +132,7 @@
 .piano-key-label {
   font-size: 0.65rem;
   font-weight: 700;
-  color: #6060a0;
+  color: #303090;
   letter-spacing: 0.3px;
 }
 
@@ -170,7 +170,7 @@
 .piano-key-label--black {
   font-size: 0.6rem;
   font-weight: 700;
-  color: #6060a0;
+  color: #c0c0e8;
   letter-spacing: 0.3px;
 }
 

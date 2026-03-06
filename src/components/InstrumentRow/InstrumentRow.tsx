@@ -46,6 +46,7 @@ export function InstrumentRow({
           isMeasureStart={measureStarts.has(i) && i > 0}
           isSubdivision={subdivisionCells.has(i)}
           onClick={() => onToggle(instrument.id, i)}
+          label={`${instrument.label}, beat ${i + 1}${active ? ', on' : ', off'}`}
         />
       ))}
     </>

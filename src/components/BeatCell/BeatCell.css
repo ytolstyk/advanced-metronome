@@ -1,7 +1,7 @@
 .beat-cell {
   width: 100%;
   aspect-ratio: 1;
-  border: 1px solid #3e3f58;
+  border: 1px solid #565878;
   border-radius: 6px;
   background-color: #2e2f42;
   cursor: pointer;
@@ -11,8 +11,8 @@
 }
 
 .beat-cell:hover {
-  background-color: #383a52;
-  border-color: #565878;
+  background-color: #3c3e58;
+  border-color: #7072a0;
 }
 
 .beat-cell--active {
@@ -31,7 +31,7 @@
 }
 
 .beat-cell--measure-start {
-  border-left: 2px solid #5a5c80;
+  border-left: 2px solid #8486b8;
 }
 
 .beat-cell--subdivision {
