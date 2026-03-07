@@ -21,6 +21,7 @@ export function DrumGrid({ state, dispatch }: DrumGridProps) {
   const totalBeats = getTotalBeats(state.config.measures);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevBeatRef = useRef(0);
+  const targetScrollRef = useRef(0);
   const [copiedMeasure, setCopiedMeasure] = useState<number | null>(null);
 
   const handleToggle = (instrument: InstrumentId, beat: number) => {
@@ -34,16 +35,47 @@ export function DrumGrid({ state, dispatch }: DrumGridProps) {
     dispatch({ type: 'SET_TIME_SIGNATURE', measureIndex: index, timeSignature });
   };
 
+  // Update the scroll target whenever the beat changes.
+  // Instant-snap on rewind (loop restart); otherwise just move the target
+  // and let the continuous loop below chase it smoothly.
   useEffect(() => {
-    if (!state.isPlaying || !scrollRef.current) return;
+    if (!scrollRef.current) return;
     const container = scrollRef.current;
     const beat = state.currentBeat;
     const isRewind = beat < prevBeatRef.current;
     prevBeatRef.current = beat;
+
     const beatLeft = GRID_PADDING + LABEL_COL_WIDTH + GRID_GAP + beat * (CELL_WIDTH + GRID_GAP);
-    const targetScrollLeft = Math.max(0, beatLeft - container.clientWidth / 2 + CELL_WIDTH / 2);
-    container.scrollTo({ left: targetScrollLeft, behavior: isRewind ? 'instant' : 'smooth' });
-  }, [state.currentBeat, state.isPlaying]);
+    const target = Math.max(0, beatLeft - container.clientWidth / 2 + CELL_WIDTH / 2);
+    targetScrollRef.current = target;
+
+    if (isRewind) {
+      container.scrollLeft = target;
+    }
+  }, [state.currentBeat]);
+
+  // Single persistent RAF loop while playing — exponential lerp toward target.
+  // One loop for all speeds: no per-beat start/cancel, no animation overlap.
+  useEffect(() => {
+    if (!state.isPlaying) return;
+    if (scrollRef.current) {
+      targetScrollRef.current = scrollRef.current.scrollLeft;
+    }
+
+    let rafId: number;
+    const tick = () => {
+      const el = scrollRef.current;
+      if (el) {
+        const diff = targetScrollRef.current - el.scrollLeft;
+        if (Math.abs(diff) > 0.5) {
+          el.scrollLeft += diff * 0.2;
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [state.isPlaying]);
 
   return (
     <div className="drum-grid-scroll" ref={scrollRef}>
