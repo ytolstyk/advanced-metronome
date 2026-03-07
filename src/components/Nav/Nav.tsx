@@ -7,6 +7,7 @@ const LINKS = [
   { to: "/", label: "Drum Machine", end: true },
   { to: "/tuner", label: "Tuner" },
   { to: "/chords", label: "Chords" },
+  { to: "/scales", label: "Scales" },
   { to: "/circle", label: "Circle of 5ths" },
 ];
 
