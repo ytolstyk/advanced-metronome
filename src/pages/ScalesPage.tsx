@@ -18,14 +18,14 @@ const STRING_NAMES_TOP = ["e", "B", "G", "D", "A", "E"];
 const NUM_FRETS = 24;
 const NUM_STRINGS = 6;
 
-const FRET_W = 54;
-const STRING_H = 32;
-const NUT_X = 36;
+const FRET_W = 64;
+const STRING_H = 40;
+const NUT_X = 40;
 const LEFT_PAD = 8;
 const RIGHT_PAD = 24;
-const TOP_PAD = 24;
-const BOTTOM_PAD = 36;
-const CIRCLE_R = 12;
+const TOP_PAD = 40;
+const BOTTOM_PAD = 40;
+const CIRCLE_R = 14;
 
 const SVG_W = LEFT_PAD + NUT_X + NUM_FRETS * FRET_W + RIGHT_PAD;
 const SVG_H = TOP_PAD + (NUM_STRINGS - 1) * STRING_H + BOTTOM_PAD;
@@ -134,7 +134,7 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
             y={cy}
             textAnchor="middle"
             dominantBaseline="central"
-            fontSize="9"
+            fontSize="11"
             fontWeight="700"
             fill="white"
             style={{ pointerEvents: "none", userSelect: "none" }}
@@ -183,10 +183,10 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
       <text
         key={`fl${fret}`}
         x={cx}
-        y={TOP_PAD - 18}
+        y={TOP_PAD - 24}
         textAnchor="middle"
         dominantBaseline="middle"
-        fontSize="11"
+        fontSize="13"
         fill="#8888bb"
       >
         {fret}
@@ -251,7 +251,7 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
           y={stringY(i)}
           textAnchor="middle"
           dominantBaseline="central"
-          fontSize="10"
+          fontSize="12"
           fill="#777799"
           fontWeight="600"
         >
