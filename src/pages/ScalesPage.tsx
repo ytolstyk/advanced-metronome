@@ -276,12 +276,27 @@ interface PracticeNote {
 
 // ── ScalesPage ───────────────────────────────────────────────────────────────
 export function ScalesPage() {
-  const [selectedKey, setSelectedKey] = useState<RootNote>("C");
-  const [selectedMode, setSelectedMode] = useState<ScaleMode>("major");
-  const [practiceMode, setPracticeMode] = useState(false);
-  const [practiceNotes, setPracticeNotes] = useState<PracticeNote[]>([]);
+  const [selectedKey, setSelectedKey] = useState<RootNote>(() => {
+    const saved = localStorage.getItem('scales-selectedKey');
+    return ROOT_NOTES.includes(saved as RootNote) ? (saved as RootNote) : 'C';
+  });
+  const [selectedMode, setSelectedMode] = useState<ScaleMode>(() => {
+    const saved = localStorage.getItem('scales-selectedMode');
+    return SCALE_MODES.includes(saved as ScaleMode) ? (saved as ScaleMode) : 'major';
+  });
+  const [practiceMode, setPracticeMode] = useState(() =>
+    localStorage.getItem('scales-practiceMode') === 'true'
+  );
+  const [practiceNotes, setPracticeNotes] = useState<PracticeNote[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('scales-practiceNotes') ?? '[]') as PracticeNote[];
+    } catch { return []; }
+  });
   const [isPlaying, setIsPlaying] = useState(false);
-  const [bpm, setBpm] = useState(80);
+  const [bpm, setBpm] = useState(() => {
+    const n = Number(localStorage.getItem('scales-bpm'));
+    return n >= 40 && n <= 240 ? n : 80;
+  });
   const [activeNoteIdx, setActiveNoteIdx] = useState<number | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -290,11 +305,18 @@ export function ScalesPage() {
   const currentIdxRef = useRef(0);
   const bpmRef = useRef(bpm);
   const practiceNotesRef = useRef(practiceNotes);
-  const noteIdCounter = useRef(0);
+  const noteIdCounter = useRef(practiceNotes.reduce((max, n) => Math.max(max, n.id + 1), 0));
 
   // Keep refs in sync
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
   useEffect(() => { practiceNotesRef.current = practiceNotes; }, [practiceNotes]);
+
+  // Persist to localStorage
+  useEffect(() => { localStorage.setItem('scales-selectedKey', selectedKey); }, [selectedKey]);
+  useEffect(() => { localStorage.setItem('scales-selectedMode', selectedMode); }, [selectedMode]);
+  useEffect(() => { localStorage.setItem('scales-bpm', String(bpm)); }, [bpm]);
+  useEffect(() => { localStorage.setItem('scales-practiceMode', String(practiceMode)); }, [practiceMode]);
+  useEffect(() => { localStorage.setItem('scales-practiceNotes', JSON.stringify(practiceNotes)); }, [practiceNotes]);
 
   // Cleanup on unmount
   useEffect(() => () => {

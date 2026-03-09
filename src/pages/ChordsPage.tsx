@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import type { RootNote, ChordType, ChordVoicing } from '../data/chords';
 import type { Frets } from '../data/chords';
 import {
@@ -221,10 +221,22 @@ function ChordCard({
 
 // ── ChordsPage ───────────────────────────────────────────────────────────────
 export function ChordsPage() {
-  const [selectedKey, setSelectedKey] = useState<RootNote | 'all'>('all');
-  const [selectedType, setSelectedType] = useState<ChordType | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'fretboard' | 'tab'>('fretboard');
+  const [selectedKey, setSelectedKey] = useState<RootNote | 'all'>(() => {
+    const saved = localStorage.getItem('chords-selectedKey');
+    return (saved as RootNote | 'all') || 'all';
+  });
+  const [selectedType, setSelectedType] = useState<ChordType | 'all'>(() => {
+    const saved = localStorage.getItem('chords-selectedType');
+    return (saved as ChordType | 'all') || 'all';
+  });
+  const [viewMode, setViewMode] = useState<'fretboard' | 'tab'>(() => {
+    return localStorage.getItem('chords-viewMode') === 'tab' ? 'tab' : 'fretboard';
+  });
   const audioCtxRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => { localStorage.setItem('chords-selectedKey', selectedKey); }, [selectedKey]);
+  useEffect(() => { localStorage.setItem('chords-selectedType', selectedType); }, [selectedType]);
+  useEffect(() => { localStorage.setItem('chords-viewMode', viewMode); }, [viewMode]);
 
   const playChord = useCallback((frets: Frets) => {
     if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {

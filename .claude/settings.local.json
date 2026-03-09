@@ -13,5 +13,9 @@
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__evaluate_script",
       "Bash(npm install:*)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "jcodemunch"
+  ],
+  "enableAllProjectMcpServers": true
 }
