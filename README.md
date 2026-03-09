@@ -113,6 +113,18 @@ Navigate to the **Chords** tab to browse guitar chord diagrams and tab notation.
 
 ---
 
+## Scales
+
+Navigate to the **Scales** tab to visualize scales on the fretboard.
+
+- **Full 24-fret fretboard** in standard tuning (high e on top, as viewed from the player)
+- **Scale modes** — major, natural minor, pentatonic major/minor, dorian, phrygian, lydian, mixolydian, and more
+- **Root note selector** — choose any of the 12 chromatic roots
+- **Practice mode** — highlights notes one by one to help you learn patterns across the neck
+- **Note labels** — each highlighted dot shows the note name
+
+---
+
 ## Circle of Fifths
 
 Navigate to the **Circle of 5ths** tab for an interactive music theory reference.
@@ -161,6 +173,7 @@ src/
 ├── pages/
 │   ├── TunerPage.tsx           # Guitar tuner: pitch detection (NSDF/MPM), vertical meter
 │   ├── ChordsPage.tsx          # Chord library: diagrams, tab view, playback
+│   ├── ScalesPage.tsx          # 24-fret fretboard scale visualizer + practice mode
 │   └── CircleOfFifthsPage.tsx  # Interactive circle of fifths diagram
 └── components/
     ├── Nav/               # Sticky top navigation
