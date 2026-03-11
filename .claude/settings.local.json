@@ -11,11 +11,15 @@
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__wait_for",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__resize_page",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__evaluate_script",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(./node_modules/.bin/eslint src:*)",
+      "Bash(./node_modules/.bin/tsc --noEmit 2>&1 | tail -30)",
+      "Bash(./node_modules/.bin/vite build:*)",
+      "Bash(./node_modules/.bin/tsc --noEmit 2>&1 && ./node_modules/.bin/vite build 2>&1 | tail -10)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "jcodemunch"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }

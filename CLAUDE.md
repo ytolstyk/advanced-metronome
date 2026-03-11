@@ -5,11 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev      # Start development server (Vite + HMR)
-npm run build    # Type-check + production build (tsc -b && vite build)
-npm run lint     # Run ESLint
-npm run preview  # Preview production build locally
-npm run type-check  # tsc --noEmit only
+npm run dev                 # Start development server (Vite + HMR)
+rtk tsc                     # Type-check (tsc -b)
+rtk err npm run build       # Production build (vite build)
+rtk lint                    # ESLint (flat config, v9+)
+npm run preview             # Preview production build locally
 ```
 
 No test framework is configured yet.
@@ -17,6 +17,7 @@ No test framework is configured yet.
 ## Architecture
 
 Two-screen app (React Router) with a shared `<Nav>` rendered in `src/main.tsx`:
+
 - `/` — Drum machine (`src/App.tsx`)
 - `/tuner` — Guitar tuner (`src/pages/TunerPage.tsx`)
 
@@ -72,6 +73,6 @@ Strict mode enabled. Notable settings in `tsconfig.app.json`:
 
 Make sure all these checks pass before accepting changes:
 
-1. **Lint** `npm run lint`
-2. **Types** `npm run type-check`
-3. **Build** `npm run build`
+1. **Lint** `rtk lint`
+2. **Types** `rtk tsc`
+3. **Build** `err npm run build`
