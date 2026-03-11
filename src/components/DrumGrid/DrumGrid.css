@@ -27,7 +27,7 @@
   height: 22px;
   font-size: 0.85rem;
   font-weight: 700;
-  color: #7878a8;
+  color: #a8a8d8;
   letter-spacing: 0.2px;
   border-radius: 4px;
   transition: color 0.05s, background 0.05s;
@@ -35,15 +35,25 @@
 }
 
 .beat-count-cell--half {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  color: #4e4e74;
+  color: #8888b8;
 }
 
 .beat-count-cell--triplet {
   font-size: 0.9rem;
   font-weight: 400;
-  color: #3e3e60;
+  color: #7070a8;
+}
+
+.beat-count-cell--quarter {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6060a0;
+}
+
+.beat-count-cell--measure-start {
+  border-left: 2px solid #8486b8;
 }
 
 .beat-count-cell--active {
@@ -59,4 +69,9 @@
 .beat-count-cell--triplet.beat-count-cell--active {
   color: #7878b0;
   background: #272860;
+}
+
+.beat-count-cell--quarter.beat-count-cell--active {
+  color: #6060a0;
+  background: #222258;
 }

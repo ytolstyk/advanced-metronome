@@ -100,27 +100,32 @@ export function DrumGrid({ state, dispatch }: DrumGridProps) {
         />
         <div className="beat-count-spacer" />
         {(() => {
-          const cells: { label: string; kind: 'beat' | 'half' | 'triplet' }[] = [];
-          for (const m of state.config.measures) {
+          const cells: { label: string; kind: 'beat' | 'half' | 'triplet' | 'quarter'; measureStart: boolean }[] = [];
+          for (const [mi, m] of state.config.measures.entries()) {
             const spb = m.timeSignature.stepsPerBeat ?? 1;
             for (let b = 0; b < m.timeSignature.beats; b++) {
               for (let s = 0; s < spb; s++) {
+                const measureStart = mi > 0 && b === 0 && s === 0;
                 if (s === 0) {
-                  cells.push({ label: String(b + 1), kind: 'beat' });
+                  cells.push({ label: String(b + 1), kind: 'beat', measureStart });
                 } else if (spb === 2) {
-                  cells.push({ label: '+', kind: 'half' });
+                  cells.push({ label: '+', kind: 'half', measureStart: false });
+                } else if (spb === 4) {
+                  const subLabels = ['e', '+', 'a'] as const;
+                  cells.push({ label: subLabels[s - 1], kind: 'quarter', measureStart: false });
                 } else {
-                  cells.push({ label: '·', kind: 'triplet' });
+                  cells.push({ label: '·', kind: 'triplet', measureStart: false });
                 }
               }
             }
           }
-          return cells.map(({ label, kind }, i) => (
+          return cells.map(({ label, kind, measureStart }, i) => (
             <div
               key={i}
               className={[
                 'beat-count-cell',
                 kind !== 'beat' ? `beat-count-cell--${kind}` : '',
+                measureStart ? 'beat-count-cell--measure-start' : '',
                 state.isPlaying && state.currentBeat === i ? 'beat-count-cell--active' : '',
               ].filter(Boolean).join(' ')}
             >

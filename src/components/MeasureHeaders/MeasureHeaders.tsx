@@ -101,18 +101,18 @@ function MeasureHeaderCell({
           type="single"
           value={String(stepsPerBeat)}
           onValueChange={(val) => {
-            if (val) onTimeSignatureChange(index, { beats, subdivision, stepsPerBeat: Number(val) as 1 | 2 | 3 });
+            if (val) onTimeSignatureChange(index, { beats, subdivision, stepsPerBeat: Number(val) as 1 | 2 | 3 | 4 });
           }}
           className="gap-0 border border-border rounded-md overflow-hidden"
         >
-          {([1, 2, 3] as const).map((n) => (
+          {([1, 2, 3, 4] as const).map((n) => (
             <ToggleGroupItem
               key={n}
               value={String(n)}
               className="rounded-none h-6 px-3 text-[0.72rem] font-bold min-w-[32px] data-[state=on]:bg-[#363880] data-[state=on]:text-[#c0c4ff]"
-              title={n === 1 ? 'Straight' : n === 2 ? 'Half beats' : 'Triplets'}
+              title={n === 1 ? 'Straight' : n === 2 ? 'Half beats' : n === 3 ? 'Triplets' : 'Quarter beats'}
             >
-              {n === 1 ? '1' : n === 2 ? '½' : '⅓'}
+              {n === 1 ? '1' : n === 2 ? '½' : n === 3 ? '⅓' : '¼'}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
