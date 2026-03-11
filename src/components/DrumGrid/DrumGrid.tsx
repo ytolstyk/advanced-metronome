@@ -98,6 +98,36 @@ export function DrumGrid({ state, dispatch }: DrumGridProps) {
           }}
           onDeleteMeasure={(i) => dispatch({ type: 'DELETE_MEASURE', index: i })}
         />
+        <div className="beat-count-spacer" />
+        {(() => {
+          const cells: { label: string; kind: 'beat' | 'half' | 'triplet' }[] = [];
+          for (const m of state.config.measures) {
+            const spb = m.timeSignature.stepsPerBeat ?? 1;
+            for (let b = 0; b < m.timeSignature.beats; b++) {
+              for (let s = 0; s < spb; s++) {
+                if (s === 0) {
+                  cells.push({ label: String(b + 1), kind: 'beat' });
+                } else if (spb === 2) {
+                  cells.push({ label: '+', kind: 'half' });
+                } else {
+                  cells.push({ label: '·', kind: 'triplet' });
+                }
+              }
+            }
+          }
+          return cells.map(({ label, kind }, i) => (
+            <div
+              key={i}
+              className={[
+                'beat-count-cell',
+                kind !== 'beat' ? `beat-count-cell--${kind}` : '',
+                state.isPlaying && state.currentBeat === i ? 'beat-count-cell--active' : '',
+              ].filter(Boolean).join(' ')}
+            >
+              {label}
+            </div>
+          ));
+        })()}
         {INSTRUMENTS.map((instrument) => (
           <InstrumentRow
             key={instrument.id}

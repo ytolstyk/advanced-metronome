@@ -12,3 +12,51 @@
   padding: 14px;
   box-sizing: border-box;
 }
+
+.beat-count-spacer {
+  position: sticky;
+  left: 14px;
+  z-index: 1;
+  background: #262736;
+}
+
+.beat-count-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #7878a8;
+  letter-spacing: 0.2px;
+  border-radius: 4px;
+  transition: color 0.05s, background 0.05s;
+  user-select: none;
+}
+
+.beat-count-cell--half {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #4e4e74;
+}
+
+.beat-count-cell--triplet {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: #3e3e60;
+}
+
+.beat-count-cell--active {
+  color: #d0d0ff;
+  background: #363880;
+}
+
+.beat-count-cell--half.beat-count-cell--active {
+  color: #9898cc;
+  background: #2c2e6a;
+}
+
+.beat-count-cell--triplet.beat-count-cell--active {
+  color: #7878b0;
+  background: #272860;
+}

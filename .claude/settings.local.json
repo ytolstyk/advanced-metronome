@@ -15,7 +15,9 @@
       "Bash(./node_modules/.bin/eslint src:*)",
       "Bash(./node_modules/.bin/tsc --noEmit 2>&1 | tail -30)",
       "Bash(./node_modules/.bin/vite build:*)",
-      "Bash(./node_modules/.bin/tsc --noEmit 2>&1 && ./node_modules/.bin/vite build 2>&1 | tail -10)"
+      "Bash(./node_modules/.bin/tsc --noEmit 2>&1 && ./node_modules/.bin/vite build 2>&1 | tail -10)",
+      "Bash(rtk tsc:*)",
+      "Bash(rtk lint:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
