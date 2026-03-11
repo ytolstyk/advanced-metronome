@@ -20,6 +20,9 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/scales" element={<ScalesPage />} />
         <Route path="/circle" element={<CircleOfFifthsPage />} />
       </Routes>
+      <footer style={{ textAlign: 'center', padding: '1rem', color: '#666', fontSize: '0.85rem' }}>
+        &copy; Yuriy Tolstykh
+      </footer>
     </BrowserRouter>
   </StrictMode>,
 )
