@@ -47,8 +47,6 @@ export function ChordPickerModal({
   const [selected, setSelected] = useState<{ root: RootNote; type: ChordType } | null>(
     existingChord ? { root: existingChord.root, type: existingChord.type } : null,
   );
-  const [fadeDuration, setFadeDuration] = useState(existingChord?.fadeDuration ?? 100);
-  const [fadeCurve, setFadeCurve] = useState<'linear' | 'exponential'>(existingChord?.fadeCurve ?? 'linear');
 
   const filtered = CHORD_DATABASE.filter(
     (e) =>
@@ -59,7 +57,7 @@ export function ChordPickerModal({
   const handleApply = () => {
     const root = selected?.root ?? selectedRoot;
     const type = selected?.type ?? selectedType;
-    onConfirm({ root, type, fadeDuration, fadeCurve });
+    onConfirm({ root, type, fadeDuration: 100, fadeCurve: 'linear' });
   };
 
   const handleSelect = (root: RootNote, type: ChordType) => {
@@ -129,32 +127,6 @@ export function ChordPickerModal({
           {filtered.length === 0 && (
             <div className="chord-picker-empty">No chords match filters</div>
           )}
-        </div>
-
-        {/* Fade controls */}
-        <div className="chord-picker-section chord-picker-fade">
-          <div className="chord-picker-label">Fade out</div>
-          <div className="chord-picker-fade-controls">
-            <input
-              type="range"
-              min={0}
-              max={500}
-              step={10}
-              value={fadeDuration}
-              onChange={(e) => setFadeDuration(Number(e.target.value))}
-              className="chord-picker-fade-slider"
-            />
-            <span className="chord-picker-fade-value">{fadeDuration}ms</span>
-            <ToggleGroup
-              type="single"
-              value={fadeCurve}
-              onValueChange={(v) => { if (v) setFadeCurve(v as 'linear' | 'exponential'); }}
-              className="flex gap-1"
-            >
-              <ToggleGroupItem value="linear" className={FILTER_ITEM_CLS}>Linear</ToggleGroupItem>
-              <ToggleGroupItem value="exponential" className={FILTER_ITEM_CLS}>Exp</ToggleGroupItem>
-            </ToggleGroup>
-          </div>
         </div>
 
         {/* Footer */}
