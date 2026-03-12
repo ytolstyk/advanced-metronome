@@ -1,0 +1,81 @@
+.storage-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #2a1a0a;
+  border: 1px solid #7c4a1a;
+  border-radius: 8px;
+  color: #f5c97a;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.storage-error-banner__icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.storage-error-banner__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.storage-error-banner__title {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  color: #fcd87e;
+  margin-bottom: 4px;
+}
+
+.storage-error-banner__reason {
+  margin: 0 0 6px;
+  color: #e8b96a;
+  font-family: monospace;
+  font-size: 12px;
+  background: rgba(0,0,0,0.25);
+  padding: 4px 8px;
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+.storage-error-banner__hint {
+  margin: 0;
+  color: #c49a4e;
+  font-size: 12px;
+}
+
+.storage-error-banner__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.storage-error-banner__btn {
+  padding: 6px 12px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.storage-error-banner__btn:hover {
+  opacity: 0.85;
+}
+
+.storage-error-banner__btn--clear {
+  background: #c0392b;
+  color: #fff;
+}
+
+.storage-error-banner__btn--dismiss {
+  background: #3a3a3a;
+  color: #ccc;
+}

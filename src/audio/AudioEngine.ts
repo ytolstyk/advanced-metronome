@@ -32,7 +32,6 @@ export class AudioEngine {
   private chordVolume = 0.8; // 0–1
   private chordPattern: ChordPattern = [];
   private chordInstrument: ChordInstrumentType = 'guitar';
-  private lastChordBeat = -1;
 
   getAudioContext(): AudioContext {
     if (!this.ctx) {
@@ -170,7 +169,6 @@ export class AudioEngine {
       chordGain.connect(this.chordBusGain);
       playChordSynth(this.ctx, chordGain, chord, this.chordInstrument, this.nextBeatTime);
       this.prevChordGain = chordGain;
-      this.lastChordBeat = this.currentBeat;
     }
 
     this.onBeat?.(this.currentBeat, this.nextBeatTime);
@@ -226,7 +224,6 @@ export class AudioEngine {
     this.chordInstrument = chordInstrument;
     this.currentBeat = startBeat;
     this.currentLoop = 0;
-    this.lastChordBeat = -1;
     this.prevChordGain = null;
     this.isRunning = true;
     this.nextBeatTime = ctx.currentTime;
@@ -242,7 +239,6 @@ export class AudioEngine {
     }
     this.currentBeat = 0;
     this.currentLoop = 0;
-    this.lastChordBeat = -1;
     if (this.prevChordGain) {
       this.prevChordGain.gain.setValueAtTime(0, this.ctx?.currentTime ?? 0);
       this.prevChordGain = null;

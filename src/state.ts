@@ -137,7 +137,69 @@ function createDefaultMeasures(): Measure[] {
   }));
 }
 
-const STORAGE_KEY = 'drum-machine-state';
+export const STORAGE_KEY = 'drum-machine-state';
+
+export interface StorageValidationError {
+  reason: string;
+}
+
+export function validateStoredState(): StorageValidationError | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+
+    let data: unknown;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return { reason: 'Stored data could not be parsed as JSON.' };
+    }
+
+    if (!data || typeof data !== 'object') {
+      return { reason: 'Stored data is not a valid object.' };
+    }
+
+    const d = data as Record<string, unknown>;
+    const config = d['config'] as Record<string, unknown> | undefined;
+
+    if (!config || !Array.isArray(config['measures']) || (config['measures'] as unknown[]).length === 0) {
+      return { reason: 'Stored config is missing or has no measures.' };
+    }
+
+    const measures = config['measures'] as Record<string, unknown>[];
+    for (let i = 0; i < measures.length; i++) {
+      const ts = measures[i]['timeSignature'] as Record<string, unknown> | undefined;
+      if (!ts || typeof ts['beats'] !== 'number' || ts['beats'] <= 0) {
+        return { reason: `Measure ${i + 1} has an invalid or missing time signature.` };
+      }
+    }
+
+    const totalBeats = getTotalBeats(
+      measures.map((m) => ({ timeSignature: m['timeSignature'] as TimeSignature })),
+    );
+
+    const pattern = d['pattern'] as Record<string, unknown> | undefined;
+    if (!pattern || typeof pattern !== 'object') {
+      return { reason: 'Stored drum pattern is missing.' };
+    }
+
+    for (const id of INSTRUMENT_IDS) {
+      const track = pattern[id];
+      if (!Array.isArray(track)) {
+        return { reason: `Drum pattern is missing the "${id}" instrument track.` };
+      }
+      if (track.length !== totalBeats) {
+        return {
+          reason: `Pattern length mismatch for "${id}": expected ${totalBeats} steps (based on your measures), but found ${track.length}.`,
+        };
+      }
+    }
+
+    return null;
+  } catch {
+    return { reason: 'An unexpected error occurred while reading saved data.' };
+  }
+}
 
 interface PersistedState {
   config: Omit<LoopConfig, 'humanize' | 'volume'> & { humanize?: number; volume?: number };

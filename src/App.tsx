@@ -1,7 +1,8 @@
 import { useReducer, useEffect, useRef, useCallback, useState } from "react";
-import { reducer, createInitialState, saveState } from "./state";
-import type { Action } from "./state";
+import { reducer, createInitialState, saveState, validateStoredState } from "./state";
+import type { Action, StorageValidationError } from "./state";
 import type { AppState } from "./types";
+import { StorageErrorBanner } from "./components/StorageErrorBanner/StorageErrorBanner";
 import { useAudioEngine } from "./hooks/useAudioEngine";
 import { DrumGrid } from "./components/DrumGrid/DrumGrid";
 import { TransportControls } from "./components/TransportControls/TransportControls";
@@ -58,6 +59,10 @@ function App() {
     dispatch({ type: "RESTORE_STATE", state: prev });
   }, []);
 
+  const [storageError, setStorageError] = useState<StorageValidationError | null>(
+    () => validateStoredState(),
+  );
+
   const [showPiano, setShowPiano] = useState(false);
 
   const { humanize, volume } = state.config;
@@ -93,6 +98,13 @@ function App() {
 
   return (
     <main className="app" aria-label="Drum machine">
+      {storageError && (
+        <StorageErrorBanner
+          error={storageError}
+          onDismiss={() => setStorageError(null)}
+          onClear={() => setStorageError(null)}
+        />
+      )}
       <DrumGrid state={state} dispatch={dispatchWithHistory} onPreviewChord={(root, type) => previewChord(root, type, state.chordInstrument)} />
       <TransportControls
         state={state}
