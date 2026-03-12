@@ -1,5 +1,8 @@
 import type {
   AppState,
+  ChordBeat,
+  ChordInstrumentType,
+  ChordPattern,
   InstrumentId,
   LoopConfig,
   Measure,
@@ -106,6 +109,28 @@ function remapPatternForMeasureChange(
   return result;
 }
 
+function sanitizeChordBeat(chord: ChordBeat): ChordBeat {
+  return {
+    ...chord,
+    fadeDuration: chord.fadeDuration ?? 100,
+    fadeCurve: chord.fadeCurve ?? 'linear',
+  };
+}
+
+function resizeChordPattern(
+  pattern: ChordPattern,
+  newTotal: number,
+): ChordPattern {
+  const newPattern: ChordPattern = new Array(newTotal).fill(null);
+  for (let i = 0; i < newTotal && i < pattern.length; i++) {
+    const chord = pattern[i];
+    if (chord !== null) {
+      newPattern[i] = sanitizeChordBeat(chord);
+    }
+  }
+  return newPattern;
+}
+
 function createDefaultMeasures(): Measure[] {
   return Array.from({ length: DEFAULT_MEASURE_COUNT }, () => ({
     timeSignature: { ...DEFAULT_MEASURE.timeSignature },
@@ -117,11 +142,20 @@ const STORAGE_KEY = 'drum-machine-state';
 interface PersistedState {
   config: Omit<LoopConfig, 'humanize' | 'volume'> & { humanize?: number; volume?: number };
   pattern: Pattern;
+  chordPattern?: ChordPattern;
+  chordInstrument?: ChordInstrumentType;
+  chordVolume?: number;
 }
 
-export function saveState(config: AppState['config'], pattern: Pattern): void {
+export function saveState(
+  config: AppState['config'],
+  pattern: Pattern,
+  chordPattern: ChordPattern,
+  chordInstrument: ChordInstrumentType,
+  chordVolume: number,
+): void {
   try {
-    const persisted: PersistedState = { config, pattern };
+    const persisted: PersistedState = { config, pattern, chordPattern, chordInstrument, chordVolume };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   } catch {
     // storage full or unavailable — silently ignore
@@ -141,6 +175,8 @@ function loadPersistedState(): PersistedState | null {
 export function createInitialState(): AppState {
   const persisted = loadPersistedState();
   if (persisted) {
+    const totalBeats = getTotalBeats(persisted.config.measures);
+    const rawChordPattern = persisted.chordPattern ?? new Array(totalBeats).fill(null);
     return {
       config: {
         humanize: DEFAULT_HUMANIZE,
@@ -148,12 +184,16 @@ export function createInitialState(): AppState {
         ...persisted.config,
       },
       pattern: persisted.pattern,
+      chordPattern: resizeChordPattern(rawChordPattern, totalBeats),
+      chordInstrument: 'guitar',
+      chordVolume: persisted.chordVolume ?? 80,
       isPlaying: false,
       currentBeat: 0,
       currentLoop: 0,
     };
   }
   const measures = createDefaultMeasures();
+  const totalBeats = getTotalBeats(measures);
   return {
     config: {
       measures,
@@ -162,7 +202,10 @@ export function createInitialState(): AppState {
       humanize: DEFAULT_HUMANIZE,
       volume: DEFAULT_VOLUME,
     },
-    pattern: createEmptyPattern(getTotalBeats(measures)),
+    pattern: createEmptyPattern(totalBeats),
+    chordPattern: new Array(totalBeats).fill(null),
+    chordInstrument: 'guitar',
+    chordVolume: 80,
     isPlaying: false,
     currentBeat: 0,
     currentLoop: 0,
@@ -189,7 +232,11 @@ export type Action =
   | { type: 'RESTORE_STATE'; state: AppState }
   | { type: 'APPLY_USER_PRESET'; config: LoopConfig; pattern: Pattern }
   | { type: 'SET_HUMANIZE'; humanize: number }
-  | { type: 'SET_VOLUME'; volume: number };
+  | { type: 'SET_VOLUME'; volume: number }
+  | { type: 'SET_CHORD_BEAT'; beat: number; chord: ChordBeat | null }
+  | { type: 'SET_CHORD_INSTRUMENT'; instrument: ChordInstrumentType }
+  | { type: 'CLEAR_CHORD_PATTERN' }
+  | { type: 'SET_CHORD_VOLUME'; volume: number };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -226,10 +273,12 @@ export function reducer(state: AppState, action: Action): AppState {
       } else {
         newMeasures = current.slice(0, action.count);
       }
+      const newTotal = getTotalBeats(newMeasures);
       return {
         ...state,
         config: { ...state.config, measures: newMeasures },
         pattern: resizePattern(state.pattern, current, newMeasures),
+        chordPattern: resizeChordPattern(state.chordPattern, newTotal),
         isPlaying: false,
         currentBeat: 0,
         currentLoop: 0,
@@ -243,6 +292,7 @@ export function reducer(state: AppState, action: Action): AppState {
           ? { timeSignature: action.timeSignature }
           : m,
       );
+      const newTotal = getTotalBeats(newMeasures);
       return {
         ...state,
         config: { ...state.config, measures: newMeasures },
@@ -252,6 +302,7 @@ export function reducer(state: AppState, action: Action): AppState {
           newMeasures,
           action.measureIndex,
         ),
+        chordPattern: resizeChordPattern(state.chordPattern, newTotal),
         isPlaying: false,
         currentBeat: 0,
         currentLoop: 0,
@@ -321,10 +372,12 @@ export function reducer(state: AppState, action: Action): AppState {
 
       const stepCountChanged =
         stepsOf(measures[action.to]) !== stepsOf(newMeasures[action.to]);
+      const newTotal2 = getTotalBeats(newMeasures);
       return {
         ...state,
         config: { ...state.config, measures: newMeasures },
         pattern: newPattern,
+        chordPattern: resizeChordPattern(state.chordPattern, newTotal2),
         ...(stepCountChanged
           ? { isPlaying: false, currentBeat: 0, currentLoop: 0 }
           : {}),
@@ -353,10 +406,12 @@ export function reducer(state: AppState, action: Action): AppState {
         }
         newPattern[id] = newArr;
       }
+      const newTotalDel = getTotalBeats(newMeasures);
       return {
         ...state,
         config: { ...state.config, measures: newMeasures },
         pattern: newPattern,
+        chordPattern: resizeChordPattern(state.chordPattern, newTotalDel),
         isPlaying: false,
         currentBeat: 0,
         currentLoop: 0,
@@ -381,6 +436,7 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         config: { ...state.config, measures },
         pattern,
+        chordPattern: new Array(preset.beats).fill(null),
         isPlaying: false,
         currentBeat: 0,
         currentLoop: 0,
@@ -402,6 +458,24 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'SET_VOLUME':
       return { ...state, config: { ...state.config, volume: action.volume } };
+
+    case 'SET_CHORD_BEAT': {
+      const newChordPattern = [...state.chordPattern];
+      newChordPattern[action.beat] = action.chord;
+      return { ...state, chordPattern: newChordPattern };
+    }
+
+    case 'SET_CHORD_INSTRUMENT':
+      return { ...state, chordInstrument: action.instrument };
+
+    case 'CLEAR_CHORD_PATTERN':
+      return {
+        ...state,
+        chordPattern: new Array(getTotalBeats(state.config.measures)).fill(null),
+      };
+
+    case 'SET_CHORD_VOLUME':
+      return { ...state, chordVolume: action.volume };
 
     case 'RESTORE_STATE':
       return {

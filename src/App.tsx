@@ -20,6 +20,8 @@ const UNDOABLE: Set<Action["type"]> = new Set([
   "COPY_MEASURE",
   "APPLY_PRESET",
   "APPLY_USER_PRESET",
+  "SET_CHORD_BEAT",
+  "CLEAR_CHORD_PATTERN",
 ]);
 
 function App() {
@@ -59,12 +61,19 @@ function App() {
   const [showPiano, setShowPiano] = useState(false);
 
   const { humanize, volume } = state.config;
-  const { togglePlayback, stop } = useAudioEngine(state, dispatchWithHistory, humanize, volume / 100);
+  const { chordVolume } = state;
+  const { togglePlayback, stop, previewChord } = useAudioEngine(
+    state,
+    dispatchWithHistory,
+    humanize,
+    volume / 100,
+    chordVolume / 100,
+  );
 
-  const { config, pattern } = state;
+  const { config, pattern, chordPattern, chordInstrument } = state;
   useEffect(() => {
-    saveState(config, pattern);
-  }, [config, pattern]);
+    saveState(config, pattern, chordPattern, chordInstrument, chordVolume);
+  }, [config, pattern, chordPattern, chordInstrument, chordVolume]);
 
   // Space = play/pause, Ctrl/Cmd+Z = undo
   useEffect(() => {
@@ -84,7 +93,7 @@ function App() {
 
   return (
     <main className="app" aria-label="Drum machine">
-      <DrumGrid state={state} dispatch={dispatchWithHistory} />
+      <DrumGrid state={state} dispatch={dispatchWithHistory} onPreviewChord={(root, type) => previewChord(root, type, state.chordInstrument)} />
       <TransportControls
         state={state}
         dispatch={dispatchWithHistory}
@@ -96,6 +105,8 @@ function App() {
         onHumanizeChange={(v) => dispatchWithHistory({ type: 'SET_HUMANIZE', humanize: v })}
         volume={volume}
         onVolumeChange={(v) => dispatchWithHistory({ type: 'SET_VOLUME', volume: v })}
+        chordVolume={chordVolume}
+        onChordVolumeChange={(v) => dispatchWithHistory({ type: 'SET_CHORD_VOLUME', volume: v })}
       />
       <div className="piano-toggle-row">
         <button

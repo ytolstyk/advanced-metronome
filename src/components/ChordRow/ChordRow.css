@@ -1,0 +1,126 @@
+.chord-row-separator {
+  height: 1px;
+  background: #2a2b40;
+  margin: 2px 0;
+}
+
+.chord-row-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #c4c4d8;
+  white-space: nowrap;
+  user-select: none;
+  position: sticky;
+  left: 14px;
+  z-index: 1;
+  background: #262736;
+  letter-spacing: 0.2px;
+}
+
+.chord-cell {
+  background: #252a4a;
+  border: 1px solid #4c5aff;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 60px;
+  padding: 4px 6px;
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    box-shadow 0.1s,
+    transform 0.1s;
+  overflow: hidden;
+  position: relative;
+}
+
+.chord-cell:hover {
+  background: #2a3060;
+  border-color: #5b7fff;
+}
+
+.chord-cell--empty {
+  background: transparent;
+  border: 1px dashed #383860;
+}
+
+.chord-cell--empty:hover {
+  background: #1a1b2e;
+  border-color: #505280;
+}
+
+.chord-cell--paste-target {
+  border: 1px dashed #4fc3c3;
+}
+
+.chord-cell--paste-target:hover {
+  background: #1a2a2a;
+  border-color: #4fc3c3;
+}
+
+.chord-cell--active {
+  box-shadow: 0 0 0 2px #5b7fff;
+  transform: scale(1.03);
+  border-color: #5b7fff;
+  background: #1a2a4a;
+}
+
+.chord-cell-name {
+  color: #8eaaff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.chord-cell-actions {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.chord-cell-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 0;
+  background: transparent;
+  transition:
+    background 0.1s,
+    color 0.1s;
+}
+
+.chord-cell-action-btn--delete {
+  color: #cc6666;
+}
+
+.chord-cell-action-btn--delete:hover {
+  background: rgba(204, 102, 102, 0.2);
+  color: #ff8888;
+}
+
+.chord-cell-action-btn--copy {
+  color: #4fc3c3;
+}
+
+.chord-cell-action-btn--copy:hover {
+  background: rgba(79, 195, 195, 0.2);
+  color: #7de0e0;
+}

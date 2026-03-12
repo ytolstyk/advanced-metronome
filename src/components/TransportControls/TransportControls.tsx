@@ -32,6 +32,8 @@ interface TransportControlsProps {
   onHumanizeChange: (v: number) => void;
   volume: number;
   onVolumeChange: (v: number) => void;
+  chordVolume: number;
+  onChordVolumeChange: (v: number) => void;
 }
 
 export function TransportControls({
@@ -45,6 +47,8 @@ export function TransportControls({
   onHumanizeChange,
   volume,
   onVolumeChange,
+  chordVolume,
+  onChordVolumeChange,
 }: TransportControlsProps) {
   const { bpm, loopCount, measures } = state.config;
 
@@ -296,7 +300,7 @@ export function TransportControls({
         </div>
         <div className="flex flex-col gap-2 min-w-0 w-[180px] max-sm:basis-full max-sm:w-auto">
           <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
-            Volume: {volume}%
+            Drum Vol: {volume}%
           </Label>
           <Slider
             min={0}
@@ -304,7 +308,20 @@ export function TransportControls({
             step={1}
             value={[volume]}
             onValueChange={([v]) => onVolumeChange(v)}
-            aria-label="Volume"
+            aria-label="Drum volume"
+          />
+        </div>
+        <div className="flex flex-col gap-2 min-w-0 w-[180px] max-sm:basis-full max-sm:w-auto">
+          <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
+            Chord Vol: {chordVolume}%
+          </Label>
+          <Slider
+            min={0}
+            max={100}
+            step={1}
+            value={[chordVolume]}
+            onValueChange={([v]) => onChordVolumeChange(v)}
+            aria-label="Chord volume"
           />
         </div>
       </div>

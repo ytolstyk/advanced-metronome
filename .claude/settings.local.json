@@ -18,7 +18,8 @@
       "Bash(./node_modules/.bin/tsc --noEmit 2>&1 && ./node_modules/.bin/vite build 2>&1 | tail -10)",
       "Bash(rtk tsc:*)",
       "Bash(rtk lint:*)",
-      "Bash(rtk err:*)"
+      "Bash(rtk err:*)",
+      "Bash(/Users/yuriytolstykh/.nvm/versions/node/v22.14.0/bin/npm run:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

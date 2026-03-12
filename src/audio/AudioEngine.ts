@@ -1,7 +1,8 @@
-import type { Measure, Pattern } from '../types';
+import type { ChordInstrumentType, ChordPattern, Measure, Pattern } from '../types';
 import { INSTRUMENT_IDS } from '../constants';
 import { getTotalBeats } from '../state';
 import { drumSynths } from './drumSynths';
+import { playChordSynth } from './chordSynths';
 
 const SCHEDULE_AHEAD_TIME = 0.1; // seconds
 const SCHEDULER_INTERVAL = 25; // ms
@@ -12,6 +13,9 @@ export type StopCallback = () => void;
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private chordBusGain: GainNode | null = null;
+  private chordVolumeGain: GainNode | null = null;
+  private prevChordGain: GainNode | null = null;
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
   private currentBeat = 0;
   private nextBeatTime = 0;
@@ -25,6 +29,10 @@ export class AudioEngine {
   private onStop: StopCallback | null = null;
   private humanize = 0; // 0–100
   private volume = 1;   // 0–1
+  private chordVolume = 0.8; // 0–1
+  private chordPattern: ChordPattern = [];
+  private chordInstrument: ChordInstrumentType = 'guitar';
+  private lastChordBeat = -1;
 
   getAudioContext(): AudioContext {
     if (!this.ctx) {
@@ -32,6 +40,14 @@ export class AudioEngine {
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.value = this.volume;
       this.masterGain.connect(this.ctx.destination);
+
+      this.chordVolumeGain = this.ctx.createGain();
+      this.chordVolumeGain.gain.value = this.chordVolume;
+      this.chordVolumeGain.connect(this.ctx.destination);
+
+      this.chordBusGain = this.ctx.createGain();
+      this.chordBusGain.gain.value = 1;
+      this.chordBusGain.connect(this.chordVolumeGain);
     }
     return this.ctx;
   }
@@ -69,11 +85,25 @@ export class AudioEngine {
     if (this.masterGain) this.masterGain.gain.value = v;
   }
 
-  updateConfig(pattern: Pattern, measures: Measure[], bpm: number, loopCount: number) {
+  setChordVolume(v: number) {
+    this.chordVolume = v;
+    if (this.chordVolumeGain) this.chordVolumeGain.gain.value = v;
+  }
+
+  updateConfig(
+    pattern: Pattern,
+    measures: Measure[],
+    bpm: number,
+    loopCount: number,
+    chordPattern: ChordPattern,
+    chordInstrument: ChordInstrumentType,
+  ) {
     this.pattern = pattern;
     this.measures = measures;
     this.bpm = bpm;
     this.loopCount = loopCount;
+    this.chordPattern = chordPattern;
+    this.chordInstrument = chordInstrument;
   }
 
   private getBeatDuration(beatIndex: number): number {
@@ -98,6 +128,7 @@ export class AudioEngine {
     if (totalBeats === 0) return;
 
     const dest = this.masterGain ?? this.ctx.destination;
+
     for (const id of INSTRUMENT_IDS) {
       if (this.pattern[id][this.currentBeat]) {
         if (this.humanize > 0) {
@@ -110,6 +141,36 @@ export class AudioEngine {
           drumSynths[id](this.ctx, dest, this.nextBeatTime);
         }
       }
+    }
+
+    const chord = this.chordPattern[this.currentBeat];
+    if (chord && this.ctx && this.chordBusGain) {
+      // Fade out the previous chord's gain node so its oscillators stop
+      if (this.prevChordGain) {
+        const fadeS = chord.fadeDuration / 1000;
+        const prev = this.prevChordGain;
+        if (fadeS > 0) {
+          const fadeStart = Math.max(this.ctx.currentTime, this.nextBeatTime - fadeS);
+          prev.gain.setValueAtTime(prev.gain.value, fadeStart);
+          if (chord.fadeCurve === 'exponential') {
+            prev.gain.exponentialRampToValueAtTime(0.001, this.nextBeatTime);
+          } else {
+            prev.gain.linearRampToValueAtTime(0, this.nextBeatTime);
+          }
+        } else {
+          prev.gain.setValueAtTime(0, this.nextBeatTime);
+        }
+        // Disconnect after oscillators have finished
+        setTimeout(() => prev.disconnect(), 4000);
+      }
+
+      // Route new chord through a fresh gain node
+      const chordGain = this.ctx.createGain();
+      chordGain.gain.value = 1;
+      chordGain.connect(this.chordBusGain);
+      playChordSynth(this.ctx, chordGain, chord, this.chordInstrument, this.nextBeatTime);
+      this.prevChordGain = chordGain;
+      this.lastChordBeat = this.currentBeat;
     }
 
     this.onBeat?.(this.currentBeat, this.nextBeatTime);
@@ -143,7 +204,15 @@ export class AudioEngine {
     }
   }
 
-  start(pattern: Pattern, measures: Measure[], bpm: number, loopCount: number, startBeat = 0) {
+  start(
+    pattern: Pattern,
+    measures: Measure[],
+    bpm: number,
+    loopCount: number,
+    chordPattern: ChordPattern,
+    chordInstrument: ChordInstrumentType,
+    startBeat = 0,
+  ) {
     const ctx = this.getAudioContext();
     if (ctx.state === 'suspended') {
       ctx.resume();
@@ -153,8 +222,12 @@ export class AudioEngine {
     this.measures = measures;
     this.bpm = bpm;
     this.loopCount = loopCount;
+    this.chordPattern = chordPattern;
+    this.chordInstrument = chordInstrument;
     this.currentBeat = startBeat;
     this.currentLoop = 0;
+    this.lastChordBeat = -1;
+    this.prevChordGain = null;
     this.isRunning = true;
     this.nextBeatTime = ctx.currentTime;
 
@@ -169,6 +242,11 @@ export class AudioEngine {
     }
     this.currentBeat = 0;
     this.currentLoop = 0;
+    this.lastChordBeat = -1;
+    if (this.prevChordGain) {
+      this.prevChordGain.gain.setValueAtTime(0, this.ctx?.currentTime ?? 0);
+      this.prevChordGain = null;
+    }
   }
 
   pause() {
@@ -179,7 +257,14 @@ export class AudioEngine {
     }
   }
 
-  resume(pattern: Pattern, measures: Measure[], bpm: number, loopCount: number) {
+  resume(
+    pattern: Pattern,
+    measures: Measure[],
+    bpm: number,
+    loopCount: number,
+    chordPattern: ChordPattern,
+    chordInstrument: ChordInstrumentType,
+  ) {
     if (this.isRunning) return;
 
     const ctx = this.getAudioContext();
@@ -191,6 +276,8 @@ export class AudioEngine {
     this.measures = measures;
     this.bpm = bpm;
     this.loopCount = loopCount;
+    this.chordPattern = chordPattern;
+    this.chordInstrument = chordInstrument;
     this.isRunning = true;
     this.nextBeatTime = ctx.currentTime;
 

@@ -1,3 +1,16 @@
+import type { RootNote, ChordType } from './data/chords';
+
+export type ChordInstrumentType = 'guitar';
+
+export interface ChordBeat {
+  root: RootNote;
+  type: ChordType;
+  fadeDuration: number; // ms (0–500), how long previous chord fades out when THIS chord starts
+  fadeCurve: 'linear' | 'exponential';
+}
+
+export type ChordPattern = (ChordBeat | null)[];
+
 export type InstrumentId =
   | 'kick'
   | 'snare'
@@ -30,6 +43,9 @@ export interface LoopConfig {
 export interface AppState {
   config: LoopConfig;
   pattern: Pattern;
+  chordPattern: ChordPattern;
+  chordInstrument: ChordInstrumentType;
+  chordVolume: number; // 0–100
   isPlaying: boolean;
   currentBeat: number;
   currentLoop: number;
