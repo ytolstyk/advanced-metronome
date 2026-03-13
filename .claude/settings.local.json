@@ -26,7 +26,13 @@
       "Bash(/Users/yuriytolstykh/.nvm/versions/node/v22.14.0/bin/npm install:*)",
       "Bash(node -e \"console.log\\(require\\('./node_modules/@aws-amplify/ui-react/package.json'\\).version\\)\")",
       "Bash(./node_modules/.bin/eslint src/components/AuthModal/AuthModal.tsx 2>&1)",
-      "Bash(node -e \"console.log\\(require\\('./node_modules/eslint-plugin-react-hooks/package.json'\\).version\\)\")"
+      "Bash(node -e \"console.log\\(require\\('./node_modules/eslint-plugin-react-hooks/package.json'\\).version\\)\")",
+      "Bash(which ampx:*)",
+      "Bash(npm_config_user_agent=\"npm\" npm run --prefix /Users/yuriytolstykh/code/advanced-metronome 2>&1 | head -20)",
+      "Bash(npm_config_user_agent=\"npm/10.0.0 node/22.0.0\" ./node_modules/.bin/ampx sandbox --once 2>&1 | tail -30)",
+      "Bash(npm_config_user_agent=\"npm\" node_modules/.bin/vite build 2>&1 | tail -20)",
+      "Bash(npm_config_user_agent=\"npm\" node_modules/.bin/ampx sandbox --once 2>&1 | tail -10)",
+      "Bash(npm_config_user_agent=\"npm\" node_modules/.bin/ampx sandbox --once 2>&1 | tail -8)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -2,6 +2,7 @@ import { useReducer, useEffect, useRef, useCallback, useState } from "react";
 import { reducer, createInitialState, saveState, validateStoredState } from "./state";
 import type { Action, StorageValidationError } from "./state";
 import type { AppState } from "./types";
+import { loadCurrentTrack, saveCurrentTrack } from "./api/drumApi";
 import { StorageErrorBanner } from "./components/StorageErrorBanner/StorageErrorBanner";
 import { useAudioEngine } from "./hooks/useAudioEngine";
 import { DrumGrid } from "./components/DrumGrid/DrumGrid";
@@ -76,8 +77,41 @@ function App() {
   );
 
   const { config, pattern, chordPattern, chordInstrument } = state;
+
+  // Persist to localStorage on every change
   useEffect(() => {
     saveState(config, pattern, chordPattern, chordInstrument, chordVolume);
+  }, [config, pattern, chordPattern, chordInstrument, chordVolume]);
+
+  // Load current track from cloud on mount and apply it
+  useEffect(() => {
+    loadCurrentTrack().then((track) => {
+      if (track) {
+        dispatch({
+          type: "RESTORE_STATE",
+          state: {
+            ...stateRef.current,
+            config: track.config,
+            pattern: track.pattern,
+            chordPattern: track.chordPattern,
+            chordInstrument: track.chordInstrument,
+            chordVolume: track.chordVolume,
+          },
+        });
+      }
+    }).catch(() => { /* cloud unavailable — keep local state */ });
+  }, []);
+
+  // Auto-save current track to cloud (debounced 2s)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      void saveCurrentTrack({ config, pattern, chordPattern, chordInstrument, chordVolume });
+    }, 2000);
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
   }, [config, pattern, chordPattern, chordInstrument, chordVolume]);
 
   // Space = play/pause, Ctrl/Cmd+Z = undo

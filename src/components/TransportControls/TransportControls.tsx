@@ -1,11 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuthenticator } from "@aws-amplify/ui-react";
 import type { AppState } from "../../types";
 import type { Action } from "../../state";
 import { MIN_BPM, MAX_BPM, MAX_MEASURES } from "../../constants";
 import { exportDrumLoop } from "../../audio/exportAudio";
 import { PRESETS } from "../../presets";
-import { loadUserPresets, saveUserPresets } from "../../userPresets";
-import type { UserPreset } from "../../userPresets";
+import { loadCloudDrumTracks, createCloudDrumTrack, updateCloudDrumTrack, deleteCloudDrumTrack } from "../../api/drumApi";
+import type { CloudDrumTrack } from "../../api/drumApi";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,12 +77,26 @@ export function TransportControls({
     }
   };
 
+  const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
+
   // Preset select — values are prefixed: "builtin:<name>" or "user:<id>"
   const [selectedPreset, setSelectedPreset] = useState("");
-  const [userPresets, setUserPresets] = useState<UserPreset[]>(() =>
-    loadUserPresets(),
-  );
+  const [userPresets, setUserPresets] = useState<CloudDrumTrack[]>([]);
+  const [presetsLoading, setPresetsLoading] = useState(false);
   const [presetName, setPresetName] = useState("");
+  const [conflictPreset, setConflictPreset] = useState<CloudDrumTrack | null>(null);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated") {
+      setUserPresets([]);
+      return;
+    }
+    setPresetsLoading(true);
+    loadCloudDrumTracks()
+      .then(setUserPresets)
+      .catch(() => setUserPresets([]))
+      .finally(() => setPresetsLoading(false));
+  }, [authStatus]);
 
   const commitBpm = () => {
     const parsed = parseInt(bpmDraft, 10);
@@ -97,6 +119,7 @@ export function TransportControls({
           type: "APPLY_USER_PRESET",
           config: up.config,
           pattern: up.pattern,
+          chordPattern: up.chordPattern,
         });
     }
     setSelectedPreset("");
@@ -105,25 +128,38 @@ export function TransportControls({
   const deleteSelectedPreset = () => {
     if (!selectedPreset.startsWith("user:")) return;
     const id = selectedPreset.slice(5);
-    const updated = userPresets.filter((p) => p.id !== id);
-    setUserPresets(updated);
-    saveUserPresets(updated);
+    setUserPresets((prev) => prev.filter((p) => p.id !== id));
     setSelectedPreset("");
+    void deleteCloudDrumTrack(id);
   };
 
   const handleSavePreset = () => {
     const name = presetName.trim();
     if (!name) return;
-    const newPreset: UserPreset = {
-      id: Date.now().toString(),
-      name,
-      config: state.config,
-      pattern: state.pattern,
-    };
-    const updated = [...userPresets, newPreset];
-    setUserPresets(updated);
-    saveUserPresets(updated);
+    const existing = userPresets.find(
+      (p) => p.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (existing) {
+      setConflictPreset(existing);
+      return;
+    }
     setPresetName("");
+    void createCloudDrumTrack(name, state.config, state.pattern, state.chordPattern).then((created) => {
+      if (created) setUserPresets((prev) => [...prev, created]);
+    });
+  };
+
+  const handleOverridePreset = () => {
+    if (!conflictPreset) return;
+    const { id, name } = conflictPreset;
+    setConflictPreset(null);
+    setPresetName("");
+    void updateCloudDrumTrack(id, name, state.config, state.pattern, state.chordPattern).then(
+      (updated) => {
+        if (updated)
+          setUserPresets((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      },
+    );
   };
 
   const isUserPresetSelected = selectedPreset.startsWith("user:");
@@ -341,7 +377,12 @@ export function TransportControls({
                 </SelectItem>
               ))}
             </SelectGroup>
-            {userPresets.length > 0 && (
+            {presetsLoading ? (
+              <SelectGroup>
+                <SelectLabel>Saved</SelectLabel>
+                <SelectItem value="__loading__" disabled>Loading…</SelectItem>
+              </SelectGroup>
+            ) : userPresets.length > 0 ? (
               <SelectGroup>
                 <SelectLabel>Saved</SelectLabel>
                 {userPresets.map((p) => (
@@ -350,7 +391,7 @@ export function TransportControls({
                   </SelectItem>
                 ))}
               </SelectGroup>
-            )}
+            ) : null}
           </SelectContent>
         </Select>
         <Button
@@ -398,6 +439,26 @@ export function TransportControls({
           Save
         </Button>
       </div>
+
+      <Dialog open={!!conflictPreset} onOpenChange={(open) => { if (!open) setConflictPreset(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Preset already exists</DialogTitle>
+            <DialogDescription>
+              A preset named <strong>&ldquo;{conflictPreset?.name}&rdquo;</strong> already exists.
+              Override it with the current beat, or go back and choose a different name.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setConflictPreset(null)}>
+              Choose different name
+            </Button>
+            <Button variant="destructive" size="sm" onClick={handleOverridePreset}>
+              Override
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

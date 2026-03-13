@@ -292,7 +292,7 @@ export type Action =
   | { type: 'DELETE_MEASURE'; index: number }
   | { type: 'APPLY_PRESET'; preset: Preset }
   | { type: 'RESTORE_STATE'; state: AppState }
-  | { type: 'APPLY_USER_PRESET'; config: LoopConfig; pattern: Pattern }
+  | { type: 'APPLY_USER_PRESET'; config: LoopConfig; pattern: Pattern; chordPattern: ChordPattern }
   | { type: 'SET_HUMANIZE'; humanize: number }
   | { type: 'SET_VOLUME'; volume: number }
   | { type: 'SET_CHORD_BEAT'; beat: number; chord: ChordBeat | null }
@@ -510,6 +510,7 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         config: action.config,
         pattern: action.pattern,
+        chordPattern: action.chordPattern,
         isPlaying: false,
         currentBeat: 0,
         currentLoop: 0,
