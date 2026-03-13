@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useAuthenticator } from "@aws-amplify/ui-react";
 import type { ScaleMode } from "../data/scales";
 import {
   SCALE_INTERVALS,
@@ -9,6 +10,28 @@ import {
 import { ROOT_NOTES } from "../data/chords";
 import type { RootNote } from "../data/chords";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  loadCloudScaleTracks,
+  createCloudScaleTrack,
+  updateCloudScaleTrack,
+  deleteCloudScaleTrack,
+} from "../api/scaleApi";
+import type { CloudScaleTrack } from "../api/scaleApi";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 // ── Fretboard constants ──────────────────────────────────────────────────────
 // Standard tuning: low E → high e (index 0 = low E)
@@ -299,6 +322,23 @@ export function ScalesPage() {
   });
   const [activeNoteIdx, setActiveNoteIdx] = useState<number | null>(null);
 
+  const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
+  const [cloudTracks, setCloudTracks] = useState<CloudScaleTrack[]>([]);
+  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
+  const [trackName, setTrackName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [overrideConfirm, setOverrideConfirm] = useState<{ id: string; name: string } | null>(null);
+
+  // Load cloud tracks when authenticated
+  useEffect(() => {
+    if (authStatus !== 'authenticated') {
+      setCloudTracks([]);
+      return;
+    }
+    void loadCloudScaleTracks().then(setCloudTracks);
+  }, [authStatus]);
+
   const audioCtxRef = useRef<AudioContext | null>(null);
   const schedulerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nextNoteTimeRef = useRef(0);
@@ -416,6 +456,87 @@ export function ScalesPage() {
     activeNoteIdx !== null && practiceNotes[activeNoteIdx]
       ? practiceNotes[activeNoteIdx].dotKey
       : null;
+
+  function handleSaveTrackClick() {
+    const name = trackName.trim();
+    if (!name) return;
+    const existing = cloudTracks.find(
+      (t) => t.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (existing) {
+      setOverrideConfirm({ id: existing.id, name: existing.name });
+    } else {
+      void performSaveTrack();
+    }
+  }
+
+  async function performSaveTrack() {
+    const name = trackName.trim();
+    if (!name) return;
+    setSaving(true);
+    try {
+      if (overrideConfirm) {
+        const updated = await updateCloudScaleTrack(
+          overrideConfirm.id,
+          name,
+          selectedKey,
+          selectedMode,
+          practiceNotes,
+          bpm,
+        );
+        if (updated) {
+          setCloudTracks((prev) =>
+            prev.map((t) => (t.id === updated.id ? updated : t)),
+          );
+          setSelectedTrackId(updated.id);
+        }
+      } else {
+        const created = await createCloudScaleTrack(
+          name,
+          selectedKey,
+          selectedMode,
+          practiceNotes,
+          bpm,
+        );
+        if (created) {
+          setCloudTracks((prev) => [...prev, created]);
+          setSelectedTrackId(created.id);
+        }
+      }
+    } finally {
+      setSaving(false);
+      setOverrideConfirm(null);
+    }
+  }
+
+  function handleLoadTrack(trackId: string) {
+    const track = cloudTracks.find((t) => t.id === trackId);
+    if (!track) return;
+    stopPlayback();
+    setSelectedTrackId(trackId);
+    setTrackName(track.name);
+    setSelectedKey(track.selectedKey);
+    setSelectedMode(track.selectedMode);
+    setPracticeNotes(track.practiceNotes);
+    setBpm(track.bpm);
+    noteIdCounter.current = track.practiceNotes.reduce(
+      (max, n) => Math.max(max, n.id + 1),
+      0,
+    );
+  }
+
+  async function handleDeleteTrack() {
+    if (!selectedTrackId) return;
+    setDeleting(true);
+    try {
+      await deleteCloudScaleTrack(selectedTrackId);
+      setCloudTracks((prev) => prev.filter((t) => t.id !== selectedTrackId));
+      setSelectedTrackId(null);
+      setTrackName("");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <main
@@ -539,49 +660,55 @@ export function ScalesPage() {
         </button>
       </div>
 
-      {/* Practice mode controls */}
+      {/* Practice mode panel */}
       {practiceMode && (
-        <div className="flex flex-col gap-3">
-          {/* Note chips */}
-          <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center">
-            {practiceNotes.length === 0 ? (
-              <span className="text-[0.78rem] text-[#555577] italic">
-                Click notes above to build a sequence
-              </span>
-            ) : (
-              practiceNotes.map((note, idx) => {
-                const isActive = idx === activeNoteIdx;
-                return (
-                  <span
-                    key={note.id}
-                    className={
-                      "inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[0.78rem] font-semibold transition-colors " +
-                      (isActive
-                        ? "bg-[#1a3a2a] border-[#22dd88] text-[#22dd88]"
-                        : "bg-[#1e1f2c] border-[#505270] text-[#aaa]")
-                    }
-                  >
-                    {note.label}
-                    <button
-                      onClick={() => {
-                        setPracticeNotes((prev) =>
-                          prev.filter((_, i) => i !== idx),
-                        );
-                        if (isPlaying) stopPlayback();
-                      }}
-                      className="opacity-50 hover:opacity-100 leading-none"
-                      aria-label={`Remove ${note.label}`}
+        <div className="rounded-xl border border-[#3a3a60] bg-[#0b0b16] overflow-hidden">
+
+          {/* ── Sequence ─────────────────────────────────────────────────── */}
+          <div className="px-4 pt-3 pb-3">
+            <div className="text-[0.68rem] font-bold uppercase tracking-wider text-[#8080b8] mb-2">
+              Sequence
+            </div>
+            <div className="flex flex-wrap gap-1.5 min-h-[34px] items-center">
+              {practiceNotes.length === 0 ? (
+                <span className="text-[0.78rem] text-[#606080] italic">
+                  Click notes on the fretboard to build a sequence
+                </span>
+              ) : (
+                practiceNotes.map((note, idx) => {
+                  const isActive = idx === activeNoteIdx;
+                  return (
+                    <span
+                      key={note.id}
+                      className={
+                        "inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[0.78rem] font-semibold transition-colors " +
+                        (isActive
+                          ? "bg-[#0f2a1e] border-[#22dd88] text-[#22dd88]"
+                          : "bg-[#13131e] border-[#4a4a70] text-[#aaaacc]")
+                      }
                     >
-                      ×
-                    </button>
-                  </span>
-                );
-              })
-            )}
+                      {note.label}
+                      <button
+                        onClick={() => {
+                          setPracticeNotes((prev) =>
+                            prev.filter((_, i) => i !== idx),
+                          );
+                          if (isPlaying) stopPlayback();
+                        }}
+                        className="opacity-40 hover:opacity-80 leading-none ml-0.5"
+                        aria-label={`Remove ${note.label}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          {/* Playback controls */}
-          <div className="flex flex-wrap items-center gap-3">
+          {/* ── Transport ─────────────────────────────────────────────────── */}
+          <div className="border-t border-[#272744] px-4 py-3 flex flex-col md:flex-row md:items-center gap-3">
             <button
               onClick={() => {
                 if (isPlaying) {
@@ -592,43 +719,140 @@ export function ScalesPage() {
               }}
               disabled={practiceNotes.length === 0}
               className={
-                "px-4 py-1.5 text-[0.82rem] font-semibold rounded-md border transition-colors " +
+                "h-8 px-4 text-[0.82rem] font-semibold rounded-md border transition-colors shrink-0 " +
                 (isPlaying
-                  ? "border-[#dd4444] bg-[#1f0d0d] text-[#ff8888] hover:border-[#ff6666]"
+                  ? "border-[#dd4444] bg-[#1a0808] text-[#ff8888] hover:border-[#ff6666]"
                   : practiceNotes.length === 0
-                    ? "border-[#333355] bg-[#1a1a2c] text-[#555577] cursor-not-allowed"
-                    : "border-[#22dd88] bg-[#0d1f17] text-[#22dd88] hover:border-[#66ffbb]")
+                    ? "border-[#383858] bg-[#0b0b16] text-[#555578] cursor-not-allowed"
+                    : "border-[#22dd88] bg-[#081a10] text-[#22dd88] hover:border-[#66ffbb]")
               }
             >
               {isPlaying ? "■ Stop" : "▶ Play"}
             </button>
 
-            <label className="flex items-center gap-2 text-[0.82rem] text-[#aaa]">
-              <span className="text-[#777799] font-semibold">BPM</span>
+            <div className="flex items-center gap-2.5 flex-1 min-w-0 w-full md:w-auto md:max-w-[30rem]">
+              <span className="text-[0.68rem] font-bold uppercase tracking-wider text-[#8080b8] shrink-0">
+                BPM
+              </span>
               <input
                 type="range"
                 min={40}
-                max={240}
+                max={400}
                 step={1}
                 value={bpm}
                 onChange={(e) => setBpm(Number(e.target.value))}
-                className="w-28 accent-[#22dd88]"
+                className="flex-1 min-w-0 accent-[#22dd88]"
               />
-              <span className="w-8 text-right tabular-nums">{bpm}</span>
-            </label>
+              <span className="text-[0.82rem] font-semibold text-[#aaaacc] tabular-nums w-7 text-right shrink-0">
+                {bpm}
+              </span>
+            </div>
 
             <button
               onClick={() => {
                 stopPlayback();
                 setPracticeNotes([]);
               }}
-              className="px-3 py-1.5 text-[0.82rem] font-semibold rounded-md border border-[#505270] bg-[#1e1f2c] text-[#aaa] hover:border-[#7070a0] hover:text-[#ddd] transition-colors"
+              className="h-8 px-3 text-[0.82rem] font-semibold rounded-md border border-[#3a3a60] bg-[#0b0b16] text-[#7878a8] hover:border-[#5050a0] hover:text-[#aaaacc] transition-colors shrink-0"
             >
-              Clear ×
+              Clear
             </button>
           </div>
+
+          {/* ── Save / Load (authenticated only) ─────────────────────────── */}
+          {authStatus === 'authenticated' && (
+            <div className="border-t border-[#272744] px-4 py-3 flex flex-wrap items-center gap-2">
+              <span className="text-[0.68rem] font-bold uppercase tracking-wider text-[#8080b8] shrink-0 mr-1">
+                Track
+              </span>
+
+              {cloudTracks.length > 0 && (
+                <Select
+                  value={selectedTrackId ?? ""}
+                  onValueChange={handleLoadTrack}
+                >
+                  <SelectTrigger className="h-8 w-44 text-[0.82rem] bg-[#0f0f1e] border-[#3a3a60] text-[#aaaacc]">
+                    <SelectValue placeholder="Load saved…" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#13131e] border-[#3a3a60]">
+                    {cloudTracks.map((t) => (
+                      <SelectItem
+                        key={t.id}
+                        value={t.id}
+                        className="text-[0.82rem] text-[#ccc] focus:bg-[#1e1e36] focus:text-white"
+                      >
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              <input
+                type="text"
+                placeholder="Name…"
+                value={trackName}
+                onChange={(e) => setTrackName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSaveTrackClick();
+                  }
+                }}
+                className="h-8 px-2.5 text-[0.82rem] rounded-md border border-[#3a3a60] bg-[#0f0f1e] text-[#ddd] placeholder-[#606080] focus:outline-none focus:border-[#6b7fff] w-32"
+              />
+
+              <button
+                onClick={handleSaveTrackClick}
+                disabled={saving || !trackName.trim() || practiceNotes.length === 0 || overrideConfirm !== null}
+                className={
+                  "h-8 px-3.5 text-[0.82rem] font-semibold rounded-md border transition-colors " +
+                  (saving || !trackName.trim() || practiceNotes.length === 0
+                    ? "border-[#383858] bg-[#0b0b16] text-[#555578] cursor-not-allowed"
+                    : "border-[#4a5fff] bg-[#10122a] text-[#8eaaff] hover:border-[#8eaaff] hover:text-[#c0d4ff]")
+                }
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+
+              {selectedTrackId && (
+                <button
+                  onClick={() => void handleDeleteTrack()}
+                  disabled={deleting}
+                  className={
+                    "h-8 px-3 text-[0.82rem] font-semibold rounded-md border transition-colors " +
+                    (deleting
+                      ? "border-[#383858] bg-[#0b0b16] text-[#555578] cursor-not-allowed"
+                      : "border-[#6a2020] bg-[#0f0808] text-[#dd7777] hover:border-[#dd4444] hover:text-[#ff8888]")
+                  }
+                >
+                  {deleting ? "Deleting…" : "Delete"}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
+
+      <Dialog open={!!overrideConfirm} onOpenChange={(open) => { if (!open) setOverrideConfirm(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Track already exists</DialogTitle>
+            <DialogDescription>
+              A track named <strong>&ldquo;{overrideConfirm?.name}&rdquo;</strong> already exists.
+              Override it with the current scale, or go back and choose a different name.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setOverrideConfirm(null)}>
+              Choose different name
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => void performSaveTrack()}>
+              Override
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

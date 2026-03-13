@@ -426,7 +426,7 @@ export function TransportControls({
           maxLength={40}
           onChange={(e) => setPresetName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") handleSavePreset();
+            if (e.key === "Enter") { e.preventDefault(); handleSavePreset(); }
           }}
         />
         <Button

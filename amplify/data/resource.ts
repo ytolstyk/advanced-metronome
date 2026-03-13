@@ -17,6 +17,15 @@ const schema = a.schema({
     patternJson: a.string().required(),
     chordPatternJson: a.string().required(),
   }).authorization(allow => [allow.owner()]),
+
+  // Many records per user — saved explicitly as named scale practice tracks
+  ScaleTrack: a.model({
+    name: a.string().required(),
+    selectedKey: a.string().required(),
+    selectedMode: a.string().required(),
+    practiceNotesJson: a.string().required(),
+    bpm: a.integer().required(),
+  }).authorization(allow => [allow.owner()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
