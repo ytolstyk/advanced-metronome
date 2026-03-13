@@ -19,9 +19,10 @@ interface DrumGridProps {
   state: AppState;
   dispatch: React.Dispatch<Action>;
   onPreviewChord: (root: RootNote, type: ChordType) => void;
+  onPreviewDrum: (instrumentId: string) => void;
 }
 
-export function DrumGrid({ state, dispatch, onPreviewChord }: DrumGridProps) {
+export function DrumGrid({ state, dispatch, onPreviewChord, onPreviewDrum }: DrumGridProps) {
   const totalBeats = getTotalBeats(state.config.measures);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevBeatRef = useRef(0);
@@ -29,7 +30,11 @@ export function DrumGrid({ state, dispatch, onPreviewChord }: DrumGridProps) {
   const [copiedMeasure, setCopiedMeasure] = useState<number | null>(null);
 
   const handleToggle = (instrument: InstrumentId, beat: number) => {
+    const isCurrentlyActive = state.pattern[instrument][beat];
     dispatch({ type: "TOGGLE_BEAT", instrument, beat });
+    if (!isCurrentlyActive) {
+      onPreviewDrum(instrument);
+    }
   };
 
   const handleTimeSignatureChange = (

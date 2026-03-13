@@ -117,6 +117,10 @@ export function useAudioEngine(
     engineRef.current?.setChordVolume(chordVolume);
   }, [chordVolume]);
 
+  const previewDrum = useCallback((instrumentId: string) => {
+    getEngine().previewDrum(instrumentId);
+  }, [getEngine]);
+
   const previewChord = useCallback((root: RootNote, type: ChordType, instrument: ChordInstrumentType) => {
     const engine = getEngine();
     const ctx = engine.getAudioContext();
@@ -135,5 +139,6 @@ export function useAudioEngine(
     togglePlayback,
     getEngine,
     previewChord,
+    previewDrum,
   };
 }

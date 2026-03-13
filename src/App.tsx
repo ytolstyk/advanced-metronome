@@ -67,7 +67,7 @@ function App() {
 
   const { humanize, volume } = state.config;
   const { chordVolume } = state;
-  const { togglePlayback, stop, previewChord } = useAudioEngine(
+  const { togglePlayback, stop, previewChord, previewDrum } = useAudioEngine(
     state,
     dispatchWithHistory,
     humanize,
@@ -105,7 +105,7 @@ function App() {
           onClear={() => setStorageError(null)}
         />
       )}
-      <DrumGrid state={state} dispatch={dispatchWithHistory} onPreviewChord={(root, type) => previewChord(root, type, state.chordInstrument)} />
+      <DrumGrid state={state} dispatch={dispatchWithHistory} onPreviewChord={(root, type) => previewChord(root, type, state.chordInstrument)} onPreviewDrum={previewDrum} />
       <TransportControls
         state={state}
         dispatch={dispatchWithHistory}

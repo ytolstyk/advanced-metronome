@@ -280,6 +280,15 @@ export class AudioEngine {
     this.schedulerTimer = setInterval(() => this.scheduler(), SCHEDULER_INTERVAL);
   }
 
+  previewDrum(instrumentId: string) {
+    const ctx = this.getAudioContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    const dest = this.masterGain ?? ctx.destination;
+    drumSynths[instrumentId]?.(ctx, dest, ctx.currentTime);
+  }
+
   dispose() {
     this.stop();
     if (this.ctx) {
