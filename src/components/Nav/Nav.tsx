@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AuthModal } from "@/components/AuthModal/AuthModal";
 
 const LINKS = [
   { to: "/", label: "Drum Machine", end: true },
@@ -30,30 +31,37 @@ export function Nav() {
           Drumma Llama
         </span>
 
-        {/* Desktop links */}
-        <div className="hidden sm:flex gap-1">
-          {LINKS.map(({ to, label, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) => linkCls(isActive)}
-            >
-              {label}
-            </NavLink>
-          ))}
-        </div>
+        <div className="flex items-center gap-1">
+          {/* Desktop links */}
+          <div className="hidden sm:flex gap-1">
+            {LINKS.map(({ to, label, end }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                className={({ isActive }) => linkCls(isActive)}
+              >
+                {label}
+              </NavLink>
+            ))}
+          </div>
 
-        {/* Mobile burger */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="sm:hidden text-[#888] hover:text-[#eee] hover:bg-[#1a1a1a]"
-          onClick={() => setOpen(o => !o)}
-          aria-label={open ? "Close menu" : "Open menu"}
-        >
-          {open ? <X size={20} /> : <Menu size={20} />}
-        </Button>
+          {/* Auth button — desktop */}
+          <div className="hidden sm:block ml-1">
+            <AuthModal />
+          </div>
+
+          {/* Mobile burger */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="sm:hidden text-[#888] hover:text-[#eee] hover:bg-[#1a1a1a]"
+            onClick={() => setOpen(o => !o)}
+            aria-label={open ? "Close menu" : "Open menu"}
+          >
+            {open ? <X size={20} /> : <Menu size={20} />}
+          </Button>
+        </div>
       </div>
 
       {/* Mobile dropdown */}
@@ -70,6 +78,9 @@ export function Nav() {
               {label}
             </NavLink>
           ))}
+          <div className="pt-1 border-t border-[#1a1a1a] mt-0.5">
+            <AuthModal />
+          </div>
         </div>
       )}
     </nav>

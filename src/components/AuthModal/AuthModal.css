@@ -1,0 +1,250 @@
+/* ── Trigger button ─────────────────────────────────────────────────── */
+.auth-trigger {
+  color: #b0b0b0;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+}
+.auth-trigger:hover {
+  color: #eee;
+  background: #1a1a1a;
+}
+.auth-trigger-signed-in {
+  color: hsl(237 100% 75%);
+}
+
+/* ── Dialog sizing for the Authenticator form ───────────────────────── */
+.auth-dialog-content {
+  padding: 0;
+  max-width: 100%;
+}
+
+@media (min-width: 640px) {
+  .auth-dialog-content {
+    max-width: min(520px, calc(100vw - 2rem));
+  }
+}
+
+/* ── Amplify UI token overrides ─────────────────────────────────────── */
+[data-amplify-authenticator] {
+  width: 100%;
+
+  /* structural */
+  --amplify-components-authenticator-router-border-width: 0;
+  --amplify-components-authenticator-router-box-shadow: none;
+  --amplify-components-authenticator-router-background-color: transparent;
+
+  /* background */
+  --amplify-colors-background-primary: hsl(235 22% 17%);
+  --amplify-colors-background-secondary: hsl(233 24% 13%);
+
+  /* font — bumped up across the board */
+  --amplify-colors-font-primary: hsl(240 40% 97%);
+  --amplify-colors-font-secondary: hsl(237 50% 84%);
+  --amplify-colors-font-tertiary: hsl(237 40% 74%);
+  --amplify-colors-font-interactive: hsl(237 100% 82%);
+  --amplify-colors-font-hover: hsl(237 100% 92%);
+
+  /* headings */
+  --amplify-components-heading-color: hsl(240 40% 97%);
+  --amplify-components-authenticator-heading-color: hsl(240 40% 97%);
+
+  /* brand / primary accent */
+  --amplify-colors-brand-primary-10: hsl(237 100% 18%);
+  --amplify-colors-brand-primary-20: hsl(237 100% 28%);
+  --amplify-colors-brand-primary-40: hsl(237 100% 52%);
+  --amplify-colors-brand-primary-60: hsl(237 100% 68%);
+  --amplify-colors-brand-primary-80: hsl(237 100% 78%);
+  --amplify-colors-brand-primary-90: hsl(237 100% 84%);
+  --amplify-colors-brand-primary-100: hsl(237 100% 90%);
+
+  /* borders — more visible */
+  --amplify-colors-border-primary: hsl(237 40% 50%);
+  --amplify-colors-border-secondary: hsl(237 35% 40%);
+  --amplify-colors-border-focus: hsl(237 100% 74%);
+
+  /* overlay */
+  --amplify-colors-overlay-10: hsla(237 50% 50% / 0.12);
+  --amplify-colors-overlay-20: hsla(237 50% 50% / 0.22);
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────────── */
+[data-amplify-authenticator] .amplify-tabs {
+  background: hsl(233 26% 12%);
+  border-bottom: 1px solid hsl(237 40% 34%);
+}
+[data-amplify-authenticator] .amplify-tabs-item {
+  color: hsl(237 40% 68%);
+  border-color: transparent;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.875rem 1.5rem;
+  letter-spacing: 0.01em;
+}
+[data-amplify-authenticator] .amplify-tabs-item[data-state="active"] {
+  color: hsl(237 100% 82%);
+  border-color: hsl(237 100% 68%);
+  background: transparent;
+  text-shadow: 0 0 12px hsl(237 100% 66% / 0.4);
+}
+[data-amplify-authenticator] .amplify-tabs-item:hover:not([data-state="active"]) {
+  color: hsl(240 40% 88%);
+  background: hsl(237 25% 20%);
+}
+
+/* ── Headings & body text ───────────────────────────────────────────── */
+[data-amplify-authenticator] .amplify-heading,
+[data-amplify-authenticator] .amplify-authenticator__heading {
+  color: hsl(240 40% 97%);
+  font-weight: 700;
+}
+[data-amplify-authenticator] .amplify-text {
+  color: hsl(237 50% 84%);
+}
+
+/* ── Icons ──────────────────────────────────────────────────────────── */
+[data-amplify-authenticator] .amplify-icon {
+  color: hsl(237 60% 80%);
+  fill: currentColor;
+}
+
+/* ── Form fields ────────────────────────────────────────────────────── */
+[data-amplify-authenticator] .amplify-field-group {
+  background: transparent;
+}
+[data-amplify-authenticator] .amplify-label {
+  color: hsl(237 60% 86%);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+[data-amplify-authenticator] .amplify-input {
+  background: hsl(237 22% 19%);
+  color: hsl(240 40% 97%);
+  border-color: hsl(237 40% 44%);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+[data-amplify-authenticator] .amplify-input::placeholder {
+  color: hsl(237 30% 54%);
+}
+[data-amplify-authenticator] .amplify-input:focus {
+  border-color: hsl(237 100% 72%);
+  box-shadow: 0 0 0 3px hsl(237 100% 66% / 0.25);
+  outline: none;
+}
+
+/* Password show/hide toggle */
+[data-amplify-authenticator] .amplify-field-group__control {
+  background: hsl(237 22% 19%);
+  border-color: hsl(237 40% 44%);
+  border-radius: 0.375rem;
+}
+[data-amplify-authenticator] .amplify-field-group__icon-button {
+  color: hsl(237 50% 72%);
+  background: transparent;
+  border: none;
+}
+[data-amplify-authenticator] .amplify-field-group__icon-button:hover {
+  color: hsl(237 100% 84%);
+  background: transparent;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────── */
+[data-amplify-authenticator] .amplify-button[data-variation="primary"] {
+  background: linear-gradient(135deg, hsl(237 100% 62%), hsl(260 100% 66%));
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 12px hsl(237 100% 60% / 0.35);
+}
+[data-amplify-authenticator] .amplify-button[data-variation="primary"]:hover {
+  background: linear-gradient(135deg, hsl(237 100% 58%), hsl(260 100% 62%));
+  box-shadow: 0 2px 16px hsl(237 100% 60% / 0.5);
+}
+[data-amplify-authenticator] .amplify-button[data-variation="primary"]:active {
+  background: linear-gradient(135deg, hsl(237 100% 52%), hsl(260 100% 56%));
+  box-shadow: none;
+}
+
+/* Default / outlined buttons (e.g. "Resend Code") */
+[data-amplify-authenticator] .amplify-button[data-variation="default"],
+[data-amplify-authenticator] .amplify-button:not([data-variation]) {
+  color: hsl(237 100% 84%);
+  border-color: hsl(237 40% 50%);
+  background: hsl(237 25% 22%);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+[data-amplify-authenticator] .amplify-button[data-variation="default"]:hover,
+[data-amplify-authenticator] .amplify-button:not([data-variation]):hover {
+  color: hsl(237 100% 92%);
+  border-color: hsl(237 100% 68%);
+  background: hsl(237 30% 26%);
+}
+
+/* Link buttons (e.g. "Forgot password", "Back to Sign In") */
+[data-amplify-authenticator] .amplify-button[data-variation="link"] {
+  color: hsl(237 100% 82%);
+  font-size: 0.8125rem;
+  text-decoration: none;
+}
+[data-amplify-authenticator] .amplify-button[data-variation="link"]:hover {
+  color: hsl(237 100% 92%);
+  background: transparent;
+  text-decoration: underline;
+}
+
+/* ── Dividers ───────────────────────────────────────────────────────── */
+[data-amplify-authenticator] .amplify-divider {
+  border-color: hsl(237 35% 38%);
+}
+[data-amplify-authenticator] .amplify-divider-label {
+  color: hsl(237 40% 68%);
+  background: hsl(235 22% 17%);
+}
+
+/* ── Alerts / errors ────────────────────────────────────────────────── */
+[data-amplify-authenticator] .amplify-alert--error {
+  background: hsl(0 50% 14%);
+  border: 1px solid hsl(0 60% 40%);
+  color: hsl(0 90% 82%);
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+}
+
+/* ── Form body ──────────────────────────────────────────────────────── */
+[data-amplify-authenticator] [data-amplify-authenticator-signin],
+[data-amplify-authenticator] [data-amplify-authenticator-signup],
+[data-amplify-authenticator] [data-amplify-authenticator-confirmverifyuser],
+[data-amplify-authenticator] [data-amplify-authenticator-forceNewPassword],
+[data-amplify-authenticator] [data-amplify-authenticator-resetpassword],
+[data-amplify-authenticator] [data-amplify-authenticator-confirmresetpassword],
+[data-amplify-authenticator] [data-amplify-authenticator-confirmsignup],
+[data-amplify-authenticator] [data-amplify-router] > form,
+[data-amplify-authenticator] .amplify-authenticator__route {
+  padding: 1.5rem;
+  background: hsl(235 22% 17%);
+  color: hsl(240 40% 97%);
+}
+
+/* ── Signed-in view ─────────────────────────────────────────────────── */
+.auth-signed-in {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding-top: 0.25rem;
+}
+.auth-email {
+  text-align: center;
+  color: hsl(237 70% 86%);
+  font-size: 0.875rem;
+  margin: 0;
+  padding: 0.625rem 1rem;
+  background: hsl(237 25% 18%);
+  border-radius: 0.375rem;
+  border: 1px solid hsl(237 40% 38%);
+  word-break: break-all;
+}
