@@ -33,7 +33,8 @@
       "Bash(npm_config_user_agent=\"npm\" node_modules/.bin/vite build 2>&1 | tail -20)",
       "Bash(npm_config_user_agent=\"npm\" node_modules/.bin/ampx sandbox --once 2>&1 | tail -10)",
       "Bash(npm_config_user_agent=\"npm\" node_modules/.bin/ampx sandbox --once 2>&1 | tail -8)",
-      "Bash(node_modules/.bin/eslint src/components/TransportControls/TransportControls.tsx 2>&1; echo \"exit: $?\")"
+      "Bash(node_modules/.bin/eslint src/components/TransportControls/TransportControls.tsx 2>&1; echo \"exit: $?\")",
+      "Bash(/Users/yuriytolstykh/.nvm/versions/node/v22.14.0/bin/npx shadcn@latest add tooltip --yes 2>&1)"
     ]
   },
   "enableAllProjectMcpServers": true,

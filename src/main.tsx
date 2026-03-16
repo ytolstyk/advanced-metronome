@@ -12,10 +12,12 @@ import { TunerPage } from './pages/TunerPage.tsx'
 import { ChordsPage } from './pages/ChordsPage.tsx'
 import { CircleOfFifthsPage } from './pages/CircleOfFifthsPage.tsx'
 import { ScalesPage } from './pages/ScalesPage.tsx'
+import { TooltipProvider } from './components/ui/tooltip.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Authenticator.Provider>
+      <TooltipProvider>
       <BrowserRouter>
         <Nav />
         <Routes>
@@ -30,6 +32,7 @@ createRoot(document.getElementById('root')!).render(
           <DonationModal />
         </footer>
       </BrowserRouter>
+      </TooltipProvider>
     </Authenticator.Provider>
   </StrictMode>,
 )

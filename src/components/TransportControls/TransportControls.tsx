@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -420,31 +421,46 @@ export function TransportControls({
 
       <div className="save-preset-row">
         <span className="preset-row-label">Save</span>
-        <span
-          className="flex flex-1 min-w-0 gap-[10px]"
-          title={!isAuthenticated ? "Sign in to save beats" : undefined}
-        >
-          <Input
-            type="text"
-            className="flex-1 bg-secondary border-border"
-            placeholder={isAuthenticated ? "Name this beat…" : "Sign in to save beats"}
-            value={presetName}
-            maxLength={40}
-            disabled={!isAuthenticated}
-            onChange={(e) => setPresetName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") { e.preventDefault(); handleSavePreset(); }
-            }}
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            className="font-bold uppercase tracking-wider text-xs"
-            disabled={!isAuthenticated || !presetName.trim()}
-            onClick={handleSavePreset}
-          >
-            Save
-          </Button>
+        <span className="flex flex-1 min-w-0 gap-[10px]">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="flex-1 min-w-0">
+                <Input
+                  type="text"
+                  className="w-full bg-secondary border-border"
+                  placeholder={isAuthenticated ? "Name this beat…" : "Sign in to save beats"}
+                  value={presetName}
+                  maxLength={40}
+                  disabled={!isAuthenticated}
+                  onChange={(e) => setPresetName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); handleSavePreset(); }
+                  }}
+                />
+              </span>
+            </TooltipTrigger>
+            {!isAuthenticated && (
+              <TooltipContent>Sign in to save beats</TooltipContent>
+            )}
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="font-bold uppercase tracking-wider text-xs"
+                  disabled={!isAuthenticated || !presetName.trim()}
+                  onClick={handleSavePreset}
+                >
+                  Save
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {!isAuthenticated && (
+              <TooltipContent>Sign in to save beats</TooltipContent>
+            )}
+          </Tooltip>
         </span>
       </div>
 
