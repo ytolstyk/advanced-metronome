@@ -482,15 +482,17 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'APPLY_PRESET': {
       const { preset } = action;
+      const stepsPerBeat = preset.stepsPerBeat ?? 1;
+      const totalSteps = preset.beats * stepsPerBeat;
       const measures: Measure[] = [
-        { timeSignature: { beats: preset.beats, subdivision: preset.subdivision } },
+        { timeSignature: { beats: preset.beats, subdivision: preset.subdivision, stepsPerBeat } },
       ];
       const pattern = {} as Pattern;
       for (const id of INSTRUMENT_IDS) {
         const hits = preset.pattern[id] ?? [];
-        const arr = new Array(preset.beats).fill(false);
+        const arr = new Array(totalSteps).fill(false);
         for (const step of hits) {
-          if (step < preset.beats) arr[step] = true;
+          if (step < totalSteps) arr[step] = true;
         }
         pattern[id] = arr;
       }
@@ -498,7 +500,7 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         config: { ...state.config, measures },
         pattern,
-        chordPattern: new Array(preset.beats).fill(null),
+        chordPattern: new Array(totalSteps).fill(null),
         isPlaying: false,
         currentBeat: 0,
         currentLoop: 0,
