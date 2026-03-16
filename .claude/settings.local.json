@@ -32,7 +32,8 @@
       "Bash(npm_config_user_agent=\"npm/10.0.0 node/22.0.0\" ./node_modules/.bin/ampx sandbox --once 2>&1 | tail -30)",
       "Bash(npm_config_user_agent=\"npm\" node_modules/.bin/vite build 2>&1 | tail -20)",
       "Bash(npm_config_user_agent=\"npm\" node_modules/.bin/ampx sandbox --once 2>&1 | tail -10)",
-      "Bash(npm_config_user_agent=\"npm\" node_modules/.bin/ampx sandbox --once 2>&1 | tail -8)"
+      "Bash(npm_config_user_agent=\"npm\" node_modules/.bin/ampx sandbox --once 2>&1 | tail -8)",
+      "Bash(node_modules/.bin/eslint src/components/TransportControls/TransportControls.tsx 2>&1; echo \"exit: $?\")"
     ]
   },
   "enableAllProjectMcpServers": true,

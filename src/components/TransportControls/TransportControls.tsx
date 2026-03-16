@@ -78,6 +78,7 @@ export function TransportControls({
   };
 
   const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
+  const isAuthenticated = authStatus === "authenticated";
 
   // Preset select — values are prefixed: "builtin:<name>" or "user:<id>"
   const [selectedPreset, setSelectedPreset] = useState("");
@@ -418,26 +419,32 @@ export function TransportControls({
 
       <div className="save-preset-row">
         <span className="preset-row-label">Save</span>
-        <Input
-          type="text"
-          className="flex-1 bg-secondary border-border"
-          placeholder="Name this beat…"
-          value={presetName}
-          maxLength={40}
-          onChange={(e) => setPresetName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); handleSavePreset(); }
-          }}
-        />
-        <Button
-          variant="secondary"
-          size="sm"
-          className="font-bold uppercase tracking-wider text-xs"
-          disabled={!presetName.trim()}
-          onClick={handleSavePreset}
+        <span
+          className="flex flex-1 min-w-0 gap-[10px]"
+          title={!isAuthenticated ? "Sign in to save beats" : undefined}
         >
-          Save
-        </Button>
+          <Input
+            type="text"
+            className="flex-1 bg-secondary border-border"
+            placeholder={isAuthenticated ? "Name this beat…" : "Sign in to save beats"}
+            value={presetName}
+            maxLength={40}
+            disabled={!isAuthenticated}
+            onChange={(e) => setPresetName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); handleSavePreset(); }
+            }}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            className="font-bold uppercase tracking-wider text-xs"
+            disabled={!isAuthenticated || !presetName.trim()}
+            onClick={handleSavePreset}
+          >
+            Save
+          </Button>
+        </span>
       </div>
 
       <Dialog open={!!conflictPreset} onOpenChange={(open) => { if (!open) setConflictPreset(null); }}>
