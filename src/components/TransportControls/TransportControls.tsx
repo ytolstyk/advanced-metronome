@@ -343,7 +343,7 @@ export function TransportControls({
         >
           {shareCopied ? '✓ Copied!' : '⤴ Share'}
         </Button>
-        <div className="flex flex-col gap-2 min-w-0 w-[180px] max-sm:w-auto max-sm:flex-1">
+        <div className="flex flex-col gap-2 min-w-0 w-[180px] max-sm:w-auto max-sm:flex-1 max-sm:basis-full">
           <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
             Human: {humanize}%
           </Label>
