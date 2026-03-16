@@ -108,6 +108,7 @@ export function TransportControls({
   };
 
   const applySelectedPreset = () => {
+    onStop();
     if (selectedPreset.startsWith("builtin:")) {
       const name = selectedPreset.slice(8);
       const preset = PRESETS.find((p) => p.name === name);
