@@ -1,8 +1,10 @@
 import { useReducer, useEffect, useRef, useCallback, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { reducer, createInitialState, saveState, validateStoredState } from "./state";
 import type { Action, StorageValidationError } from "./state";
 import type { AppState } from "./types";
 import { loadCurrentTrack, saveCurrentTrack } from "./api/drumApi";
+import { decodeShareState } from "./shareUtils";
 import { StorageErrorBanner } from "./components/StorageErrorBanner/StorageErrorBanner";
 import { useAudioEngine } from "./hooks/useAudioEngine";
 import { DrumGrid } from "./components/DrumGrid/DrumGrid";
@@ -27,6 +29,7 @@ const UNDOABLE: Set<Action["type"]> = new Set([
 ]);
 
 function App() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [state, dispatch] = useReducer(reducer, null, createInitialState);
 
   // Refs let dispatchWithHistory / undo stay stable without re-creating on every render
@@ -83,8 +86,20 @@ function App() {
     saveState(config, pattern, chordPattern, chordInstrument, chordVolume);
   }, [config, pattern, chordPattern, chordInstrument, chordVolume]);
 
-  // Load current track from cloud on mount and apply it
+  // Load current track from cloud on mount and apply it (skip if share param present)
   useEffect(() => {
+    const shareParam = searchParams.get('share');
+    if (shareParam) {
+      const shared = decodeShareState(shareParam);
+      if (shared) {
+        dispatch({
+          type: 'RESTORE_STATE',
+          state: { ...stateRef.current, ...shared },
+        });
+      }
+      setSearchParams({}, { replace: true });
+      return;
+    }
     loadCurrentTrack().then((track) => {
       if (track) {
         dispatch({
@@ -100,6 +115,7 @@ function App() {
         });
       }
     }).catch(() => { /* cloud unavailable — keep local state */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-save current track to cloud (debounced 2s)

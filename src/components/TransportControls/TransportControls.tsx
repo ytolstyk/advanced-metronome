@@ -4,6 +4,7 @@ import type { AppState } from "../../types";
 import type { Action } from "../../state";
 import { MIN_BPM, MAX_BPM, MAX_MEASURES } from "../../constants";
 import { exportDrumLoop } from "../../audio/exportAudio";
+import { buildShareUrl } from "../../shareUtils";
 import { PRESETS } from "../../presets";
 import { loadCloudDrumTracks, createCloudDrumTrack, updateCloudDrumTrack, deleteCloudDrumTrack } from "../../api/drumApi";
 import type { CloudDrumTrack } from "../../api/drumApi";
@@ -64,6 +65,15 @@ export function TransportControls({
   const [bpmDraft, setBpmDraft] = useState("");
   const [bpmFocused, setBpmFocused] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const handleShare = () => {
+    const url = buildShareUrl(state);
+    void navigator.clipboard.writeText(url).then(() => {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    });
+  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -323,6 +333,15 @@ export function TransportControls({
           title="Download drum loop as WAV"
         >
           <span aria-hidden="true">{exporting ? "⏳" : "⬇ WAV"}</span>
+        </Button>
+        <Button
+          variant="outline"
+          className="h-9 rounded-lg px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+          onClick={handleShare}
+          aria-label="Copy share link"
+          title="Copy share link to clipboard"
+        >
+          {shareCopied ? '✓ Copied!' : '⤴ Share'}
         </Button>
         <div className="flex flex-col gap-2 min-w-0 w-[180px] max-sm:w-auto max-sm:flex-1">
           <Label className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
