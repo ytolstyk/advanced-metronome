@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuthenticator } from "@aws-amplify/ui-react";
+import { decodeScaleShare, buildScaleShareUrl } from "../shareUtils";
 import type { ScaleMode } from "../data/scales";
 import {
   SCALE_INTERVALS,
@@ -321,6 +323,29 @@ export function ScalesPage() {
     return n >= 40 && n <= 240 ? n : 80;
   });
   const [activeNoteIdx, setActiveNoteIdx] = useState<number | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [copiedShare, setCopiedShare] = useState(false);
+
+  // Load shared state from URL on mount
+  useEffect(() => {
+    const encoded = searchParams.get('scaleshare');
+    if (!encoded) return;
+    const payload = decodeScaleShare(encoded);
+    if (payload) {
+      if (ROOT_NOTES.includes(payload.key as RootNote)) setSelectedKey(payload.key as RootNote);
+      if (SCALE_MODES.includes(payload.mode as ScaleMode)) setSelectedMode(payload.mode as ScaleMode);
+      const bpmVal = payload.bpm;
+      if (bpmVal >= 40 && bpmVal <= 400) setBpm(bpmVal);
+      if (payload.notes && payload.notes.length > 0) {
+        setPracticeNotes(payload.notes);
+        setPracticeMode(true);
+        noteIdCounter.current = payload.notes.reduce((max, n) => Math.max(max, n.id + 1), 0);
+      }
+    }
+    setSearchParams({}, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
   const [cloudTracks, setCloudTracks] = useState<CloudScaleTrack[]>([]);
@@ -645,8 +670,8 @@ export function ScalesPage() {
         />
       </div>
 
-      {/* Practice Mode toggle */}
-      <div>
+      {/* Practice Mode toggle + Share */}
+      <div className="flex items-center gap-2">
         <button
           onClick={togglePracticeMode}
           className={
@@ -657,6 +682,23 @@ export function ScalesPage() {
           }
         >
           {practiceMode ? "✦ Practice Mode" : "Practice Mode"}
+        </button>
+        <button
+          onClick={() => {
+            const url = buildScaleShareUrl(
+              selectedKey,
+              selectedMode,
+              bpm,
+              practiceNotes.length > 0 ? practiceNotes : undefined,
+            );
+            void navigator.clipboard.writeText(url).then(() => {
+              setCopiedShare(true);
+              setTimeout(() => setCopiedShare(false), 2000);
+            });
+          }}
+          className="px-4 py-1.5 text-[0.82rem] font-semibold rounded-md border transition-colors border-[#505270] bg-[#1e1f2c] text-[#aaa] hover:border-[#7070a0] hover:text-[#ddd]"
+        >
+          {copiedShare ? "✓ Copied!" : "Share"}
         </button>
       </div>
 

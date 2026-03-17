@@ -1,5 +1,70 @@
 import type { AppState, LoopConfig, Pattern, ChordPattern, ChordInstrumentType } from './types';
 
+// ── Scale share ───────────────────────────────────────────────────────────────
+
+interface ScalePracticeNote {
+  id: number;
+  midiNote: number;
+  label: string;
+  dotKey: string;
+}
+
+export interface ScaleSharePayload {
+  v: 1;
+  key: string;
+  mode: string;
+  bpm: number;
+  notes?: ScalePracticeNote[];
+}
+
+export function encodeScaleShare(
+  key: string,
+  mode: string,
+  bpm: number,
+  notes?: ScalePracticeNote[],
+): string {
+  const payload: ScaleSharePayload = {
+    v: 1,
+    key,
+    mode,
+    bpm,
+    ...(notes && notes.length > 0 ? { notes } : {}),
+  };
+  const json = JSON.stringify(payload);
+  return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function decodeScaleShare(encoded: string): ScaleSharePayload | null {
+  try {
+    const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    const json = atob(base64);
+    const payload = JSON.parse(json) as unknown;
+    if (!isScaleSharePayload(payload)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function isScaleSharePayload(value: unknown): value is ScaleSharePayload {
+  if (typeof value !== 'object' || value === null) return false;
+  const p = value as Record<string, unknown>;
+  if (p['v'] !== 1) return false;
+  if (typeof p['key'] !== 'string') return false;
+  if (typeof p['mode'] !== 'string') return false;
+  if (typeof p['bpm'] !== 'number') return false;
+  return true;
+}
+
+export function buildScaleShareUrl(
+  key: string,
+  mode: string,
+  bpm: number,
+  notes?: ScalePracticeNote[],
+): string {
+  return `${window.location.origin}/scales?scaleshare=${encodeScaleShare(key, mode, bpm, notes)}`;
+}
+
 export interface SharePayload {
   v: 1;
   config: LoopConfig;
