@@ -1,5 +1,5 @@
-// Frets: index 0 = low E, index 5 = high e. -1 = muted, 0 = open, 1+ = fret number
-export type Frets = [number, number, number, number, number, number];
+// Frets: index 0 = lowest string, index n-1 = highest string. -1 = muted, 0 = open, 1+ = fret number
+export type Frets = number[];
 
 export interface Barre { fret: number; fromString: number; toString: number; }
 
@@ -51,6 +51,113 @@ function chordName(root: RootNote, type: ChordType): string {
   return `${root}${label}`;
 }
 export { chordName };
+
+export interface GuitarTuning {
+  id: string;
+  label: string;
+  stringCount: 6 | 7 | 8;
+  openMidi: number[];    // low→high
+  stringNames: string[]; // low→high
+}
+
+export const GUITAR_TUNINGS: GuitarTuning[] = [
+  // 6-string
+  { id: 'standard-6',    label: 'Standard (EADGBE)',        stringCount: 6, openMidi: [40,45,50,55,59,64], stringNames: ['E','A','D','G','B','e'] },
+  { id: 'eb-standard-6', label: 'Eb Standard',              stringCount: 6, openMidi: [39,44,49,54,58,63], stringNames: ['Eb','Ab','Db','Gb','Bb','eb'] },
+  { id: 'd-standard-6',  label: 'D Standard (DGCFAD)',      stringCount: 6, openMidi: [38,43,48,53,57,62], stringNames: ['D','G','C','F','A','d'] },
+  { id: 'drop-d-6',      label: 'Drop D (DADGBE)',          stringCount: 6, openMidi: [38,45,50,55,59,64], stringNames: ['D','A','D','G','B','e'] },
+  { id: 'drop-c-6',      label: 'Drop C (CGCFAD)',          stringCount: 6, openMidi: [36,43,48,53,57,62], stringNames: ['C','G','C','F','A','d'] },
+  { id: 'open-g-6',      label: 'Open G (DGDGBD)',          stringCount: 6, openMidi: [38,43,50,55,59,62], stringNames: ['D','G','D','G','B','D'] },
+  { id: 'dadgad-6',      label: 'DADGAD',                   stringCount: 6, openMidi: [38,45,50,55,57,62], stringNames: ['D','A','D','G','A','D'] },
+  // 7-string
+  { id: 'b-standard-7',  label: 'B Standard (BEADGBe)',     stringCount: 7, openMidi: [35,40,45,50,55,59,64], stringNames: ['B','E','A','D','G','B','e'] },
+  { id: 'drop-a-7',      label: 'Drop A (AEADGBe)',         stringCount: 7, openMidi: [33,40,45,50,55,59,64], stringNames: ['A','E','A','D','G','B','e'] },
+  { id: 'bb-standard-7', label: 'Bb Standard',              stringCount: 7, openMidi: [34,39,44,49,54,58,63], stringNames: ['Bb','Eb','Ab','Db','Gb','Bb','eb'] },
+  // 8-string
+  { id: 'f#-standard-8', label: 'F# Standard (F#BEADGBe)',  stringCount: 8, openMidi: [30,35,40,45,50,55,59,64], stringNames: ['F#','B','E','A','D','G','B','e'] },
+  { id: 'drop-e-8',      label: 'Drop E (EBEADGBe)',        stringCount: 8, openMidi: [28,35,40,45,50,55,59,64], stringNames: ['E','B','E','A','D','G','B','e'] },
+  { id: 'f-standard-8',  label: 'F Standard',               stringCount: 8, openMidi: [29,34,39,44,49,54,58,63], stringNames: ['F','Bb','Eb','Ab','Db','Gb','Bb','eb'] },
+];
+
+export const DEFAULT_TUNING_ID = 'standard-6';
+
+export function getTuningById(id: string): GuitarTuning {
+  return GUITAR_TUNINGS.find(t => t.id === id) ?? GUITAR_TUNINGS[0];
+}
+
+const ROOT_NOTE_TO_PC: Record<RootNote, number> = {
+  'C':0,'C#':1,'D':2,'D#':3,'E':4,'F':5,'F#':6,'G':7,'G#':8,'A':9,'A#':10,'B':11,
+};
+
+function addExtraStrings(entry: ChordEntry, extraOpenMidi: number[]): ChordEntry {
+  const rootPc = ROOT_NOTE_TO_PC[entry.root];
+  const extraCount = extraOpenMidi.length;
+  const newVoicings = entry.voicings.map(voicing => {
+    let frets: number[] = [...voicing.frets];
+    for (let e = extraOpenMidi.length - 1; e >= 0; e--) {
+      const semis = (rootPc - (extraOpenMidi[e] % 12) + 12) % 12;
+      frets = [semis === 0 ? 0 : semis <= 4 ? semis : -1, ...frets];
+    }
+    const barre = voicing.barre
+      ? { ...voicing.barre, fromString: voicing.barre.fromString + extraCount, toString: voicing.barre.toString + extraCount }
+      : undefined;
+    return { ...voicing, frets, barre };
+  });
+  return { ...entry, voicings: newVoicings };
+}
+
+const STANDARD_6_OPEN_MIDI = [40, 45, 50, 55, 59, 64];
+
+// After transposing frets, detect whether a barre makes sense:
+// a barre at fret F from string S1 to S2 requires that every string in [S1,S2]
+// is either muted or fretted at F or higher (no lower non-muted fret in the range).
+function detectBarre(frets: number[]): Barre | undefined {
+  const uniqueFrets = [...new Set(frets.filter(f => f > 0))];
+  let best: Barre | undefined;
+  let bestSpan = 1;
+
+  for (const fv of uniqueFrets) {
+    const first = frets.indexOf(fv);
+    const last = frets.lastIndexOf(fv);
+    if (last - first < 1) continue; // only one occurrence
+    // All non-muted strings between first and last must be >= fv
+    let valid = true;
+    for (let i = first; i <= last; i++) {
+      if (frets[i] >= 0 && frets[i] < fv) { valid = false; break; }
+    }
+    if (valid && last - first + 1 > bestSpan) {
+      bestSpan = last - first + 1;
+      best = { fret: fv, fromString: first + 1, toString: last + 1 };
+    }
+  }
+  return best;
+}
+
+function transpose6StringVoicing(voicing: ChordVoicing, newOpenMidi: number[]): ChordVoicing {
+  const newFrets = voicing.frets.map((fret, i) => {
+    if (fret < 0) return -1;
+    const midi = STANDARD_6_OPEN_MIDI[i] + fret;
+    const nf = midi - newOpenMidi[i];
+    return nf >= 0 && nf <= 15 ? nf : -1;
+  });
+  const frettedOnly = newFrets.filter(f => f > 0);
+  const minFret = frettedOnly.length > 0 ? Math.min(...frettedOnly) : 0;
+  const startFret = minFret > 1 ? minFret : undefined;
+  const barre = detectBarre(newFrets);
+  return { frets: newFrets, barre, startFret };
+}
+
+export function getChordDatabase(tuning: GuitarTuning): ChordEntry[] {
+  if (tuning.id === 'standard-6') return CHORD_DATABASE;
+  if (tuning.stringCount === 6) {
+    return CHORD_DATABASE.map(entry => ({
+      ...entry,
+      voicings: entry.voicings.map(v => transpose6StringVoicing(v, tuning.openMidi)),
+    }));
+  }
+  const extraOpenMidi = tuning.openMidi.slice(0, tuning.stringCount - 6);
+  return CHORD_DATABASE.map(entry => addExtraStrings(entry, extraOpenMidi));
+}
 
 export const CHORD_DATABASE: ChordEntry[] = [
   // ── C ──────────────────────────────────────────────────────────────

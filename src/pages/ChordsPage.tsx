@@ -2,17 +2,20 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import type { RootNote, ChordType, ChordVoicing } from '../data/chords';
 import type { Frets } from '../data/chords';
 import {
-  CHORD_DATABASE,
   CHORD_TYPE_LABELS,
   CHORD_TYPES,
   ROOT_NOTES,
   chordName,
+  GUITAR_TUNINGS,
+  DEFAULT_TUNING_ID,
+  getTuningById,
+  getChordDatabase,
 } from '../data/chords';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // ── SVG constants ───────────────────────────────────────────────────────────
-const SVG_H = 120;
-const SVG_TOTAL_W = 118;
+const SVG_H = 140;
 const STRING_X_START = 14;
 const STRING_SPACING = 14.4;
 const FRET_Y_START = 18;
@@ -29,9 +32,6 @@ function dotY(fretNum: number, visibleStart: number): number {
 }
 
 // ── Audio ────────────────────────────────────────────────────────────────────
-// Standard tuning open-string MIDI notes: low E → high e
-const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
-
 function pluckString(ctx: AudioContext, freq: number, startTime: number, vol: number) {
   const env = ctx.createGain();
   env.connect(ctx.destination);
@@ -53,11 +53,11 @@ function pluckString(ctx: AudioContext, freq: number, startTime: number, vol: nu
   }
 }
 
-function strumChord(ctx: AudioContext, frets: Frets) {
+function strumChord(ctx: AudioContext, frets: Frets, openMidi: number[]) {
   const now = ctx.currentTime;
   frets.forEach((fret, i) => {
     if (fret < 0) return;
-    const freq = 440 * Math.pow(2, (OPEN_MIDI[i] + fret - 69) / 12);
+    const freq = 440 * Math.pow(2, (openMidi[i] + fret - 69) / 12);
     pluckString(ctx, freq, now + i * 0.025, 0.22);
   });
 }
@@ -70,10 +70,12 @@ const FILTER_ITEM_CLS =
   'data-[state=on]:border-[#5b7fff] data-[state=on]:bg-[#252850] data-[state=on]:text-[#8eaaff]';
 
 // ── FretboardDiagram ────────────────────────────────────────────────────────
-function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
+function FretboardDiagram({ voicing, stringNames }: { voicing: ChordVoicing; stringNames: string[] }) {
   const { frets, barre, startFret = 1 } = voicing;
   const visibleStart = startFret;
   const isOpenPosition = startFret <= 1;
+  const numStrings = frets.length;
+  const svgWidth = STRING_X_START + (numStrings - 1) * STRING_SPACING + 18 + STRING_X_START;
 
   const stringLines = frets.map((_, i) => (
     <line
@@ -91,7 +93,7 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
       <line
         key={`f${f}`}
         x1={stringX(0)} y1={y}
-        x2={stringX(5)} y2={y}
+        x2={stringX(numStrings - 1)} y2={y}
         stroke={isNut ? '#eee' : '#888'}
         strokeWidth={isNut ? 3 : 1}
       />
@@ -137,37 +139,45 @@ function FretboardDiagram({ voicing }: { voicing: ChordVoicing }) {
   });
 
   const fretLabel = !isOpenPosition ? (
-    <text x={SVG_TOTAL_W - 2} y={FRET_Y_START + FRET_SPACING / 2}
+    <text x={svgWidth - 2} y={FRET_Y_START + FRET_SPACING / 2}
       textAnchor="end" fontSize="14" fill="#bbb" dominantBaseline="middle">
       {startFret}fr
     </text>
   ) : null;
 
+  const STRING_LABEL_Y = FRET_Y_START + FRET_SPACING * FRETS_SHOWN + 12;
+  const stringLabels = frets.map((_, i) => (
+    <text key={`n${i}`} x={stringX(i)} y={STRING_LABEL_Y}
+      textAnchor="middle" fontSize="9" fill="#666">
+      {stringNames[i]}
+    </text>
+  ));
+
   return (
-    <svg viewBox={`0 0 ${SVG_TOTAL_W} ${SVG_H}`} className="w-full max-w-[140px]" aria-hidden="true">
+    <svg viewBox={`0 0 ${svgWidth} ${SVG_H}`} className="w-full max-w-[180px]" aria-hidden="true">
       {stringLines}
       {fretLines}
       {markers}
       {barreEl}
       {dots}
       {fretLabel}
+      {stringLabels}
     </svg>
   );
 }
 
 // ── TabView ─────────────────────────────────────────────────────────────────
-const STRING_NAMES = ['e', 'B', 'G', 'D', 'A', 'E'];
-
-function TabView({ voicing }: { voicing: ChordVoicing }) {
+function TabView({ voicing, stringNames }: { voicing: ChordVoicing; stringNames: string[] }) {
   const { frets } = voicing;
   return (
     <div className="font-mono text-[0.9rem] leading-relaxed bg-[#14141e] rounded-md px-2.5 py-2 w-full">
-      {STRING_NAMES.map((name, i) => {
-        const fret = frets[5 - i];
+      {stringNames.map((_, i) => {
+        const name = stringNames[stringNames.length - 1 - i]; // high→low
+        const fret = frets[frets.length - 1 - i];
         const label = fret === -1 ? 'x' : String(fret);
         return (
-          <div key={name} className="flex whitespace-pre">
-            <span className="text-[#9898c8] font-bold">{name}</span>
+          <div key={i} className="flex whitespace-pre">
+            <span className="text-[#9898c8] font-bold">{name.padStart(2)}</span>
             <span className="text-[#c8d8ff]">{`|--${label.padEnd(2, '-')}|`}</span>
           </div>
         );
@@ -178,12 +188,13 @@ function TabView({ voicing }: { voicing: ChordVoicing }) {
 
 // ── ChordCard ────────────────────────────────────────────────────────────────
 function ChordCard({
-  root, type, voicing, viewMode, onPlay,
+  root, type, voicing, viewMode, stringNames, onPlay,
 }: {
   root: RootNote;
   type: ChordType;
   voicing: ChordVoicing;
   viewMode: 'fretboard' | 'tab';
+  stringNames: string[];
   onPlay: (frets: Frets) => void;
 }) {
   const [lit, setLit] = useState(false);
@@ -212,8 +223,8 @@ function ChordCard({
         {chordName(root, type)}
       </div>
       {viewMode === 'fretboard'
-        ? <FretboardDiagram voicing={voicing} />
-        : <TabView voicing={voicing} />
+        ? <FretboardDiagram voicing={voicing} stringNames={stringNames} />
+        : <TabView voicing={voicing} stringNames={stringNames} />
       }
     </div>
   );
@@ -232,11 +243,34 @@ export function ChordsPage() {
   const [viewMode, setViewMode] = useState<'fretboard' | 'tab'>(() => {
     return localStorage.getItem('chords-viewMode') === 'tab' ? 'tab' : 'fretboard';
   });
+  const [stringCount, setStringCount] = useState<6 | 7 | 8>(() => {
+    const n = Number(localStorage.getItem('chords-stringCount'));
+    return ([6, 7, 8] as const).includes(n as 6 | 7 | 8) ? (n as 6 | 7 | 8) : 6;
+  });
+  const [tuningId, setTuningId] = useState<string>(() =>
+    localStorage.getItem('chords-tuningId') ?? DEFAULT_TUNING_ID
+  );
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => { localStorage.setItem('chords-selectedKey', selectedKey); }, [selectedKey]);
   useEffect(() => { localStorage.setItem('chords-selectedType', selectedType); }, [selectedType]);
   useEffect(() => { localStorage.setItem('chords-viewMode', viewMode); }, [viewMode]);
+  useEffect(() => { localStorage.setItem('chords-stringCount', String(stringCount)); }, [stringCount]);
+  useEffect(() => { localStorage.setItem('chords-tuningId', tuningId); }, [tuningId]);
+
+  const activeTuning = useMemo(() => {
+    const t = getTuningById(tuningId);
+    if (t.stringCount === stringCount) return t;
+    return GUITAR_TUNINGS.find(tu => tu.stringCount === stringCount) ?? GUITAR_TUNINGS[0];
+  }, [stringCount, tuningId]);
+
+  const activeChordDb = useMemo(() => getChordDatabase(activeTuning), [activeTuning]);
+
+  function handleStringCountChange(count: 6 | 7 | 8) {
+    setStringCount(count);
+    const first = GUITAR_TUNINGS.find(t => t.stringCount === count);
+    if (first) setTuningId(first.id);
+  }
 
   const playChord = useCallback((frets: Frets) => {
     if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
@@ -244,19 +278,46 @@ export function ChordsPage() {
     }
     const ctx = audioCtxRef.current;
     if (ctx.state === 'suspended') void ctx.resume();
-    strumChord(ctx, frets);
-  }, []);
+    strumChord(ctx, frets, activeTuning.openMidi);
+  }, [activeTuning]);
 
   const filtered = useMemo(() =>
-    CHORD_DATABASE.filter(e =>
+    activeChordDb.filter(e =>
       (selectedKey === 'all' || e.root === selectedKey) &&
       (selectedType === 'all' || e.type === selectedType)
     ),
-    [selectedKey, selectedType]
+    [activeChordDb, selectedKey, selectedType]
   );
 
   return (
     <main className="flex flex-col gap-4 px-4 pt-6 pb-12 max-w-[1100px] mx-auto" aria-label="Chord library">
+
+      {/* Strings toggle */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8] mr-1">Strings</span>
+        <ToggleGroup type="single" value={String(stringCount)}
+          onValueChange={v => { if (v) handleStringCountChange(Number(v) as 6 | 7 | 8); }}
+          className="flex flex-wrap justify-start gap-1">
+          {([6, 7, 8] as const).map(n => (
+            <ToggleGroupItem key={n} value={String(n)} className={FILTER_ITEM_CLS}>{n}-string</ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+
+      {/* Tuning selector */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8]">Tuning</span>
+        <Select value={tuningId} onValueChange={setTuningId}>
+          <SelectTrigger className="w-[220px] bg-[#1e1f2c] border-[#505270] text-[#aaa] text-[0.82rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="bg-[#1e1f2c] border-[#505270]">
+            {GUITAR_TUNINGS.filter(t => t.stringCount === stringCount).map(t => (
+              <SelectItem key={t.id} value={t.id} className="text-[0.82rem] text-[#aaa]">{t.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Key filter */}
       <div className="flex flex-wrap items-center gap-1">
@@ -315,6 +376,7 @@ export function ChordsPage() {
             type={entry.type}
             voicing={entry.voicings[0]}
             viewMode={viewMode}
+            stringNames={activeTuning.stringNames}
             onPlay={playChord}
           />
         ))}
