@@ -26,6 +26,12 @@ const schema = a.schema({
     practiceNotesJson: a.string().required(),
     bpm: a.integer().required(),
   }).authorization(allow => [allow.owner()]),
+
+  // One record per chord per user — persists favorite chords
+  FavoriteChord: a.model({
+    root: a.string().required(),
+    type: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import type { RootNote, ChordType, ChordVoicing } from '../data/chords';
 import type { Frets } from '../data/chords';
+import { useFavorites } from '../hooks/useFavorites';
 import {
   CHORD_TYPE_LABELS,
   CHORD_TYPES,
@@ -198,6 +199,8 @@ function ChordCard({
   onPlay: (frets: Frets) => void;
 }) {
   const [lit, setLit] = useState(false);
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const fav = isFavorite(root, type);
 
   function handleClick() {
     onPlay(voicing.frets);
@@ -212,13 +215,25 @@ function ChordCard({
       onClick={handleClick}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }}
       className={[
-        'bg-[#1e1f2c] border rounded-xl p-3.5 flex flex-col items-center gap-2.5',
+        'relative bg-[#1e1f2c] border rounded-xl p-3.5 flex flex-col items-center gap-2.5',
         'cursor-pointer select-none transition-colors duration-150',
         lit
           ? 'border-[#5b7fff] bg-[#252850]'
           : 'border-[#505270] hover:border-[#7070a0] hover:bg-[#23243a]',
       ].join(' ')}
     >
+      <button
+        className={[
+          'absolute top-1 right-1 leading-none p-1.5 transition-colors duration-150',
+          fav ? 'text-[#ffca28]' : 'text-[#505270] hover:text-[#ffca28]',
+        ].join(' ')}
+        style={{ fontSize: '1.5rem' }}
+        onClick={e => { e.stopPropagation(); toggleFavorite(root, type); }}
+        aria-label={fav ? 'Remove from favorites' : 'Add to favorites'}
+        tabIndex={0}
+      >
+        {fav ? '★' : '☆'}
+      </button>
       <div className="text-[1.05rem] font-bold text-[#8eaaff] text-center">
         {chordName(root, type)}
       </div>
@@ -229,6 +244,12 @@ function ChordCard({
     </div>
   );
 }
+
+const FAV_FILTER_CLS =
+  'h-auto px-3 py-1 text-[0.82rem] font-semibold rounded-md ' +
+  'border border-[#505270] bg-[#1e1f2c] text-[#aaa] ' +
+  'hover:bg-[#1e1f2c] hover:border-[#ffca28] hover:text-[#ffca28] ' +
+  'data-[state=on]:border-[#ffca28] data-[state=on]:bg-[#252018] data-[state=on]:text-[#ffca28]';
 
 // ── ChordsPage ───────────────────────────────────────────────────────────────
 export function ChordsPage() {
@@ -250,6 +271,8 @@ export function ChordsPage() {
   const [tuningId, setTuningId] = useState<string>(() =>
     localStorage.getItem('chords-tuningId') ?? DEFAULT_TUNING_ID
   );
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const { isFavorite } = useFavorites();
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => { localStorage.setItem('chords-selectedKey', selectedKey); }, [selectedKey]);
@@ -284,9 +307,10 @@ export function ChordsPage() {
   const filtered = useMemo(() =>
     activeChordDb.filter(e =>
       (selectedKey === 'all' || e.root === selectedKey) &&
-      (selectedType === 'all' || e.type === selectedType)
+      (selectedType === 'all' || e.type === selectedType) &&
+      (!showFavoritesOnly || isFavorite(e.root, e.type))
     ),
-    [activeChordDb, selectedKey, selectedType]
+    [activeChordDb, selectedKey, selectedType, showFavoritesOnly, isFavorite]
   );
 
   return (
@@ -351,6 +375,19 @@ export function ChordsPage() {
         </ToggleGroup>
       </div>
 
+      {/* Favorites filter */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8] mr-1">Show</span>
+        <ToggleGroup
+          type="single"
+          value={showFavoritesOnly ? 'favorites' : ''}
+          onValueChange={v => setShowFavoritesOnly(v === 'favorites')}
+          className="flex flex-wrap justify-start gap-1"
+        >
+          <ToggleGroupItem value="favorites" className={FAV_FILTER_CLS}>★ Favorites</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
       {/* View toggle */}
       <div>
         <ToggleGroup
@@ -367,7 +404,11 @@ export function ChordsPage() {
       {/* Grid */}
       <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]">
         {filtered.length === 0 && (
-          <div className="col-span-full text-center text-[#999] py-10">No chords found.</div>
+          <div className="col-span-full text-center text-[#999] py-10">
+            {showFavoritesOnly
+              ? 'No favorites yet. Click ☆ on any chord to save it.'
+              : 'No chords found.'}
+          </div>
         )}
         {filtered.map(entry => (
           <ChordCard

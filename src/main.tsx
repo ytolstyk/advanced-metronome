@@ -13,10 +13,12 @@ import { ChordsPage } from './pages/ChordsPage.tsx'
 import { CircleOfFifthsPage } from './pages/CircleOfFifthsPage.tsx'
 import { ScalesPage } from './pages/ScalesPage.tsx'
 import { TooltipProvider } from './components/ui/tooltip.tsx'
+import { FavoritesProvider } from './context/FavoritesContext.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Authenticator.Provider>
+      <FavoritesProvider>
       <TooltipProvider>
       <BrowserRouter>
         <Nav />
@@ -33,6 +35,7 @@ createRoot(document.getElementById('root')!).render(
         </footer>
       </BrowserRouter>
       </TooltipProvider>
+      </FavoritesProvider>
     </Authenticator.Provider>
   </StrictMode>,
 )
