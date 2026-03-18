@@ -147,13 +147,84 @@ function transpose6StringVoicing(voicing: ChordVoicing, newOpenMidi: number[]): 
   return { frets: newFrets, barre, startFret };
 }
 
+// Tuning-specific voicings for alternate 6-string tunings.
+// All fret values verified against each tuning's openMidi: index 0 = lowest string.
+// Drop D:  [D(38), A(45), D(50), G(55), B(59), e(64)]
+// Open G:  [D(38), G(43), D(50), G(55), B(59), D(62)]
+// DADGAD:  [D(38), A(45), D(50), G(55), A(57), D(62)]
+const TUNING_SPECIFIC_CHORDS: Record<string, ChordEntry[]> = {
+  'drop-d-6': [
+    // D-family open voicings exploiting the low D string
+    { root: 'D', type: 'major', voicings: [{ frets: [0,0,0,2,3,2] }] },          // D A D A D F#
+    { root: 'D', type: 'minor', voicings: [{ frets: [0,0,0,2,3,1] }] },          // D A D A D F
+    { root: 'D', type: '5',     voicings: [{ frets: [0,0,0,-1,-1,-1] }] },       // D A D
+    { root: 'D', type: 'sus2',  voicings: [{ frets: [0,0,0,2,3,0] }] },          // D A D A D E
+    { root: 'D', type: 'sus4',  voicings: [{ frets: [0,0,0,2,3,3] }] },          // D A D A D G
+    { root: 'D', type: 'maj7',  voicings: [{ frets: [0,0,0,2,2,2] }] },          // D A D A C# F#
+    { root: 'D', type: 'm7',    voicings: [{ frets: [0,0,0,2,1,1] }] },          // D A D A C F
+    { root: 'D', type: '7',     voicings: [{ frets: [0,0,0,2,1,2] }] },          // D A D A C F#
+    { root: 'D', type: '6',     voicings: [{ frets: [0,0,0,2,0,2] }] },          // D A D A B F#
+    { root: 'D', type: 'add9',  voicings: [{ frets: [0,0,4,2,3,0] }] },          // D A F# A D E
+    { root: 'D', type: '9',     voicings: [{ frets: [0,0,0,2,1,0] }] },          // D A D A C E
+    { root: 'D', type: 'maj9',  voicings: [{ frets: [0,0,4,2,2,0] }] },          // D A F# A C# E
+    { root: 'D', type: 'aug',   voicings: [{ frets: [0,0,0,3,3,2] }] },          // D A D Bb D F#
+    { root: 'D', type: 'm6',    voicings: [{ frets: [0,0,0,2,0,1] }] },          // D A D A B F
+    // G and A power chords using the low D string
+    { root: 'G', type: '5',     voicings: [{ frets: [5,5,0,-1,-1,-1] }] },       // G D D
+    { root: 'A', type: '5',     voicings: [{ frets: [-1,0,2,-1,-1,-1] }] },      // A E (strings 1-2)
+  ],
+  'open-g-6': [
+    // G-family exploiting the all-open G chord
+    { root: 'G', type: 'major', voicings: [{ frets: [0,0,0,0,0,0] }] },          // D G D G B D (all open)
+    { root: 'G', type: 'minor', voicings: [{ frets: [0,0,0,3,3,0] }] },          // D G D Bb D D
+    { root: 'G', type: '5',     voicings: [{ frets: [0,0,0,0,-1,-1] }] },        // D G D G
+    { root: 'G', type: '6',     voicings: [{ frets: [0,0,0,0,0,2] }] },          // D G D G B E
+    { root: 'G', type: '7',     voicings: [{ frets: [0,0,0,0,0,3] }] },          // D G D G B F
+    { root: 'G', type: 'maj7',  voicings: [{ frets: [0,0,0,0,0,4] }] },          // D G D G B F#
+    { root: 'G', type: 'm7',    voicings: [{ frets: [0,0,3,3,3,0] }] },          // D G F Bb D D
+    { root: 'G', type: 'sus4',  voicings: [{ frets: [0,0,0,5,3,0] }] },          // D G D C D D
+    { root: 'G', type: 'sus2',  voicings: [{ frets: [0,0,0,2,3,0] }] },          // D G D A D D
+    { root: 'G', type: 'add9',  voicings: [{ frets: [0,0,2,0,0,0] }] },          // D G E G B D
+    // Common barre chords idiomatic to Open G
+    { root: 'C', type: 'major', voicings: [{ frets: [5,5,5,5,5,5], barre: { fret: 5, fromString: 1, toString: 6 }, startFret: 5 }] }, // G C G C E G
+    { root: 'D', type: 'major', voicings: [{ frets: [7,7,7,7,7,7], barre: { fret: 7, fromString: 1, toString: 6 }, startFret: 7 }] }, // A D A D F# A
+    { root: 'D', type: 'minor', voicings: [{ frets: [0,0,3,2,3,0] }] },          // D G F A D D
+    { root: 'D', type: '7',     voicings: [{ frets: [0,0,4,2,1,0] }] },          // D G F# A C D
+    { root: 'A', type: 'major', voicings: [{ frets: [2,2,2,2,2,2], barre: { fret: 2, fromString: 1, toString: 6 }, startFret: 2 }] }, // E A E A C# E
+    { root: 'E', type: 'major', voicings: [{ frets: [2,1,2,1,0,2] }] },          // E G# E G# B E
+  ],
+  'dadgad-6': [
+    // Open = Dsus4; modal drone chords exploiting paired D and A strings
+    { root: 'D', type: 'sus4',  voicings: [{ frets: [0,0,0,0,0,0] }] },          // D A D G A D (all open)
+    { root: 'D', type: 'major', voicings: [{ frets: [0,0,4,2,0,0] }] },          // D A F# A A D
+    { root: 'D', type: 'minor', voicings: [{ frets: [0,0,3,2,0,0] }] },          // D A F A A D
+    { root: 'D', type: '5',     voicings: [{ frets: [0,0,0,-1,-1,-1] }] },       // D A D
+    { root: 'D', type: '7',     voicings: [{ frets: [0,0,4,2,3,0] }] },          // D A F# A C D
+    { root: 'D', type: 'm7',    voicings: [{ frets: [0,0,3,2,3,0] }] },          // D A F A C D
+    { root: 'D', type: 'sus2',  voicings: [{ frets: [0,0,2,2,0,0] }] },          // D A E A A D
+    { root: 'G', type: 'major', voicings: [{ frets: [0,2,0,0,2,0] }] },          // D B D G B D
+    { root: 'A', type: 'major', voicings: [{ frets: [0,0,2,2,4,2] }] },          // D A E A C# E
+    { root: 'A', type: 'minor', voicings: [{ frets: [0,0,2,2,3,0] }] },          // D A E A C D
+    { root: 'E', type: 'minor', voicings: [{ frets: [0,2,2,0,2,0] }] },          // D B E G B D
+    { root: 'C', type: 'major', voicings: [{ frets: [0,3,2,0,3,2] }] },          // D C E G C E
+  ],
+};
+
 export function getChordDatabase(tuning: GuitarTuning): ChordEntry[] {
   if (tuning.id === 'standard-6') return CHORD_DATABASE;
   if (tuning.stringCount === 6) {
-    return CHORD_DATABASE.map(entry => ({
+    const transposed = CHORD_DATABASE.map(entry => ({
       ...entry,
       voicings: entry.voicings.map(v => transpose6StringVoicing(v, tuning.openMidi)),
     }));
+    const specific = TUNING_SPECIFIC_CHORDS[tuning.id];
+    if (!specific) return transposed;
+    // Prepend tuning-specific voicings so they appear first in the diagram
+    return transposed.map(entry => {
+      const specificEntry = specific.find(s => s.root === entry.root && s.type === entry.type);
+      if (!specificEntry) return entry;
+      return { ...entry, voicings: [...specificEntry.voicings, ...entry.voicings] };
+    });
   }
   const extraOpenMidi = tuning.openMidi.slice(0, tuning.stringCount - 6);
   return CHORD_DATABASE.map(entry => addExtraStrings(entry, extraOpenMidi));
