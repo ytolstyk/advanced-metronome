@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useTapTempo } from "../../hooks/useTapTempo";
 import { useAuthenticator } from "@aws-amplify/ui-react";
 import type { AppState } from "../../types";
 import type { Action } from "../../state";
@@ -118,6 +119,12 @@ export function TransportControls({
     dispatch({ type: "SET_BPM", bpm: clamped });
   };
 
+  const handleTapBpm = useCallback((newBpm: number) => {
+    dispatch({ type: "SET_BPM", bpm: newBpm });
+  }, [dispatch]);
+
+  const [tapTempo, tapFlashing] = useTapTempo(handleTapBpm, MIN_BPM, MAX_BPM);
+
   const applySelectedPreset = () => {
     onStop();
     if (selectedPreset.startsWith("builtin:")) {
@@ -216,6 +223,17 @@ export function TransportControls({
           <Label htmlFor="bpm-input" className="text-[0.72rem] text-muted-foreground font-bold uppercase tracking-wider">
             <span className="flex items-center justify-between">
               BPM
+              <span className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant={tapFlashing ? "default" : "outline"}
+                size="sm"
+                className="h-7 px-2 text-xs font-bold transition-colors duration-75"
+                onClick={tapTempo}
+                title="Tap to set BPM"
+              >
+                Tap
+              </Button>
               <Input
                 id="bpm-input"
                 type="number"
@@ -239,6 +257,7 @@ export function TransportControls({
                   }
                 }}
               />
+              </span>
             </span>
           </Label>
           <Slider

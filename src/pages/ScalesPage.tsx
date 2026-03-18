@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useTapTempo } from "../hooks/useTapTempo";
 import { useSearchParams } from "react-router-dom";
 import { useAuthenticator } from "@aws-amplify/ui-react";
 import { decodeScaleShare, buildScaleShareUrl } from "../shareUtils";
@@ -326,6 +327,9 @@ export function ScalesPage() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [copiedShare, setCopiedShare] = useState(false);
+
+  const handleTapBpm = useCallback((newBpm: number) => setBpm(newBpm), []);
+  const [tapTempo, tapFlashing] = useTapTempo(handleTapBpm, 40, 400);
 
   // Load shared state from URL on mount
   useEffect(() => {
@@ -788,6 +792,16 @@ export function ScalesPage() {
               <span className="text-[0.82rem] font-semibold text-[#aaaacc] tabular-nums w-7 text-right shrink-0">
                 {bpm}
               </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={`h-7 px-2 text-xs font-bold shrink-0 transition-colors duration-75 ${tapFlashing ? "border-[#22dd88] bg-[#081a10] text-[#22dd88]" : "border-[#3a3a60] bg-[#0b0b16] text-[#8080b8] hover:border-[#5050a0] hover:text-[#aaaacc]"}`}
+                onClick={tapTempo}
+                title="Tap to set BPM"
+              >
+                Tap
+              </Button>
             </div>
 
             <button
