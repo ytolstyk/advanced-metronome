@@ -1,0 +1,246 @@
+import type { LessonModule } from '../types';
+
+export const pullOffsHammerOnsModule: LessonModule = {
+  id: 'pull-offs-hammer-ons',
+  title: 'Pull-offs & Hammer-ons',
+  type: 'technique',
+  description: 'Build legato fluency with hammer-ons and pull-offs — the foundation of smooth, connected guitar lines without picking every note.',
+  lessons: [
+    {
+      id: 'legato-1',
+      moduleId: 'pull-offs-hammer-ons',
+      title: 'Basic Hammer-ons',
+      difficulty: 'beginner',
+      order: 1,
+      explanation:
+        'A hammer-on is played by picking a note then slamming another finger down onto a higher fret on the same string. ' +
+        'The second note sounds without picking again. The key is speed and force — your finger must land firmly and quickly. ' +
+        'Think of it as "hammering" a nail. The hammered note should be as loud as the picked note.',
+      practiceRoutine:
+        'On the high E string: pick fret 5, hammer onto fret 7. Repeat steadily. Then try fret 5 to fret 8 (wider stretch). ' +
+        'Start at 60 BPM, two notes per beat (eighth notes). Focus on equal volume.',
+      tab: [
+        { string: 'e', steps: ['5h7', '5h7', '5h7', '5h7', '|'] },
+        { string: 'B', steps: [null, null, null, null, '|'] },
+        { string: 'G', steps: [null, null, null, null, '|'] },
+        { string: 'D', steps: [null, null, null, null, '|'] },
+        { string: 'A', steps: [null, null, null, null, '|'] },
+        { string: 'E', steps: [null, null, null, null, '|'] },
+      ],
+      fretHighlights: [
+        { string: 5, fret: 5, color: 'root' },
+        { string: 5, fret: 7, color: 'accent' },
+      ],
+      practiceNotes: {
+        // high e fret 5=64+5=69; fret 7=64+7=71
+        steps: [
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+        ],
+        defaultBpm: 60,
+      },
+    },
+    {
+      id: 'legato-2',
+      moduleId: 'pull-offs-hammer-ons',
+      title: 'Basic Pull-offs',
+      difficulty: 'beginner',
+      order: 2,
+      explanation:
+        'A pull-off is the reverse of a hammer-on: with two fingers fretting, you pluck the string by pulling the higher finger off with a slight downward flick. ' +
+        'The lower finger stays in place and the lower note sounds. The pulling motion gives the string energy — don\'t just lift straight up.',
+      practiceRoutine:
+        'On the high E string: pick fret 7 (ring finger), pull off to fret 5 (index finger). The pull-off should snap the string slightly. ' +
+        'Repeat at 60 BPM. Both notes should be equally clear.',
+      tab: [
+        { string: 'e', steps: ['7p5', '7p5', '7p5', '7p5', '|'] },
+        { string: 'B', steps: [null, null, null, null, '|'] },
+        { string: 'G', steps: [null, null, null, null, '|'] },
+        { string: 'D', steps: [null, null, null, null, '|'] },
+        { string: 'A', steps: [null, null, null, null, '|'] },
+        { string: 'E', steps: [null, null, null, null, '|'] },
+      ],
+      fretHighlights: [
+        { string: 5, fret: 7, color: 'root' },
+        { string: 5, fret: 5, color: 'accent' },
+      ],
+      practiceNotes: {
+        // high e fret 7=71; fret 5=69
+        steps: [
+          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+        ],
+        defaultBpm: 60,
+      },
+    },
+    {
+      id: 'legato-3',
+      moduleId: 'pull-offs-hammer-ons',
+      title: 'Hammer-on / Pull-off Trills',
+      difficulty: 'intermediate',
+      order: 3,
+      explanation:
+        'A trill rapidly alternates between two notes using continuous hammer-ons and pull-offs with no picking after the initial attack. ' +
+        'This builds finger strength and independence. Start slowly and build speed gradually. ' +
+        'Try all finger combinations: index-middle, index-ring, index-pinky for different widths.',
+      practiceRoutine:
+        'Pick fret 5 on the high E, then trill to fret 7: h7-p5-h7-p5 as fast sixteenth notes. ' +
+        'Start at 60 BPM (4 notes per beat). Then try index-ring (fret 5 to 8) and index-pinky (fret 5 to 9).',
+      tab: [
+        { string: 'e', steps: ['5h7p5h7p5h7p5h7', '|', '5h8p5h8p5h8p5h8', '|'] },
+        { string: 'B', steps: [null, '|', null, '|'] },
+        { string: 'G', steps: [null, '|', null, '|'] },
+        { string: 'D', steps: [null, '|', null, '|'] },
+        { string: 'A', steps: [null, '|', null, '|'] },
+        { string: 'E', steps: [null, '|', null, '|'] },
+      ],
+      fretHighlights: [
+        { string: 5, fret: 5, color: 'root' },
+        { string: 5, fret: 7, color: 'accent' },
+        { string: 5, fret: 8, color: 'default' },
+      ],
+      practiceNotes: {
+        // high e: 5=69, 7=71, 8=72
+        steps: [
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 8 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 8 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 8 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 8 },
+        ],
+        defaultBpm: 60,
+      },
+    },
+    {
+      id: 'legato-4',
+      moduleId: 'pull-offs-hammer-ons',
+      title: 'Legato Scale Runs',
+      difficulty: 'intermediate',
+      order: 4,
+      explanation:
+        'Apply hammer-ons and pull-offs to scale patterns for fluid, connected lines. Pick only the first note on each string, ' +
+        'then hammer-on the remaining notes. This creates the smooth "legato" sound associated with players like Joe Satriani and Allan Holdsworth.',
+      practiceRoutine:
+        'Play the A minor pentatonic scale ascending with legato: pick fret 5 on high E, hammer fret 8. Move to B string: pick 5, hammer 8. Continue across all strings. ' +
+        'Start at 50 BPM with eighth notes.',
+      tab: [
+        { string: 'e', steps: ['5h8', null, null, null, null, null, '|'] },
+        { string: 'B', steps: [null, '5h8', null, null, null, null, '|'] },
+        { string: 'G', steps: [null, null, '5h7', null, null, null, '|'] },
+        { string: 'D', steps: [null, null, null, '5h7', null, null, '|'] },
+        { string: 'A', steps: [null, null, null, null, '5h7', null, '|'] },
+        { string: 'E', steps: [null, null, null, null, null, '5h8', '|'] },
+      ],
+      fretHighlights: [
+        { string: 5, fret: 5, color: 'root' },
+        { string: 5, fret: 8, color: 'accent' },
+        { string: 4, fret: 5, color: 'default' },
+        { string: 4, fret: 8, color: 'accent' },
+        { string: 3, fret: 5, color: 'default' },
+        { string: 3, fret: 7, color: 'accent' },
+        { string: 2, fret: 5, color: 'default' },
+        { string: 2, fret: 7, color: 'accent' },
+        { string: 1, fret: 5, color: 'default' },
+        { string: 1, fret: 7, color: 'accent' },
+        { string: 0, fret: 5, color: 'default' },
+        { string: 0, fret: 8, color: 'accent' },
+      ],
+      practiceNotes: {
+        // high e 5=69, 8=72; B 5=64, 8=67; G 5=60, 7=62; D 5=55, 7=57; A 5=50, 7=52; low E 5=45, 8=48
+        steps: [
+          { string: 5, fret: 5 },
+          { string: 5, fret: 8 },
+          { string: 4, fret: 5 },
+          { string: 4, fret: 8 },
+          { string: 3, fret: 5 },
+          { string: 3, fret: 7 },
+          { string: 2, fret: 5 },
+          { string: 2, fret: 7 },
+          { string: 1, fret: 5 },
+          { string: 1, fret: 7 },
+          { string: 0, fret: 5 },
+          { string: 0, fret: 8 },
+        ],
+        defaultBpm: 50,
+      },
+    },
+    {
+      id: 'legato-5',
+      moduleId: 'pull-offs-hammer-ons',
+      title: 'Cross-String Legato',
+      difficulty: 'advanced',
+      order: 5,
+      explanation:
+        'Advanced legato extends across strings without picking — use hammer-ons from nowhere (hammering onto the next string without picking). ' +
+        'This requires significant finger strength. The trick is to hammer hard enough that the note rings clearly even without the initial pick attack.',
+      practiceRoutine:
+        'Pick only the first note (fret 5 on low E). Hammer-on to fret 7, then fret 8. Then hammer from nowhere onto fret 5 of the A string, ' +
+        'continue hammering up through all strings. Start extremely slowly at 40 BPM.',
+      tab: [
+        { string: 'e', steps: [null, null, null, null, null, 'h5h7', '|'] },
+        { string: 'B', steps: [null, null, null, null, 'h5h8', null, '|'] },
+        { string: 'G', steps: [null, null, null, 'h5h7', null, null, '|'] },
+        { string: 'D', steps: [null, null, 'h5h7', null, null, null, '|'] },
+        { string: 'A', steps: [null, 'h5h7', null, null, null, null, '|'] },
+        { string: 'E', steps: ['5h7h8', null, null, null, null, null, '|'] },
+      ],
+      fretHighlights: [
+        { string: 0, fret: 5, color: 'root' },
+        { string: 0, fret: 7, color: 'accent' },
+        { string: 0, fret: 8, color: 'default' },
+        { string: 1, fret: 5, color: 'default' },
+        { string: 1, fret: 7, color: 'accent' },
+        { string: 2, fret: 5, color: 'default' },
+        { string: 2, fret: 7, color: 'accent' },
+        { string: 3, fret: 5, color: 'default' },
+        { string: 3, fret: 7, color: 'accent' },
+        { string: 4, fret: 5, color: 'default' },
+        { string: 4, fret: 8, color: 'accent' },
+        { string: 5, fret: 5, color: 'default' },
+        { string: 5, fret: 7, color: 'accent' },
+      ],
+      practiceNotes: {
+        // low E: 5=45, 7=47, 8=48; A: 5=50, 7=52; D: 5=55, 7=57; G: 5=60, 7=62; B: 5=64, 8=67; high e: 5=69, 7=71
+        steps: [
+          { string: 0, fret: 5 },
+          { string: 0, fret: 7 },
+          { string: 0, fret: 8 },
+          { string: 1, fret: 5 },
+          { string: 1, fret: 7 },
+          { string: 2, fret: 5 },
+          { string: 2, fret: 7 },
+          { string: 3, fret: 5 },
+          { string: 3, fret: 7 },
+          { string: 4, fret: 5 },
+          { string: 4, fret: 8 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 7 },
+        ],
+        defaultBpm: 40,
+      },
+    },
+  ],
+};

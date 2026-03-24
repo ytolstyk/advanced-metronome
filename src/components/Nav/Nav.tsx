@@ -3,22 +3,33 @@ import { NavLink } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuthModal } from "@/components/AuthModal/AuthModal";
+import { NavDropdown } from "@/components/NavDropdown/NavDropdown";
 
-const LINKS = [
-  { to: "/", label: "Drum Machine", end: true },
-  { to: "/tuner", label: "Tuner" },
-  { to: "/chords", label: "Chords" },
-  { to: "/scales", label: "Scales" },
-  { to: "/circle", label: "Circle of 5ths" },
+const NAV_GROUPS = [
+  {
+    label: "Tools",
+    items: [
+      { to: "/", label: "Drum Machine", end: true },
+      { to: "/tuner", label: "Tuner" },
+    ],
+  },
+  {
+    label: "Learn",
+    items: [
+      { to: "/chords", label: "Chords" },
+      { to: "/scales", label: "Scales" },
+      { to: "/circle", label: "Circle of 5ths" },
+      { to: "/lessons", label: "Lessons" },
+    ],
+  },
 ];
 
-function linkCls(isActive: boolean, mobile = false) {
-  const base = "text-sm rounded-md transition-colors duration-150 no-underline";
-  const size = mobile ? "block px-4 py-2.5 w-full" : "px-3.5 py-1.5";
+function linkCls(isActive: boolean) {
+  const base = "text-sm rounded-md transition-colors duration-150 no-underline block px-4 py-2.5 w-full";
   const state = isActive
     ? "bg-[#1e1e1e] text-[#f0f0f0]"
     : "text-[#b0b0b0] hover:text-[#eee] hover:bg-[#1a1a1a]";
-  return `${base} ${size} ${state}`;
+  return `${base} ${state}`;
 }
 
 export function Nav() {
@@ -32,17 +43,14 @@ export function Nav() {
         </span>
 
         <div className="flex items-center gap-1">
-          {/* Desktop links */}
+          {/* Desktop dropdown groups */}
           <div className="hidden sm:flex gap-1">
-            {LINKS.map(({ to, label, end }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={({ isActive }) => linkCls(isActive)}
-              >
-                {label}
-              </NavLink>
+            {NAV_GROUPS.map((group) => (
+              <NavDropdown
+                key={group.label}
+                label={group.label}
+                items={group.items}
+              />
             ))}
           </div>
 
@@ -67,16 +75,23 @@ export function Nav() {
       {/* Mobile dropdown */}
       {open && (
         <div className="sm:hidden flex flex-col px-3 pb-3 gap-0.5 border-t border-[#222]">
-          {LINKS.map(({ to, label, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) => linkCls(isActive, true)}
-              onClick={() => setOpen(false)}
-            >
-              {label}
-            </NavLink>
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label}>
+              <span className="block text-[0.65rem] font-bold uppercase tracking-wider text-[#666] px-4 pt-2 pb-1">
+                {group.label}
+              </span>
+              {group.items.map(({ to, label, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  className={({ isActive }) => linkCls(isActive)}
+                  onClick={() => setOpen(false)}
+                >
+                  {label}
+                </NavLink>
+              ))}
+            </div>
           ))}
           <div className="pt-1 border-t border-[#1a1a1a] mt-0.5">
             <AuthModal />

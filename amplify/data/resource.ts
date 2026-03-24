@@ -32,6 +32,20 @@ const schema = a.schema({
     root: a.string().required(),
     type: a.string().required(),
   }).authorization(allow => [allow.owner()]),
+
+  // Lesson progress — one record per lesson per user
+  LessonProgress: a.model({
+    lessonId: a.string().required(),
+    moduleId: a.string().required(),
+    status: a.string().required(),
+    completedAt: a.string(),
+  }).authorization(allow => [allow.owner()]),
+
+  // Lesson favorites — one record per lesson per user
+  LessonFavorite: a.model({
+    lessonId: a.string().required(),
+    moduleId: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

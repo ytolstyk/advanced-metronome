@@ -1,0 +1,40 @@
+.lesson-tab-view {
+  background: #14141e;
+  border-radius: 8px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.lesson-tab-line {
+  display: flex;
+  white-space: nowrap;
+}
+
+.lesson-tab-string {
+  color: #9898c8;
+  min-width: 1.5em;
+  text-align: right;
+  margin-right: 4px;
+  user-select: none;
+}
+
+.lesson-tab-content {
+  color: #c8d8ff;
+}
+
+.lesson-tab-beat {
+  display: inline;
+}
+
+.lesson-tab-beat--active {
+  background: #252850;
+  color: #a0c0ff;
+  border-bottom: 2px solid #5b7fff;
+}
+
+.lesson-tab-bar {
+  color: #6878b0;
+}

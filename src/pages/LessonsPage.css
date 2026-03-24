@@ -1,0 +1,69 @@
+.lesson-module-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid #505270;
+  background: #1e1f2c;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.lesson-module-card:hover {
+  border-color: #5b7fff;
+  background: #252850;
+}
+
+.lesson-module-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lesson-module-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f0f0f0;
+}
+
+.lesson-module-fav-indicator {
+  color: #ffca28;
+  font-size: 0.9rem;
+}
+
+.lesson-module-desc {
+  font-size: 0.82rem;
+  color: #aaa;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.lesson-module-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.lesson-progress-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: #353650;
+  overflow: hidden;
+}
+
+.lesson-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: #5b7fff;
+  transition: width 0.3s;
+}
+
+.lesson-progress-text {
+  font-size: 0.72rem;
+  color: #888;
+  white-space: nowrap;
+}

@@ -35,6 +35,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { pluckString } from "@/audio/pluckString";
 
 // ── Fretboard constants ──────────────────────────────────────────────────────
 // Standard tuning: low E → high e (index 0 = low E)
@@ -59,32 +60,6 @@ const SVG_H = TOP_PAD + (NUM_STRINGS - 1) * STRING_H + BOTTOM_PAD;
 // Fret position marker frets
 const SINGLE_DOT_FRETS = new Set([3, 5, 7, 9, 15, 17, 19, 21]);
 const DOUBLE_DOT_FRETS = new Set([12, 24]);
-
-// ── Audio ────────────────────────────────────────────────────────────────────
-function pluckString(
-  ctx: AudioContext,
-  freq: number,
-  startTime: number,
-  vol: number,
-) {
-  const env = ctx.createGain();
-  env.connect(ctx.destination);
-  env.gain.setValueAtTime(0.001, startTime);
-  env.gain.linearRampToValueAtTime(vol, startTime + 0.008);
-  env.gain.exponentialRampToValueAtTime(0.001, startTime + 2.2);
-
-  for (let h = 1; h <= 6; h++) {
-    const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.value = freq * h;
-    const hg = ctx.createGain();
-    hg.gain.value = 0.5 / (h * h);
-    osc.connect(hg);
-    hg.connect(env);
-    osc.start(startTime);
-    osc.stop(startTime + 2.5);
-  }
-}
 
 // ── Shared toggle style ──────────────────────────────────────────────────────
 const FILTER_ITEM_CLS =

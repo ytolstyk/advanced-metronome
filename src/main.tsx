@@ -14,11 +14,16 @@ import { CircleOfFifthsPage } from './pages/CircleOfFifthsPage.tsx'
 import { ScalesPage } from './pages/ScalesPage.tsx'
 import { TooltipProvider } from './components/ui/tooltip.tsx'
 import { FavoritesProvider } from './context/FavoritesContext.tsx'
+import { LessonsProgressProvider } from './context/LessonsProgressContext.tsx'
+import { LessonsPage } from './pages/LessonsPage.tsx'
+import { ModulePage } from './pages/ModulePage.tsx'
+import { LessonPage } from './pages/LessonPage.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Authenticator.Provider>
       <FavoritesProvider>
+      <LessonsProgressProvider>
       <TooltipProvider>
       <BrowserRouter>
         <Nav />
@@ -28,6 +33,9 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/chords" element={<ChordsPage />} />
           <Route path="/scales" element={<ScalesPage />} />
           <Route path="/circle" element={<CircleOfFifthsPage />} />
+          <Route path="/lessons" element={<LessonsPage />} />
+          <Route path="/lessons/:moduleId" element={<ModulePage />} />
+          <Route path="/lessons/:moduleId/:lessonId" element={<LessonPage />} />
         </Routes>
         <footer style={{ textAlign: 'center', padding: '1rem', color: '#666', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
           <span>&copy; Yuriy Tolstykh</span>
@@ -35,6 +43,7 @@ createRoot(document.getElementById('root')!).render(
         </footer>
       </BrowserRouter>
       </TooltipProvider>
+      </LessonsProgressProvider>
       </FavoritesProvider>
     </Authenticator.Provider>
   </StrictMode>,
