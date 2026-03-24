@@ -9,18 +9,18 @@ export const alternatePickingModule: LessonModule = {
     {
       id: 'alt-pick-1',
       moduleId: 'alternate-picking',
-      title: 'Single-String Alternate Picking',
+      title: 'Minor Pentatonic Single-String Run',
       difficulty: 'beginner',
       order: 1,
       explanation:
-        'Alternate picking means strictly alternating between downstrokes (toward the floor) and upstrokes (toward the ceiling). ' +
-        'Never use two downstrokes or two upstrokes in a row. This consistency builds speed and predictability. ' +
-        'Start on one string with a simple chromatic exercise.',
+        'Skip the chromatic exercises — start with notes you\'ll actually use in solos. ' +
+        'On the high e string, the A minor pentatonic lands on frets 5 (A), 8 (C), 10 (D), and 12 (E). ' +
+        'Strictly alternate pick every note: down-up-down-up all the way up and back down.',
       practiceRoutine:
-        'On the high E string, play frets 5-6-7-8 with strict down-up-down-up picking. Then descend 8-7-6-5 continuing the alternation. ' +
-        'Start at 60 BPM with eighth notes. Use a metronome and focus on perfectly even timing.',
+        'Play frets 5-8-10-12 ascending then 12-10-8-5 descending on the high e string with strict down-up alternate picking. ' +
+        'Start at 60 BPM with eighth notes. It should sound musical — these are real solo notes.',
       tab: [
-        { string: 'e', steps: ['5', '6', '7', '8', '8', '7', '6', '5', '|', '5', '6', '7', '8', '8', '7', '6', '5', '|'] },
+        { string: 'e', steps: ['5', '8', '10', '12', '12', '10', '8', '5', '|', '5', '8', '10', '12', '12', '10', '8', '5', '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|', null, null, null, null, null, null, null, null, '|'] },
         { string: 'G', steps: [null, null, null, null, null, null, null, null, '|', null, null, null, null, null, null, null, null, '|'] },
         { string: 'D', steps: [null, null, null, null, null, null, null, null, '|', null, null, null, null, null, null, null, null, '|'] },
@@ -29,28 +29,28 @@ export const alternatePickingModule: LessonModule = {
       ],
       fretHighlights: [
         { string: 5, fret: 5, color: 'root' },
-        { string: 5, fret: 6, color: 'accent' },
-        { string: 5, fret: 7, color: 'default' },
         { string: 5, fret: 8, color: 'accent' },
+        { string: 5, fret: 10, color: 'default' },
+        { string: 5, fret: 12, color: 'accent' },
       ],
       practiceNotes: {
-        // high e: 5=69, 6=70, 7=71, 8=72
+        // high e: 5=A4(69), 8=C5(72), 10=D5(74), 12=E5(76)
         steps: [
           { string: 5, fret: 5 },
-          { string: 5, fret: 6 },
-          { string: 5, fret: 7 },
           { string: 5, fret: 8 },
+          { string: 5, fret: 10 },
+          { string: 5, fret: 12 },
+          { string: 5, fret: 12 },
+          { string: 5, fret: 10 },
           { string: 5, fret: 8 },
-          { string: 5, fret: 7 },
-          { string: 5, fret: 6 },
           { string: 5, fret: 5 },
           { string: 5, fret: 5 },
-          { string: 5, fret: 6 },
-          { string: 5, fret: 7 },
           { string: 5, fret: 8 },
+          { string: 5, fret: 10 },
+          { string: 5, fret: 12 },
+          { string: 5, fret: 12 },
+          { string: 5, fret: 10 },
           { string: 5, fret: 8 },
-          { string: 5, fret: 7 },
-          { string: 5, fret: 6 },
           { string: 5, fret: 5 },
         ],
         defaultBpm: 60,
@@ -59,43 +59,51 @@ export const alternatePickingModule: LessonModule = {
     {
       id: 'alt-pick-2',
       moduleId: 'alternate-picking',
-      title: 'Two-String Crossing',
+      title: 'Pentatonic Box 1: Two-String Crossing',
       difficulty: 'beginner',
       order: 2,
       explanation:
-        'The challenge of alternate picking appears when crossing strings. When moving from a higher to a lower string on an upstroke, ' +
-        'or from a lower to a higher string on a downstroke, the pick must "hop over" the string just played. ' +
-        'Practice this transition slowly and deliberately.',
+        'The top two strings of the A minor pentatonic box 1 are behind virtually every rock and blues solo. ' +
+        'High e gives you frets 5 (A) and 8 (C); B string gives you 5 (E) and 8 (G). ' +
+        'Ascend through all four notes then descend — alternate picking throughout. The string crossing is what makes this exercise valuable.',
       practiceRoutine:
-        'Play frets 5-7 on high E, then 5-7 on B string, alternating picks throughout (D-U-D-U). ' +
-        'The string change happens between notes 2 and 3. Start at 50 BPM.',
+        'Ascend: e:5, e:8, B:5, B:8. Descend: B:8, B:5, e:8, e:5. Strict alternate picking throughout. ' +
+        'The string crossing mid-phrase is the challenge — keep the pick motion consistent and don\'t hesitate. Start at 55 BPM.',
       tab: [
-        { string: 'e', steps: ['5', '7', null, null, '5', '7', null, null, '|'] },
-        { string: 'B', steps: [null, null, '5', '7', null, null, '5', '7', '|'] },
-        { string: 'G', steps: [null, null, null, null, null, null, null, null, '|'] },
-        { string: 'D', steps: [null, null, null, null, null, null, null, null, '|'] },
-        { string: 'A', steps: [null, null, null, null, null, null, null, null, '|'] },
-        { string: 'E', steps: [null, null, null, null, null, null, null, null, '|'] },
+        { string: 'e', steps: ['5', '8', null, null, null, null, '8', '5', '|', '5', '8', null, null, null, null, '8', '5', '|'] },
+        { string: 'B', steps: [null, null, '5', '8', '8', '5', null, null, '|', null, null, '5', '8', '8', '5', null, null, '|'] },
+        { string: 'G', steps: [null, null, null, null, null, null, null, null, '|', null, null, null, null, null, null, null, null, '|'] },
+        { string: 'D', steps: [null, null, null, null, null, null, null, null, '|', null, null, null, null, null, null, null, null, '|'] },
+        { string: 'A', steps: [null, null, null, null, null, null, null, null, '|', null, null, null, null, null, null, null, null, '|'] },
+        { string: 'E', steps: [null, null, null, null, null, null, null, null, '|', null, null, null, null, null, null, null, null, '|'] },
       ],
       fretHighlights: [
         { string: 5, fret: 5, color: 'root' },
-        { string: 5, fret: 7, color: 'accent' },
+        { string: 5, fret: 8, color: 'accent' },
         { string: 4, fret: 5, color: 'default' },
-        { string: 4, fret: 7, color: 'accent' },
+        { string: 4, fret: 8, color: 'accent' },
       ],
       practiceNotes: {
-        // high e: 5=69, 7=71; B: 5=64, 7=66
+        // high e: 5=A4(69), 8=C5(72); B: 5=E4(64), 8=G4(67)
         steps: [
           { string: 5, fret: 5 },
-          { string: 5, fret: 7 },
+          { string: 5, fret: 8 },
           { string: 4, fret: 5 },
-          { string: 4, fret: 7 },
+          { string: 4, fret: 8 },
+          { string: 4, fret: 8 },
+          { string: 4, fret: 5 },
+          { string: 5, fret: 8 },
           { string: 5, fret: 5 },
-          { string: 5, fret: 7 },
+          { string: 5, fret: 5 },
+          { string: 5, fret: 8 },
           { string: 4, fret: 5 },
-          { string: 4, fret: 7 },
+          { string: 4, fret: 8 },
+          { string: 4, fret: 8 },
+          { string: 4, fret: 5 },
+          { string: 5, fret: 8 },
+          { string: 5, fret: 5 },
         ],
-        defaultBpm: 50,
+        defaultBpm: 55,
       },
     },
     {
@@ -167,41 +175,50 @@ export const alternatePickingModule: LessonModule = {
     {
       id: 'alt-pick-4',
       moduleId: 'alternate-picking',
-      title: 'Speed Building: Sixteenth Note Bursts',
+      title: 'Cross-String Pentatonic Sextuplet',
       difficulty: 'advanced',
       order: 4,
       explanation:
-        'Build top speed with short bursts of sixteenth notes. Play 4 fast notes then rest, 4 fast notes then rest. ' +
-        'This trains your muscles for speed without the fatigue of continuous playing. Gradually extend the burst length. ' +
-        'Use minimal pick movement — the pick should barely clear the string.',
+        'Three notes ascending on the high e string, three notes descending on the B string, cycling as sextuplets. ' +
+        'Every string crossing here is an "inside" pick — the most demanding type, where the pick must pass between two strings mid-phrase. ' +
+        'This exact pattern and its variants appear throughout Paul Gilbert\'s and John Petrucci\'s playing. ' +
+        'All six notes (A-C-D-A-G-E) are from the A minor pentatonic, so it sounds like a real lick.',
       practiceRoutine:
-        'On the high E string: play frets 5-7-5-7 as a fast sixteenth-note burst, then rest for a beat. Repeat. ' +
-        'Start at 80 BPM. The burst should be fast and clean, the rest should be complete silence.',
+        'Play e:5-8-10, then immediately B:10-8-5 as one continuous 6-note group. Every note strictly alternate picked — no sweeping. ' +
+        'Start at 60 BPM with triplets (6 notes per beat). Upstrokes must match the volume of downstrokes.',
       tab: [
-        { string: 'e', steps: ['5', '7', '5', '7', null, null, null, null, '5', '7', '5', '7', null, null, null, null, '|'] },
-        { string: 'B', steps: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, '|'] },
-        { string: 'G', steps: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, '|'] },
-        { string: 'D', steps: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, '|'] },
-        { string: 'A', steps: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, '|'] },
-        { string: 'E', steps: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, '|'] },
+        { string: 'e', steps: ['5', '8', '10', null, null, null, '5', '8', '10', null, null, null, '|'] },
+        { string: 'B', steps: [null, null, null, '10', '8', '5', null, null, null, '10', '8', '5', '|'] },
+        { string: 'G', steps: [null, null, null, null, null, null, null, null, null, null, null, null, '|'] },
+        { string: 'D', steps: [null, null, null, null, null, null, null, null, null, null, null, null, '|'] },
+        { string: 'A', steps: [null, null, null, null, null, null, null, null, null, null, null, null, '|'] },
+        { string: 'E', steps: [null, null, null, null, null, null, null, null, null, null, null, null, '|'] },
       ],
       fretHighlights: [
         { string: 5, fret: 5, color: 'root' },
-        { string: 5, fret: 7, color: 'accent' },
+        { string: 5, fret: 8, color: 'accent' },
+        { string: 5, fret: 10, color: 'default' },
+        { string: 4, fret: 10, color: 'root' },
+        { string: 4, fret: 8, color: 'accent' },
+        { string: 4, fret: 5, color: 'default' },
       ],
       practiceNotes: {
-        // high e: 5=69, 7=71
+        // high e: 5=A4(69), 8=C5(72), 10=D5(74); B: 10=A4(69), 8=G4(67), 5=E4(64)
         steps: [
           { string: 5, fret: 5 },
-          { string: 5, fret: 7 },
+          { string: 5, fret: 8 },
+          { string: 5, fret: 10 },
+          { string: 4, fret: 10 },
+          { string: 4, fret: 8 },
+          { string: 4, fret: 5 },
           { string: 5, fret: 5 },
-          { string: 5, fret: 7 },
-          { string: 5, fret: 5 },
-          { string: 5, fret: 7 },
-          { string: 5, fret: 5 },
-          { string: 5, fret: 7 },
+          { string: 5, fret: 8 },
+          { string: 5, fret: 10 },
+          { string: 4, fret: 10 },
+          { string: 4, fret: 8 },
+          { string: 4, fret: 5 },
         ],
-        defaultBpm: 80,
+        defaultBpm: 60,
       },
     },
   ],
