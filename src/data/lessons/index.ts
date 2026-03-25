@@ -44,4 +44,4 @@ export function getNextLesson(moduleId: string, lessonId: string): { moduleId: s
   return { moduleId, lessonId: mod.lessons[idx + 1].id };
 }
 
-export type { LessonModule, Lesson, FretHighlight, TabLine, Difficulty, ModuleType, PracticeNotes } from './types';
+export type { LessonModule, Lesson, LessonExample, FretHighlight, TabLine, Difficulty, ModuleType, PracticeNotes } from './types';

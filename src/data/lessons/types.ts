@@ -22,6 +22,13 @@ export interface PracticeNotes {
   defaultBpm: number;
 }
 
+export interface LessonExample {
+  name: string;
+  tab: TabLine[];
+  fretHighlights: FretHighlight[];
+  practiceNotes: PracticeNotes;
+}
+
 export interface Lesson {
   id: string;
   moduleId: string;
@@ -33,6 +40,7 @@ export interface Lesson {
   fretHighlights: FretHighlight[];
   practiceNotes: PracticeNotes;
   order: number;
+  examples?: LessonExample[];
 }
 
 export interface LessonModule {

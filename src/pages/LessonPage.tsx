@@ -7,7 +7,7 @@ import { Fretboard } from '@/components/Fretboard/Fretboard';
 import { LessonTabView } from '@/components/LessonTabView/LessonTabView';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import type { Lesson, LessonModule } from '@/data/lessons';
+import type { Lesson, LessonModule, TabLine, FretHighlight, PracticeNotes } from '@/data/lessons';
 import './LessonPage.css';
 
 export function LessonPage() {
@@ -24,16 +24,61 @@ export function LessonPage() {
     );
   }
 
-  // Key forces full remount when lesson changes, resetting all state
-  return <LessonInner key={lesson.id} mod={mod} lesson={lesson} />;
+  // Key resets example selection state when navigating to a different lesson
+  return <LessonWithExamples key={lesson.id} mod={mod} lesson={lesson} />;
 }
 
-function LessonInner({ mod, lesson }: { mod: LessonModule; lesson: Lesson }) {
+function LessonWithExamples({ mod, lesson }: { mod: LessonModule; lesson: Lesson }) {
+  const [exampleIdx, setExampleIdx] = useState(0);
+  const examples = lesson.examples ?? [];
+  const activeTab: TabLine[] = exampleIdx === 0 ? lesson.tab : examples[exampleIdx - 1].tab;
+  const activeHighlights: FretHighlight[] = exampleIdx === 0 ? lesson.fretHighlights : examples[exampleIdx - 1].fretHighlights;
+  const activePracticeNotes: PracticeNotes = exampleIdx === 0 ? lesson.practiceNotes : examples[exampleIdx - 1].practiceNotes;
+
+  return (
+    <>
+      {examples.length > 0 && (
+        <div className="flex gap-2 flex-wrap px-4 pt-4 max-w-[900px] mx-auto">
+          {['Original', ...examples.map(e => e.name)].map((name, i) => (
+            <button
+              key={i}
+              onClick={() => setExampleIdx(i)}
+              className={
+                exampleIdx === i
+                  ? 'px-3 py-1 rounded text-sm font-medium bg-[#5b7fff] text-white'
+                  : 'px-3 py-1 rounded text-sm font-medium border border-[#505270] text-[#aaa] hover:border-[#5b7fff] hover:text-[#eee]'
+              }
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Key forces full remount when example changes, resetting audio/bpm state */}
+      <LessonInner
+        key={`${lesson.id}-${exampleIdx}`}
+        mod={mod}
+        lesson={lesson}
+        tab={activeTab}
+        fretHighlights={activeHighlights}
+        practiceNotes={activePracticeNotes}
+      />
+    </>
+  );
+}
+
+function LessonInner({ mod, lesson, tab, fretHighlights, practiceNotes }: {
+  mod: LessonModule;
+  lesson: Lesson;
+  tab: TabLine[];
+  fretHighlights: FretHighlight[];
+  practiceNotes: PracticeNotes;
+}) {
   const { markViewed, markComplete, isComplete, toggleFavorite, isFavorite } = useLessonsProgress();
-  const [bpm, setBpm] = useState(lesson.practiceNotes.defaultBpm);
+  const [bpm, setBpm] = useState(practiceNotes.defaultBpm);
   const hasPlayedRef = useRef(false);
 
-  const { isPlaying, activeNoteIdx, toggle, playNote } = useLessonAudio(lesson.practiceNotes.steps, bpm);
+  const { isPlaying, activeNoteIdx, toggle, playNote } = useLessonAudio(practiceNotes.steps, bpm);
 
   const handlePlay = useCallback(() => {
     toggle();
@@ -59,24 +104,24 @@ function LessonInner({ mod, lesson }: { mod: LessonModule; lesson: Lesson }) {
 
   const highlightedDotKey = useMemo(() => {
     if (activeNoteIdx === null) return null;
-    const steps = lesson.practiceNotes.steps;
+    const steps = practiceNotes.steps;
     if (steps.length === 0) return null;
     const step = steps[activeNoteIdx % steps.length];
     const svgStr = 5 - step.string;
     return `${svgStr}-${step.fret}`;
-  }, [activeNoteIdx, lesson]);
+  }, [activeNoteIdx, practiceNotes]);
 
   // Map activeNoteIdx to the tab column index using all strings
   const activeBeatIndex = useMemo(() => {
-    if (activeNoteIdx === null || lesson.tab.length === 0) return null;
-    const totalSteps = lesson.practiceNotes.steps.length;
+    if (activeNoteIdx === null || tab.length === 0) return null;
+    const totalSteps = practiceNotes.steps.length;
     if (totalSteps === 0) return null;
     const noteIdx = activeNoteIdx % totalSteps;
-    const colCount = Math.max(...lesson.tab.map(l => l.steps.length));
+    const colCount = Math.max(...tab.map(l => l.steps.length));
     let cumulative = 0;
     for (let i = 0; i < colCount; i++) {
       let colNotes = 0;
-      for (const line of lesson.tab) {
+      for (const line of tab) {
         const s = line.steps[i];
         if (s && s !== '|') {
           colNotes = Math.max(colNotes, s.match(/\d+/g)?.length ?? 0);
@@ -88,7 +133,7 @@ function LessonInner({ mod, lesson }: { mod: LessonModule; lesson: Lesson }) {
       }
     }
     return null;
-  }, [activeNoteIdx, lesson]);
+  }, [activeNoteIdx, practiceNotes, tab]);
 
   const difficultyColor =
     lesson.difficulty === 'beginner' ? '#22dd88' :
@@ -131,14 +176,14 @@ function LessonInner({ mod, lesson }: { mod: LessonModule; lesson: Lesson }) {
 
       <section>
         <h2 className="lesson-section-title">Tab</h2>
-        <LessonTabView tab={lesson.tab} activeBeatIndex={activeBeatIndex} />
+        <LessonTabView tab={tab} activeBeatIndex={activeBeatIndex} />
       </section>
 
       <section>
         <h2 className="lesson-section-title">Fretboard</h2>
         <div className="lesson-fretboard-wrap">
           <Fretboard
-            highlights={lesson.fretHighlights}
+            highlights={fretHighlights}
             highlightedDotKey={highlightedDotKey}
             onNoteClick={(midi) => playNote(midi)}
             interactive
