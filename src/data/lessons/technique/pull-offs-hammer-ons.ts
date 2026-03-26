@@ -190,6 +190,58 @@ export const pullOffsHammerOnsModule: LessonModule = {
     {
       id: 'legato-5',
       moduleId: 'pull-offs-hammer-ons',
+      title: 'Legato Scale Runs',
+      difficulty: 'intermediate',
+      order: 4,
+      explanation:
+        'Apply hammer-ons and pull-offs to scale patterns for fluid, connected lines. Pick only the first note on each string, ' +
+        'then hammer-on the remaining notes. This creates the smooth "legato" sound associated with players like Joe Satriani and Allan Holdsworth.',
+      practiceRoutine:
+        'Play the A minor pentatonic scale ascending with legato: pick fret 5 on high E, hammer fret 8. Move to B string: pick 5, hammer 8. Continue across all strings. ' +
+        'Start at 50 BPM with eighth notes.',
+      tab: [
+        {"string":"e","steps":[null,null,null,null,null,"7h9","|"]},
+        {"string":"B","steps":[null,null,null,null,"7h9",null,"|"]},
+        {"string":"G","steps":[null,null,null,"6h9",null,null,"|"]},
+        {"string":"D","steps":[null,null,"6h9",null,null,null,"|"]},
+        {"string":"A","steps":[null,"7h9",null,null,null,null,"|"]},
+        {"string":"E","steps":["7h9",null,null,null,null,null,"|"]}
+      ],
+      fretHighlights: [
+        {"string":0,"fret":7},
+        {"string":0,"fret":9},
+        {"string":1,"fret":7},
+        {"string":1,"fret":9},
+        {"string":2,"fret":6},
+        {"string":2,"fret":9},
+        {"string":3,"fret":6},
+        {"string":3,"fret":9},
+        {"string":4,"fret":7},
+        {"string":4,"fret":9},
+        {"string":5,"fret":7},
+        {"string":5,"fret":9}
+      ],
+      practiceNotes: {
+        "steps": [
+          {"string":0,"fret":7},
+          {"string":0,"fret":9},
+          {"string":1,"fret":7},
+          {"string":1,"fret":9},
+          {"string":2,"fret":6},
+          {"string":2,"fret":9},
+          {"string":3,"fret":6},
+          {"string":3,"fret":9},
+          {"string":4,"fret":7},
+          {"string":4,"fret":9},
+          {"string":5,"fret":7},
+          {"string":5,"fret":9}
+        ],
+        "defaultBpm": 80
+      }
+    },
+    {
+      id: 'legato-6',
+      moduleId: 'pull-offs-hammer-ons',
       title: 'Cross-String Legato',
       difficulty: 'advanced',
       order: 5,

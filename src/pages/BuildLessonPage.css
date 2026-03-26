@@ -1,0 +1,195 @@
+.build-lesson-page {
+  padding: 2rem;
+  font-family: monospace;
+  background: #0e0e16;
+  min-height: 100vh;
+  color: #c8c8e0;
+}
+
+.build-lesson-page h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: #e0e0f0;
+  letter-spacing: 0.03em;
+}
+
+.build-lesson-grid-wrapper {
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.build-lesson-grid {
+  display: inline-flex;
+  flex-direction: column;
+  outline: none;
+  user-select: none;
+}
+
+/* Checkbox row */
+.build-lesson-checkrow {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.build-lesson-string-label-spacer {
+  display: inline-flex;
+  align-items: center;
+  width: 2.2rem;
+  flex-shrink: 0;
+}
+
+.build-lesson-open-bar {
+  display: inline-flex;
+  align-items: center;
+  width: 0.6rem;
+  flex-shrink: 0;
+  justify-content: center;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.build-lesson-checkbox-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  flex-shrink: 0;
+}
+
+.build-lesson-checkbox-cell.bar-col {
+  width: 0.8rem;
+}
+
+.build-lesson-checkbox-cell input[type='checkbox'] {
+  width: 12px;
+  height: 12px;
+  cursor: pointer;
+  accent-color: #5b7fff;
+}
+
+/* String rows */
+.build-lesson-string-row {
+  display: flex;
+  align-items: center;
+  height: 1.8rem;
+}
+
+.build-lesson-string-label {
+  width: 2.2rem;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  color: #8888aa;
+  text-align: right;
+  padding-right: 0.3rem;
+}
+
+.build-lesson-open-bar-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.6rem;
+  flex-shrink: 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.build-lesson-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  flex-shrink: 0;
+  height: 1.8rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  position: relative;
+  color: #c0c0d8;
+  border-bottom: 2px solid transparent;
+  transition: background 0.08s;
+}
+
+.build-lesson-cell:hover {
+  background: #1a1a2e;
+}
+
+.build-lesson-cell.cursor {
+  background: #1e2040;
+  border-bottom: 2px solid #5b7fff;
+  color: #a0c0ff;
+}
+
+.build-lesson-cell.bar-col {
+  width: 0.8rem;
+  color: #555577;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Controls */
+.build-lesson-controls {
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.build-lesson-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  border: 1px solid #444466;
+  background: #1a1a2e;
+  color: #c8c8e0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: monospace;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.build-lesson-btn:hover {
+  background: #252545;
+  border-color: #6666aa;
+}
+
+.build-lesson-btn.primary {
+  border-color: #5b7fff;
+  color: #a0c0ff;
+}
+
+.build-lesson-btn.primary:hover {
+  background: #1e2655;
+}
+
+.build-lesson-bpm-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: #8888aa;
+}
+
+.build-lesson-bpm-input {
+  width: 4rem;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.8rem;
+  background: #1a1a2e;
+  border: 1px solid #444466;
+  color: #c8c8e0;
+  border-radius: 4px;
+  font-family: monospace;
+  text-align: center;
+}
+
+.build-lesson-bpm-input:focus {
+  outline: none;
+  border-color: #5b7fff;
+}
+
+.build-lesson-hint {
+  margin-top: 1rem;
+  font-size: 0.75rem;
+  color: #555577;
+  line-height: 1.6;
+}
