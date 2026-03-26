@@ -1,4 +1,5 @@
 import { useMemo, useRef, useCallback, useState } from 'react';
+import type React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getModule, getLesson, getNextLesson } from '@/data/lessons';
 import { useLessonsProgress } from '@/hooks/useLessonsProgress';
@@ -35,44 +36,45 @@ function LessonWithExamples({ mod, lesson }: { mod: LessonModule; lesson: Lesson
   const activeHighlights: FretHighlight[] = exampleIdx === 0 ? lesson.fretHighlights : examples[exampleIdx - 1].fretHighlights;
   const activePracticeNotes: PracticeNotes = exampleIdx === 0 ? lesson.practiceNotes : examples[exampleIdx - 1].practiceNotes;
 
+  const variantSelector = examples.length > 0 ? (
+    <div className="flex gap-2 flex-wrap">
+      {['Original', ...examples.map(e => e.name)].map((name, i) => (
+        <button
+          key={i}
+          onClick={() => setExampleIdx(i)}
+          className={
+            exampleIdx === i
+              ? 'px-3 py-1 rounded text-sm font-medium bg-[#5b7fff] text-white'
+              : 'px-3 py-1 rounded text-sm font-medium border border-[#505270] text-[#aaa] hover:border-[#5b7fff] hover:text-[#eee]'
+          }
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  ) : null;
+
   return (
-    <>
-      {examples.length > 0 && (
-        <div className="flex gap-2 flex-wrap px-4 pt-4 max-w-[900px] mx-auto">
-          {['Original', ...examples.map(e => e.name)].map((name, i) => (
-            <button
-              key={i}
-              onClick={() => setExampleIdx(i)}
-              className={
-                exampleIdx === i
-                  ? 'px-3 py-1 rounded text-sm font-medium bg-[#5b7fff] text-white'
-                  : 'px-3 py-1 rounded text-sm font-medium border border-[#505270] text-[#aaa] hover:border-[#5b7fff] hover:text-[#eee]'
-              }
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-      )}
-      {/* Key forces full remount when example changes, resetting audio/bpm state */}
-      <LessonInner
-        key={`${lesson.id}-${exampleIdx}`}
-        mod={mod}
-        lesson={lesson}
-        tab={activeTab}
-        fretHighlights={activeHighlights}
-        practiceNotes={activePracticeNotes}
-      />
-    </>
+    // Key forces full remount when example changes, resetting audio/bpm state
+    <LessonInner
+      key={`${lesson.id}-${exampleIdx}`}
+      mod={mod}
+      lesson={lesson}
+      tab={activeTab}
+      fretHighlights={activeHighlights}
+      practiceNotes={activePracticeNotes}
+      variantSelector={variantSelector}
+    />
   );
 }
 
-function LessonInner({ mod, lesson, tab, fretHighlights, practiceNotes }: {
+function LessonInner({ mod, lesson, tab, fretHighlights, practiceNotes, variantSelector }: {
   mod: LessonModule;
   lesson: Lesson;
   tab: TabLine[];
   fretHighlights: FretHighlight[];
   practiceNotes: PracticeNotes;
+  variantSelector?: React.ReactNode;
 }) {
   const { markViewed, markComplete, isComplete, toggleFavorite, isFavorite } = useLessonsProgress();
   const [bpm, setBpm] = useState(practiceNotes.defaultBpm);
@@ -173,6 +175,8 @@ function LessonInner({ mod, lesson, tab, fretHighlights, practiceNotes }: {
         <h2 className="lesson-section-title">Practice Routine</h2>
         <p className="lesson-section-text">{lesson.practiceRoutine}</p>
       </section>
+
+      <section>{variantSelector}</section>
 
       <section>
         <h2 className="lesson-section-title">Tab</h2>
