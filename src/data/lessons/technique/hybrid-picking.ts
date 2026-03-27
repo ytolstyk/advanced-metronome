@@ -43,8 +43,38 @@ export const hybridPickingModule: LessonModule = {
           { string: 0, fret: 3 },
           { string: 4, fret: 0 },
         ],
-        defaultBpm: 60,
+        defaultBpm: 80,
       },
+      examples: [
+        {
+          name: 'A major',
+          tab: [
+            {string:"e",steps:[null,null,null,null,null,null,null,null,"|"]},
+            {string:"B",steps:[null,null,null,null,null,null,null,null,"|"]},
+            {string:"G",steps:[null,"m4",null,"m4",null,"m4",null,"m4","|"]},
+            {string:"D",steps:[null,null,null,null,null,null,null,null,"|"]},
+            {string:"A",steps:[null,null,null,null,null,null,null,null,"|"]},
+            {string:"E",steps:["p5",null,"p5",null,"p5",null,"p5",null,"|"]},
+          ],
+          fretHighlights: [
+            {string:0,fret:5},
+            {string:3,fret:4}
+          ],
+          practiceNotes: {
+            steps: [
+              {string:0,fret:5},
+              {string:3,fret:4},
+              {string:0,fret:5},
+              {string:3,fret:4},
+              {string:0,fret:5},
+              {string:3,fret:4},
+              {string:0,fret:5},
+              {string:3,fret:4}
+            ],
+            "defaultBpm": 80
+          },
+        },
+      ],
     },
     {
       id: 'hybrid-2',
@@ -87,8 +117,37 @@ export const hybridPickingModule: LessonModule = {
           { string: 3, fret: 0 },
           { string: 4, fret: 0 },
         ],
-        defaultBpm: 60,
+        defaultBpm: 80,
       },
+      examples: [
+        {
+          name: 'C major',
+          tab: [
+            {string:"e",steps:[null,null,null,null,null,null]},
+            {string:"B",steps:[null,null,"a1",null,null,"a1"]},
+            {string:"G",steps:[null,"m0",null,null,"m0",null]},
+            {string:"D",steps:[null,null,null,null,null,null]},
+            {string:"A",steps:["p3",null,null,"p3",null,null]},
+            {string:"E",steps:[null,null,null,null,null,null]}
+          ],
+          fretHighlights: [
+            {string:1,fret:3},
+            {string:3,fret:0},
+            {string:4,fret:1}
+          ],
+          practiceNotes: {
+            steps: [
+              {string:1,fret:3},
+              {string:3,fret:0},
+              {string:4,fret:1},
+              {string:1,fret:3},
+              {string:3,fret:0},
+              {string:4,fret:1}
+            ],
+            "defaultBpm": 80
+          },
+        },
+      ],
     },
     {
       id: 'hybrid-3',
@@ -103,37 +162,35 @@ export const hybridPickingModule: LessonModule = {
       practiceRoutine:
         'Play 3rds on the G and B strings simultaneously: G(4)/B(5), G(5)/B(6), G(5)/B(6), G(7)/B(8). ' +
         'Start at 50 BPM, one double stop per beat.',
-      tab: [
-        { string: 'e', steps: [null, null, null, null, '|'] },
-        { string: 'B', steps: ['5', '6', '6', '8', '|'] },
-        { string: 'G', steps: ['4', '5', '5', '7', '|'] },
-        { string: 'D', steps: [null, null, null, null, '|'] },
-        { string: 'A', steps: [null, null, null, null, '|'] },
-        { string: 'E', steps: [null, null, null, null, '|'] },
-      ],
-      fretHighlights: [
-        { string: 3, fret: 4, color: 'root' },
-        { string: 3, fret: 5, color: 'accent' },
-        { string: 3, fret: 7, color: 'default' },
-        { string: 4, fret: 5, color: 'accent' },
-        { string: 4, fret: 6, color: 'default' },
-        { string: 4, fret: 8, color: 'default' },
-      ],
-      practiceNotes: {
-        // G fret 4=55+4=59 (but played simultaneously with B fret 5=64); list G then B for each
-        // G:4=59, B:5=64; G:5=60, B:6=65; G:7=62, B:8=67
-        steps: [
-          { string: 3, fret: 4 },
-          { string: 4, fret: 5 },
-          { string: 3, fret: 5 },
-          { string: 4, fret: 6 },
-          { string: 3, fret: 5 },
-          { string: 4, fret: 6 },
-          { string: 3, fret: 7 },
-          { string: 4, fret: 8 },
+        tab: [
+          {string:"e",steps:[null,null,null,null,"|"]},
+          {string:"B",steps:["5","6","6","8"]},
+          {string:"G",steps:["4","5","5","7"]},
+          {string:"D",steps:[null,null,null,null,"|"]},
+          {string:"A",steps:[null,null,null,null,"|"]},
+          {string:"E",steps:[null,null,null,null,"|"]}
         ],
-        defaultBpm: 50,
-      },
+        fretHighlights: [
+          {string:4,fret:5},
+          {string:3,fret:4},
+          {string:4,fret:6},
+          {string:3,fret:5},
+          {string:4,fret:8},
+          {string:3,fret:7}
+        ],
+        practiceNotes: {
+          steps: [
+            {string:4,fret:5},
+            {string:3,fret:4},
+            {string:4,fret:6},
+            {string:3,fret:5},
+            {string:4,fret:6},
+            {string:3,fret:5},
+            {string:4,fret:8},
+            {string:3,fret:7}
+          ],
+          defaultBpm: 80
+        },
     },
     {
       id: 'hybrid-4',
@@ -149,12 +206,12 @@ export const hybridPickingModule: LessonModule = {
         'Play a Cmaj7 arpeggio: pick A string fret 3 (C), middle finger plucks G open, ring finger plucks high E open, ' +
         'then pick D string fret 2 (E), middle finger plucks B fret 1 (C). Start at 50 BPM.',
       tab: [
-        { string: 'e', steps: [null, null, 'a0', null, null, null, null, null, 'a0', null, '|'] },
-        { string: 'B', steps: [null, null, null, null, 'm1', null, null, null, null, 'm1', '|'] },
-        { string: 'G', steps: [null, 'm0', null, null, null, null, null, 'm0', null, null, '|'] },
-        { string: 'D', steps: [null, null, null, 'p2', null, null, null, null, null, null, '|'] },
-        { string: 'A', steps: ['p3', null, null, null, null, 'p3', null, null, null, null, '|'] },
-        { string: 'E', steps: [null, null, null, null, null, null, null, null, null, null, '|'] },
+        { string: 'e', steps: [null, null, 'a0', null, null, null, null, null, 'a0', null, null, '|'] },
+        { string: 'B', steps: [null, null, null, null, 'm1', null, null, null, null, null, 'm1', '|'] },
+        { string: 'G', steps: [null, 'm0', null, null, null, null, null, 'm0', null, null, null, '|'] },
+        { string: 'D', steps: [null, null, null, 'p2', null, null, null, null, null, "p2", null, '|'] },
+        { string: 'A', steps: ['p3', null, null, null, null, 'p3', null, null, null, null, null, '|'] },
+        { string: 'E', steps: [null, null, null, null, null, null, null, null, null, null, null, '|'] },
       ],
       fretHighlights: [
         { string: 1, fret: 3, color: 'root' },
@@ -177,8 +234,40 @@ export const hybridPickingModule: LessonModule = {
           { string: 2, fret: 2 },
           { string: 4, fret: 1 },
         ],
-        defaultBpm: 50,
+        defaultBpm: 80,
       },
+      examples: [
+        {
+          name: "B major",
+          tab: [
+            {string:"e",steps:[null,null,null,null,null,null,"0","|"]},
+            {string:"B",steps:[null,null,"0",null,null,"0",null,"|"]},
+            {string:"G",steps:[null,"8",null,null,"8",null,null,"|"]},
+            {string:"D",steps:[null,null,null,null,null,null,null,"|"]},
+            {string:"A",steps:[null,null,null,"9",null,null,null,"|"]},
+            {string:"E",steps:["7",null,null,null,null,null,null,"|"]}
+          ],
+          fretHighlights: [
+            {string:0,fret:7},
+            {string:3,fret:8},
+            {string:4,fret:0},
+            {string:1,fret:9},
+            {string:5,fret:0}
+          ],
+          practiceNotes: {
+            steps: [
+              {string:0,fret:7},
+              {string:3,fret:8},
+              {string:4,fret:0},
+              {string:1,fret:9},
+              {string:3,fret:8},
+              {string:4,fret:0},
+              {string:5,fret:0}
+            ],
+            defaultBpm: 80
+          },
+        },
+      ],
     },
   ],
 };

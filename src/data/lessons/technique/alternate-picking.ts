@@ -53,7 +53,7 @@ export const alternatePickingModule: LessonModule = {
           { string: 5, fret: 12 },
           { string: 5, fret: 10 },
         ],
-        defaultBpm: 60,
+        defaultBpm: 80,
       },
       examples: [
         {
@@ -87,7 +87,7 @@ export const alternatePickingModule: LessonModule = {
               { string: 4, fret: 5 },
               { string: 4, fret: 7 },
             ],
-            defaultBpm: 60,
+            defaultBpm: 80,
           },
         },
         {
@@ -121,7 +121,7 @@ export const alternatePickingModule: LessonModule = {
               { string: 3, fret: 2 },
               { string: 3, fret: 4 },
             ],
-            defaultBpm: 60,
+            defaultBpm: 80,
           },
         },
       ],
@@ -483,7 +483,7 @@ export const alternatePickingModule: LessonModule = {
           { string: 4, fret: 8 },
           { string: 4, fret: 5 },
         ],
-        defaultBpm: 60,
+        defaultBpm: 80,
       },
       examples: [
         {
@@ -521,7 +521,7 @@ export const alternatePickingModule: LessonModule = {
               { string: 2, fret: 5 },
               { string: 2, fret: 2 },
             ],
-            defaultBpm: 60,
+            defaultBpm: 80,
           },
         },
         {
@@ -559,7 +559,7 @@ export const alternatePickingModule: LessonModule = {
               { string: 3, fret: 7 },
               { string: 3, fret: 5 },
             ],
-            defaultBpm: 60,
+            defaultBpm: 80,
           },
         },
       ],

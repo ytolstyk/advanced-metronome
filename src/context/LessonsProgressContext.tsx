@@ -43,8 +43,9 @@ export function LessonsProgressProvider({ children }: { children: ReactNode }) {
   const markComplete = useCallback((lessonId: string, moduleId: string) => {
     setProgress(prev => {
       const next = new Map(prev);
-      next.set(lessonId, 'completed');
-      void saveProgress(lessonId, moduleId, 'completed', progressIdMapRef.current.get(lessonId)).then(id => {
+      const newStatus = prev.get(lessonId) === 'completed' ? 'active' : 'completed';
+      next.set(lessonId, newStatus);
+      void saveProgress(lessonId, moduleId, newStatus, progressIdMapRef.current.get(lessonId)).then(id => {
         if (id) progressIdMapRef.current.set(lessonId, id);
       });
       return next;

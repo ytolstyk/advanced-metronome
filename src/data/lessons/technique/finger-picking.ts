@@ -45,8 +45,70 @@ export const fingerPickingModule: LessonModule = {
           { string: 4, fret: 0 },
           { string: 5, fret: 0 },
         ],
-        defaultBpm: 60,
+        defaultBpm: 80,
       },
+      examples: [
+        {
+          name: "D major",
+          tab: [
+            {string:"e",steps:[null,null,null,"2",null,null,null,"2","|"]},
+            {string:"B",steps:[null,null,"3",null,null,null,"3",null,"|"]},
+            {string:"G",steps:[null,"2",null,null,null,"2",null,null,"|"]},
+            {string:"D",steps:["0",null,null,null,"0",null,null,null,"|"]},
+            {string:"A",steps:[null,null,null,null,null,null,null,null,"|"]},
+            {string:"E",steps:[null,null,null,null,null,null,null,null,"|"]},
+          ],
+          fretHighlights: [
+            {string:2,fret:0},
+            {string:3,fret:2},
+            {string:4,fret:3},
+            {string:5,fret:2}
+          ],
+          practiceNotes: {
+            steps: [
+              {string:2,fret:0},
+              {string:3,fret:2},
+              {string:4,fret:3},
+              {string:5,fret:2},
+              {string:2,fret:0},
+              {string:3,fret:2},
+              {string:4,fret:3},
+              {string:5,fret:2}
+            ],
+            defaultBpm: 80
+          }
+        },
+        {
+          name: "A minor",
+          tab: [
+            {string:"e",steps:[null,null,null,null,null,null,null,null,"|"]},
+            {string:"B",steps:[null,null,null,"1",null,null,null,"1","|"]},
+            {string:"G",steps:[null,null,"2",null,null,null,"2",null,"|"]},
+            {string:"D",steps:[null,"2",null,null,null,"2",null,null,"|"]},
+            {string:"A",steps:["0",null,null,null,"0",null,null,null,"|"]},
+            {string:"E",steps:[null,null,null,null,null,null,null,null,"|"]},
+          ],
+          fretHighlights: [
+            {string:1,fret:0},
+            {string:2,fret:2},
+            {string:3,fret:2},
+            {string:4,fret:1}
+          ],
+          practiceNotes: {
+            steps: [
+              {string:1,fret:0},
+              {string:2,fret:2},
+              {string:3,fret:2},
+              {string:4,fret:1},
+              {string:1,fret:0},
+              {string:2,fret:2},
+              {string:3,fret:2},
+              {string:4,fret:1}
+            ],
+            defaultBpm: 80
+          },
+        },
+      ],
     },
     {
       id: 'finger-picking-2',
@@ -61,34 +123,66 @@ export const fingerPickingModule: LessonModule = {
         'Hold a C chord. Thumb alternates between A string fret 3 (C note) and low E string open. ' +
         'Index and middle fingers pluck G and B strings between thumb strokes. Start at 50 BPM.',
       tab: [
-        { string: 'e', steps: [null, null, null, '0', null, null, null, '0', '|'] },
-        { string: 'B', steps: [null, null, '1', null, null, null, '1', null, '|'] },
-        { string: 'G', steps: [null, '0', null, '0', null, '0', null, '0', '|'] },
-        { string: 'D', steps: [null, null, null, null, null, null, null, null, '|'] },
-        { string: 'A', steps: ['3', null, null, null, '3', null, null, null, '|'] },
-        { string: 'E', steps: [null, null, null, null, null, null, null, null, '|'] },
+        {string:"e",steps:[null,null,null,"0",null,null,null,"0","|"]},
+        {string:"B",steps:[null,null,"1",null,null,null,"1",null,"|"]},
+        {string:"G",steps:[null,"0",null,null,null,"0",null,null,"|"]},
+        {string:"D",steps:[null,null,null,null,"2",null,null,null,"|"]},
+        {string:"A",steps:["3",null,null,null,null,null,null,null,"|"]},
+        {string:"E",steps:[null,null,null,null,null,null,null,null,"|"]}
       ],
       fretHighlights: [
-        { string: 1, fret: 3, color: 'root' },
-        { string: 0, fret: 0, color: 'accent' },
-        { string: 3, fret: 0, color: 'default' },
-        { string: 4, fret: 1, color: 'default' },
-        { string: 5, fret: 0, color: 'default' },
+        {string:1,fret:3},
+        {string:3,fret:0},
+        {string:4,fret:1},
+        {string:5,fret:0},
+        {string:2,fret:2}
       ],
       practiceNotes: {
-        // A fret 3=45+3=48; G open=55; B fret 1=59+1=60; high e open=64
         steps: [
-          { string: 1, fret: 3 },
-          { string: 3, fret: 0 },
-          { string: 4, fret: 1 },
-          { string: 5, fret: 0 },
-          { string: 1, fret: 3 },
-          { string: 3, fret: 0 },
-          { string: 4, fret: 1 },
-          { string: 5, fret: 0 },
+          {string:1,fret:3},
+          {string:3,fret:0},
+          {string:4,fret:1},
+          {string:5,fret:0},
+          {string:2,fret:2},
+          {string:3,fret:0},
+          {string:4,fret:1},
+          {string:5,fret:0}
         ],
-        defaultBpm: 50,
+        defaultBpm: 80
       },
+      examples: [
+        {
+          name: "G major",
+          tab: [
+            {string:"e",steps:[null,null,null,"3",null,null,null,"3","|"]},
+            {string:"B",steps:[null,null,"3",null,null,null,"3",null,"|"]},
+            {string:"G",steps:[null,"0",null,null,null,"0",null,null,"|"]},
+            {string:"D",steps:[null,null,null,null,"0",null,null,null,"|"]},
+            {string:"A",steps:[null,null,null,null,null,null,null,null,"|"]},
+            {string:"E",steps:["3",null,null,null,null,null,null,null,"|"]}
+          ],
+          fretHighlights: [
+            {string:0,fret:3},
+            {string:3,fret:0},
+            {string:4,fret:3},
+            {string:5,fret:3},
+            {string:2,fret:0}
+          ],
+          practiceNotes: {
+            steps: [
+              {string:0,fret:3},
+              {string:3,fret:0},
+              {string:4,fret:3},
+              {string:5,fret:3},
+              {string:2,fret:0},
+              {string:3,fret:0},
+              {string:4,fret:3},
+              {string:5,fret:3}
+            ],
+            defaultBpm: 80
+          },
+        },
+      ],
     },
     {
       id: 'finger-picking-3',
@@ -132,8 +226,44 @@ export const fingerPickingModule: LessonModule = {
           { string: 4, fret: 1 },
           { string: 3, fret: 2 },
         ],
-        defaultBpm: 60,
+        defaultBpm: 80,
       },
+      examples: [
+        {
+          name: "D major",
+          tab: [
+            {string:"e",steps:[null,null,null,"2",null,null,"|",null,null,null,"2",null,null,"|"]},
+            {string:"B",steps:[null,null,"3",null,"3",null,"|",null,null,"3",null,"3",null,"|"]},
+            {string:"G",steps:[null,"2",null,null,null,"2","|",null,"2",null,null,null,"2","|"]},
+            {string:"D",steps:["0",null,null,null,null,null,"|","0",null,null,null,null,null,"|"]},
+            {string:"A",steps:[null,null,null,null,null,null,"|",null,null,null,null,null,null,"|"]},
+            {string:"E",steps:[null,null,null,null,null,null,"|",null,null,null,null,null,null,"|"]}
+          ],
+          fretHighlights: [
+            {string:2,fret:0},
+            {string:3,fret:2},
+            {string:4,fret:3},
+            {string:5,fret:2}
+          ],
+          practiceNotes: {
+            steps: [
+              {string:2,fret:0},
+              {string:3,fret:2},
+              {string:4,fret:3},
+              {string:5,fret:2},
+              {string:4,fret:3},
+              {string:3,fret:2},
+              {string:2,fret:0},
+              {string:3,fret:2},
+              {string:4,fret:3},
+              {string:5,fret:2},
+              {string:4,fret:3},
+              {string:3,fret:2}
+            ],
+            defaultBpm: 80
+          },
+        },
+      ],
     },
     {
       id: 'finger-picking-4',
@@ -175,6 +305,39 @@ export const fingerPickingModule: LessonModule = {
         ],
         defaultBpm: 40,
       },
+      examples: [
+        {
+            name: "E major",
+          tab: [
+            {string:"e",steps:[null,null,null,null,null,null,null,null,"|"]},
+            {string:"B",steps:[null,null,null,null,null,null,null,null,"|"]},
+            {string:"G",steps:[null,null,null,null,null,null,null,null,"|"]},
+            {string:"D",steps:[null,null,null,null,null,null,null,"9","|"]},
+            {string:"A",steps:[null,"7",null,"9",null,"11",null,null,"|"]},
+            {string:"E",steps:["0",null,"0",null,"0",null,"0",null,"|"]}
+          ],
+          fretHighlights: [
+            {string:0,fret:0},
+            {string:1,fret:7},
+            {string:1,fret:9},
+            {string:1,fret:11},
+            {string:2,fret:9}
+          ],
+          practiceNotes: {
+            steps: [
+              {string:0,fret:0},
+              {string:1,fret:7},
+              {string:0,fret:0},
+              {string:1,fret:9},
+              {string:0,fret:0},
+              {string:1,fret:11},
+              {string:0,fret:0},
+              {string:2,fret:9}
+            ],
+            defaultBpm: 80
+          },
+        },
+      ],
     },
   ],
 };

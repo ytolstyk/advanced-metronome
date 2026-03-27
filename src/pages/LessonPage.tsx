@@ -231,9 +231,8 @@ function LessonInner({ mod, lesson, tab, fretHighlights, practiceNotes, variantS
         <Button
           variant="outline"
           onClick={() => markComplete(lesson.id, mod.id)}
-          disabled={complete}
           className={complete
-            ? 'border-[#22dd88] text-[#22dd88] opacity-80 cursor-default'
+            ? 'border-[#22dd88] text-[#22dd88] hover:border-[#e05555] hover:text-[#e05555]'
             : 'border-[#505270] text-[#aaa] hover:border-[#22dd88] hover:text-[#22dd88]'}
         >
           {complete ? '\u2713 Completed' : 'Mark Complete'}
