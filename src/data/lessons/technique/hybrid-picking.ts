@@ -164,8 +164,8 @@ export const hybridPickingModule: LessonModule = {
         'Start at 50 BPM, one double stop per beat.',
         tab: [
           {string:"e",steps:[null,null,null,null,"|"]},
-          {string:"B",steps:["5","6","6","8"]},
-          {string:"G",steps:["4","5","5","7"]},
+          {string:"B",steps:["5","6","6","8", "|"]},
+          {string:"G",steps:["4","5","5","7", "|"]},
           {string:"D",steps:[null,null,null,null,"|"]},
           {string:"A",steps:[null,null,null,null,"|"]},
           {string:"E",steps:[null,null,null,null,"|"]}
@@ -180,17 +180,47 @@ export const hybridPickingModule: LessonModule = {
         ],
         practiceNotes: {
           steps: [
-            {string:4,fret:5},
-            {string:3,fret:4},
-            {string:4,fret:6},
-            {string:3,fret:5},
-            {string:4,fret:6},
-            {string:3,fret:5},
-            {string:4,fret:8},
-            {string:3,fret:7}
+            [{string:4,fret:5},
+            {string:3,fret:4}],
+            [{string:4,fret:6},
+            {string:3,fret:5}],
+            [{string:4,fret:6},
+            {string:3,fret:5}],
+            [{string:4,fret:8},
+            {string:3,fret:7}]
           ],
           defaultBpm: 80
         },
+        examples: [
+          {
+            name: "String skipping",
+            tab: [
+              {string:"e",steps:[null,null,null,null,"|"]},
+              {string:"B",steps:["7","8","5","3","|"]},
+              {string:"G",steps:[null,null,null,null,"|"]},
+              {string:"D",steps:[null,null,null,null,"|"]},
+              {string:"A",steps:["5","5","3","3","|"]},
+              {string:"E",steps:[null,null,null,null,"|"]}
+            ],
+            fretHighlights: [
+              {string:4,fret:7},
+              {string:1,fret:5},
+              {string:4,fret:8},
+              {string:4,fret:5},
+              {string:1,fret:3},
+              {string:4,fret:3}
+            ],
+            practiceNotes: {
+              steps: [
+                [{string:4,fret:7},{string:1,fret:5}],
+                [{string:4,fret:8},{string:1,fret:5}],
+                [{string:4,fret:5},{string:1,fret:3}],
+                [{string:4,fret:3},{string:1,fret:3}]
+              ],
+              "defaultBpm": 80
+            }
+          }
+        ],
     },
     {
       id: 'hybrid-4',
@@ -240,12 +270,12 @@ export const hybridPickingModule: LessonModule = {
         {
           name: "B major",
           tab: [
-            {string:"e",steps:[null,null,null,null,null,null,"0","|"]},
-            {string:"B",steps:[null,null,"0",null,null,"0",null,"|"]},
-            {string:"G",steps:[null,"8",null,null,"8",null,null,"|"]},
+            {string:"e",steps:[null,null,null,null,null,null,"c0","|"]},
+            {string:"B",steps:[null,null,"a0",null,null,"a0",null,"|"]},
+            {string:"G",steps:[null,"m8",null,null,"m8",null,null,"|"]},
             {string:"D",steps:[null,null,null,null,null,null,null,"|"]},
-            {string:"A",steps:[null,null,null,"9",null,null,null,"|"]},
-            {string:"E",steps:["7",null,null,null,null,null,null,"|"]}
+            {string:"A",steps:[null,null,null,"p9",null,null,null,"|"]},
+            {string:"E",steps:["p7",null,null,null,null,null,null,"|"]}
           ],
           fretHighlights: [
             {string:0,fret:7},

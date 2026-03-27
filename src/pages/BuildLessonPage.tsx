@@ -155,29 +155,35 @@ function buildJson(state: GridState) {
 
   const tab = STRING_LABELS.map((str, rowIdx) => ({
     string: str,
-    steps: Array.from({ length: colCount }, (_, ci) =>
-      barCols[ci] ? '|' : cells[ci][rowIdx],
-    ),
+    steps: [
+      ...Array.from({ length: colCount }, (_, ci) =>
+        barCols[ci] ? '|' : cells[ci][rowIdx],
+      ),
+      '|',
+    ],
   }));
 
   const seen = new Set<string>();
   const fretHighlights: { string: number; fret: number }[] = [];
-  const practiceSteps: { string: number; fret: number }[] = [];
+  const practiceSteps: ({ string: number; fret: number } | { string: number; fret: number }[])[] = [];
 
   for (let ci = 0; ci < colCount; ci++) {
     if (barCols[ci]) continue;
+    const colNotes: { string: number; fret: number }[] = [];
     for (let ri = 0; ri < 6; ri++) {
       const val = cells[ci][ri];
       if (val === null) continue;
       const fret = parseInt(val, 10);
       const stringIdx = ROW_TO_STRING_IDX[ri];
-      practiceSteps.push({ string: stringIdx, fret });
+      colNotes.push({ string: stringIdx, fret });
       const key = `${stringIdx}-${fret}`;
       if (!seen.has(key)) {
         seen.add(key);
         fretHighlights.push({ string: stringIdx, fret });
       }
     }
+    if (colNotes.length === 1) practiceSteps.push(colNotes[0]);
+    else if (colNotes.length > 1) practiceSteps.push(colNotes);
   }
 
   return {

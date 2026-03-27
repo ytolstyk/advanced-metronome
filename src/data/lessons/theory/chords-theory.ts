@@ -38,12 +38,8 @@ export const chordsTheoryModule: LessonModule = {
         // C major: G fret 9=55+9=64(E), B fret 8=59+8=67(G), high e fret 8=64+8=72(C)
         // C minor: G fret 8=63(Eb), B fret 8=67(G), high e fret 8=72(C)
         steps: [
-          { string: 3, fret: 9 },
-          { string: 4, fret: 8 },
-          { string: 5, fret: 8 },
-          { string: 3, fret: 8 },
-          { string: 4, fret: 8 },
-          { string: 5, fret: 8 },
+          [{ string: 3, fret: 9 }, { string: 4, fret: 8 }, { string: 5, fret: 8 }],
+          [{ string: 3, fret: 8 }, { string: 4, fret: 8 }, { string: 5, fret: 8 }],
         ],
         defaultBpm: 60,
       },
@@ -79,18 +75,12 @@ export const chordsTheoryModule: LessonModule = {
       ],
       practiceNotes: {
         // Csus2: G9=64(E), B8=67(G), e10=74(D)
-        // Csus4: G10=65(F), B8=67(G), e10=74(F?)  — top 3 strings arpeggio each chord
+        // Csus4: G10=65(F), B8=67(G), e10=74
         // Caug: G9=64, B9=68, e8=72
         steps: [
-          { string: 3, fret: 9 },
-          { string: 4, fret: 8 },
-          { string: 5, fret: 8 },
-          { string: 3, fret: 10 },
-          { string: 4, fret: 8 },
-          { string: 5, fret: 10 },
-          { string: 3, fret: 9 },
-          { string: 4, fret: 9 },
-          { string: 5, fret: 8 },
+          [{ string: 3, fret: 9 }, { string: 4, fret: 8 }, { string: 5, fret: 10 }],
+          [{ string: 3, fret: 10 }, { string: 4, fret: 8 }, { string: 5, fret: 10 }],
+          [{ string: 3, fret: 9 }, { string: 4, fret: 9 }, { string: 5, fret: 8 }],
         ],
         defaultBpm: 60,
       },
@@ -127,25 +117,13 @@ export const chordsTheoryModule: LessonModule = {
         { string: 2, fret: 1, color: 'default' },
       ],
       practiceNotes: {
-        // Cmaj7 arpeggio: A3=48, D2=52, G0=55, B0=59, e0=64
+        // Cmaj7: A3=48, D2=52, G0=55, B0=59, e0=64
         // C7: same but B1=60
         // Cm7: A3=48, D1=51, G0=55
         steps: [
-          { string: 1, fret: 3 },
-          { string: 2, fret: 2 },
-          { string: 3, fret: 0 },
-          { string: 4, fret: 0 },
-          { string: 5, fret: 0 },
-          { string: 1, fret: 3 },
-          { string: 2, fret: 2 },
-          { string: 3, fret: 0 },
-          { string: 4, fret: 1 },
-          { string: 5, fret: 0 },
-          { string: 1, fret: 3 },
-          { string: 2, fret: 1 },
-          { string: 3, fret: 0 },
-          { string: 4, fret: 0 },
-          { string: 5, fret: 0 },
+          [{ string: 1, fret: 3 }, { string: 2, fret: 2 }, { string: 3, fret: 0 }, { string: 4, fret: 0 }, { string: 5, fret: 0 }],
+          [{ string: 1, fret: 3 }, { string: 2, fret: 2 }, { string: 3, fret: 0 }, { string: 4, fret: 1 }, { string: 5, fret: 0 }],
+          [{ string: 1, fret: 3 }, { string: 2, fret: 1 }, { string: 3, fret: 0 }],
         ],
         defaultBpm: 50,
       },
@@ -189,15 +167,9 @@ export const chordsTheoryModule: LessonModule = {
         // 1st inv: G5=60, B5=64, e5=69
         // 2nd inv: G0=55, B1=60, e0=64
         steps: [
-          { string: 3, fret: 9 },
-          { string: 4, fret: 8 },
-          { string: 5, fret: 8 },
-          { string: 3, fret: 5 },
-          { string: 4, fret: 5 },
-          { string: 5, fret: 5 },
-          { string: 3, fret: 0 },
-          { string: 4, fret: 1 },
-          { string: 5, fret: 0 },
+          [{ string: 3, fret: 9 }, { string: 4, fret: 8 }, { string: 5, fret: 8 }],
+          [{ string: 3, fret: 5 }, { string: 4, fret: 5 }, { string: 5, fret: 5 }],
+          [{ string: 3, fret: 0 }, { string: 4, fret: 1 }, { string: 5, fret: 0 }],
         ],
         defaultBpm: 50,
       },
@@ -231,17 +203,11 @@ export const chordsTheoryModule: LessonModule = {
         { string: 5, fret: 3, color: 'default' },
       ],
       practiceNotes: {
-        // C9: A3=48, D2=52, G3=58(Bb), B3=62(D)
-        // Dm11: D0=50, G2=57, B1=60, e0=64
+        // C9: A3=48, D2=52, G3=58(Bb), B3=62(D), e3=67
+        // Dm11: D0=50, G2=57, B1=60, e1=65
         steps: [
-          { string: 1, fret: 3 },
-          { string: 2, fret: 2 },
-          { string: 3, fret: 3 },
-          { string: 4, fret: 3 },
-          { string: 4, fret: 1 },
-          { string: 3, fret: 2 },
-          { string: 2, fret: 0 },
-          { string: 5, fret: 0 },
+          [{ string: 1, fret: 3 }, { string: 2, fret: 2 }, { string: 3, fret: 3 }, { string: 4, fret: 3 }, { string: 5, fret: 3 }],
+          [{ string: 2, fret: 0 }, { string: 3, fret: 2 }, { string: 4, fret: 1 }, { string: 5, fret: 1 }],
         ],
         defaultBpm: 40,
       },

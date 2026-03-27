@@ -361,7 +361,7 @@ export const pullOffsHammerOnsModule: LessonModule = {
           {string:0,fret:8},
           {string:0,fret:5}
         ],
-        defaultBpm: 50,
+        defaultBpm: 80,
       },
       examples: [
         {
@@ -392,7 +392,7 @@ export const pullOffsHammerOnsModule: LessonModule = {
               {string:1,fret:9},{string:1,fret:7},{string:1,fret:5},
               {string:0,fret:9},{string:0,fret:7},{string:0,fret:5}
             ],
-            defaultBpm: 50,
+            defaultBpm: 80,
           },
         },
         {
@@ -423,7 +423,7 @@ export const pullOffsHammerOnsModule: LessonModule = {
               {string:1,fret:8},{string:1,fret:7},{string:1,fret:5},
               {string:0,fret:8},{string:0,fret:7},{string:0,fret:5}
             ],
-            defaultBpm: 50,
+            defaultBpm: 80,
           },
         },
       ],
@@ -508,7 +508,7 @@ export const pullOffsHammerOnsModule: LessonModule = {
               {string:4,fret:7},{string:4,fret:9},{string:4,fret:10},
               {string:5,fret:5},{string:5,fret:7},{string:5,fret:9}
             ],
-            defaultBpm: 60,
+            defaultBpm: 80,
           },
         },
         {
@@ -539,7 +539,7 @@ export const pullOffsHammerOnsModule: LessonModule = {
               {string:4,fret:5},{string:4,fret:6},{string:4,fret:8},
               {string:5,fret:5},{string:5,fret:7},{string:5,fret:8}
             ],
-            defaultBpm: 60,
+            defaultBpm: 80,
           },
         },
       ],
