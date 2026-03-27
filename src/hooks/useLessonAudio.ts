@@ -4,7 +4,7 @@ import { pluckString } from '@/audio/pluckString';
 
 const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
 
-export function useLessonAudio(steps: PracticeStep[], bpm: number) {
+export function useLessonAudio(steps: (PracticeStep | PracticeStep[])[], bpm: number) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeNoteIdx, setActiveNoteIdx] = useState<number | null>(null);
 
@@ -50,10 +50,13 @@ export function useLessonAudio(steps: PracticeStep[], bpm: number) {
 
       while (nextNoteTimeRef.current < audioCtx.currentTime + 0.1) {
         const idx = currentIdxRef.current % n.length;
-        const step = n[idx];
-        const midi = OPEN_MIDI[step.string] + step.fret;
-        const freq = 440 * Math.pow(2, (midi - 69) / 12);
-        pluckString(audioCtx, freq, nextNoteTimeRef.current, 0.3);
+        const entry = n[idx];
+        const noteList = Array.isArray(entry) ? entry : [entry];
+        for (const step of noteList) {
+          const midi = OPEN_MIDI[step.string] + step.fret;
+          const freq = 440 * Math.pow(2, (midi - 69) / 12);
+          pluckString(audioCtx, freq, nextNoteTimeRef.current, 0.3);
+        }
 
         const delay = Math.max(0, (nextNoteTimeRef.current - audioCtx.currentTime) * 1000);
         const capturedIdx = idx;

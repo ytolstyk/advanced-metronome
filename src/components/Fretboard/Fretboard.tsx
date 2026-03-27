@@ -34,12 +34,12 @@ function stringY(svgStringIdx: number): number {
 
 interface FretboardProps {
   highlights: FretHighlight[];
-  highlightedDotKey?: string | null;
+  highlightedDotKeys?: Set<string> | null;
   onNoteClick?: (midiNote: number, label: string, dotKey: string) => void;
   interactive?: boolean;
 }
 
-export function Fretboard({ highlights, highlightedDotKey, onNoteClick, interactive }: FretboardProps) {
+export function Fretboard({ highlights, highlightedDotKeys, onNoteClick, interactive }: FretboardProps) {
   // Build a lookup from "string-fret" to highlight info
   const hlMap = new Map<string, FretHighlight>();
   for (const h of highlights) {
@@ -60,7 +60,7 @@ export function Fretboard({ highlights, highlightedDotKey, onNoteClick, interact
       if (!hl) continue;
 
       const dotKey = `${svgStr}-${fret}`;
-      const isHighlighted = dotKey === highlightedDotKey;
+      const isHighlighted = highlightedDotKeys?.has(dotKey) ?? false;
       const cx =
         fret === 0
           ? LEFT_PAD + NUT_X / 2

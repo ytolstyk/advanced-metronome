@@ -18,7 +18,7 @@ export interface PracticeStep {
 }
 
 export interface PracticeNotes {
-  steps: PracticeStep[];
+  steps: (PracticeStep | PracticeStep[])[];
   defaultBpm: number;
 }
 

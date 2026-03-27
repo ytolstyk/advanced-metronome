@@ -104,13 +104,13 @@ function LessonInner({ mod, lesson, tab, fretHighlights, practiceNotes, variantS
     [mod.id, lesson.id],
   );
 
-  const highlightedDotKey = useMemo(() => {
+  const highlightedDotKeys = useMemo(() => {
     if (activeNoteIdx === null) return null;
     const steps = practiceNotes.steps;
     if (steps.length === 0) return null;
-    const step = steps[activeNoteIdx % steps.length];
-    const svgStr = 5 - step.string;
-    return `${svgStr}-${step.fret}`;
+    const entry = steps[activeNoteIdx % steps.length];
+    const noteList = Array.isArray(entry) ? entry : [entry];
+    return new Set(noteList.map(s => `${5 - s.string}-${s.fret}`));
   }, [activeNoteIdx, practiceNotes]);
 
   // Map activeNoteIdx to the tab column index using all strings
@@ -188,7 +188,7 @@ function LessonInner({ mod, lesson, tab, fretHighlights, practiceNotes, variantS
         <div className="lesson-fretboard-wrap">
           <Fretboard
             highlights={fretHighlights}
-            highlightedDotKey={highlightedDotKey}
+            highlightedDotKeys={highlightedDotKeys}
             onNoteClick={(midi) => playNote(midi)}
             interactive
           />

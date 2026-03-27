@@ -9,6 +9,7 @@ import { hybridPickingModule } from './technique/hybrid-picking';
 import { selectivePickingModule } from './technique/selective-picking';
 import { chordsTheoryModule } from './theory/chords-theory';
 import { scalesTheoryModule } from './theory/scales-theory';
+import { readingTablatureModule } from './theory/reading-tablature';
 
 export const TECHNIQUE_MODULES: LessonModule[] = [
   alternatePickingModule,
@@ -24,6 +25,7 @@ export const TECHNIQUE_MODULES: LessonModule[] = [
 export const THEORY_MODULES: LessonModule[] = [
   chordsTheoryModule,
   scalesTheoryModule,
+  readingTablatureModule,
 ];
 
 export const ALL_MODULES: LessonModule[] = [...TECHNIQUE_MODULES, ...THEORY_MODULES];
