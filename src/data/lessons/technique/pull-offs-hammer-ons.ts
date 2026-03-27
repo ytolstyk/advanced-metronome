@@ -32,7 +32,7 @@ export const pullOffsHammerOnsModule: LessonModule = {
         { string: 5, fret: 7, color: 'accent' },
       ],
       practiceNotes: {
-        // high e fret 5=64+5=69; fret 7=64+7=71
+        // high e fret 5=A4(69); fret 7=B4(71)
         steps: [
           { string: 5, fret: 5 },
           { string: 5, fret: 7 },
@@ -45,6 +45,95 @@ export const pullOffsHammerOnsModule: LessonModule = {
         ],
         defaultBpm: 60,
       },
+      examples: [
+        {
+          name: 'B string',
+          tab: [
+            { string: 'e', steps: [null, null, null, null, '|'] },
+            { string: 'B', steps: ['5h7', '5h7', '5h7', '5h7', '|'] },
+            { string: 'G', steps: [null, null, null, null, '|'] },
+            { string: 'D', steps: [null, null, null, null, '|'] },
+            { string: 'A', steps: [null, null, null, null, '|'] },
+            { string: 'E', steps: [null, null, null, null, '|'] },
+          ],
+          fretHighlights: [
+            { string: 4, fret: 5, color: 'root' },
+            { string: 4, fret: 7, color: 'accent' },
+          ],
+          practiceNotes: {
+            // B string fret 5=E4(64); fret 7=F#4(66)
+            steps: [
+              { string: 4, fret: 5 },
+              { string: 4, fret: 7 },
+              { string: 4, fret: 5 },
+              { string: 4, fret: 7 },
+              { string: 4, fret: 5 },
+              { string: 4, fret: 7 },
+              { string: 4, fret: 5 },
+              { string: 4, fret: 7 },
+            ],
+            defaultBpm: 60,
+          },
+        },
+        {
+          name: 'G string',
+          tab: [
+            { string: 'e', steps: [null, null, null, null, '|'] },
+            { string: 'B', steps: [null, null, null, null, '|'] },
+            { string: 'G', steps: ['5h7', '5h7', '5h7', '5h7', '|'] },
+            { string: 'D', steps: [null, null, null, null, '|'] },
+            { string: 'A', steps: [null, null, null, null, '|'] },
+            { string: 'E', steps: [null, null, null, null, '|'] },
+          ],
+          fretHighlights: [
+            { string: 3, fret: 5, color: 'root' },
+            { string: 3, fret: 7, color: 'accent' },
+          ],
+          practiceNotes: {
+            // G string fret 5=C4(60); fret 7=D4(62)
+            steps: [
+              { string: 3, fret: 5 },
+              { string: 3, fret: 7 },
+              { string: 3, fret: 5 },
+              { string: 3, fret: 7 },
+              { string: 3, fret: 5 },
+              { string: 3, fret: 7 },
+              { string: 3, fret: 5 },
+              { string: 3, fret: 7 },
+            ],
+            defaultBpm: 60,
+          },
+        },
+        {
+          name: 'Minor third stretch',
+          tab: [
+            { string: 'e', steps: ['5h8', '5h8', '5h8', '5h8', '|'] },
+            { string: 'B', steps: [null, null, null, null, '|'] },
+            { string: 'G', steps: [null, null, null, null, '|'] },
+            { string: 'D', steps: [null, null, null, null, '|'] },
+            { string: 'A', steps: [null, null, null, null, '|'] },
+            { string: 'E', steps: [null, null, null, null, '|'] },
+          ],
+          fretHighlights: [
+            { string: 5, fret: 5, color: 'root' },
+            { string: 5, fret: 8, color: 'accent' },
+          ],
+          practiceNotes: {
+            // high e fret 5=A4(69); fret 8=C5(72)
+            steps: [
+              { string: 5, fret: 5 },
+              { string: 5, fret: 8 },
+              { string: 5, fret: 5 },
+              { string: 5, fret: 8 },
+              { string: 5, fret: 5 },
+              { string: 5, fret: 8 },
+              { string: 5, fret: 5 },
+              { string: 5, fret: 8 },
+            ],
+            defaultBpm: 60,
+          },
+        },
+      ],
     },
     {
       id: 'legato-2',
@@ -71,7 +160,7 @@ export const pullOffsHammerOnsModule: LessonModule = {
         { string: 5, fret: 5, color: 'accent' },
       ],
       practiceNotes: {
-        // high e fret 7=71; fret 5=69
+        // high e fret 7=B4(71); fret 5=A4(69)
         steps: [
           { string: 5, fret: 7 },
           { string: 5, fret: 5 },
@@ -84,6 +173,95 @@ export const pullOffsHammerOnsModule: LessonModule = {
         ],
         defaultBpm: 60,
       },
+      examples: [
+        {
+          name: 'B string',
+          tab: [
+            { string: 'e', steps: [null, null, null, null, '|'] },
+            { string: 'B', steps: ['7p5', '7p5', '7p5', '7p5', '|'] },
+            { string: 'G', steps: [null, null, null, null, '|'] },
+            { string: 'D', steps: [null, null, null, null, '|'] },
+            { string: 'A', steps: [null, null, null, null, '|'] },
+            { string: 'E', steps: [null, null, null, null, '|'] },
+          ],
+          fretHighlights: [
+            { string: 4, fret: 7, color: 'root' },
+            { string: 4, fret: 5, color: 'accent' },
+          ],
+          practiceNotes: {
+            // B string fret 7=F#4(66); fret 5=E4(64)
+            steps: [
+              { string: 4, fret: 7 },
+              { string: 4, fret: 5 },
+              { string: 4, fret: 7 },
+              { string: 4, fret: 5 },
+              { string: 4, fret: 7 },
+              { string: 4, fret: 5 },
+              { string: 4, fret: 7 },
+              { string: 4, fret: 5 },
+            ],
+            defaultBpm: 60,
+          },
+        },
+        {
+          name: 'G string',
+          tab: [
+            { string: 'e', steps: [null, null, null, null, '|'] },
+            { string: 'B', steps: [null, null, null, null, '|'] },
+            { string: 'G', steps: ['7p5', '7p5', '7p5', '7p5', '|'] },
+            { string: 'D', steps: [null, null, null, null, '|'] },
+            { string: 'A', steps: [null, null, null, null, '|'] },
+            { string: 'E', steps: [null, null, null, null, '|'] },
+          ],
+          fretHighlights: [
+            { string: 3, fret: 7, color: 'root' },
+            { string: 3, fret: 5, color: 'accent' },
+          ],
+          practiceNotes: {
+            // G string fret 7=D4(62); fret 5=C4(60)
+            steps: [
+              { string: 3, fret: 7 },
+              { string: 3, fret: 5 },
+              { string: 3, fret: 7 },
+              { string: 3, fret: 5 },
+              { string: 3, fret: 7 },
+              { string: 3, fret: 5 },
+              { string: 3, fret: 7 },
+              { string: 3, fret: 5 },
+            ],
+            defaultBpm: 60,
+          },
+        },
+        {
+          name: 'Minor third drop',
+          tab: [
+            { string: 'e', steps: ['8p5', '8p5', '8p5', '8p5', '|'] },
+            { string: 'B', steps: [null, null, null, null, '|'] },
+            { string: 'G', steps: [null, null, null, null, '|'] },
+            { string: 'D', steps: [null, null, null, null, '|'] },
+            { string: 'A', steps: [null, null, null, null, '|'] },
+            { string: 'E', steps: [null, null, null, null, '|'] },
+          ],
+          fretHighlights: [
+            { string: 5, fret: 8, color: 'root' },
+            { string: 5, fret: 5, color: 'accent' },
+          ],
+          practiceNotes: {
+            // high e fret 8=C5(72); fret 5=A4(69)
+            steps: [
+              { string: 5, fret: 8 },
+              { string: 5, fret: 5 },
+              { string: 5, fret: 8 },
+              { string: 5, fret: 5 },
+              { string: 5, fret: 8 },
+              { string: 5, fret: 5 },
+              { string: 5, fret: 8 },
+              { string: 5, fret: 5 },
+            ],
+            defaultBpm: 60,
+          },
+        },
+      ],
     },
     {
       id: 'legato-3',

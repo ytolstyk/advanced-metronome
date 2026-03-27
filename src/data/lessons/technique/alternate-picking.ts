@@ -13,12 +13,12 @@ export const alternatePickingModule: LessonModule = {
       difficulty: 'beginner',
       order: 1,
       explanation:
-        'Skip the chromatic exercises — start with notes you\'ll actually use in solos. ' +
-        'On the high e string, the A minor pentatonic lands on frets 5 (A), 8 (C), 10 (D), and 12 (E). ' +
-        'Strictly alternate pick every note: down-up-down-up all the way up and back down.',
+        'Skip the chromatic exercises — start with a lick you\'ll actually use in solos. ' +
+        'On the high e string: frets 9, 10, 12 — a half-step then a whole-step, a compact 3-note figure that sits naturally under the fingers. ' +
+        'Strictly alternate pick every note: down-up-down-up throughout the repeating phrase.',
       practiceRoutine:
-        'Play frets 5-8-10-12 ascending then 12-10-8-5 descending on the high e string with strict down-up alternate picking. ' +
-        'Start at 60 BPM with eighth notes. It should sound musical — these are real solo notes.',
+        'Play the ascending figure (9-10-12) then roll back to 10 and repeat: 9-10-12-10. ' +
+        'Start at 60 BPM with eighth notes. Focus on matching the volume of upstrokes to downstrokes.',
       tab: [
         { string: 'e', steps: ['9', '10', '12', '10', '9', '10', '12', '10', '|', '9', '10', '12', '10', '9', '10', '12', '10', '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|', null, null, null, null, null, null, null, null, '|'] },
@@ -34,7 +34,7 @@ export const alternatePickingModule: LessonModule = {
         { string: 5, fret: 10, color: 'accent' },
       ],
       practiceNotes: {
-        // high e: 5=A4(69), 8=C5(72), 10=D5(74), 12=E5(76)
+        // high e: 9=C#5(73), 10=D5(74), 12=E5(76)
         steps: [
           { string: 5, fret: 9 },
           { string: 5, fret: 10 },
