@@ -23,9 +23,9 @@ export const TECHNIQUE_MODULES: LessonModule[] = [
 ];
 
 export const THEORY_MODULES: LessonModule[] = [
+  readingTablatureModule,
   chordsTheoryModule,
   scalesTheoryModule,
-  readingTablatureModule,
 ];
 
 export const ALL_MODULES: LessonModule[] = [...TECHNIQUE_MODULES, ...THEORY_MODULES];
