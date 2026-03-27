@@ -315,7 +315,7 @@ export const pullOffsHammerOnsModule: LessonModule = {
     {
       id: 'legato-4',
       moduleId: 'pull-offs-hammer-ons',
-      title: 'Legato Scale Runs',
+      title: 'Legato Scale Runs — Pull-offs',
       difficulty: 'intermediate',
       order: 4,
       explanation:
@@ -363,11 +363,75 @@ export const pullOffsHammerOnsModule: LessonModule = {
         ],
         defaultBpm: 50,
       },
+      examples: [
+        {
+          name: 'A major',
+          tab: [
+            {string:"e",steps:["9p7p5",null,null,null,null,null,"|"]},
+            {string:"B",steps:[null,"10p9p7",null,null,null,null,"|"]},
+            {string:"G",steps:[null,null,"9p7p6",null,null,null,"|"]},
+            {string:"D",steps:[null,null,null,"9p7p6",null,null,"|"]},
+            {string:"A",steps:[null,null,null,null,"9p7p5",null,"|"]},
+            {string:"E",steps:[null,null,null,null,null,"9p7p5","|"]}
+          ],
+          fretHighlights: [
+            {string:5,fret:9},{string:5,fret:7},{string:5,fret:5},
+            {string:4,fret:10},{string:4,fret:9},{string:4,fret:7},
+            {string:3,fret:9},{string:3,fret:7},{string:3,fret:6},
+            {string:2,fret:9},{string:2,fret:7},{string:2,fret:6},
+            {string:1,fret:9},{string:1,fret:7},{string:1,fret:5},
+            {string:0,fret:9},{string:0,fret:7},{string:0,fret:5}
+          ],
+          practiceNotes: {
+            // e:C#5→B4→A4, B:A4→G#4→F#4, G:E4→D4→C#4, D:B3→A3→G#3, A:F#3→E3→D3, E:C#3→B2→A2
+            steps: [
+              {string:5,fret:9},{string:5,fret:7},{string:5,fret:5},
+              {string:4,fret:10},{string:4,fret:9},{string:4,fret:7},
+              {string:3,fret:9},{string:3,fret:7},{string:3,fret:6},
+              {string:2,fret:9},{string:2,fret:7},{string:2,fret:6},
+              {string:1,fret:9},{string:1,fret:7},{string:1,fret:5},
+              {string:0,fret:9},{string:0,fret:7},{string:0,fret:5}
+            ],
+            defaultBpm: 50,
+          },
+        },
+        {
+          name: 'A minor',
+          tab: [
+            {string:"e",steps:["8p7p5",null,null,null,null,null,"|"]},
+            {string:"B",steps:[null,"8p6p5",null,null,null,null,"|"]},
+            {string:"G",steps:[null,null,"9p7p5",null,null,null,"|"]},
+            {string:"D",steps:[null,null,null,"9p7p5",null,null,"|"]},
+            {string:"A",steps:[null,null,null,null,"8p7p5",null,"|"]},
+            {string:"E",steps:[null,null,null,null,null,"8p7p5","|"]}
+          ],
+          fretHighlights: [
+            {string:5,fret:8},{string:5,fret:7},{string:5,fret:5},
+            {string:4,fret:8},{string:4,fret:6},{string:4,fret:5},
+            {string:3,fret:9},{string:3,fret:7},{string:3,fret:5},
+            {string:2,fret:9},{string:2,fret:7},{string:2,fret:5},
+            {string:1,fret:8},{string:1,fret:7},{string:1,fret:5},
+            {string:0,fret:8},{string:0,fret:7},{string:0,fret:5}
+          ],
+          practiceNotes: {
+            // e:C5→B4→A4, B:G4→F4→E4, G:E4→D4→C4, D:B3→A3→G3, A:F3→E3→D3, E:C3→B2→A2
+            steps: [
+              {string:5,fret:8},{string:5,fret:7},{string:5,fret:5},
+              {string:4,fret:8},{string:4,fret:6},{string:4,fret:5},
+              {string:3,fret:9},{string:3,fret:7},{string:3,fret:5},
+              {string:2,fret:9},{string:2,fret:7},{string:2,fret:5},
+              {string:1,fret:8},{string:1,fret:7},{string:1,fret:5},
+              {string:0,fret:8},{string:0,fret:7},{string:0,fret:5}
+            ],
+            defaultBpm: 50,
+          },
+        },
+      ],
     },
     {
       id: 'legato-5',
       moduleId: 'pull-offs-hammer-ons',
-      title: 'Legato Scale Runs',
+      title: 'Legato Scale Runs — Hammer-ons',
       difficulty: 'intermediate',
       order: 4,
       explanation:
@@ -414,7 +478,71 @@ export const pullOffsHammerOnsModule: LessonModule = {
           {string:5,fret:9}
         ],
         "defaultBpm": 80
-      }
+      },
+      examples: [
+        {
+          name: 'A major',
+          tab: [
+            {string:"e",steps:[null,null,null,null,null,"5h7h9","|"]},
+            {string:"B",steps:[null,null,null,null,"7h9h10",null,"|"]},
+            {string:"G",steps:[null,null,null,"6h7h9",null,null,"|"]},
+            {string:"D",steps:[null,null,"6h7h9",null,null,null,"|"]},
+            {string:"A",steps:[null,"5h7h9",null,null,null,null,"|"]},
+            {string:"E",steps:["5h7h9",null,null,null,null,null,"|"]}
+          ],
+          fretHighlights: [
+            {string:0,fret:5},{string:0,fret:7},{string:0,fret:9},
+            {string:1,fret:5},{string:1,fret:7},{string:1,fret:9},
+            {string:2,fret:6},{string:2,fret:7},{string:2,fret:9},
+            {string:3,fret:6},{string:3,fret:7},{string:3,fret:9},
+            {string:4,fret:7},{string:4,fret:9},{string:4,fret:10},
+            {string:5,fret:5},{string:5,fret:7},{string:5,fret:9}
+          ],
+          practiceNotes: {
+            // E:A2→B2→C#3, A:D3→E3→F#3, D:G#3→A3→B3, G:C#4→D4→E4, B:F#4→G#4→A4, e:A4→B4→C#5
+            steps: [
+              {string:0,fret:5},{string:0,fret:7},{string:0,fret:9},
+              {string:1,fret:5},{string:1,fret:7},{string:1,fret:9},
+              {string:2,fret:6},{string:2,fret:7},{string:2,fret:9},
+              {string:3,fret:6},{string:3,fret:7},{string:3,fret:9},
+              {string:4,fret:7},{string:4,fret:9},{string:4,fret:10},
+              {string:5,fret:5},{string:5,fret:7},{string:5,fret:9}
+            ],
+            defaultBpm: 60,
+          },
+        },
+        {
+          name: 'A minor',
+          tab: [
+            {string:"e",steps:[null,null,null,null,null,"5h7h8","|"]},
+            {string:"B",steps:[null,null,null,null,"5h6h8",null,"|"]},
+            {string:"G",steps:[null,null,null,"5h7h9",null,null,"|"]},
+            {string:"D",steps:[null,null,"5h7h9",null,null,null,"|"]},
+            {string:"A",steps:[null,"5h7h8",null,null,null,null,"|"]},
+            {string:"E",steps:["5h7h8",null,null,null,null,null,"|"]}
+          ],
+          fretHighlights: [
+            {string:0,fret:5},{string:0,fret:7},{string:0,fret:8},
+            {string:1,fret:5},{string:1,fret:7},{string:1,fret:8},
+            {string:2,fret:5},{string:2,fret:7},{string:2,fret:9},
+            {string:3,fret:5},{string:3,fret:7},{string:3,fret:9},
+            {string:4,fret:5},{string:4,fret:6},{string:4,fret:8},
+            {string:5,fret:5},{string:5,fret:7},{string:5,fret:8}
+          ],
+          practiceNotes: {
+            // E:A2→B2→C3, A:D3→E3→F3, D:G3→A3→B3, G:C4→D4→E4, B:E4→F4→G4, e:A4→B4→C5
+            steps: [
+              {string:0,fret:5},{string:0,fret:7},{string:0,fret:8},
+              {string:1,fret:5},{string:1,fret:7},{string:1,fret:8},
+              {string:2,fret:5},{string:2,fret:7},{string:2,fret:9},
+              {string:3,fret:5},{string:3,fret:7},{string:3,fret:9},
+              {string:4,fret:5},{string:4,fret:6},{string:4,fret:8},
+              {string:5,fret:5},{string:5,fret:7},{string:5,fret:8}
+            ],
+            defaultBpm: 60,
+          },
+        },
+      ],
     },
     {
       id: 'legato-6',
