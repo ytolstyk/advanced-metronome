@@ -18,7 +18,7 @@ export const doubleThumpingModule: LessonModule = {
         'Start on the low E string with a relaxed wrist. The sound should be punchy and short.',
       practiceRoutine:
         'Slap the open low E string with your thumb on beats 1 and 3. Let the string ring briefly, then mute with your fretting hand. ' +
-        'Start at 60 BPM. Focus on a clean, percussive attack.',
+        'Start at 80 BPM. Focus on a clean, percussive attack.',
       tab: [
         { string: 'e', steps: [null, null, null, null, '|'] },
         { string: 'B', steps: [null, null, null, null, '|'] },
@@ -38,7 +38,7 @@ export const doubleThumpingModule: LessonModule = {
           { string: 0, fret: 0 },
           { string: 0, fret: 0 },
         ],
-        defaultBpm: 60,
+        defaultBpm: 80,
       },
     },
     {
@@ -53,7 +53,7 @@ export const doubleThumpingModule: LessonModule = {
         'This creates the iconic funky "thump-pop" sound.',
       practiceRoutine:
         'Slap the open low E string, then pop the open G string. Alternate: slap-pop-slap-pop in steady eighth notes. ' +
-        'Start at 50 BPM. Keep the volume balanced between slap and pop.',
+        'Start at 80 BPM. Keep the volume balanced between slap and pop.',
       tab: [
         { string: 'e', steps: [null, null, null, null, null, null, null, null, '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|'] },
@@ -78,7 +78,7 @@ export const doubleThumpingModule: LessonModule = {
           { string: 0, fret: 0 },
           { string: 3, fret: 0 },
         ],
-        defaultBpm: 50,
+        defaultBpm: 80,
       },
     },
     {
@@ -93,7 +93,7 @@ export const doubleThumpingModule: LessonModule = {
         'Pioneered by Victor Wooten on bass, this technique translates well to guitar low strings.',
       practiceRoutine:
         'On the low E string: thumb slap down (D), then thumb slap up (U) in quick succession. ' +
-        'Play D-U-D-U as sixteenth notes at 50 BPM. The down and up should sound equally strong.',
+        'Play D-U-D-U as sixteenth notes at 80 BPM. The down and up should sound equally strong.',
       tab: [
         { string: 'e', steps: [null, null, null, null, null, null, null, null, '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|'] },
@@ -117,7 +117,7 @@ export const doubleThumpingModule: LessonModule = {
           { string: 0, fret: 0 },
           { string: 0, fret: 0 },
         ],
-        defaultBpm: 50,
+        defaultBpm: 80,
       },
     },
     {
@@ -158,7 +158,7 @@ export const doubleThumpingModule: LessonModule = {
           { string: 3, fret: 5 },
           { string: 3, fret: 7 },
         ],
-        defaultBpm: 60,
+        defaultBpm: 80,
       },
     },
   ],

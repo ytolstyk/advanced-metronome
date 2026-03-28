@@ -18,7 +18,7 @@ export const scalesTheoryModule: LessonModule = {
         'C major is the simplest: C-D-E-F-G-A-B (all white keys on a piano).',
       practiceRoutine:
         'Play the C major scale on one string (high E): frets 8-10-12-13-15-17-19-20. ' +
-        'Say each interval aloud: "whole, whole, half, whole, whole, whole, half." Start at 60 BPM.',
+        'Say each interval aloud: "whole, whole, half, whole, whole, whole, half." Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['8', '10', '12', '13', '15', '17', '19', '20', '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|'] },
@@ -49,7 +49,7 @@ export const scalesTheoryModule: LessonModule = {
           { string: 5, fret: 19 },
           { string: 5, fret: 20 },
         ],
-        defaultBpm: 60,
+        defaultBpm: 80,
       },
     },
     {
@@ -64,7 +64,7 @@ export const scalesTheoryModule: LessonModule = {
         'C major\'s relative minor is A minor (A-B-C-D-E-F-G). Same notes, different starting point, completely different mood.',
       practiceRoutine:
         'Play A natural minor on the high E string: frets 5-7-8-10-12-13-15-17. ' +
-        'Then play C major starting from fret 8. Notice they share the same notes! Start at 60 BPM.',
+        'Then play C major starting from fret 8. Notice they share the same notes! Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['5', '7', '8', '10', '12', '13', '15', '17', '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|'] },
@@ -95,7 +95,7 @@ export const scalesTheoryModule: LessonModule = {
           { string: 5, fret: 15 },
           { string: 5, fret: 17 },
         ],
-        defaultBpm: 60,
+        defaultBpm: 80,
       },
     },
     {
@@ -110,7 +110,7 @@ export const scalesTheoryModule: LessonModule = {
         'These scales are forgiving — almost every note sounds good over the right chord.',
       practiceRoutine:
         'Play A minor pentatonic in the classic "box 1" position: low E (5-8), A (5-7), D (5-7), G (5-7), B (5-8), high E (5-8). ' +
-        'This is the most important scale shape in rock guitar. Start at 60 BPM ascending then descending.',
+        'This is the most important scale shape in rock guitar. Start at 80 BPM ascending then descending.',
       tab: [
         { string: 'e', steps: [null, null, null, null, null, null, null, null, null, null, '5', '8', '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '5', '8', null, null, '|'] },
@@ -149,7 +149,7 @@ export const scalesTheoryModule: LessonModule = {
           { string: 5, fret: 5 },
           { string: 5, fret: 8 },
         ],
-        defaultBpm: 60,
+        defaultBpm: 80,
       },
     },
     {
@@ -165,7 +165,7 @@ export const scalesTheoryModule: LessonModule = {
         'Understanding modes unlocks the entire fretboard for improvisation.',
       practiceRoutine:
         'Play D Dorian on the high E string (same notes as C major, starting on D): frets 10-12-13-15-17-19-20-22. ' +
-        'Compare with D natural minor (10-12-13-15-17-18-20-22) — the only difference is the 6th degree. Start at 50 BPM.',
+        'Compare with D natural minor (10-12-13-15-17-18-20-22) — the only difference is the 6th degree. Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['10', '12', '13', '15', '17', '19', '20', '22', '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|'] },
@@ -196,7 +196,7 @@ export const scalesTheoryModule: LessonModule = {
           { string: 5, fret: 20 },
           { string: 5, fret: 22 },
         ],
-        defaultBpm: 50,
+        defaultBpm: 80,
       },
     },
     {
@@ -211,7 +211,7 @@ export const scalesTheoryModule: LessonModule = {
         'creating a smoother line. These scales generate unique chord types used extensively in jazz (e.g., min/maj7).',
       practiceRoutine:
         'Play A harmonic minor on the high E string: frets 5-7-8-10-12-13-16-17. Notice the 1.5-step gap between frets 13 and 16 — that\'s the signature sound. ' +
-        'Then play A melodic minor ascending: 5-7-8-10-12-14-16-17. Start at 50 BPM.',
+        'Then play A melodic minor ascending: 5-7-8-10-12-14-16-17. Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['5', '7', '8', '10', '12', '13', '16', '17', '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|'] },
@@ -242,7 +242,7 @@ export const scalesTheoryModule: LessonModule = {
           { string: 5, fret: 16 },
           { string: 5, fret: 17 },
         ],
-        defaultBpm: 50,
+        defaultBpm: 80,
       },
     },
   ],

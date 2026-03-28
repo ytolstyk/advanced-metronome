@@ -24,7 +24,7 @@ export const readingTablatureModule: LessonModule = {
       practiceRoutine:
         'On the high e string (top line): play the open string (0), then fret 1 (index finger), fret 3 (ring finger), fret 5 (pinky). ' +
         'Hear how each step rises in pitch. Then reverse — 5, 3, 1, 0 — descending back down. ' +
-        'Start at 60 BPM, one note per beat.',
+        'Start at 80 BPM, one note per beat.',
       tab: [
         { string: 'e', steps: ['0', '1', '3', '5', '5', '3', '1', '0', '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|'] },
@@ -133,7 +133,7 @@ export const readingTablatureModule: LessonModule = {
       practiceRoutine:
         'Pick each open string starting from low E, moving up one string at a time: E → A → D → G → B → e. ' +
         'Then reverse: e → B → G → D → A → E. Say each string name aloud as you play it. ' +
-        'Repeat until you can name each string instantly without thinking. 60 BPM, one string per beat.',
+        'Repeat until you can name each string instantly without thinking. 80 BPM, one string per beat.',
       tab: [
         { string: 'e', steps: [null, null, null, null, null, '0', '|'] },
         { string: 'B', steps: [null, null, null, null, '0', null, '|'] },
@@ -251,7 +251,7 @@ export const readingTablatureModule: LessonModule = {
         'These are the notes G, A, B, C — a major scale fragment. ' +
         'Then reverse (5–4–2–0) for a descending run. ' +
         'Try it on the D string at the same frets — notice the notes change but the fingering pattern is identical. ' +
-        'Start at 60 BPM, one note per beat.',
+        'Start at 80 BPM, one note per beat.',
       tab: [
         { string: 'e', steps: [null, null, null, null, null, null, null, '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, '|'] },
@@ -363,7 +363,7 @@ export const readingTablatureModule: LessonModule = {
       practiceRoutine:
         'Fret A string at 2 and D string at 2, then strum all six strings. ' +
         'Then try arpeggating — pick each string individually from low E up to high e, one note per beat. ' +
-        'Arpeggiation lets you check that each note rings cleanly. Start at 60 BPM.',
+        'Arpeggiation lets you check that each note rings cleanly. Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['0', '0', '0', '0', '|'] },
         { string: 'B', steps: ['0', '0', '0', '0', '|'] },
@@ -523,7 +523,7 @@ export const readingTablatureModule: LessonModule = {
       practiceRoutine:
         'Arpeggiate the G chord: play each string from low E to high e, one per beat, checking each note rings clearly. ' +
         'Then try the examples: C chord (skip low E) and D chord (skip E and A). ' +
-        'Strum each chord four times before moving to the next. Start at 60 BPM.',
+        'Strum each chord four times before moving to the next. Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['3', '3', '3', '3', '|'] },
         { string: 'B', steps: ['3', '3', '3', '3', '|'] },
@@ -667,7 +667,7 @@ export const readingTablatureModule: LessonModule = {
         'On the high e string, play 5h7 four times. Make the hammered note as loud as the picked one — this requires speed and force. ' +
         'Then play 7p5 four times, snapping your finger off the string sharply. ' +
         'Finally try the slides: 5/7 (smooth upward glide) and 7\\\\5 (smooth downward glide). ' +
-        'Start at 70 BPM.',
+        'Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['5h7', '5h7', '5h7', '5h7', '7p5', '7p5', '7p5', '7p5', '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|'] },
@@ -772,7 +772,7 @@ export const readingTablatureModule: LessonModule = {
       practiceRoutine:
         'Play E5 → G5 → A5 → G5 on the low E and A strings. Hold each shape for two beats, picking both strings together. ' +
         'Focus on muting the higher strings with the side of your pick-hand palm. ' +
-        'Start at 70 BPM.',
+        'Start at 80 BPM.',
       tab: [
         { string: 'e', steps: [null, null, null, null, '|'] },
         { string: 'B', steps: [null, null, null, null, '|'] },
@@ -877,8 +877,8 @@ export const readingTablatureModule: LessonModule = {
         'This riff walks up the low strings using the A minor pentatonic root positions: a great pattern for both reading practice and real music.',
       practiceRoutine:
         'Read through the riff one note at a time before playing. Identify each string and fret. ' +
-        'Play at 60 BPM, one note per beat, focusing on clean transitions between strings. ' +
-        'Once it feels smooth, push to 80 BPM. The riff ascends across low E → A → D strings — keep your fretting hand relaxed as you shift positions.',
+        'Play at 80 BPM, one note per beat, focusing on clean transitions between strings. ' +
+        'The riff ascends across low E → A → D strings — keep your fretting hand relaxed as you shift positions.',
       tab: [
         { string: 'e', steps: [null, null, null, null, null, null, null, null, '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|'] },

@@ -17,9 +17,8 @@ export const chordsTheoryModule: LessonModule = {
         'A minor triad has a root, minor 3rd (3 semitones), and perfect 5th (7 semitones). ' +
         'The difference between major and minor is just one semitone in the 3rd — but it completely changes the mood.',
       practiceRoutine:
-        'Play C major triad on top 3 strings at the 8th position: G fret 9 (G), B fret 8 (E), high E fret 8 (C). ' +
-        'Then play C minor by lowering the B string to fret 8→fret 8... wait: Cm = G fret 8 (G), B fret 8 (Eb), high E fret 8 (C). ' +
-        'Listen to the emotional difference. Start at 60 BPM.',
+        'Play C major: G fret 9 (E), B fret 8 (G), high E fret 8 (C). Then C minor: G fret 8 (Eb), B fret 8 (G), high E fret 8 (C). ' +
+        'Listen to the emotional difference. Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['8', null, '8', null, '|'] },
         { string: 'B', steps: ['8', null, '8', null, '|'] },
@@ -56,7 +55,7 @@ export const chordsTheoryModule: LessonModule = {
         'Augmented chords raise the 5th by a semitone (8 semitones from root), creating tension and symmetry.',
       practiceRoutine:
         'Starting from C major on the top 3 strings: play Csus2 (G fret 9, B fret 8, high E fret 10), Csus4 (G fret 10, B fret 8, high E fret 10), ' +
-        'and Caug (G fret 9, B fret 9, high E fret 8). Notice how each has a distinct character. Play at 60 BPM.',
+        'and Caug (G fret 9, B fret 9, high E fret 8). Notice how each has a distinct character. Play at 80 BPM.',
       tab: [
         { string: 'e', steps: ['8', null, '10', null, '8', null, '|'] },
         { string: 'B', steps: ['8', null, '8', null, '9', null, '|'] },
@@ -97,8 +96,8 @@ export const chordsTheoryModule: LessonModule = {
         'Minor 7th (m7) adds 10 semitones to a minor triad — smooth and mellow. These are essential for jazz, R&B, and blues.',
       practiceRoutine:
         'Play Cmaj7, C7, and Cm7 in open position. Cmaj7: A fret 3, D fret 2, G open, B open, high E open. ' +
-        'C7: same but B string fret 1. Cm7: A fret 3, D fret 1, G open, B open. ' +
-        'Strum each slowly and listen to the mood. Start at 50 BPM.',
+        'C7: same but B string fret 1. Cm7: A fret 3, D fret 1, G open. ' +
+        'Strum each slowly and listen to the mood. Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['0', null, '0', null, null, null, '|'] },
         { string: 'B', steps: ['0', null, '1', null, null, null, '|'] },
@@ -142,7 +141,7 @@ export const chordsTheoryModule: LessonModule = {
         'Play C major in all three positions on the top 3 strings: ' +
         'Root position (G fret 9, B fret 8, high E fret 8), ' +
         '1st inversion (G fret 5, B fret 5, high E fret 5 = C/E), ' +
-        '2nd inversion (G fret 0, B fret 1, high E fret 0 = C/G). Play at 50 BPM.',
+        '2nd inversion (G fret 0, B fret 1, high E fret 0 = C/G). Play at 80 BPM.',
       tab: [
         { string: 'e', steps: ['8', null, '5', null, '0', null, '|'] },
         { string: 'B', steps: ['8', null, '5', null, '1', null, '|'] },
@@ -185,8 +184,8 @@ export const chordsTheoryModule: LessonModule = {
         'An 11th adds the 11th (= 4th an octave up). A 13th adds the 13th (= 6th an octave up). ' +
         'On guitar, you can\'t play all 5-7 notes, so you drop less essential tones (usually the 5th). These chords are the vocabulary of jazz.',
       practiceRoutine:
-        'Play C9 voicing: A fret 3 (C), D fret 2 (E), G fret 3 (Bb), B fret 3 (D). ' +
-        'Then Dm11 voicing: A fret 5 (D), D fret 0 (D), G fret 2 (A?). Experiment with voicings at 40 BPM.',
+        'Play C9 voicing: A fret 3 (C), D fret 2 (E), G fret 3 (Bb), B fret 3 (D), high E fret 3. ' +
+        'Then Dm11 voicing: D fret 0, G fret 2, B fret 1, high E fret 1. Experiment with voicings at 80 BPM.',
       tab: [
         { string: 'e', steps: ['3', null, '1', null, '|'] },
         { string: 'B', steps: ['3', null, '1', null, '|'] },

@@ -17,8 +17,8 @@ export const fingerPickingModule: LessonModule = {
         'I (indice/index) plays G string, M (medio/middle) plays B string, A (anular/ring) plays high E. ' +
         'This assignment creates a natural hand position. Start by plucking each string with its assigned finger in sequence.',
       practiceRoutine:
-        'Place your hand over the strings with thumb on the low E. Pluck P-I-M-A in sequence (low E, G, B, high e open), then reverse A-M-I-P. ' +
-        'Keep your wrist relaxed and fingers curved. Start at 60 BPM, one note per beat.',
+        'Place your hand over the strings with thumb on the low E. Pluck P-I-M-A in sequence (low E, G, B, high e open) and repeat. ' +
+        'Keep your wrist relaxed and fingers curved. Start at 80 BPM, one note per beat.',
       tab: [
         { string: 'e', steps: [null, null, null, '0', null, null, null, '0', '|'] },
         { string: 'B', steps: [null, null, '0', null, null, null, '0', null, '|'] },
@@ -120,8 +120,8 @@ export const fingerPickingModule: LessonModule = {
         'Travis picking is a fingerstyle pattern where the thumb alternates between two bass strings while the fingers pick a melody on the treble strings. ' +
         'Named after Merle Travis, this creates a "boom-chick" rhythmic feel. The thumb keeps a steady alternating bass while fingers fill in between.',
       practiceRoutine:
-        'Hold a C chord. Thumb alternates between A string fret 3 (C note) and low E string open. ' +
-        'Index and middle fingers pluck G and B strings between thumb strokes. Start at 50 BPM.',
+        'Hold a C chord. Thumb plays A string fret 3 (C) on beat 1, then D string fret 2 (E) on beat 3. ' +
+        'Index, middle, and ring fingers pluck G (open), B (fret 1), and high E (open) between each bass note. Start at 80 BPM.',
       tab: [
         {string:"e",steps:[null,null,null,"0",null,null,null,"0","|"]},
         {string:"B",steps:[null,null,"1",null,null,null,"1",null,"|"]},
@@ -195,7 +195,7 @@ export const fingerPickingModule: LessonModule = {
         'fingers cascade up or down through the remaining strings. This is the foundation of classical guitar repertoire and creates a harp-like sound.',
       practiceRoutine:
         'Hold an Am chord. Play the arpeggio: A string open (thumb), G fret 2 (index), B fret 1 (middle), high E open (ring), B fret 1 (middle), G fret 2 (index). ' +
-        'This is a 6-note pattern. Keep it flowing and even. Start at 60 BPM (one note per 8th note).',
+        'This is a 6-note pattern. Keep it flowing and even. Start at 80 BPM (one note per 8th note).',
       tab: [
         { string: 'e', steps: [null, null, null, '0', null, null, '|', null, null, null, '0', null, null, '|'] },
         { string: 'B', steps: [null, null, '1', null, '1', null, '|', null, null, '1', null, '1', null, '|'] },
@@ -276,7 +276,7 @@ export const fingerPickingModule: LessonModule = {
         'This requires your thumb to operate on autopilot while your fingers focus on the melody. Think of each hand as a separate instrument.',
       practiceRoutine:
         'Play a steady quarter-note bass on the A string open with your thumb while your ring finger plays a simple melody on the high E string: ' +
-        'frets 0, 3, 5, 3. The bass and melody should be completely independent. Start at 40 BPM.',
+        'frets 0, 3, 5, 3. The bass and melody should be completely independent. Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['0', null, '3', null, '5', null, '3', null, '|'] },
         { string: 'B', steps: [null, null, null, null, null, null, null, null, '|'] },
@@ -303,7 +303,7 @@ export const fingerPickingModule: LessonModule = {
           { string: 5, fret: 3 },
           { string: 1, fret: 0 },
         ],
-        defaultBpm: 40,
+        defaultBpm: 80,
       },
       examples: [
         {

@@ -18,7 +18,7 @@ export const hybridPickingModule: LessonModule = {
         'This technique is essential in country, bluegrass, and modern rock.',
       practiceRoutine:
         'Pick the low E string fret 3 with the pick and pluck the open B string with your middle finger, alternating. ' +
-        'Alternate: pick bass, pluck treble, pick bass, pluck treble at 60 BPM.',
+        'Alternate: pick bass, pluck treble, pick bass, pluck treble at 80 BPM.',
       tab: [
         { string: 'e', steps: [null, null, null, null, null, null, null, null, '|'] },
         { string: 'B', steps: [null, 'm0', null, 'm0', null, 'm0', null, 'm0', '|'] },
@@ -87,7 +87,7 @@ export const hybridPickingModule: LessonModule = {
         'The pick hits a bass string, middle finger plucks a middle string, ring finger plucks a high string, creating a rolling arpeggio effect. ' +
         'This is the signature sound of country and bluegrass guitar.',
       practiceRoutine:
-        'Hold a G chord. Play a forward roll: pick low E fret 3, middle finger G open, ring finger B open, repeat as triplets at 60 BPM.',
+        'Hold a G chord. Play a forward roll: pick low E fret 3, middle finger G open, ring finger B open, repeat as triplets at 80 BPM.',
       tab: [
         { string: 'e', steps: [null, null, null, null, null, null, null, null, null, null, null, null, '|'] },
         { string: 'B', steps: [null, null, 'a0', null, null, 'a0', null, null, 'a0', null, null, 'a0', '|'] },
@@ -161,7 +161,7 @@ export const hybridPickingModule: LessonModule = {
         'Country pedal steel licks rely heavily on this technique.',
       practiceRoutine:
         'Play 3rds on the G and B strings simultaneously: G(4)/B(5), G(5)/B(6), G(5)/B(6), G(7)/B(8). ' +
-        'Start at 50 BPM, one double stop per beat.',
+        'Start at 80 BPM, one double stop per beat.',
         tab: [
           {string:"e",steps:[null,null,null,null,"|"]},
           {string:"B",steps:["5","6","6","8", "|"]},
@@ -234,7 +234,7 @@ export const hybridPickingModule: LessonModule = {
         'This opens up voicings and textures unique to hybrid picking.',
       practiceRoutine:
         'Play a Cmaj7 arpeggio: pick A string fret 3 (C), middle finger plucks G open, ring finger plucks high E open, ' +
-        'then pick D string fret 2 (E), middle finger plucks B fret 1 (C). Start at 50 BPM.',
+        'then pick D string fret 2 (E), middle finger plucks B fret 1 (C). Start at 80 BPM.',
       tab: [
         { string: 'e', steps: [null, null, 'a0', null, null, null, null, null, 'a0', null, null, '|'] },
         { string: 'B', steps: [null, null, null, null, 'm1', null, null, null, null, null, 'm1', '|'] },

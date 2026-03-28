@@ -18,7 +18,7 @@ export const pullOffsHammerOnsModule: LessonModule = {
         'Think of it as "hammering" a nail. The hammered note should be as loud as the picked note.',
       practiceRoutine:
         'On the high E string: pick fret 5, hammer onto fret 7. Repeat steadily. Then try fret 5 to fret 8 (wider stretch). ' +
-        'Start at 60 BPM, two notes per beat (eighth notes). Focus on equal volume.',
+        'Start at 80 BPM, two notes per beat (eighth notes). Focus on equal volume.',
       tab: [
         { string: 'e', steps: ['5h7', '5h7', '5h7', '5h7', '|'] },
         { string: 'B', steps: [null, null, null, null, '|'] },
@@ -146,7 +146,7 @@ export const pullOffsHammerOnsModule: LessonModule = {
         'The lower finger stays in place and the lower note sounds. The pulling motion gives the string energy — don\'t just lift straight up.',
       practiceRoutine:
         'On the high E string: pick fret 7 (ring finger), pull off to fret 5 (index finger). The pull-off should snap the string slightly. ' +
-        'Repeat at 60 BPM. Both notes should be equally clear.',
+        'Repeat at 80 BPM. Both notes should be equally clear.',
       tab: [
         { string: 'e', steps: ['7p5', '7p5', '7p5', '7p5', '|'] },
         { string: 'B', steps: [null, null, null, null, '|'] },
@@ -272,10 +272,10 @@ export const pullOffsHammerOnsModule: LessonModule = {
       explanation:
         'A trill rapidly alternates between two notes using continuous hammer-ons and pull-offs with no picking after the initial attack. ' +
         'This builds finger strength and independence. Start slowly and build speed gradually. ' +
-        'Try all finger combinations: index-middle, index-ring, index-pinky for different widths.',
+        'Try both finger combinations: index-middle (fret 5 to 7) and index-ring (fret 5 to 8) for different widths.',
       practiceRoutine:
         'Pick fret 5 on the high E, then trill to fret 7: h7-p5-h7-p5 as fast sixteenth notes. ' +
-        'Start at 60 BPM (4 notes per beat). Then try index-ring (fret 5 to 8) and index-pinky (fret 5 to 9).',
+        'Start at 80 BPM (4 notes per beat). Then try index-ring (fret 5 to 8).',
       tab: [
         { string: 'e', steps: ['5h7p5h7p5h7p5h7', '|', '5h8p5h8p5h8p5h8', '|'] },
         { string: 'B', steps: [null, '|', null, '|'] },
@@ -319,11 +319,11 @@ export const pullOffsHammerOnsModule: LessonModule = {
       difficulty: 'intermediate',
       order: 4,
       explanation:
-        'Apply hammer-ons and pull-offs to scale patterns for fluid, connected lines. Pick only the first note on each string, ' +
-        'then hammer-on the remaining notes. This creates the smooth "legato" sound associated with players like Joe Satriani and Allan Holdsworth.',
+        'Apply pull-offs to scale patterns for fluid, connected lines descending. Pick only the first (highest) note on each string, ' +
+        'then pull off to the lower note. This creates the smooth "legato" sound associated with players like Joe Satriani and Allan Holdsworth.',
       practiceRoutine:
-        'Play the A minor pentatonic scale ascending with legato: pick fret 5 on high E, hammer fret 8. Move to B string: pick 5, hammer 8. Continue across all strings. ' +
-        'Start at 50 BPM with eighth notes.',
+        'Play the A minor pentatonic scale descending with pull-offs: pick fret 8 on high E, pull off to fret 5. B string: 8p5. G: 7p5. D: 7p5. A: 7p5. Low E: 8p5. ' +
+        'Start at 80 BPM with eighth notes.',
       tab: [
         {string:"e",steps:["8p5",null,null,null,null,null,"|"]},
         {string:"B",steps:[null,"8p5",null,null,null,null,"|"]},
@@ -435,11 +435,11 @@ export const pullOffsHammerOnsModule: LessonModule = {
       difficulty: 'intermediate',
       order: 4,
       explanation:
-        'Apply hammer-ons and pull-offs to scale patterns for fluid, connected lines. Pick only the first note on each string, ' +
-        'then hammer-on the remaining notes. This creates the smooth "legato" sound associated with players like Joe Satriani and Allan Holdsworth.',
+        'Apply hammer-ons to scale patterns for fluid, connected lines ascending. Pick only the first (lowest) note on each string, ' +
+        'then hammer-on to the higher note. This creates the smooth "legato" sound associated with players like Joe Satriani and Allan Holdsworth.',
       practiceRoutine:
-        'Play the A minor pentatonic scale ascending with legato: pick fret 5 on high E, hammer fret 8. Move to B string: pick 5, hammer 8. Continue across all strings. ' +
-        'Start at 50 BPM with eighth notes.',
+        'Play the A minor scale ascending with hammer-ons: low E pick fret 7, hammer 9. A: 7h9. D: 6h9. G: 6h9. B: 7h9. High E: 7h9. ' +
+        'Start at 80 BPM with eighth notes.',
       tab: [
         {string:"e",steps:[null,null,null,null,null,"7h9","|"]},
         {string:"B",steps:[null,null,null,null,"7h9",null,"|"]},
@@ -554,8 +554,8 @@ export const pullOffsHammerOnsModule: LessonModule = {
         'Advanced legato extends across strings without picking — use hammer-ons from nowhere (hammering onto the next string without picking). ' +
         'This requires significant finger strength. The trick is to hammer hard enough that the note rings clearly even without the initial pick attack.',
       practiceRoutine:
-        'Pick only the first note (fret 5 on low E). Hammer-on to fret 7, then fret 8. Then hammer from nowhere onto fret 5 of the A string, ' +
-        'continue hammering up through all strings. Start extremely slowly at 40 BPM.',
+        'Pick only the first note (fret 5 on low E). Hammer-on to fret 7, then fret 9. Then hammer from nowhere onto fret 5 of the A string, ' +
+        'continue hammering up through all strings. Start extremely slowly at 80 BPM.',
       tab: [
         {string:"e",steps:[null,null,null,null,null,"7h9h10","|"]},
         {string:"B",steps:[null,null,null,null,"7h9h10",null,"|"]},

@@ -15,10 +15,10 @@ export const sweepPickingModule: LessonModule = {
       explanation:
         'Sweep picking uses a single continuous pick motion across multiple strings. Think of it as a controlled "fall" — the pick rakes across strings in one direction. ' +
         'The key is muting: each finger lifts off immediately after the note sounds to prevent strings ringing together. ' +
-        'Start with a simple 3-string Am arpeggio shape on G, B, and high E strings, all at fret 5.',
+        'Start with a simple 3-string Am arpeggio shape on G, B, and high E strings: fret 7, fret 6, and fret 5 respectively.',
       practiceRoutine:
-        'Play the Am arpeggio shape: G string fret 5, B string fret 5, high E string fret 5. Sweep downward (toward floor), then sweep upward to return. ' +
-        'Use a metronome at 50 BPM. Each note should ring clearly and individually — no blurring.',
+        'Play the Am arpeggio shape: G string fret 7, B string fret 6, high E string fret 5. Sweep downward (toward floor), then sweep upward to return. ' +
+        'Use a metronome at 80 BPM. Each note should ring clearly and individually — no blurring.',
       "tab": [
         {"string":"e","steps":[null,null,"5",null,null,"5","|"]},
         {"string":"B","steps":[null,"6",null,null,"6",null,"|"]},
@@ -80,11 +80,11 @@ export const sweepPickingModule: LessonModule = {
       difficulty: 'beginner',
       order: 2,
       explanation:
-        'Now apply the sweep technique to a major arpeggio shape. The C major shape at the 8th–9th position uses fret 9 on G, fret 8 on B, fret 8 on high E. ' +
+        'Now apply the sweep technique to a major arpeggio shape. The shape uses fret 9 on G, fret 10 on B, then frets 9 and 12 on high E. ' +
         'Focus on the rolling motion of your fretting fingers — each finger presses down as the pick arrives and releases immediately after.',
       practiceRoutine:
-        'Sweep the C major shape: G string fret 9, B string fret 8, high E fret 8. Down-sweep then up-sweep. ' +
-        'Start at 50 BPM. Listen for clean, separated notes.',
+        'Sweep the shape: G string fret 9, B string fret 10, high E frets 9 and 12. Sweep down (G→B→e:9), reach e:12, then up-sweep (e:9→B→G). ' +
+        'Start at 80 BPM. Listen for clean, separated notes.',
       "tab": [
         {"string":"e","steps":[null,null,"9","12","9",null,"|",null,null,"9","12","9",null,"|"]},
         {"string":"B","steps":[null,"10",null,null,null,"10","|",null,"10",null,null,null,"10","|"]},
@@ -198,8 +198,8 @@ export const sweepPickingModule: LessonModule = {
         'The motion should feel like one fluid stroke downward, a tap at the top, then one fluid stroke upward. ' +
         'The biggest challenge is keeping unwanted strings silent — use left-hand muting and slight finger lifts.',
       practiceRoutine:
-        'Sweep through the full Am shape: A fret 7, D fret 7, G fret 5, B fret 5, high E fret 5, then reverse back down. ' +
-        'Start at 40 BPM. Play each note as a clean, distinct event.',
+        'Sweep from high E (frets 15→12), through B (fret 13), G (fret 12), to D (frets 15, 12, 15), then reverse up through G (fret 12), B (fret 13), back to high E (fret 12). ' +
+        'Start at 80 BPM. Play each note as a clean, distinct event.',
       "tab": [
         {"string":"e","steps":["15","12",null,null,null,null,null,null,null,"12","|"]},
         {"string":"B","steps":[null,null,"13",null,null,null,null,null,"13",null,"|"]},
@@ -316,11 +316,11 @@ export const sweepPickingModule: LessonModule = {
       order: 4,
       explanation:
         'Combine sweep picking with a tap at the top of the arpeggio to extend the range. After the upward sweep reaches the high E string, ' +
-        'tap fret 12 then pull off back to fret 5 and descend. ' +
+        'tap fret 20 on the high E after ascending to fret 15, then return. ' +
         'This creates dramatic, wide-range arpeggios used extensively in neoclassical metal.',
       practiceRoutine:
-        'Sweep up the Am shape (A7, D7, G5, B5, e5), tap fret 12 on the high E string at the top, pull off to fret 5, then sweep back down. ' +
-        'Start at 40 BPM. The tap should be at the same volume as the swept notes.',
+        'Sweep up: G fret 14 → B fret 13 → high E fret 12, slide to fret 15, tap fret 20, then reverse: e:15, e:12, B:13, G:14. ' +
+        'Start at 80 BPM. The tap should be at the same volume as the swept notes.',
       "tab": [
         {"string":"e","steps":[null,null,"12","15","T20","15","12",null,"|"]},
         {"string":"B","steps":[null,"13",null,null,null,null,null,"13","|"]},

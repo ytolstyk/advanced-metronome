@@ -17,7 +17,7 @@ export const tappingModule: LessonModule = {
         'The key is to tap firmly and pull off cleanly. Keep your fretting hand anchored and use the tip of your tapping finger. ' +
         'Start with a simple three-note pattern on one string: tap fret 12, pull off to fret 8, pull off to fret 5.',
       practiceRoutine:
-        'Play this triplet pattern on the high E string at 60 BPM. Tap fret 12, pull off to fret 8, pull off to fret 5. ' +
+        'Play this triplet pattern on the high E string at 80 BPM. Tap fret 12, pull off to fret 8, pull off to fret 5. ' +
         'Focus on even volume across all three notes. Once comfortable, increase BPM by 5.',
       tab: [
         { string: 'e', steps: ['T12p8p5', 'T12p8p5', '|', 'T12p8p5', 'T12p8p5', '|'] },
@@ -127,11 +127,11 @@ export const tappingModule: LessonModule = {
       order: 2,
       explanation:
         'Once comfortable on one string, expand to two strings. This creates wider melodic intervals and is the basis for tapping arpeggios. ' +
-        'The fretting hand holds notes on the B string while the tapping hand alternates between the high E and B strings. ' +
+        'Expand to two adjacent strings: the D and G strings alternate. ' +
         'Keep movements small and precise — the tapping finger should hover just above the fretboard.',
       practiceRoutine:
-        'Alternate between high E and B strings. Tap fret 12 on high E, pull off to fret 7 on B, hammer on to fret 8 on B, then repeat. ' +
-        'Start at 50 BPM with quarter notes.',
+        'On the D string: hammer from fret 5 to fret 7, then tap fret 9. Alternate between D and G strings with the same 5h7T9 pattern. ' +
+        'Start at 80 BPM with quarter notes.',
       "tab": [
         { "string": "e", "steps": [null, null, "|", null, null, "|"] },
         { "string": "B", "steps": [null, null, "|", null, null, "|"] },
@@ -215,7 +215,7 @@ export const tappingModule: LessonModule = {
         'The fretting hand holds a chord shape while the tapping hand adds notes an octave or more above.',
       practiceRoutine:
         'Play an Am arpeggio using tapping: tap fret 12 on high E (E note), pull off to fret 5 (A), move to B string: tap fret 12 (B), pull off to fret 5 (E). ' +
-        'Continue to G string: tap fret 12 (G#/Ab), pull off to fret 5 (C#). Start at 70 BPM.',
+        'Continue to G string: tap fret 12 (G), pull off to fret 5 (C). Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['T12p5', null, null, '|'] },
         { string: 'B', steps: [null, 'T12p5', null, '|'] },
@@ -324,8 +324,8 @@ export const tappingModule: LessonModule = {
         'The left hand plays bass notes and chords while the right hand plays melody, similar to piano technique. ' +
         'This requires complete independence between hands. Start by tapping simple intervals with both hands on separate strings.',
       practiceRoutine:
-        'Left hand taps fret 5 on A string (D note, MIDI 50) while right hand taps fret 9 on high E string (C# note, MIDI 73). ' +
-        'Alternate: LH on A string, RH on high E, creating a two-voice texture. Start very slowly at 40 BPM.',
+        'Left hand hammers fret 5 on A string (D) and fret 7 on G string (D). Right hand taps fret 10 on B string (A) and fret 10 on D string (C#). ' +
+        'Cycle: A:h5 → G:h7 → B:T10 → D:T10. Start very slowly at 80 BPM.',
 
       "tab": [
         { "string": "e", "steps": [null, null, null, null, "|", null, null, null, null, "|"] },

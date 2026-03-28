@@ -18,7 +18,7 @@ export const selectivePickingModule: LessonModule = {
         'For example, after a downstroke on the B string, sweep the downstroke through to the high E string. This saves one motion.',
       practiceRoutine:
         'Play 2 notes on B string (down-up), then 1 note on high E (down — sweeping through from B). ' +
-        'Pattern: B fret 5 (D), B fret 7 (U), high E fret 5 (D). The high E should feel like the pick falls onto the string. Start at 50 BPM.',
+        'Pattern: B fret 5 (D), B fret 7 (U), high E fret 5 (D). The high E should feel like the pick falls onto the string. Start at 80 BPM.',
       tab: [
         { string: 'e', steps: [null, null, '5', null, null, '5', '|'] },
         { string: 'B', steps: ['5', '7', null, '5', '7', null, '|'] },
@@ -42,7 +42,7 @@ export const selectivePickingModule: LessonModule = {
           { string: 4, fret: 7 },
           { string: 5, fret: 5 },
         ],
-        defaultBpm: 50,
+        defaultBpm: 80,
       },
     },
     {
@@ -106,7 +106,7 @@ export const selectivePickingModule: LessonModule = {
           { string: 5, fret: 9 },
           { string: 5, fret: 10 },
         ],
-        defaultBpm: 50,
+        defaultBpm: 80,
       },
     },
     {
@@ -121,7 +121,7 @@ export const selectivePickingModule: LessonModule = {
         'Descending is often harder because upstrokes feel less natural as the sweeping stroke.',
       practiceRoutine:
         'Descend the A minor pentatonic: high E (8-5), B (8-5), G (7-5), D (7-5), A (7-5), low E (8-5). ' +
-        'Use economy picking: upstroke-downstroke on each string, sweep to next. Start at 50 BPM.',
+        'Use economy picking: upstroke-downstroke on each string, sweep to next. Start at 80 BPM.',
       tab: [
         { string: 'e', steps: ['8', '5', null, null, null, null, null, null, null, null, null, null, '|'] },
         { string: 'B', steps: [null, null, '8', '5', null, null, null, null, null, null, null, null, '|'] },
@@ -160,7 +160,7 @@ export const selectivePickingModule: LessonModule = {
           { string: 0, fret: 8 },
           { string: 0, fret: 5 },
         ],
-        defaultBpm: 50,
+        defaultBpm: 80,
       },
     },
     {
@@ -175,7 +175,7 @@ export const selectivePickingModule: LessonModule = {
         'The goal is efficiency — always choose the path of least pick movement.',
       practiceRoutine:
         'Play this phrase: ascend 3 notes on G string with economy sweep to B, play 2 on B with alternate pick back, sweep to high E. ' +
-        'Practice slowly, analyzing each pick stroke. Start at 40 BPM.',
+        'Practice slowly, analyzing each pick stroke. Start at 80 BPM.',
       tab: [
         { string: 'e', steps: [null, null, null, null, null, null, null, null, null, null, '5', '7', '8', '|'] },
         { string: 'B', steps: [null, null, null, null, null, '5', '7', '8', '5', null, null, null, null, '|'] },
@@ -209,7 +209,7 @@ export const selectivePickingModule: LessonModule = {
           { string: 5, fret: 7 },
           { string: 5, fret: 8 },
         ],
-        defaultBpm: 40,
+        defaultBpm: 80,
       },
     },
   ],
