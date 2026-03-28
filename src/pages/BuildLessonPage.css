@@ -187,6 +187,19 @@
   border-color: #5b7fff;
 }
 
+.build-lesson-bpm-slider {
+  width: 9rem;
+  accent-color: #5b7fff;
+  cursor: pointer;
+}
+
+.build-lesson-bpm-value {
+  min-width: 2.2rem;
+  text-align: right;
+  color: #c8c8e0;
+  font-size: 0.8rem;
+}
+
 .build-lesson-hint {
   margin-top: 1rem;
   font-size: 0.75rem;

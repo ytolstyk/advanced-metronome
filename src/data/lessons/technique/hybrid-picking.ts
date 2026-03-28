@@ -297,6 +297,43 @@ export const hybridPickingModule: LessonModule = {
             defaultBpm: 80
           },
         },
+        {
+          name: "C major",
+          "tab": [
+            {"string":"e","steps":["m8",null,"m7",null,"m5",null,null,null,null,null,null,null,"|"]},
+            {"string":"B","steps":[null,null,null,null,null,null,"m8",null,"m6",null,"m5",null,"|"]},
+            {"string":"G","steps":[null,"p5",null,"p5",null,"p5",null,"p5",null,"p5",null,"p5","|"]},
+            {"string":"D","steps":[null,null,null,null,null,null,null,null,null,null,null,null,"|"]},
+            {"string":"A","steps":[null,null,null,null,null,null,null,null,null,null,null,null,"|"]},
+            {"string":"E","steps":[null,null,null,null,null,null,null,null,null,null,null,null,"|"]}
+          ],
+          "fretHighlights": [
+            {"string":5,"fret":8},
+            {"string":3,"fret":5},
+            {"string":5,"fret":7},
+            {"string":5,"fret":5},
+            {"string":4,"fret":8},
+            {"string":4,"fret":6},
+            {"string":4,"fret":5}
+          ],
+          "practiceNotes": {
+            "steps": [
+              {"string":5,"fret":8},
+              {"string":3,"fret":5},
+              {"string":5,"fret":7},
+              {"string":3,"fret":5},
+              {"string":5,"fret":5},
+              {"string":3,"fret":5},
+              {"string":4,"fret":8},
+              {"string":3,"fret":5},
+              {"string":4,"fret":6},
+              {"string":3,"fret":5},
+              {"string":4,"fret":5},
+              {"string":3,"fret":5}
+            ],
+            "defaultBpm": 80
+          }
+        }
       ],
     },
   ],

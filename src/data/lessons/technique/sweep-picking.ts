@@ -19,33 +19,59 @@ export const sweepPickingModule: LessonModule = {
       practiceRoutine:
         'Play the Am arpeggio shape: G string fret 5, B string fret 5, high E string fret 5. Sweep downward (toward floor), then sweep upward to return. ' +
         'Use a metronome at 50 BPM. Each note should ring clearly and individually — no blurring.',
-      tab: [
-        { string: 'e', steps: [null, null, '5', null, null, '5', '|', null, null, '5', null, null, '5', '|'] },
-        { string: 'B', steps: [null, '5', null, null, '5', null, '|', null, '5', null, null, '5', null, '|'] },
-        { string: 'G', steps: ['5', null, null, '5', null, null, '|', '5', null, null, '5', null, null, '|'] },
-        { string: 'D', steps: [null, null, null, null, null, null, '|', null, null, null, null, null, null, '|'] },
-        { string: 'A', steps: [null, null, null, null, null, null, '|', null, null, null, null, null, null, '|'] },
-        { string: 'E', steps: [null, null, null, null, null, null, '|', null, null, null, null, null, null, '|'] },
+      "tab": [
+        {"string":"e","steps":[null,null,"5",null,null,"5","|"]},
+        {"string":"B","steps":[null,"6",null,null,"6",null,"|"]},
+        {"string":"G","steps":["7",null,null,"7",null,null,"|"]},
+        {"string":"D","steps":[null,null,null,null,null,null,"|"]},
+        {"string":"A","steps":[null,null,null,null,null,null,"|"]},
+        {"string":"E","steps":[null,null,null,null,null,null,"|"]}
       ],
-      fretHighlights: [
-        { string: 3, fret: 5, color: 'root' },
-        { string: 4, fret: 5, color: 'accent' },
-        { string: 5, fret: 5, color: 'default' },
+      "fretHighlights": [
+        {"string":3,"fret":7},
+        {"string":4,"fret":6},
+        {"string":5,"fret":5}
       ],
-      practiceNotes: {
-        // G fret 5=55+5=60; B fret 5=59+5=64; high e fret 5=64+5=69
-        steps: [
-          { string: 3, fret: 5 },
-          { string: 4, fret: 5 },
-          { string: 5, fret: 5 },
-          { string: 4, fret: 5 },
-          { string: 3, fret: 5 },
-          { string: 4, fret: 5 },
-          { string: 5, fret: 5 },
-          { string: 4, fret: 5 },
+      "practiceNotes": {
+        "steps": [
+          {"string":3,"fret":7},
+          {"string":4,"fret":6},
+          {"string":5,"fret":5},
+          {"string":3,"fret":7},
+          {"string":4,"fret":6},
+          {"string":5,"fret":5}
         ],
-        defaultBpm: 50,
+        "defaultBpm": 80
       },
+      examples: [
+        {
+          name: "Down strokes",
+          "tab": [
+            {"string":"e","steps":[null,null,null,null,null,null,"|"]},
+            {"string":"B","steps":["5",null,null,"5",null,null,"|"]},
+            {"string":"G","steps":[null,"6",null,null,"6",null,"|"]},
+            {"string":"D","steps":[null,null,"7",null,null,"7","|"]},
+            {"string":"A","steps":[null,null,null,null,null,null,"|"]},
+            {"string":"E","steps":[null,null,null,null,null,null,"|"]}
+          ],
+          "fretHighlights": [
+            {"string":4,"fret":5},
+            {"string":3,"fret":6},
+            {"string":2,"fret":7}
+          ],
+          "practiceNotes": {
+            "steps": [
+              {"string":4,"fret":5},
+              {"string":3,"fret":6},
+              {"string":2,"fret":7},
+              {"string":4,"fret":5},
+              {"string":3,"fret":6},
+              {"string":2,"fret":7}
+            ],
+            "defaultBpm": 80
+          }
+        }
+      ],
     },
     {
       id: 'sweep-2',
@@ -59,38 +85,112 @@ export const sweepPickingModule: LessonModule = {
       practiceRoutine:
         'Sweep the C major shape: G string fret 9, B string fret 8, high E fret 8. Down-sweep then up-sweep. ' +
         'Start at 50 BPM. Listen for clean, separated notes.',
-      tab: [
-        { string: 'e', steps: [null, null, '8', null, null, '8', '|', null, null, '8', null, null, '8', '|'] },
-        { string: 'B', steps: [null, '8', null, null, '8', null, '|', null, '8', null, null, '8', null, '|'] },
-        { string: 'G', steps: ['9', null, null, '9', null, null, '|', '9', null, null, '9', null, null, '|'] },
-        { string: 'D', steps: [null, null, null, null, null, null, '|', null, null, null, null, null, null, '|'] },
-        { string: 'A', steps: [null, null, null, null, null, null, '|', null, null, null, null, null, null, '|'] },
-        { string: 'E', steps: [null, null, null, null, null, null, '|', null, null, null, null, null, null, '|'] },
+      "tab": [
+        {"string":"e","steps":[null,null,"9","12","9",null,"|",null,null,"9","12","9",null,"|"]},
+        {"string":"B","steps":[null,"10",null,null,null,"10","|",null,"10",null,null,null,"10","|"]},
+        {"string":"G","steps":["9",null,null,null,null,null,"|","9",null,null,null,null,null,"|"]},
+        {"string":"D","steps":[null,null,null,null,null,null,"|",null,null,null,null,null,null,"|"]},
+        {"string":"A","steps":[null,null,null,null,null,null,"|",null,null,null,null,null,null,"|"]},
+        {"string":"E","steps":[null,null,null,null,null,null,"|",null,null,null,null,null,null,"|"]}
       ],
-      fretHighlights: [
-        { string: 3, fret: 9, color: 'root' },
-        { string: 4, fret: 8, color: 'accent' },
-        { string: 5, fret: 8, color: 'default' },
+      "fretHighlights": [
+        {"string":3,"fret":9},
+        {"string":4,"fret":10},
+        {"string":5,"fret":9},
+        {"string":5,"fret":12}
       ],
-      practiceNotes: {
-        // G fret 9=55+9=64; B fret 8=59+8=67; high e fret 8=64+8=72
-        steps: [
-          { string: 3, fret: 9 },
-          { string: 4, fret: 8 },
-          { string: 5, fret: 8 },
-          { string: 4, fret: 8 },
-          { string: 3, fret: 9 },
-          { string: 4, fret: 8 },
-          { string: 5, fret: 8 },
-          { string: 4, fret: 8 },
+      "practiceNotes": {
+        "steps": [
+          {"string":3,"fret":9},
+          {"string":4,"fret":10},
+          {"string":5,"fret":9},
+          {"string":5,"fret":12},
+          {"string":5,"fret":9},
+          {"string":4,"fret":10},
+          {"string":3,"fret":9},
+          {"string":4,"fret":10},
+          {"string":5,"fret":9},
+          {"string":5,"fret":12},
+          {"string":5,"fret":9},
+          {"string":4,"fret":10}
         ],
-        defaultBpm: 50,
+        "defaultBpm": 80
       },
+      examples: [
+        {
+          name: "E major",
+          "tab": [
+            {"string":"e","steps":[null,null,"12","16","12",null,"|",null,null,"12","16","12",null,"|"]},
+            {"string":"B","steps":[null,"12",null,null,null,"12","|",null,"12",null,null,null,"12","|"]},
+            {"string":"G","steps":["13",null,null,null,null,null,"|","13",null,null,null,null,null,"|"]},
+            {"string":"D","steps":[null,null,null,null,null,null,"|",null,null,null,null,null,null,"|"]},
+            {"string":"A","steps":[null,null,null,null,null,null,"|",null,null,null,null,null,null,"|"]},
+            {"string":"E","steps":[null,null,null,null,null,null,"|",null,null,null,null,null,null,"|"]}
+          ],
+          "fretHighlights": [
+            {"string":3,"fret":13},
+            {"string":4,"fret":12},
+            {"string":5,"fret":12},
+            {"string":5,"fret":16}
+          ],
+          "practiceNotes": {
+            "steps": [
+              {"string":3,"fret":13},
+              {"string":4,"fret":12},
+              {"string":5,"fret":12},
+              {"string":5,"fret":16},
+              {"string":5,"fret":12},
+              {"string":4,"fret":12},
+              {"string":3,"fret":13},
+              {"string":4,"fret":12},
+              {"string":5,"fret":12},
+              {"string":5,"fret":16},
+              {"string":5,"fret":12},
+              {"string":4,"fret":12}
+            ],
+            "defaultBpm": 80
+          }
+        },
+        {
+          name: "E major #2",
+          "tab": [
+            {"string":"e","steps":[null,null,"7","12","7",null,"|",null,null,"7","12","7",null,"|"]},
+            {"string":"B","steps":[null,"9",null,null,null,"9","|",null,"9",null,null,null,"9","|"]},
+            {"string":"G","steps":["9",null,null,null,null,null,"|","9",null,null,null,null,null,"|"]},
+            {"string":"D","steps":[null,null,null,null,null,null,"|",null,null,null,null,null,null,"|"]},
+            {"string":"A","steps":[null,null,null,null,null,null,"|",null,null,null,null,null,null,"|"]},
+            {"string":"E","steps":[null,null,null,null,null,null,"|",null,null,null,null,null,null,"|"]}
+          ],
+          "fretHighlights": [
+            {"string":3,"fret":9},
+            {"string":4,"fret":9},
+            {"string":5,"fret":7},
+            {"string":5,"fret":12}
+          ],
+          "practiceNotes": {
+            "steps": [
+              {"string":3,"fret":9},
+              {"string":4,"fret":9},
+              {"string":5,"fret":7},
+              {"string":5,"fret":12},
+              {"string":5,"fret":7},
+              {"string":4,"fret":9},
+              {"string":3,"fret":9},
+              {"string":4,"fret":9},
+              {"string":5,"fret":7},
+              {"string":5,"fret":12},
+              {"string":5,"fret":7},
+              {"string":4,"fret":9}
+            ],
+            "defaultBpm": 80
+          }
+        }
+      ]
     },
     {
       id: 'sweep-3',
       moduleId: 'sweep-picking',
-      title: 'Five-String Arpeggio Sweep',
+      title: 'Arpeggio Sweep',
       difficulty: 'intermediate',
       order: 3,
       explanation:
@@ -100,43 +200,113 @@ export const sweepPickingModule: LessonModule = {
       practiceRoutine:
         'Sweep through the full Am shape: A fret 7, D fret 7, G fret 5, B fret 5, high E fret 5, then reverse back down. ' +
         'Start at 40 BPM. Play each note as a clean, distinct event.',
-      tab: [
-        { string: 'e', steps: [null, null, null, null, '5', null, null, null, null, '5', '|'] },
-        { string: 'B', steps: [null, null, null, '5', null, null, null, null, '5', null, '|'] },
-        { string: 'G', steps: [null, null, '5', null, null, null, null, '5', null, null, '|'] },
-        { string: 'D', steps: [null, '7', null, null, null, null, '7', null, null, null, '|'] },
-        { string: 'A', steps: ['7', null, null, null, null, '7', null, null, null, null, '|'] },
-        { string: 'E', steps: [null, null, null, null, null, null, null, null, null, null, '|'] },
+      "tab": [
+        {"string":"e","steps":["15","12",null,null,null,null,null,null,null,"12","|"]},
+        {"string":"B","steps":[null,null,"13",null,null,null,null,null,"13",null,"|"]},
+        {"string":"G","steps":[null,null,null,"12",null,null,null,"12",null,null,"|"]},
+        {"string":"D","steps":[null,null,null,null,"15","12","15",null,null,null,"|"]},
+        {"string":"A","steps":[null,null,null,null,null,null,null,null,null,null,"|"]},
+        {"string":"E","steps":[null,null,null,null,null,null,null,null,null,null,"|"]}
       ],
-      fretHighlights: [
-        { string: 1, fret: 7, color: 'root' },
-        { string: 2, fret: 7, color: 'accent' },
-        { string: 3, fret: 5, color: 'default' },
-        { string: 4, fret: 5, color: 'accent' },
-        { string: 5, fret: 5, color: 'default' },
+      "fretHighlights": [
+        {"string":5,"fret":15},
+        {"string":5,"fret":12},
+        {"string":4,"fret":13},
+        {"string":3,"fret":12},
+        {"string":2,"fret":15},
+        {"string":2,"fret":12}
       ],
-      practiceNotes: {
-        // A fret 7=45+7=52; D fret 7=50+7=57; G fret 5=55+5=60; B fret 5=59+5=64; high e fret 5=64+5=69
-        steps: [
-          { string: 1, fret: 7 },
-          { string: 2, fret: 7 },
-          { string: 3, fret: 5 },
-          { string: 4, fret: 5 },
-          { string: 5, fret: 5 },
-          { string: 4, fret: 5 },
-          { string: 3, fret: 5 },
-          { string: 2, fret: 7 },
-          { string: 1, fret: 7 },
-          { string: 2, fret: 7 },
-          { string: 3, fret: 5 },
-          { string: 4, fret: 5 },
-          { string: 5, fret: 5 },
-          { string: 4, fret: 5 },
-          { string: 3, fret: 5 },
-          { string: 2, fret: 7 },
+      "practiceNotes": {
+        "steps": [
+          {"string":5,"fret":15},
+          {"string":5,"fret":12},
+          {"string":4,"fret":13},
+          {"string":3,"fret":12},
+          {"string":2,"fret":15},
+          {"string":2,"fret":12},
+          {"string":2,"fret":15},
+          {"string":3,"fret":12},
+          {"string":4,"fret":13},
+          {"string":5,"fret":12}
         ],
-        defaultBpm: 40,
+        "defaultBpm": 80
       },
+      examples: [
+        {
+          name: "Five string major",
+          "tab": [
+            {"string":"e","steps":[null,null,null,null,null,"8","12","8",null,null,null,null,"|"]},
+            {"string":"B","steps":[null,null,null,null,"10",null,null,null,"10",null,null,null,"|"]},
+            {"string":"G","steps":[null,null,null,"10",null,null,null,null,null,"10",null,null,"|"]},
+            {"string":"D","steps":[null,null,"10",null,null,null,null,null,null,null,"10",null,"|"]},
+            {"string":"A","steps":["8","12",null,null,null,null,null,null,null,null,null,"12","|"]},
+            {"string":"E","steps":[null,null,null,null,null,null,null,null,null,null,null,null,"|"]}
+          ],
+          "fretHighlights": [
+            {"string":1,"fret":8},
+            {"string":1,"fret":12},
+            {"string":2,"fret":10},
+            {"string":3,"fret":10},
+            {"string":4,"fret":10},
+            {"string":5,"fret":8},
+            {"string":5,"fret":12}
+          ],
+          "practiceNotes": {
+            "steps": [
+              {"string":1,"fret":8},
+              {"string":1,"fret":12},
+              {"string":2,"fret":10},
+              {"string":3,"fret":10},
+              {"string":4,"fret":10},
+              {"string":5,"fret":8},
+              {"string":5,"fret":12},
+              {"string":5,"fret":8},
+              {"string":4,"fret":10},
+              {"string":3,"fret":10},
+              {"string":2,"fret":10},
+              {"string":1,"fret":12}
+            ],
+            "defaultBpm": 80
+          }
+        },
+        {
+          name: "Five string minor",
+          "tab": [
+            {"string":"e","steps":["17","12",null,null,null,null,null,null,null,null,null,"12","|"]},
+            {"string":"B","steps":[null,null,"13",null,null,null,null,null,null,null,"13",null,"|"]},
+            {"string":"G","steps":[null,null,null,"14",null,null,null,null,null,"14",null,null,"|"]},
+            {"string":"D","steps":[null,null,null,null,"14",null,null,null,"14",null,null,null,"|"]},
+            {"string":"A","steps":[null,null,null,null,null,"15","12","15",null,null,null,null,"|"]},
+            {"string":"E","steps":[null,null,null,null,null,null,null,null,null,null,null,null,"|"]}
+          ],
+          "fretHighlights": [
+            {"string":5,"fret":17},
+            {"string":5,"fret":12},
+            {"string":4,"fret":13},
+            {"string":3,"fret":14},
+            {"string":2,"fret":14},
+            {"string":1,"fret":15},
+            {"string":1,"fret":12}
+          ],
+          "practiceNotes": {
+            "steps": [
+              {"string":5,"fret":17},
+              {"string":5,"fret":12},
+              {"string":4,"fret":13},
+              {"string":3,"fret":14},
+              {"string":2,"fret":14},
+              {"string":1,"fret":15},
+              {"string":1,"fret":12},
+              {"string":1,"fret":15},
+              {"string":2,"fret":14},
+              {"string":3,"fret":14},
+              {"string":4,"fret":13},
+              {"string":5,"fret":12}
+            ],
+            "defaultBpm": 80
+          }
+        }
+      ]
     },
     {
       id: 'sweep-4',
@@ -151,38 +321,71 @@ export const sweepPickingModule: LessonModule = {
       practiceRoutine:
         'Sweep up the Am shape (A7, D7, G5, B5, e5), tap fret 12 on the high E string at the top, pull off to fret 5, then sweep back down. ' +
         'Start at 40 BPM. The tap should be at the same volume as the swept notes.',
-      tab: [
-        { string: 'e', steps: [null, null, null, null, '5', 'T12', 'p5', null, null, null, null, '|'] },
-        { string: 'B', steps: [null, null, null, '5', null, null, null, '5', null, null, null, '|'] },
-        { string: 'G', steps: [null, null, '5', null, null, null, null, null, '5', null, null, '|'] },
-        { string: 'D', steps: [null, '7', null, null, null, null, null, null, null, '7', null, '|'] },
-        { string: 'A', steps: ['7', null, null, null, null, null, null, null, null, null, '7', '|'] },
-        { string: 'E', steps: [null, null, null, null, null, null, null, null, null, null, null, '|'] },
+      "tab": [
+        {"string":"e","steps":[null,null,"12","15","T20","15","12",null,"|"]},
+        {"string":"B","steps":[null,"13",null,null,null,null,null,"13","|"]},
+        {"string":"G","steps":["14",null,null,null,null,null,null,null,"|"]},
+        {"string":"D","steps":[null,null,null,null,null,null,null,null,"|"]},
+        {"string":"A","steps":[null,null,null,null,null,null,null,null,"|"]},
+        {"string":"E","steps":[null,null,null,null,null,null,null,null,"|"]}
       ],
-      fretHighlights: [
-        { string: 1, fret: 7, color: 'root' },
-        { string: 2, fret: 7, color: 'accent' },
-        { string: 3, fret: 5, color: 'default' },
-        { string: 4, fret: 5, color: 'accent' },
-        { string: 5, fret: 5, color: 'default' },
-        { string: 5, fret: 12, color: 'root' },
+      "fretHighlights": [
+        {"string":3,"fret":14},
+        {"string":4,"fret":13},
+        {"string":5,"fret":12},
+        {"string":5,"fret":15},
+        {"string":5,"fret":20}
       ],
-      practiceNotes: {
-        // A7=52, D7=57, G5=60, B5=64, e5=69, e12=76
-        steps: [
-          { string: 1, fret: 7 },
-          { string: 2, fret: 7 },
-          { string: 3, fret: 5 },
-          { string: 4, fret: 5 },
-          { string: 5, fret: 5 },
-          { string: 5, fret: 12 },
-          { string: 5, fret: 5 },
-          { string: 4, fret: 5 },
-          { string: 3, fret: 5 },
-          { string: 2, fret: 7 },
+      "practiceNotes": {
+        "steps": [
+          {"string":3,"fret":14},
+          {"string":4,"fret":13},
+          {"string":5,"fret":12},
+          {"string":5,"fret":15},
+          {"string":5,"fret":20},
+          {"string":5,"fret":15},
+          {"string":5,"fret":12},
+          {"string":4,"fret":13}
         ],
-        defaultBpm: 40,
+        "defaultBpm": 80
       },
+      examples: [
+        {
+          name: "Alternating sweep and tap",
+          "tab": [
+            {"string":"e","steps":[null,null,null,"9","10","9",null,null,null,"9","T17","9",null,"|"]},
+            {"string":"B","steps":[null,"10",null,null,null,null,"10",null,"10",null,null,null,"10","|"]},
+            {"string":"G","steps":["9",null,null,null,null,null,null,"9",null,null,null,null,null,"|"]},
+            {"string":"D","steps":[null,null,null,null,null,null,null,null,null,null,null,null,null,"|"]},
+            {"string":"A","steps":[null,null,null,null,null,null,null,null,null,null,null,null,null,"|"]},
+            {"string":"E","steps":[null,null,null,null,null,null,null,null,null,null,null,null,null,"|"]}
+          ],
+          "fretHighlights": [
+            {"string":3,"fret":9},
+            {"string":4,"fret":10},
+            {"string":5,"fret":9},
+            {"string":5,"fret":10},
+            {"string":5,"fret":17}
+          ],
+          "practiceNotes": {
+            "steps": [
+              {"string":3,"fret":9},
+              {"string":4,"fret":10},
+              {"string":5,"fret":9},
+              {"string":5,"fret":10},
+              {"string":5,"fret":9},
+              {"string":4,"fret":10},
+              {"string":3,"fret":9},
+              {"string":4,"fret":10},
+              {"string":5,"fret":9},
+              {"string":5,"fret":17},
+              {"string":5,"fret":9},
+              {"string":4,"fret":10}
+            ],
+            "defaultBpm": 80
+          }
+        }
+      ]
     },
   ],
 };

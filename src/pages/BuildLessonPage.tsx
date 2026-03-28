@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useLessonAudio } from '@/hooks/useLessonAudio';
 import './BuildLessonPage.css';
 
 // Display order: row 0 = high e, row 5 = low E
@@ -45,7 +46,7 @@ function init(): GridState {
     barCols: Array(DEFAULT_COL_COUNT).fill(false) as boolean[],
     cursor: { col: 0, row: 0 },
     colCount: DEFAULT_COL_COUNT,
-    defaultBpm: 80,
+    defaultBpm: 150,
   };
 }
 
@@ -256,6 +257,9 @@ export function BuildLessonPage() {
 
   const { cells, barCols, cursor, colCount, defaultBpm } = state;
 
+  const practiceSteps = useMemo(() => buildJson(state).practiceNotes.steps, [state]);
+  const { isPlaying, toggle } = useLessonAudio(practiceSteps, defaultBpm);
+
   return (
     <div className="build-lesson-page">
       <h1>Lesson Tab Builder</h1>
@@ -332,14 +336,19 @@ export function BuildLessonPage() {
         <label className="build-lesson-bpm-group">
           BPM:
           <input
-            type="number"
-            className="build-lesson-bpm-input"
+            type="range"
+            className="build-lesson-bpm-slider"
             value={defaultBpm}
             min={20}
-            max={400}
-            onChange={e => dispatch({ type: 'SET_BPM', bpm: parseInt(e.target.value, 10) || 80 })}
+            max={300}
+            step={1}
+            onChange={e => dispatch({ type: 'SET_BPM', bpm: parseInt(e.target.value, 10) })}
           />
+          <span className="build-lesson-bpm-value">{defaultBpm}</span>
         </label>
+        <button className="build-lesson-btn primary" onClick={toggle}>
+          {isPlaying ? '■ Stop' : '▶ Play'}
+        </button>
         <button className="build-lesson-btn primary" onClick={handleDownload}>Download JSON</button>
       </div>
 

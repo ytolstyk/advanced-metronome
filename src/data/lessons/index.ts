@@ -2,13 +2,10 @@ import type { LessonModule, Lesson } from './types';
 import { tappingModule } from './technique/tapping';
 import { sweepPickingModule } from './technique/sweep-picking';
 import { fingerPickingModule } from './technique/finger-picking';
-import { doubleThumpingModule } from './technique/double-thumping';
 import { pullOffsHammerOnsModule } from './technique/pull-offs-hammer-ons';
 import { alternatePickingModule } from './technique/alternate-picking';
 import { hybridPickingModule } from './technique/hybrid-picking';
-import { selectivePickingModule } from './technique/selective-picking';
 import { chordsTheoryModule } from './theory/chords-theory';
-import { scalesTheoryModule } from './theory/scales-theory';
 import { readingTablatureModule } from './theory/reading-tablature';
 
 export const TECHNIQUE_MODULES: LessonModule[] = [
@@ -16,16 +13,13 @@ export const TECHNIQUE_MODULES: LessonModule[] = [
   pullOffsHammerOnsModule,
   fingerPickingModule,
   hybridPickingModule,
-  selectivePickingModule,
   tappingModule,
   sweepPickingModule,
-  doubleThumpingModule,
 ];
 
 export const THEORY_MODULES: LessonModule[] = [
   readingTablatureModule,
   chordsTheoryModule,
-  scalesTheoryModule,
 ];
 
 export const ALL_MODULES: LessonModule[] = [...TECHNIQUE_MODULES, ...THEORY_MODULES];
