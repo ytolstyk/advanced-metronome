@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GripVertical, Play, Pause, Square, Pencil, Trash2, Plus, Download, RotateCcw, Cloud, ChevronDown } from 'lucide-react';
+import { GripVertical, Play, Pause, Square, Pencil, Trash2, Plus, Download, RotateCcw, Cloud, ChevronDown, FolderOpen, Share2 } from 'lucide-react';
+import { useAuthenticator } from '@aws-amplify/ui-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,8 +11,8 @@ import { cn } from '@/lib/utils';
 import { ClickTrackEngine } from '@/audio/ClickTrackEngine';
 import type { TrackPiece, SubdivisionLabel } from '@/audio/ClickTrackEngine';
 import { exportClickTrack } from '@/audio/exportClickTrack';
-import { saveCloudClickTrack } from '@/api/clickTrackApi';
-import type { SegmentGroup } from '@/api/clickTrackApi';
+import { saveCloudClickTrack, loadCloudClickTracks, deleteCloudClickTrack } from '@/api/clickTrackApi';
+import type { SegmentGroup, CloudClickTrack } from '@/api/clickTrackApi';
 import './ClickTrackPage.css';
 
 // ── Color palette ──────────────────────────────────────────────────────────
@@ -98,6 +99,39 @@ function subLabel(s: SubdivisionLabel): string {
   return SUBDIVISIONS.find(x => x.value === s)?.label ?? s;
 }
 
+// ── Share encoding ──────────────────────────────────────────────────────────
+function encodeTrack(pieces: TrackPiece[], groups: SegmentGroup[]): string {
+  return btoa(encodeURIComponent(JSON.stringify({ pieces, groups })));
+}
+
+function decodeTrack(s: string): { pieces: TrackPiece[]; groups: SegmentGroup[] } | null {
+  try {
+    const parsed = JSON.parse(decodeURIComponent(atob(s))) as unknown;
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const p = parsed as Record<string, unknown>;
+    if (!Array.isArray(p.pieces)) return null;
+    return { pieces: p.pieces as TrackPiece[], groups: Array.isArray(p.groups) ? p.groups as SegmentGroup[] : [] };
+  } catch { return null; }
+}
+
+// ── Score view dot computation ──────────────────────────────────────────────
+function getMeasureDots(piece: TrackPiece): Array<'accent' | 'beat' | 'sub'> {
+  const { numerator } = piece.timeSignature;
+  const sub = piece.subdivision;
+  if (sub === 'whole') return ['accent'];
+  if (sub === 'half') {
+    const count = Math.ceil(numerator / 2);
+    return Array.from({ length: count }, (_, i) => (i === 0 ? 'accent' : 'beat') as 'accent' | 'beat');
+  }
+  const subsPerBeat = sub === 'eighth' || sub === 'eighth-triplet' ? 1 : sub === 'sixteenth' ? 3 : 0;
+  const result: Array<'accent' | 'beat' | 'sub'> = [];
+  for (let b = 0; b < numerator; b++) {
+    result.push(b === 0 ? 'accent' : 'beat');
+    for (let s = 0; s < subsPerBeat; s++) result.push('sub');
+  }
+  return result;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 export function ClickTrackPage() {
   const saved = loadState();
@@ -127,6 +161,15 @@ export function ClickTrackPage() {
 
   const [exporting, setExporting] = useState(false);
 
+  const { authStatus } = useAuthenticator(ctx => [ctx.authStatus]);
+
+  const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+  const [savedTracks, setSavedTracks] = useState<CloudClickTrack[]>([]);
+  const [loadingTracks, setLoadingTracks] = useState(false);
+
+  const [sharedOffer, setSharedOffer] = useState<{ pieces: TrackPiece[]; groups: SegmentGroup[] } | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+
   const engineRef = useRef<ClickTrackEngine | null>(null);
   const dragIndex = useRef<number | null>(null);
   const dragOverIndex = useRef<number | null>(null);
@@ -145,6 +188,16 @@ export function ClickTrackPage() {
   useEffect(() => {
     if (isPlaying) engineRef.current?.updateSpeed(speedPercent / 100);
   }, [speedPercent, isPlaying]);
+
+  // Load shared track from URL param on mount
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('t');
+    if (t) {
+      const decoded = decodeTrack(t);
+      if (decoded) setSharedOffer(decoded);
+      history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   const handleStop = useCallback(() => {
     setIsPlaying(false);
@@ -340,6 +393,36 @@ export function ClickTrackPage() {
     setEditingId(null);
   }
 
+  // ── Load from cloud ────────────────────────────────────────────────────
+  async function openLoadDialog() {
+    setLoadDialogOpen(true);
+    setLoadingTracks(true);
+    setSavedTracks(await loadCloudClickTracks());
+    setLoadingTracks(false);
+  }
+
+  function loadTrack(track: CloudClickTrack) {
+    if (pieces.length > 0 && !window.confirm('Replace current track with the saved one?')) return;
+    stopPlayback();
+    setPieces(track.pieces);
+    setGroups(track.groups);
+    setLoadDialogOpen(false);
+  }
+
+  async function deleteTrack(id: string) {
+    await deleteCloudClickTrack(id);
+    setSavedTracks(t => t.filter(x => x.id !== id));
+  }
+
+  // ── Share ──────────────────────────────────────────────────────────────
+  function handleShare() {
+    const encoded = encodeTrack(pieces, groups);
+    const url = `${window.location.origin}${window.location.pathname}?t=${encoded}`;
+    void navigator.clipboard.writeText(url);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  }
+
   // ── Save to cloud ──────────────────────────────────────────────────────
   async function saveCloud() {
     setSaveStatus('saving');
@@ -516,12 +599,31 @@ export function ClickTrackPage() {
           </Button>
           <Button
             size="sm" variant="outline"
-            onClick={() => { setSaveName(''); setSaveStatus('idle'); setSaveDialogOpen(true); }}
+            onClick={handleShare}
             disabled={pieces.length === 0}
             className="gap-1 text-xs"
           >
-            <Cloud size={13} /> Save to Cloud
+            <Share2 size={13} /> {shareCopied ? 'Copied!' : 'Share'}
           </Button>
+          {authStatus === 'authenticated' && (
+            <>
+              <Button
+                size="sm" variant="outline"
+                onClick={() => void openLoadDialog()}
+                className="gap-1 text-xs"
+              >
+                <FolderOpen size={13} /> Load
+              </Button>
+              <Button
+                size="sm" variant="outline"
+                onClick={() => { setSaveName(''); setSaveStatus('idle'); setSaveDialogOpen(true); }}
+                disabled={pieces.length === 0}
+                className="gap-1 text-xs"
+              >
+                <Cloud size={13} /> Save to Cloud
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -574,13 +676,57 @@ export function ClickTrackPage() {
         </label>
       </div>
 
+      {/* Shared track banner */}
+      {sharedOffer !== null && (
+        <div className="ct-shared-banner">
+          <span>Shared track available — load it?</span>
+          <Button size="sm" className="h-7 text-xs" onClick={() => {
+            if (pieces.length > 0 && !window.confirm('Replace current track with the shared one?')) return;
+            stopPlayback();
+            setPieces(sharedOffer.pieces);
+            setGroups(sharedOffer.groups);
+            setSharedOffer(null);
+          }}>Load</Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSharedOffer(null)}>Dismiss</Button>
+        </div>
+      )}
+
       {/* Track list */}
       <div className="ct-track-list">
         {pieces.length === 0 && (
           <div className="ct-empty-state">No segments yet — add one below</div>
         )}
 
-        {pieces.map((piece, i) => {
+        {/* Score view (expand mode) */}
+        {expandView && pieces.length > 0 && (
+          <div className="ct-score-view">
+            {pieces.map((piece, pi) => {
+              const color = getEffectiveColor(piece);
+              const dots = getMeasureDots(piece);
+              return Array.from({ length: piece.repeats }, (_, r) => {
+                const isActiveCell = currentPieceIndex === pi && currentRepetition === r;
+                return (
+                  <div
+                    key={`${piece.id}-${r}`}
+                    className={cn('ct-measure-cell', isActiveCell && 'is-active-rep')}
+                    style={{ '--piece-color': color } as React.CSSProperties}
+                  >
+                    {r === 0 && <div className="ct-measure-label">{piece.label}</div>}
+                    <div className="ct-dots-row">
+                      {dots.map((type, di) => (
+                        <span key={di} className={`ct-dot ct-dot--${type}`} />
+                      ))}
+                    </div>
+                    <div className="ct-measure-rep">{r + 1}/{piece.repeats}</div>
+                  </div>
+                );
+              });
+            })}
+          </div>
+        )}
+
+        {/* Normal card list (non-expand mode) */}
+        {!expandView && pieces.map((piece, i) => {
           const color = getEffectiveColor(piece);
           const gName = groupName(piece.groupId);
           const isActive = currentPieceIndex === i;
@@ -679,20 +825,6 @@ export function ClickTrackPage() {
                 />
               )}
 
-              {/* Expanded repetitions */}
-              {expandView && !isEditing && (
-                <div className="ct-rep-rows">
-                  {Array.from({ length: piece.repeats }, (_, r) => (
-                    <div
-                      key={r}
-                      className={cn('ct-rep-row', isActive && currentRepetition === r && 'is-active-rep')}
-                      style={{ '--piece-color': color } as React.CSSProperties}
-                    >
-                      Rep {r + 1}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           );
         })}
@@ -735,6 +867,41 @@ export function ClickTrackPage() {
           </Button>
         </div>
       )}
+
+      {/* Load from Cloud dialog */}
+      <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Load Saved Track</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 pt-2">
+            {loadingTracks && <p className="text-xs text-[#888]">Loading…</p>}
+            {!loadingTracks && savedTracks.length === 0 && (
+              <p className="text-xs text-[#888]">No saved tracks found.</p>
+            )}
+            {savedTracks.map(track => (
+              <div key={track.id} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="flex-1 text-left text-sm px-3 py-2 rounded-md bg-[#1a1a1a] hover:bg-[#252525] text-[#f0f0f0] transition-colors"
+                  onClick={() => loadTrack(track)}
+                >
+                  {track.name}
+                  <span className="text-[#666] text-xs ml-2">{track.pieces.length} segments</span>
+                </button>
+                <Button
+                  size="icon" variant="ghost"
+                  className="h-7 w-7 text-[#666] hover:text-rose-400 shrink-0"
+                  onClick={() => void deleteTrack(track.id)}
+                  title="Delete"
+                >
+                  <Trash2 size={13} />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Save to Cloud dialog */}
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>

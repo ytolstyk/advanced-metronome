@@ -1,8 +1,12 @@
 .click-track-page {
   max-width: 820px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 4rem;
+  padding: 1.5rem 1rem 0;
   color: #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 49px);
+  overflow: hidden;
 }
 
 /* ── Header ── */
@@ -137,11 +141,13 @@
 
 /* ── Track list ── */
 .ct-track-list {
+  flex: 1 1 0;
+  overflow-y: auto;
+  min-height: 112px; /* ≈ 2 segment cards */
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  margin-bottom: 1.25rem;
-  min-height: 60px;
+  padding-bottom: 1.25rem;
 }
 
 .ct-empty-state {
@@ -334,9 +340,11 @@
   border: 1px solid #2a2a2a;
   border-radius: 10px;
   padding: 1rem;
+  margin-bottom: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .ct-add-panel h2 {
@@ -383,4 +391,104 @@
 .ct-timesig-slash {
   color: #666;
   font-weight: 700;
+}
+
+/* ── Shared track banner ── */
+.ct-shared-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: color-mix(in srgb, #6366f1 15%, #111);
+  border: 1px solid color-mix(in srgb, #6366f1 40%, transparent);
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: #c7c7ff;
+  flex-shrink: 0;
+}
+
+/* ── Score view (expand mode) ── */
+.ct-score-view {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  align-content: flex-start;
+}
+
+.ct-measure-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem 0.35rem;
+  position: relative;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  min-width: 44px;
+}
+
+.ct-measure-cell.is-active-rep {
+  border-color: var(--piece-color, #6366f1);
+  box-shadow: 0 0 0 1.5px var(--piece-color, #6366f1),
+              0 0 12px color-mix(in srgb, var(--piece-color, #6366f1) 25%, transparent);
+}
+
+.ct-measure-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--piece-color, #6366f1);
+  white-space: nowrap;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.ct-dots-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: nowrap;
+}
+
+.ct-dot {
+  display: inline-block;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ct-dot--accent {
+  width: 10px;
+  height: 10px;
+  background: var(--piece-color, #6366f1);
+}
+
+.ct-measure-cell.is-active-rep .ct-dot--accent {
+  box-shadow: 0 0 6px var(--piece-color, #6366f1);
+}
+
+.ct-dot--beat {
+  width: 7px;
+  height: 7px;
+  background: var(--piece-color, #6366f1);
+  opacity: 0.55;
+}
+
+.ct-dot--sub {
+  width: 4px;
+  height: 4px;
+  background: var(--piece-color, #6366f1);
+  opacity: 0.3;
+}
+
+.ct-measure-rep {
+  font-size: 0.55rem;
+  color: #555;
+  letter-spacing: 0.02em;
 }
