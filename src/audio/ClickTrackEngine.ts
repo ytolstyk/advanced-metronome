@@ -56,6 +56,7 @@ export class ClickTrackEngine {
   private onProgress: ((pieceIndex: number, repetition: number) => void) | null = null;
   private onCountdown: ((n: number) => void) | null = null;
   private onStop: (() => void) | null = null;
+  private onBeat: ((pieceIndex: number, repetition: number, subTick: number) => void) | null = null;
 
   private ensureCtx(): AudioContext {
     if (!this.ctx) {
@@ -74,6 +75,7 @@ export class ClickTrackEngine {
     onProgress: (pieceIndex: number, repetition: number) => void,
     onCountdownFn: (n: number) => void,
     onStop: () => void,
+    onBeat?: (pieceIndex: number, repetition: number, subTick: number) => void,
   ): void {
     this.stop();
     const ctx = this.ensureCtx();
@@ -87,6 +89,7 @@ export class ClickTrackEngine {
     this.onProgress = onProgress;
     this.onCountdown = onCountdownFn;
     this.onStop = onStop;
+    this.onBeat = onBeat ?? null;
 
     this.pieceIndex = startPieceIndex;
     this.repetition = 0;
@@ -192,18 +195,21 @@ export class ClickTrackEngine {
     const subTickInMeasure = this.subIndex;
 
     // Fire synth
+    const pi = this.pieceIndex;
+    const rep = this.repetition;
+    const delay = (t - ctx.currentTime) * 1000;
     if (subTickInMeasure === 0) {
       accentClick(ctx, dest, t);
       // Notify on each new measure (beat 0, sub 0)
-      const pi = this.pieceIndex;
-      const rep = this.repetition;
-      const delay = (t - ctx.currentTime) * 1000;
       setTimeout(() => { this.onProgress?.(pi, rep); }, Math.max(0, delay));
     } else if (this.subIndex % Math.max(1, Math.round(subs)) === 0) {
       beatClick(ctx, dest, t);
     } else {
       subClick(ctx, dest, t);
     }
+    // Notify beat position for visual highlighting
+    const beatSubTick = subTickInMeasure;
+    setTimeout(() => { this.onBeat?.(pi, rep, beatSubTick); }, Math.max(0, delay));
 
     // Advance sub-tick
     this.subIndex++;

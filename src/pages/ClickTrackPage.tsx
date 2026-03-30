@@ -114,6 +114,15 @@ function decodeTrack(s: string): { pieces: TrackPiece[]; groups: SegmentGroup[] 
   } catch { return null; }
 }
 
+// ── Map engine sub-tick → dot index in getMeasureDots ──────────────────────
+function subTickToDotIndex(piece: TrackPiece, subTick: number): number {
+  // Triplets: engine fires 3x per "dot slot" but dots only show beats
+  if (piece.subdivision === 'quarter-triplet' || piece.subdivision === 'eighth-triplet') {
+    return Math.floor(subTick / 3);
+  }
+  return subTick; // 1:1 for whole/half/quarter/eighth/sixteenth
+}
+
 // ── Score view dot computation ──────────────────────────────────────────────
 function getMeasureDots(piece: TrackPiece): Array<'accent' | 'beat' | 'sub'> {
   const { numerator } = piece.timeSignature;
@@ -145,6 +154,7 @@ export function ClickTrackPage() {
   const [countdownDisplay, setCountdownDisplay] = useState<number | null>(null);
   const [currentPieceIndex, setCurrentPieceIndex] = useState<number | null>(null);
   const [currentRepetition, setCurrentRepetition] = useState<number | null>(null);
+  const [currentSubTick, setCurrentSubTick] = useState<number | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -203,6 +213,7 @@ export function ClickTrackPage() {
     setIsPlaying(false);
     setCurrentPieceIndex(null);
     setCurrentRepetition(null);
+    setCurrentSubTick(null);
     setCountdownDisplay(null);
   }, []);
 
@@ -216,11 +227,15 @@ export function ClickTrackPage() {
     setCountdownDisplay(n);
   }, []);
 
+  const handleBeat = useCallback((_pi: number, _rep: number, subTick: number) => {
+    setCurrentSubTick(subTick);
+  }, []);
+
   function startFrom(startIdx: number) {
     if (pieces.length === 0) return;
     engineRef.current!.start(
       pieces, startIdx, speedPercent / 100, countdownEnabled,
-      handleProgress, handleCountdown, handleStop,
+      handleProgress, handleCountdown, handleStop, handleBeat,
     );
     setIsPlaying(true);
     setCountdownDisplay(countdownEnabled ? 3 : null);
@@ -577,8 +592,8 @@ export function ClickTrackPage() {
 
       {/* Countdown overlay */}
       {countdownDisplay !== null && (
-        <div className="ct-countdown-overlay" key={countdownDisplay}>
-          <div className="ct-countdown-number">{countdownDisplay}</div>
+        <div className="ct-countdown-overlay">
+          <div className="ct-countdown-number" key={countdownDisplay}>{countdownDisplay}</div>
         </div>
       )}
 
@@ -705,6 +720,9 @@ export function ClickTrackPage() {
               const dots = getMeasureDots(piece);
               return Array.from({ length: piece.repeats }, (_, r) => {
                 const isActiveCell = currentPieceIndex === pi && currentRepetition === r;
+                const activeDotIdx = isActiveCell && currentSubTick !== null
+                  ? subTickToDotIndex(piece, currentSubTick)
+                  : -1;
                 return (
                   <div
                     key={`${piece.id}-${r}`}
@@ -714,7 +732,10 @@ export function ClickTrackPage() {
                     {r === 0 && <div className="ct-measure-label">{piece.label}</div>}
                     <div className="ct-dots-row">
                       {dots.map((type, di) => (
-                        <span key={di} className={`ct-dot ct-dot--${type}`} />
+                        <span
+                          key={di}
+                          className={cn(`ct-dot ct-dot--${type}`, di === activeDotIdx && 'ct-dot--clicking')}
+                        />
                       ))}
                     </div>
                     <div className="ct-measure-rep">{r + 1}/{piece.repeats}</div>
