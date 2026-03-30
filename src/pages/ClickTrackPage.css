@@ -1,0 +1,386 @@
+.click-track-page {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+  color: #f0f0f0;
+}
+
+/* ── Header ── */
+.ct-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.ct-header h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f0f0f0;
+  margin: 0;
+}
+
+.ct-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Playback bar ── */
+.ct-playback-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.ct-speed-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #999;
+  white-space: nowrap;
+}
+
+.ct-speed-label span {
+  color: #f0f0f0;
+  font-weight: 600;
+  min-width: 3ch;
+}
+
+.ct-speed-slider {
+  width: 120px;
+}
+
+.ct-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #999;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ct-toggle {
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  background: #333;
+  position: relative;
+  transition: background 0.2s;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ct-toggle.on {
+  background: #6366f1;
+}
+
+.ct-toggle::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  top: 3px;
+  left: 3px;
+  transition: left 0.2s;
+}
+
+.ct-toggle.on::after {
+  left: 19px;
+}
+
+/* ── Countdown overlay ── */
+.ct-countdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  pointer-events: none;
+  animation: ct-overlay-fade 0.15s ease;
+}
+
+@keyframes ct-overlay-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.ct-countdown-number {
+  font-size: 12rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  animation: ct-pop 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-shadow: 0 0 60px rgba(99, 102, 241, 0.8);
+}
+
+@keyframes ct-pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+/* ── Track list ── */
+.ct-track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  min-height: 60px;
+}
+
+.ct-empty-state {
+  text-align: center;
+  color: #555;
+  font-size: 0.875rem;
+  padding: 2rem 1rem;
+  border: 1px dashed #2a2a2a;
+  border-radius: 10px;
+}
+
+/* ── Piece card ── */
+.ct-piece-card {
+  border-radius: 10px;
+  border: 1px solid #2a2a2a;
+  background: #111;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  position: relative;
+}
+
+.ct-piece-card.is-active {
+  box-shadow: 0 0 0 2px var(--piece-color, #6366f1);
+  border-color: var(--piece-color, #6366f1);
+}
+
+.ct-piece-card.drag-over {
+  border-top: 2px solid #6366f1;
+}
+
+.ct-piece-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.ct-drag-handle {
+  cursor: grab;
+  color: #444;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+}
+
+.ct-drag-handle:active { cursor: grabbing; }
+
+.ct-color-stripe {
+  width: 4px;
+  height: 36px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  background: var(--piece-color, #6366f1);
+}
+
+.ct-piece-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ct-piece-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #f0f0f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ct-group-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  color: #000;
+  background: var(--group-color, #6366f1);
+}
+
+.ct-piece-meta {
+  font-size: 0.72rem;
+  color: #777;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ct-piece-meta span {
+  white-space: nowrap;
+}
+
+.ct-piece-sep {
+  color: #444;
+}
+
+.ct-rep-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--piece-color, #6366f1);
+  background: color-mix(in srgb, var(--piece-color, #6366f1) 15%, transparent);
+  padding: 1px 6px;
+  border-radius: 99px;
+  border: 1px solid color-mix(in srgb, var(--piece-color, #6366f1) 40%, transparent);
+}
+
+.ct-piece-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.ct-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #6366f1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ── Expanded rep rows ── */
+.ct-rep-rows {
+  border-top: 1px solid #1e1e1e;
+}
+
+.ct-rep-row {
+  padding: 0.35rem 0.75rem 0.35rem 3.5rem;
+  font-size: 0.75rem;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ct-rep-row.is-active-rep {
+  background: color-mix(in srgb, var(--piece-color, #6366f1) 12%, transparent);
+  color: #f0f0f0;
+}
+
+/* ── Inline edit form ── */
+.ct-edit-form {
+  padding: 0.75rem;
+  border-top: 1px solid #222;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.ct-form-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ct-form-label {
+  font-size: 0.72rem;
+  color: #888;
+  white-space: nowrap;
+}
+
+.ct-color-swatches {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.ct-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.1s;
+}
+
+.ct-swatch:hover { transform: scale(1.15); }
+.ct-swatch.selected { border-color: #fff; }
+
+/* ── Add piece panel ── */
+.ct-add-panel {
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ct-add-panel h2 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #666;
+  margin: 0;
+}
+
+/* ── Selection action bar ── */
+.ct-selection-bar {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 0.6rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  z-index: 200;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+/* ── Custom time sig inputs ── */
+.ct-timesig-custom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ct-timesig-custom input {
+  width: 44px;
+  text-align: center;
+}
+
+.ct-timesig-slash {
+  color: #666;
+  font-weight: 700;
+}

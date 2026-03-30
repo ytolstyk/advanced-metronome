@@ -27,6 +27,13 @@ const schema = a.schema({
     bpm: a.integer().required(),
   }).authorization(allow => [allow.owner()]),
 
+  // Many records per user — saved explicitly as named click tracks
+  ClickTrack: a.model({
+    name: a.string().required(),
+    piecesJson: a.string().required(),
+    groupsJson: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
+
   // One record per chord per user — persists favorite chords
   FavoriteChord: a.model({
     root: a.string().required(),

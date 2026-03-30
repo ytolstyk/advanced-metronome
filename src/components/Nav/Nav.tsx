@@ -11,6 +11,7 @@ const NAV_GROUPS = [
     items: [
       { to: "/", label: "Drum Machine", end: true },
       { to: "/tuner", label: "Tuner" },
+      { to: "/click-track", label: "Click Track" },
     ],
   },
   {
