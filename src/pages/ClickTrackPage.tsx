@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { GripVertical, Play, Pause, Square, Pencil, Trash2, Plus, Download, RotateCcw, Cloud, ChevronDown, FolderOpen, Share2 } from 'lucide-react';
+import { GripVertical, Play, Pause, Square, Pencil, Trash2, Copy, Plus, Download, RotateCcw, Cloud, ChevronDown, FolderOpen, Share2 } from 'lucide-react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -326,6 +326,8 @@ export function ClickTrackPage() {
   const dragIndex = useRef<number | null>(null);
   const dragOverIndex = useRef<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const trackListRef = useRef<HTMLDivElement>(null);
+  const activeItemRef = useRef<HTMLDivElement | null>(null);
 
   // Engine singleton
   if (!engineRef.current) engineRef.current = new ClickTrackEngine();
@@ -348,6 +350,16 @@ export function ClickTrackPage() {
   useEffect(() => {
     if (isPlaying) engineRef.current?.updateSpeed(speedPercent / 100);
   }, [speedPercent, isPlaying]);
+
+  // Scroll active segment/measure to top of list during playback
+  useEffect(() => {
+    if (!isPlaying || !activeItemRef.current || !trackListRef.current) return;
+    const container = trackListRef.current;
+    const el = activeItemRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    container.scrollTop += elRect.top - containerRect.top;
+  }, [currentPieceIndex, currentRepetition, isPlaying]);
 
   // Load shared track from URL param on mount
   useEffect(() => {
@@ -570,6 +582,35 @@ export function ClickTrackPage() {
     setSelectedIds(new Set());
   }
 
+  function copyPiece(piece: TrackPiece) {
+    const newPiece: TrackPiece = {
+      ...piece,
+      id: uid(),
+      label: piece.label ? `${piece.label} (copy)` : '',
+    };
+    setPieces(p => {
+      const idx = p.findIndex(x => x.id === piece.id);
+      const arr = [...p];
+      arr.splice(idx + 1, 0, newPiece);
+      return arr;
+    });
+  }
+
+  function duplicateSelected() {
+    setPieces(p => {
+      const indices = p.reduce<number[]>((acc, x, i) => {
+        if (selectedIds.has(x.id)) acc.push(i);
+        return acc;
+      }, []);
+      if (indices.length === 0) return p;
+      const copies = indices.map(i => ({ ...p[i], id: uid() }));
+      const arr = [...p];
+      arr.splice(indices[indices.length - 1] + 1, 0, ...copies);
+      return arr;
+    });
+    setSelectedIds(new Set());
+  }
+
   // ── Reset ──────────────────────────────────────────────────────────────
   function reset() {
     if (!window.confirm('Clear the entire click track?')) return;
@@ -760,7 +801,7 @@ export function ClickTrackPage() {
       )}
 
       {/* Track list */}
-      <div className="ct-track-list">
+      <div className="ct-track-list" ref={trackListRef}>
         {pieces.length === 0 && (
           <div className="ct-empty-state">No segments yet — add one below</div>
         )}
@@ -788,6 +829,7 @@ export function ClickTrackPage() {
                   return (
                     <div
                       key={`${piece.id}-${r}`}
+                      ref={isActiveCell ? (el) => { activeItemRef.current = el; } : undefined}
                       className={cn('ct-measure-cell', isActiveCell && 'is-active-rep', isSelected && 'is-selected')}
                       style={{ '--piece-color': color } as React.CSSProperties}
                       onClick={(e) => {
@@ -821,8 +863,12 @@ export function ClickTrackPage() {
                           />
                         ))}
                       </div>
+                      <div className="ct-measure-info">
+                        <span>{piece.timeSignature.numerator}/{piece.timeSignature.denominator}</span>
+                        <span className="ct-measure-info-sep">·</span>
+                        <span>{Math.round(piece.bpm * (speedPercent / 100))} bpm</span>
+                      </div>
                       <div className="ct-measure-footer">
-                        <span className="ct-measure-rep">{r + 1}/{piece.repeats}</span>
                         <button
                           className="ct-cell-play-btn"
                           disabled={isPlaying}
@@ -850,6 +896,7 @@ export function ClickTrackPage() {
           return (
             <div
               key={piece.id}
+              ref={isActive ? (el) => { activeItemRef.current = el; } : undefined}
               className={cn('ct-piece-card', isActive && 'is-active', dragOverIdx === i && 'drag-over')}
               style={{ '--piece-color': color } as React.CSSProperties}
               draggable
@@ -921,6 +968,14 @@ export function ClickTrackPage() {
                   </Button>
                   <Button
                     size="icon" variant="ghost"
+                    className="h-6 w-6 text-[#666] hover:text-[#f0f0f0]"
+                    onClick={() => copyPiece(piece)}
+                    title="Duplicate"
+                  >
+                    <Copy size={12} />
+                  </Button>
+                  <Button
+                    size="icon" variant="ghost"
                     className="h-6 w-6 text-[#666] hover:text-rose-400"
                     onClick={() => removePiece(piece.id)}
                     title="Remove"
@@ -962,6 +1017,9 @@ export function ClickTrackPage() {
       {selectedIds.size > 0 && (
         <div className="ct-selection-bar">
           <span>{selectedIds.size} selected</span>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={duplicateSelected}>
+            <Copy size={12} /> Duplicate
+          </Button>
           <Button size="sm" className="h-7 text-xs gap-1" onClick={() => openGroupDialog()}>
             <Plus size={12} /> Create Group
           </Button>
