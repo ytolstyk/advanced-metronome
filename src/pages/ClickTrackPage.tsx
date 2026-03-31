@@ -829,7 +829,7 @@ export function ClickTrackPage() {
                           title="Play from here"
                           onClick={(e) => { e.stopPropagation(); startFrom(pi, r); }}
                         >
-                          <Play size={9} />
+                          <Play size={12} />
                         </button>
                       </div>
                     </div>
