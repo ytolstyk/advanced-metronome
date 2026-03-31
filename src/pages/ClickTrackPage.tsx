@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { GripVertical, Play, Pause, Square, Pencil, Trash2, Plus, Download, RotateCcw, Cloud, ChevronDown, FolderOpen, Share2 } from 'lucide-react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { Button } from '@/components/ui/button';
@@ -113,6 +113,17 @@ function decodeTrack(s: string): { pieces: TrackPiece[]; groups: SegmentGroup[] 
     if (!Array.isArray(p.pieces)) return null;
     return { pieces: p.pieces as TrackPiece[], groups: Array.isArray(p.groups) ? p.groups as SegmentGroup[] : [] };
   } catch { return null; }
+}
+
+// ── Flat measure index helpers ──────────────────────────────────────────────
+function flatToPieceRep(pieces: TrackPiece[], flat: number): { pi: number; r: number } {
+  let remaining = flat;
+  for (let i = 0; i < pieces.length; i++) {
+    if (remaining < pieces[i].repeats) return { pi: i, r: remaining };
+    remaining -= pieces[i].repeats;
+  }
+  const last = pieces.length - 1;
+  return { pi: last, r: pieces[last].repeats - 1 };
 }
 
 // ── Map engine sub-tick → dot index in getMeasureDots ──────────────────────
@@ -286,6 +297,8 @@ export function ClickTrackPage() {
   const [currentSubTick, setCurrentSubTick] = useState<number | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedMeasures, setSelectedMeasures] = useState<Set<number>>(new Set());
+  const lastClickedMeasure = useRef<number | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftPiece>(DEFAULT_DRAFT);
   const [draft, setDraft] = useState<DraftPiece>({ ...DEFAULT_DRAFT });
@@ -316,6 +329,14 @@ export function ClickTrackPage() {
 
   // Engine singleton
   if (!engineRef.current) engineRef.current = new ClickTrackEngine();
+
+  // Prefix-sum of piece repeats (flat index offset per piece)
+  const measureOffsets = useMemo(() => {
+    const offsets: number[] = [];
+    let total = 0;
+    for (const p of pieces) { offsets.push(total); total += p.repeats; }
+    return offsets;
+  }, [pieces]);
 
   // Persist to localStorage
   useEffect(() => {
@@ -360,16 +381,35 @@ export function ClickTrackPage() {
     setCurrentSubTick(subTick);
   }, []);
 
-  function startFrom(startIdx: number) {
+  function startFrom(startIdx: number, startRep = 0) {
     if (pieces.length === 0) return;
+    setSelectedMeasures(new Set());
     engineRef.current!.start(
       pieces, startIdx, speedPercent / 100, countdownEnabled,
       handleProgress, handleCountdown, handleStop, handleBeat,
+      startRep,
     );
     setIsPlaying(true);
     setCountdownDisplay(countdownEnabled ? 3 : null);
     setCurrentPieceIndex(startIdx);
-    setCurrentRepetition(0);
+    setCurrentRepetition(startRep);
+  }
+
+  function startLoop() {
+    if (pieces.length === 0 || selectedMeasures.size === 0) return;
+    const minFlat = Math.min(...selectedMeasures);
+    const maxFlat = Math.max(...selectedMeasures);
+    const start = flatToPieceRep(pieces, minFlat);
+    const end = flatToPieceRep(pieces, maxFlat);
+    engineRef.current!.start(
+      pieces, start.pi, speedPercent / 100, countdownEnabled,
+      handleProgress, handleCountdown, handleStop, handleBeat,
+      start.r, true, end.pi, end.r,
+    );
+    setIsPlaying(true);
+    setCountdownDisplay(countdownEnabled ? 3 : null);
+    setCurrentPieceIndex(start.pi);
+    setCurrentRepetition(start.r);
   }
 
   function togglePlay() {
@@ -379,6 +419,8 @@ export function ClickTrackPage() {
     } else if (currentPieceIndex !== null) {
       engineRef.current!.resume();
       setIsPlaying(true);
+    } else if (selectedMeasures.size > 0) {
+      startLoop();
     } else {
       startFrom(0);
     }
@@ -725,38 +767,77 @@ export function ClickTrackPage() {
 
         {/* Score view (expand mode) */}
         {expandView && pieces.length > 0 && (
-          <div className="ct-score-view">
-            {pieces.map((piece, pi) => {
-              const color = getEffectiveColor(piece);
-              const dots = getMeasureDots(piece);
-              return Array.from({ length: piece.repeats }, (_, r) => {
-                const isActiveCell = currentPieceIndex === pi && currentRepetition === r;
-                const activeDotIdx = isActiveCell && currentSubTick !== null
-                  ? subTickToDotIndex(piece, currentSubTick)
-                  : -1;
-                return (
-                  <div
-                    key={`${piece.id}-${r}`}
-                    className={cn('ct-measure-cell', isActiveCell && 'is-active-rep')}
-                    style={{ '--piece-color': color } as React.CSSProperties}
-                  >
-                    {r === 0 && piece.label && (
-                      <div className="ct-measure-label">{piece.label}</div>
-                    )}
-                    <div className="ct-dots-row">
-                      {dots.map((type, di) => (
-                        <span
-                          key={di}
-                          className={cn(`ct-dot ct-dot--${type}`, di === activeDotIdx && 'ct-dot--clicking')}
-                        />
-                      ))}
+          <>
+            {selectedMeasures.size > 0 && (
+              <div className="ct-loop-bar">
+                <span>{selectedMeasures.size} measure{selectedMeasures.size !== 1 ? 's' : ''} selected — will loop</span>
+                <button className="ct-loop-bar-clear" onClick={() => setSelectedMeasures(new Set())}>✕</button>
+              </div>
+            )}
+            <div className="ct-score-view">
+              {pieces.map((piece, pi) => {
+                const color = getEffectiveColor(piece);
+                const dots = getMeasureDots(piece);
+                return Array.from({ length: piece.repeats }, (_, r) => {
+                  const flatIdx = measureOffsets[pi] + r;
+                  const isActiveCell = currentPieceIndex === pi && currentRepetition === r;
+                  const isSelected = selectedMeasures.has(flatIdx);
+                  const activeDotIdx = isActiveCell && currentSubTick !== null
+                    ? subTickToDotIndex(piece, currentSubTick)
+                    : -1;
+                  return (
+                    <div
+                      key={`${piece.id}-${r}`}
+                      className={cn('ct-measure-cell', isActiveCell && 'is-active-rep', isSelected && 'is-selected')}
+                      style={{ '--piece-color': color } as React.CSSProperties}
+                      onClick={(e) => {
+                        if (e.shiftKey && lastClickedMeasure.current !== null) {
+                          const lo = Math.min(lastClickedMeasure.current, flatIdx);
+                          const hi = Math.max(lastClickedMeasure.current, flatIdx);
+                          setSelectedMeasures(prev => {
+                            const next = new Set(prev);
+                            for (let i = lo; i <= hi; i++) next.add(i);
+                            return next;
+                          });
+                        } else {
+                          setSelectedMeasures(prev => {
+                            const next = new Set(prev);
+                            if (next.has(flatIdx)) next.delete(flatIdx); else next.add(flatIdx);
+                            return next;
+                          });
+                          lastClickedMeasure.current = flatIdx;
+                        }
+                      }}
+                    >
+                      <div className="ct-measure-count">{flatIdx + 1}</div>
+                      {r === 0 && piece.label && (
+                        <div className="ct-measure-label">{piece.label}</div>
+                      )}
+                      <div className="ct-dots-row">
+                        {dots.map((type, di) => (
+                          <span
+                            key={di}
+                            className={cn(`ct-dot ct-dot--${type}`, di === activeDotIdx && 'ct-dot--clicking')}
+                          />
+                        ))}
+                      </div>
+                      <div className="ct-measure-footer">
+                        <span className="ct-measure-rep">{r + 1}/{piece.repeats}</span>
+                        <button
+                          className="ct-cell-play-btn"
+                          disabled={isPlaying}
+                          title="Play from here"
+                          onClick={(e) => { e.stopPropagation(); startFrom(pi, r); }}
+                        >
+                          <Play size={9} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="ct-measure-rep">{r + 1}/{piece.repeats}</div>
-                  </div>
-                );
-              });
-            })}
-          </div>
+                  );
+                });
+              })}
+            </div>
+          </>
         )}
 
         {/* Normal card list (non-expand mode) */}

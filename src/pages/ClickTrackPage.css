@@ -443,7 +443,7 @@
   position: absolute;
   top: 0.45rem;
   left: 0.6rem;
-  right: 0.6rem;
+  right: 1.4rem;
 }
 
 .ct-dots-row {
@@ -496,4 +496,88 @@
   font-weight: 600;
   color: #888;
   letter-spacing: 0.02em;
+}
+
+/* Measure count number (top-right corner) */
+.ct-measure-count {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.4rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #555;
+  line-height: 1;
+}
+
+/* Footer row: rep counter + play button */
+.ct-measure-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* Per-cell play button */
+.ct-cell-play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid #333;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.12s, border-color 0.12s;
+  flex-shrink: 0;
+}
+
+.ct-cell-play-btn:hover:not(:disabled) {
+  color: #f0f0f0;
+  border-color: #666;
+}
+
+.ct-cell-play-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Selected measure cell */
+.ct-measure-cell.is-selected {
+  background: color-mix(in srgb, var(--piece-color, #6366f1) 12%, #161616);
+  border-color: color-mix(in srgb, var(--piece-color, #6366f1) 60%, transparent);
+}
+
+.ct-measure-cell {
+  cursor: pointer;
+}
+
+/* Loop selection bar */
+.ct-loop-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: #1a1a2e;
+  border: 1px solid #2d2d5a;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: #9999dd;
+}
+
+.ct-loop-bar-clear {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0 0.2rem;
+  line-height: 1;
+  margin-left: auto;
+}
+
+.ct-loop-bar-clear:hover {
+  color: #f0f0f0;
 }

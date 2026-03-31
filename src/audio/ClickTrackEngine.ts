@@ -42,7 +42,12 @@ export class ClickTrackEngine {
   // Playback cursor
   private pieces: TrackPiece[] = [];
   private startPieceIndex = 0;
+  private startRepetition = 0;
   private speedMultiplier = 1;
+  // Loop range (undefined = loop whole sequence)
+  private loopMode = false;
+  private loopEndPieceIndex: number | undefined = undefined;
+  private loopEndRepetition: number | undefined = undefined;
   // Cursor within sequence
   private countdownStep = 0;   // 3..1 when in countdown, 0 when done
   private pieceIndex = 0;
@@ -76,6 +81,10 @@ export class ClickTrackEngine {
     onCountdownFn: (n: number) => void,
     onStop: () => void,
     onBeat?: (pieceIndex: number, repetition: number, subTick: number) => void,
+    startRepetition = 0,
+    loopMode = false,
+    loopEndPieceIndex?: number,
+    loopEndRepetition?: number,
   ): void {
     this.stop();
     const ctx = this.ensureCtx();
@@ -85,14 +94,18 @@ export class ClickTrackEngine {
 
     this.pieces = pieces;
     this.startPieceIndex = startPieceIndex;
+    this.startRepetition = startRepetition;
     this.speedMultiplier = speedMultiplier;
+    this.loopMode = loopMode;
+    this.loopEndPieceIndex = loopEndPieceIndex;
+    this.loopEndRepetition = loopEndRepetition;
     this.onProgress = onProgress;
     this.onCountdown = onCountdownFn;
     this.onStop = onStop;
     this.onBeat = onBeat ?? null;
 
     this.pieceIndex = startPieceIndex;
-    this.repetition = 0;
+    this.repetition = startRepetition;
     this.subIndex = 0;
     this.countdownStep = countdown ? 3 : 0;
     this.nextBeatTime = ctx.currentTime + 0.05;
@@ -171,10 +184,16 @@ export class ClickTrackEngine {
 
     // ── Check if done ──
     if (this.pieceIndex >= this.pieces.length) {
-      const delay = (t - ctx.currentTime) * 1000;
-      setTimeout(() => { this.stop(); this.onStop?.(); }, Math.max(0, delay));
-      this.isRunning = false;
-      return;
+      if (this.loopMode) {
+        this.pieceIndex = this.startPieceIndex;
+        this.repetition = this.startRepetition;
+        this.subIndex = 0;
+      } else {
+        const delay = (t - ctx.currentTime) * 1000;
+        setTimeout(() => { this.stop(); this.onStop?.(); }, Math.max(0, delay));
+        this.isRunning = false;
+        return;
+      }
     }
 
     const piece = this.pieces[this.pieceIndex];
@@ -219,6 +238,17 @@ export class ClickTrackEngine {
       if (this.repetition >= piece.repeats) {
         this.repetition = 0;
         this.pieceIndex++;
+      }
+    }
+
+    // Handle loop range wrapping
+    if (this.loopMode && this.loopEndPieceIndex !== undefined && this.loopEndRepetition !== undefined) {
+      const pastEnd = this.pieceIndex > this.loopEndPieceIndex ||
+        (this.pieceIndex === this.loopEndPieceIndex && this.repetition > this.loopEndRepetition);
+      if (pastEnd) {
+        this.pieceIndex = this.startPieceIndex;
+        this.repetition = this.startRepetition;
+        this.subIndex = 0;
       }
     }
 
