@@ -364,10 +364,12 @@
   padding: 0.6rem 1rem;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.75rem;
   box-shadow: 0 8px 32px rgba(0,0,0,0.6);
   z-index: 200;
-  white-space: nowrap;
+  max-width: calc(100vw - 2rem);
   font-size: 0.8rem;
   color: #aaa;
 }

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { ClickTrackEngine } from '@/audio/ClickTrackEngine';
@@ -1023,19 +1023,34 @@ export function ClickTrackPage() {
           <Button size="sm" className="h-7 text-xs gap-1" onClick={() => openGroupDialog()}>
             <Plus size={12} /> Create Group
           </Button>
-          {groups.map(g => (
-            <Button key={g.id} size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => {
-              setPieces(p => p.map(x => selectedIds.has(x.id) ? { ...x, groupId: g.id, color: g.color } : x));
-              setSelectedIds(new Set());
-            }}>
-              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: g.color }} />
-              {g.name}
-            </Button>
-          ))}
           {groups.length > 0 && (
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={unassignGroup}>
-              Remove Group
-            </Button>
+            <Select onValueChange={(val) => {
+              if (val === '__remove__') {
+                unassignGroup();
+              } else {
+                const g = groups.find(g => g.id === val);
+                if (g) {
+                  setPieces(p => p.map(x => selectedIds.has(x.id) ? { ...x, groupId: g.id, color: g.color } : x));
+                  setSelectedIds(new Set());
+                }
+              }
+            }}>
+              <SelectTrigger className="h-7 text-xs w-[140px]">
+                <SelectValue placeholder="Assign Group" />
+              </SelectTrigger>
+              <SelectContent className="z-[300]">
+                {groups.map(g => (
+                  <SelectItem key={g.id} value={g.id}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: g.color }} />
+                      {g.name}
+                    </span>
+                  </SelectItem>
+                ))}
+                <SelectSeparator />
+                <SelectItem value="__remove__">Remove Group</SelectItem>
+              </SelectContent>
+            </Select>
           )}
           <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedIds(new Set())}>
             Deselect <ChevronDown size={12} />
