@@ -770,8 +770,8 @@ export function ClickTrackPage() {
           <>
             {selectedMeasures.size > 0 && (
               <div className="ct-loop-bar">
-                <span>{selectedMeasures.size} measure{selectedMeasures.size !== 1 ? 's' : ''} selected — will loop</span>
-                <button className="ct-loop-bar-clear" onClick={() => setSelectedMeasures(new Set())}>✕</button>
+                <span>Loop: measures {Math.min(...selectedMeasures) + 1}–{Math.max(...selectedMeasures) + 1} ({selectedMeasures.size} selected)</span>
+                <button className="ct-loop-bar-clear" onClick={() => setSelectedMeasures(new Set())}>Clear selection</button>
               </div>
             )}
             <div className="ct-score-view">
