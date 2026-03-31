@@ -41,7 +41,7 @@ const SUBDIVISIONS: { value: SubdivisionLabel; label: string }[] = [
 // ── Common time signatures ─────────────────────────────────────────────────
 const COMMON_TIME_SIGS = ['2/4','3/4','4/4','5/4','6/8','7/8','12/8','custom'] as const;
 
-type DraftPiece = Omit<TrackPiece, 'id'> & { customNum: string; customDen: string; useCustom: boolean };
+type DraftPiece = Omit<TrackPiece, 'id'> & { customNum: string; customDen: string; useCustom: boolean; bpmRaw: string };
 
 const DEFAULT_DRAFT: DraftPiece = {
   label: '',
@@ -54,6 +54,7 @@ const DEFAULT_DRAFT: DraftPiece = {
   customNum: '4',
   customDen: '4',
   useCustom: false,
+  bpmRaw: '120',
 };
 
 // ── localStorage ───────────────────────────────────────────────────────────
@@ -139,6 +140,134 @@ function getMeasureDots(piece: TrackPiece): Array<'accent' | 'beat' | 'sub'> {
     for (let s = 0; s < subsPerBeat; s++) result.push('sub');
   }
   return result;
+}
+
+// ── Time sig select helpers ────────────────────────────────────────────
+function applyTimeSigSelect(val: string, setD: React.Dispatch<React.SetStateAction<DraftPiece>>) {
+  if (val === 'custom') {
+    setD(d => ({ ...d, useCustom: true }));
+  } else {
+    const sig = parseSig(val);
+    if (sig) setD(d => ({ ...d, useCustom: false, timeSignature: sig, customNum: String(sig.numerator), customDen: String(sig.denominator) }));
+  }
+}
+
+function currentTimeSigValue(d: DraftPiece): string {
+  if (d.useCustom) return 'custom';
+  const match = COMMON_TIME_SIGS.find(s => s !== 'custom' && parseSig(s)?.numerator === d.timeSignature.numerator && parseSig(s)?.denominator === d.timeSignature.denominator);
+  return match ?? 'custom';
+}
+
+// ── Piece form (shared by Add and Edit) ────────────────────────────────
+function PieceForm({ d, setD, onSubmit, submitLabel, groups }: {
+  d: DraftPiece;
+  setD: React.Dispatch<React.SetStateAction<DraftPiece>>;
+  onSubmit: () => void;
+  submitLabel: string;
+  groups: SegmentGroup[];
+}) {
+  const bpmParsed = parseInt(d.bpmRaw, 10);
+  const bpmValid = !isNaN(bpmParsed) && bpmParsed >= 20 && bpmParsed <= 400;
+
+  const handleKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); if (bpmValid) onSubmit(); } };
+
+  return (
+    <div className="ct-edit-form">
+      <div className="ct-form-row">
+        <Label className="ct-form-label">Label</Label>
+        <Input
+          className="h-7 text-xs w-36"
+          value={d.label}
+          placeholder="Segment name"
+          onChange={e => setD(x => ({ ...x, label: e.target.value }))}
+          onKeyDown={handleKey}
+        />
+        <Label className="ct-form-label">Color</Label>
+        <div className="ct-color-swatches">
+          {PALETTE.map(p => (
+            <button
+              key={p.name}
+              type="button"
+              className={cn('ct-swatch', d.color === p.hex && 'selected')}
+              style={{ background: p.hex }}
+              onClick={() => setD(x => ({ ...x, color: p.hex }))}
+              title={p.name}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="ct-form-row">
+        <Label className="ct-form-label">Time sig</Label>
+        <Select value={currentTimeSigValue(d)} onValueChange={v => applyTimeSigSelect(v, setD)}>
+          <SelectTrigger className="h-7 text-xs w-24">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {COMMON_TIME_SIGS.map(s => (
+              <SelectItem key={s} value={s}>{s === 'custom' ? 'Custom…' : s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {d.useCustom && (
+          <div className="ct-timesig-custom">
+            <Input className="h-7 text-xs w-12 text-center" value={d.customNum} onChange={e => setD(x => ({ ...x, customNum: e.target.value }))} onKeyDown={handleKey} />
+            <span className="ct-timesig-slash">/</span>
+            <Input className="h-7 text-xs w-12 text-center" value={d.customDen} onChange={e => setD(x => ({ ...x, customDen: e.target.value }))} onKeyDown={handleKey} />
+          </div>
+        )}
+
+        <Label className="ct-form-label">Subdivision</Label>
+        <Select value={d.subdivision} onValueChange={v => setD(x => ({ ...x, subdivision: v as SubdivisionLabel }))}>
+          <SelectTrigger className="h-7 text-xs w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SUBDIVISIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="ct-form-row">
+        <Label className="ct-form-label">BPM</Label>
+        <Input
+          type="number" className="h-7 text-xs w-20"
+          value={d.bpmRaw}
+          onChange={e => {
+            const raw = e.target.value;
+            const n = parseInt(raw, 10);
+            setD(x => ({ ...x, bpmRaw: raw, ...(isNaN(n) ? {} : { bpm: n }) }));
+          }}
+          onKeyDown={handleKey}
+        />
+
+        <Label className="ct-form-label">Repeats</Label>
+        <Input
+          type="number" className="h-7 text-xs w-16"
+          value={d.repeats} min={1} max={99}
+          onChange={e => setD(x => ({ ...x, repeats: Math.max(1, Math.min(99, parseInt(e.target.value) || 1)) }))}
+          onKeyDown={handleKey}
+        />
+
+        {groups.length > 0 && (
+          <>
+            <Label className="ct-form-label">Group</Label>
+            <Select value={d.groupId ?? 'none'} onValueChange={v => setD(x => ({ ...x, groupId: v === 'none' ? null : v }))}>
+              <SelectTrigger className="h-7 text-xs w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {groups.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+
+        <Button size="sm" className="h-7 text-xs ml-auto" onClick={onSubmit} disabled={!bpmValid}>{submitLabel}</Button>
+      </div>
+    </div>
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -289,6 +418,7 @@ export function ClickTrackPage() {
       ...DEFAULT_DRAFT,
       color: colorForIndex(pieces.length + 1),
       bpm: prev.bpm,
+      bpmRaw: String(prev.bpm),
       subdivision: prev.subdivision,
       timeSignature: prev.timeSignature,
       customNum: prev.customNum,
@@ -313,6 +443,7 @@ export function ClickTrackPage() {
       timeSignature: piece.timeSignature,
       subdivision: piece.subdivision,
       bpm: piece.bpm,
+      bpmRaw: String(piece.bpm),
       repeats: piece.repeats,
       customNum: String(piece.timeSignature.numerator),
       customDen: String(piece.timeSignature.denominator),
@@ -466,126 +597,6 @@ export function ClickTrackPage() {
     return groups.find(x => x.id === groupId)?.name ?? null;
   }
 
-  // ── Time sig select handler ────────────────────────────────────────────
-  function applyTimeSigSelect(val: string, setD: React.Dispatch<React.SetStateAction<DraftPiece>>) {
-    if (val === 'custom') {
-      setD(d => ({ ...d, useCustom: true }));
-    } else {
-      const sig = parseSig(val);
-      if (sig) setD(d => ({ ...d, useCustom: false, timeSignature: sig, customNum: String(sig.numerator), customDen: String(sig.denominator) }));
-    }
-  }
-
-  function currentTimeSigValue(d: DraftPiece): string {
-    if (d.useCustom) return 'custom';
-    const match = COMMON_TIME_SIGS.find(s => s !== 'custom' && parseSig(s)?.numerator === d.timeSignature.numerator && parseSig(s)?.denominator === d.timeSignature.denominator);
-    return match ?? 'custom';
-  }
-
-  // ── Piece form (shared by Add and Edit) ────────────────────────────────
-  function PieceForm({ d, setD, onSubmit, submitLabel }: {
-    d: DraftPiece;
-    setD: React.Dispatch<React.SetStateAction<DraftPiece>>;
-    onSubmit: () => void;
-    submitLabel: string;
-  }) {
-    const handleKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); onSubmit(); } };
-
-    return (
-      <div className="ct-edit-form">
-        <div className="ct-form-row">
-          <Label className="ct-form-label">Label</Label>
-          <Input
-            className="h-7 text-xs w-36"
-            value={d.label}
-            placeholder="Segment name"
-            onChange={e => setD(x => ({ ...x, label: e.target.value }))}
-            onKeyDown={handleKey}
-          />
-          <Label className="ct-form-label">Color</Label>
-          <div className="ct-color-swatches">
-            {PALETTE.map(p => (
-              <button
-                key={p.name}
-                type="button"
-                className={cn('ct-swatch', d.color === p.hex && 'selected')}
-                style={{ background: p.hex }}
-                onClick={() => setD(x => ({ ...x, color: p.hex }))}
-                title={p.name}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="ct-form-row">
-          <Label className="ct-form-label">Time sig</Label>
-          <Select value={currentTimeSigValue(d)} onValueChange={v => applyTimeSigSelect(v, setD)}>
-            <SelectTrigger className="h-7 text-xs w-24">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {COMMON_TIME_SIGS.map(s => (
-                <SelectItem key={s} value={s}>{s === 'custom' ? 'Custom…' : s}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {d.useCustom && (
-            <div className="ct-timesig-custom">
-              <Input className="h-7 text-xs w-12 text-center" value={d.customNum} onChange={e => setD(x => ({ ...x, customNum: e.target.value }))} onKeyDown={handleKey} />
-              <span className="ct-timesig-slash">/</span>
-              <Input className="h-7 text-xs w-12 text-center" value={d.customDen} onChange={e => setD(x => ({ ...x, customDen: e.target.value }))} onKeyDown={handleKey} />
-            </div>
-          )}
-
-          <Label className="ct-form-label">Subdivision</Label>
-          <Select value={d.subdivision} onValueChange={v => setD(x => ({ ...x, subdivision: v as SubdivisionLabel }))}>
-            <SelectTrigger className="h-7 text-xs w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SUBDIVISIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="ct-form-row">
-          <Label className="ct-form-label">BPM</Label>
-          <Input
-            type="number" className="h-7 text-xs w-20"
-            value={d.bpm} min={20} max={400}
-            onChange={e => setD(x => ({ ...x, bpm: Math.max(20, Math.min(400, parseInt(e.target.value) || 120)) }))}
-            onKeyDown={handleKey}
-          />
-
-          <Label className="ct-form-label">Repeats</Label>
-          <Input
-            type="number" className="h-7 text-xs w-16"
-            value={d.repeats} min={1} max={99}
-            onChange={e => setD(x => ({ ...x, repeats: Math.max(1, Math.min(99, parseInt(e.target.value) || 1)) }))}
-            onKeyDown={handleKey}
-          />
-
-          {groups.length > 0 && (
-            <>
-              <Label className="ct-form-label">Group</Label>
-              <Select value={d.groupId ?? 'none'} onValueChange={v => setD(x => ({ ...x, groupId: v === 'none' ? null : v }))}>
-                <SelectTrigger className="h-7 text-xs w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {groups.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </>
-          )}
-
-          <Button size="sm" className="h-7 text-xs ml-auto" onClick={onSubmit}>{submitLabel}</Button>
-        </div>
-      </div>
-    );
-  }
-
   // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="click-track-page">
@@ -729,7 +740,9 @@ export function ClickTrackPage() {
                     className={cn('ct-measure-cell', isActiveCell && 'is-active-rep')}
                     style={{ '--piece-color': color } as React.CSSProperties}
                   >
-                    {r === 0 && <div className="ct-measure-label">{piece.label}</div>}
+                    {r === 0 && piece.label && (
+                      <div className="ct-measure-label">{piece.label}</div>
+                    )}
                     <div className="ct-dots-row">
                       {dots.map((type, di) => (
                         <span
@@ -843,6 +856,7 @@ export function ClickTrackPage() {
                   setD={setEditDraft}
                   onSubmit={() => saveEdit(piece.id)}
                   submitLabel="Save"
+                  groups={groups}
                 />
               )}
 
@@ -859,6 +873,7 @@ export function ClickTrackPage() {
           setD={setDraft}
           onSubmit={addPiece}
           submitLabel="+ Add"
+          groups={groups}
         />
       </div>
 

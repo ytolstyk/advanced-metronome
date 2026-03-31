@@ -161,6 +161,7 @@
   overflow: hidden;
   transition: border-color 0.2s, box-shadow 0.2s;
   position: relative;
+  flex-shrink: 0;
 }
 
 .ct-piece-card.is-active {
@@ -407,8 +408,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  padding: 0.25rem 0;
-  align-content: flex-start;
+  padding: 0.25rem 0 0.75rem;
 }
 
 .ct-measure-cell {
@@ -419,7 +419,7 @@
   background: #161616;
   border: 1px solid #2a2a2a;
   border-radius: 8px;
-  padding: 0.45rem 0.6rem 0.35rem;
+  padding: 1.6rem 0.6rem 0.35rem;
   position: relative;
   transition: box-shadow 0.15s, border-color 0.15s;
   min-width: 44px;
@@ -438,10 +438,12 @@
   letter-spacing: 0.06em;
   color: var(--piece-color, #6366f1);
   white-space: nowrap;
-  max-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 2px;
+  position: absolute;
+  top: 0.45rem;
+  left: 0.6rem;
+  right: 0.6rem;
 }
 
 .ct-dots-row {

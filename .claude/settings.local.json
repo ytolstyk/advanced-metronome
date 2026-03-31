@@ -48,7 +48,8 @@
       "WebFetch(domain:www.guitar-chord.org)",
       "WebFetch(domain:stringtheorydottv.wordpress.com)",
       "WebFetch(domain:acousticguitar.com)",
-      "Bash(./node_modules/.bin/tsc -b)"
+      "Bash(./node_modules/.bin/tsc -b)",
+      "Bash(rtk proxy:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
