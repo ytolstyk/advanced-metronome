@@ -99,8 +99,8 @@
 }
 
 .drum-action-btn {
-  background: #262736;
-  border: 1px solid #353650;
+  background: #161616;
+  border: 1px solid #2a2a2a;
   border-radius: 8px;
   color: #c0c0f0;
   cursor: pointer;
@@ -110,18 +110,18 @@
 }
 
 .drum-action-btn:hover {
-  background: #2e3050;
-  border-color: #5a5c80;
+  background: #1e1e1e;
+  border-color: #444;
 }
 
 .drum-action-btn--primary {
-  background: #2a3060;
-  border-color: #7c83f5;
+  background: color-mix(in srgb, #6366f1 15%, #111);
+  border-color: #6366f1;
   color: #d0d4ff;
 }
 
 .drum-action-btn--primary:hover {
-  background: #333a80;
+  background: color-mix(in srgb, #6366f1 25%, #111);
 }
 
 /* ── Export confirm overlay ────────────────────────────────────────────── */

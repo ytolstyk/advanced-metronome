@@ -4,9 +4,9 @@
   align-items: center;
   gap: 20px;
   padding: 16px 20px;
-  background: #262736;
+  background: #111;
   border-radius: 12px;
-  border: 1px solid #353650;
+  border: 1px solid #2a2a2a;
 }
 
 .transport-buttons {
@@ -30,7 +30,7 @@
   gap: 12px;
   flex: 0 0 100%;
   padding-top: 14px;
-  border-top: 1px solid #353650;
+  border-top: 1px solid #2a2a2a;
 }
 
 .preset-row {
@@ -39,7 +39,7 @@
   gap: 10px;
   flex: 0 0 100%;
   padding-top: 14px;
-  border-top: 1px solid #353650;
+  border-top: 1px solid #2a2a2a;
 }
 
 .preset-row-label {
@@ -47,7 +47,7 @@
   font-weight: 700;
   letter-spacing: 0.7px;
   text-transform: uppercase;
-  color: #9898c8;
+  color: #888;
   white-space: nowrap;
 }
 

@@ -1,9 +1,9 @@
 .drum-grid-scroll {
   overflow-x: auto;
   width: 100%;
-  background: #262736;
+  background: #111;
   border-radius: 12px;
-  border: 1px solid #353650;
+  border: 1px solid #2a2a2a;
 }
 
 .drum-grid {
@@ -17,7 +17,7 @@
   position: sticky;
   left: 14px;
   z-index: 1;
-  background: #262736;
+  background: #111;
 }
 
 .beat-count-cell {
@@ -27,7 +27,7 @@
   height: 22px;
   font-size: 0.85rem;
   font-weight: 700;
-  color: #a8a8d8;
+  color: #888;
   letter-spacing: 0.2px;
   border-radius: 4px;
   transition: color 0.05s, background 0.05s;
@@ -37,23 +37,23 @@
 .beat-count-cell--half {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #8888b8;
+  color: #666;
 }
 
 .beat-count-cell--triplet {
   font-size: 0.9rem;
   font-weight: 400;
-  color: #7070a8;
+  color: #555;
 }
 
 .beat-count-cell--quarter {
   font-size: 0.75rem;
   font-weight: 500;
-  color: #6060a0;
+  color: #444;
 }
 
 .beat-count-cell--measure-start {
-  border-left: 2px solid #8486b8;
+  border-left: 2px solid #6366f1;
 }
 
 .beat-count-cell--active {

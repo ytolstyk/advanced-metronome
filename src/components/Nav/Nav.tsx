@@ -9,7 +9,7 @@ const NAV_GROUPS = [
   {
     label: "Tools",
     items: [
-      { to: "/", label: "Drum Machine", end: true },
+      { to: "/drums", label: "Drum Machine" },
       { to: "/tuner", label: "Tuner" },
       { to: "/click-track", label: "Click Track" },
     ],

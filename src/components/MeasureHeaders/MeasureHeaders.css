@@ -2,7 +2,7 @@
   position: sticky;
   left: 14px;
   z-index: 1;
-  background: #262736;
+  background: #111;
 }
 
 .measure-header {
@@ -11,7 +11,7 @@
   align-items: center;
   gap: 4px;
   padding: 6px 0;
-  border-bottom: 1px solid #363750;
+  border-bottom: 1px solid #2a2a2a;
   user-select: none;
 }
 
@@ -28,7 +28,7 @@
 
 .measure-number {
   font-size: 0.8rem;
-  color: #a8a8cc;
+  color: #888;
   font-weight: 700;
   letter-spacing: 0.3px;
 }
@@ -41,7 +41,7 @@
 
 .time-sig-sep {
   font-size: 0.9rem;
-  color: #9090c8;
+  color: #666;
   user-select: none;
   line-height: 1;
   font-weight: 600;

@@ -5,7 +5,8 @@ import { Authenticator } from '@aws-amplify/ui-react'
 import '@aws-amplify/ui-react/styles.css'
 import './auth/amplify'
 import './index.css'
-import App from './App.tsx'
+import { DrumMachinePage } from './pages/DrumMachinePage.tsx'
+import { WelcomePage } from './pages/WelcomePage.tsx'
 import { Nav } from './components/Nav/Nav.tsx'
 import { DonationModal } from './components/DonationModal/DonationModal.tsx'
 import { TunerPage } from './pages/TunerPage.tsx'
@@ -30,7 +31,8 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <Nav />
         <Routes>
-          <Route path="/" element={<App />} />
+          <Route path="/" element={<WelcomePage />} />
+          <Route path="/drums" element={<DrumMachinePage />} />
           <Route path="/tuner" element={<TunerPage />} />
           <Route path="/chords" element={<ChordsPage />} />
           <Route path="/scales" element={<ScalesPage />} />
