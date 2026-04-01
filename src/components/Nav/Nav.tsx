@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuthModal } from "@/components/AuthModal/AuthModal";
@@ -10,23 +10,24 @@ const NAV_GROUPS = [
     label: "Tools",
     items: [
       { to: "/drums", label: "Drum Machine" },
-      { to: "/tuner", label: "Tuner" },
       { to: "/click-track", label: "Click Track" },
+      { to: "/tuner", label: "Tuner" },
     ],
   },
   {
     label: "Learn",
     items: [
+      { to: "/lessons", label: "Lessons" },
       { to: "/chords", label: "Chords" },
       { to: "/scales", label: "Scales" },
       { to: "/circle", label: "Circle of 5ths" },
-      { to: "/lessons", label: "Lessons" },
     ],
   },
 ];
 
 function linkCls(isActive: boolean) {
-  const base = "text-sm rounded-md transition-colors duration-150 no-underline block px-4 py-2.5 w-full";
+  const base =
+    "text-sm rounded-md transition-colors duration-150 no-underline block px-4 py-2.5 w-full";
   const state = isActive
     ? "bg-[#1e1e1e] text-[#f0f0f0]"
     : "text-[#b0b0b0] hover:text-[#eee] hover:bg-[#1a1a1a]";
@@ -40,7 +41,7 @@ export function Nav() {
     <nav className="sticky top-0 z-50 bg-[#0a0a0a] border-b border-[#222]">
       <div className="flex items-center justify-between px-5 py-3">
         <span className="text-base font-bold tracking-tight text-[#f0f0f0]">
-          Drumma Llama
+          <Link to="/">Drumma Llama</Link>
         </span>
 
         <div className="flex items-center gap-1">
@@ -65,7 +66,7 @@ export function Nav() {
             variant="ghost"
             size="icon"
             className="sm:hidden text-[#888] hover:text-[#eee] hover:bg-[#1a1a1a]"
-            onClick={() => setOpen(o => !o)}
+            onClick={() => setOpen((o) => !o)}
             aria-label={open ? "Close menu" : "Open menu"}
           >
             {open ? <X size={20} /> : <Menu size={20} />}

@@ -6,6 +6,7 @@ import type { AppState } from "../types";
 import { loadCurrentTrack, saveCurrentTrack } from "../api/drumApi";
 import { decodeShareState } from "../shareUtils";
 import { StorageErrorBanner } from "../components/StorageErrorBanner/StorageErrorBanner";
+import { Button } from "@/components/ui/button";
 import { useAudioEngine } from "../hooks/useAudioEngine";
 import { DrumGrid } from "../components/DrumGrid/DrumGrid";
 import { TransportControls } from "../components/TransportControls/TransportControls";
@@ -256,15 +257,15 @@ export function DrumMachinePage() {
         <div className="import-banner">
           <span>Click track imported — apply measures to drum machine?</span>
           <div className="import-banner-actions">
-            <button className="import-banner-btn import-banner-btn--accept" onClick={handleAcceptClickImport}>
+            <Button size="sm" className="h-7 text-xs" onClick={handleAcceptClickImport}>
               Apply &amp; Generate Drums
-            </button>
-            <button className="import-banner-btn" onClick={() => {
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
               sessionStorage.removeItem('click-to-drum-import');
               setClickImportBanner(false);
             }}>
               Dismiss
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -284,34 +285,36 @@ export function DrumMachinePage() {
         onChordVolumeChange={(v) => dispatchWithHistory({ type: 'SET_CHORD_VOLUME', volume: v })}
       />
       <div className="drum-extra-row">
-        <button className="drum-action-btn" onClick={() => setShowGenerateModal(true)}>
+        <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setShowGenerateModal(true)}>
           Generate Drums
-        </button>
-        <button className="drum-action-btn" onClick={() => setShowExportConfirm(true)}>
+        </Button>
+        <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setShowExportConfirm(true)}>
           Export to Click Track
-        </button>
+        </Button>
       </div>
       {showExportConfirm && (
         <div className="export-confirm-overlay" onClick={() => setShowExportConfirm(false)}>
           <div className="export-confirm-dialog" onClick={e => e.stopPropagation()}>
             <p>This will navigate to the Click Track Builder and load your drum measures as segments.</p>
             <div className="export-confirm-actions">
-              <button className="drum-action-btn" onClick={() => setShowExportConfirm(false)}>Cancel</button>
-              <button className="drum-action-btn drum-action-btn--primary" onClick={() => { setShowExportConfirm(false); handleExportToClickTrack(); }}>
+              <Button size="sm" variant="outline" onClick={() => setShowExportConfirm(false)}>Cancel</Button>
+              <Button size="sm" onClick={() => { setShowExportConfirm(false); handleExportToClickTrack(); }}>
                 Continue
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
       <div className="piano-toggle-row">
-        <button
-          className="piano-toggle-btn"
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-xs"
           onClick={() => setShowPiano((v) => !v)}
           aria-expanded={showPiano}
         >
           {showPiano ? "Hide Piano" : "Show Piano"}
-        </button>
+        </Button>
       </div>
       {showPiano && <PianoKeyboard />}
       <p className="app-hint">Space to play/pause · Ctrl+Z to undo</p>
