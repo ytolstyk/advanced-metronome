@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { GripVertical, Play, Pause, Square, Pencil, Trash2, Copy, Plus, Download, RotateCcw, Cloud, ChevronDown, FolderOpen, Share2 } from 'lucide-react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import type { TrackPiece, SubdivisionLabel } from '@/audio/ClickTrackEngine';
 import { exportClickTrack } from '@/audio/exportClickTrack';
 import { saveCloudClickTrack, loadCloudClickTracks, deleteCloudClickTrack } from '@/api/clickTrackApi';
 import type { SegmentGroup, CloudClickTrack } from '@/api/clickTrackApi';
+import { clickTrackToDrumMeasures } from '../utils/clickTrackToDrum';
 import './ClickTrackPage.css';
 
 // ── Color palette ──────────────────────────────────────────────────────────
@@ -283,6 +285,7 @@ function PieceForm({ d, setD, onSubmit, submitLabel, groups }: {
 
 // ────────────────────────────────────────────────────────────────────────────
 export function ClickTrackPage() {
+  const navigate = useNavigate();
   const saved = loadState();
   const [pieces, setPieces] = useState<TrackPiece[]>(saved.pieces);
   const [groups, setGroups] = useState<SegmentGroup[]>(saved.groups);
@@ -321,6 +324,10 @@ export function ClickTrackPage() {
 
   const [sharedOffer, setSharedOffer] = useState<{ pieces: TrackPiece[]; groups: SegmentGroup[] } | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [showDrumExportConfirm, setShowDrumExportConfirm] = useState(false);
+  const [drumImportBanner, setDrumImportBanner] = useState<boolean>(() => {
+    return sessionStorage.getItem('drum-to-click-import') !== null;
+  });
 
   const engineRef = useRef<ClickTrackEngine | null>(null);
   const dragIndex = useRef<number | null>(null);
@@ -652,6 +659,25 @@ export function ClickTrackPage() {
     setTimeout(() => setShareCopied(false), 2000);
   }
 
+  // ── Drum track export ──────────────────────────────────────────────────
+  function handleBuildDrumTrack() {
+    const { measures, bpm } = clickTrackToDrumMeasures(pieces);
+    sessionStorage.setItem('click-to-drum-import', JSON.stringify({ measures, bpm }));
+    void navigate('/');
+  }
+
+  function handleAcceptDrumImport() {
+    const raw = sessionStorage.getItem('drum-to-click-import');
+    sessionStorage.removeItem('drum-to-click-import');
+    setDrumImportBanner(false);
+    if (!raw) return;
+    try {
+      const imported = JSON.parse(raw) as TrackPiece[];
+      stopPlayback();
+      setPieces(imported);
+    } catch { /* malformed — ignore */ }
+  }
+
   // ── Save to cloud ──────────────────────────────────────────────────────
   async function saveCloud() {
     setSaveStatus('saving');
@@ -684,6 +710,39 @@ export function ClickTrackPage() {
   return (
     <div className="click-track-page">
 
+      {/* Drum import banner */}
+      {drumImportBanner && (
+        <div className="ct-import-banner">
+          <span>Drum track imported — load it as click track segments?</span>
+          <div className="ct-import-banner-actions">
+            <button className="ct-import-btn ct-import-btn--accept" onClick={handleAcceptDrumImport}>
+              Load
+            </button>
+            <button className="ct-import-btn" onClick={() => {
+              sessionStorage.removeItem('drum-to-click-import');
+              setDrumImportBanner(false);
+            }}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Drum export confirm */}
+      {showDrumExportConfirm && (
+        <div className="ct-export-overlay" onClick={() => setShowDrumExportConfirm(false)}>
+          <div className="ct-export-dialog" onClick={e => e.stopPropagation()}>
+            <p>This will navigate to the Drum Machine and populate measures from your click track segments.</p>
+            <div className="ct-export-dialog-actions">
+              <Button size="sm" variant="outline" onClick={() => setShowDrumExportConfirm(false)}>Cancel</Button>
+              <Button size="sm" onClick={() => { setShowDrumExportConfirm(false); handleBuildDrumTrack(); }}>
+                Continue
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Countdown overlay */}
       {countdownDisplay !== null && (
         <div className="ct-countdown-overlay">
@@ -695,6 +754,14 @@ export function ClickTrackPage() {
       <div className="ct-header">
         <h1>Click Track Builder</h1>
         <div className="ct-header-actions">
+          <Button
+            size="sm" variant="outline"
+            onClick={() => setShowDrumExportConfirm(true)}
+            disabled={pieces.length === 0}
+            className="gap-1 text-xs"
+          >
+            Build Drum Track
+          </Button>
           <Button size="sm" variant="ghost" onClick={reset} className="gap-1 text-xs">
             <RotateCcw size={13} /> Reset
           </Button>

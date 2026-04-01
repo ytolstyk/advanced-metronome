@@ -46,3 +46,114 @@
   margin: 0;
   letter-spacing: 0.3px;
 }
+
+/* ── Import banner ─────────────────────────────────────────────────────── */
+.import-banner {
+  background: #1a2a3a;
+  border: 1px solid #2a5a8a;
+  border-radius: 8px;
+  color: #a0cfff;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.import-banner-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.import-banner-btn {
+  background: none;
+  border: 1px solid #4a7aaa;
+  border-radius: 6px;
+  color: #a0cfff;
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 4px 12px;
+  transition: background 0.15s;
+}
+
+.import-banner-btn:hover {
+  background: #1e3a5a;
+}
+
+.import-banner-btn--accept {
+  background: #1e4a7a;
+  border-color: #5a9ade;
+  color: #d0eaff;
+}
+
+.import-banner-btn--accept:hover {
+  background: #265a90;
+}
+
+/* ── Drum extra row ────────────────────────────────────────────────────── */
+.drum-extra-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.drum-action-btn {
+  background: #262736;
+  border: 1px solid #353650;
+  border-radius: 8px;
+  color: #c0c0f0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 7px 14px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.drum-action-btn:hover {
+  background: #2e3050;
+  border-color: #5a5c80;
+}
+
+.drum-action-btn--primary {
+  background: #2a3060;
+  border-color: #7c83f5;
+  color: #d0d4ff;
+}
+
+.drum-action-btn--primary:hover {
+  background: #333a80;
+}
+
+/* ── Export confirm overlay ────────────────────────────────────────────── */
+.export-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.export-confirm-dialog {
+  background: #1a1b2e;
+  border: 1px solid #353650;
+  border-radius: 10px;
+  color: #f0f0f0;
+  max-width: 400px;
+  padding: 24px;
+  width: 90vw;
+}
+
+.export-confirm-dialog p {
+  color: #ccc;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+
+.export-confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

@@ -298,7 +298,8 @@ export type Action =
   | { type: 'SET_CHORD_BEAT'; beat: number; chord: ChordBeat | null }
   | { type: 'SET_CHORD_INSTRUMENT'; instrument: ChordInstrumentType }
   | { type: 'CLEAR_CHORD_PATTERN' }
-  | { type: 'SET_CHORD_VOLUME'; volume: number };
+  | { type: 'SET_CHORD_VOLUME'; volume: number }
+  | { type: 'APPLY_GENERATED_DRUMS'; measures: Measure[]; pattern: Pattern };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -541,6 +542,16 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'SET_CHORD_VOLUME':
       return { ...state, chordVolume: action.volume };
+
+    case 'APPLY_GENERATED_DRUMS': {
+      const newTotal = getTotalBeats(action.measures);
+      return {
+        ...state,
+        config: { ...state.config, measures: action.measures },
+        pattern: action.pattern,
+        chordPattern: resizeChordPattern(state.chordPattern, newTotal),
+      };
+    }
 
     case 'RESTORE_STATE':
       return {
