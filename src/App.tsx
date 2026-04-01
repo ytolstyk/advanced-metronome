@@ -72,12 +72,15 @@ function App() {
 
   const handleGenerate = useCallback((style: DrumStyle) => {
     const measures = stateRef.current.config.measures;
-    // Build updated measures with the style's stepsPerBeat, keeping beats+subdivision unchanged
+    // Only force stepsPerBeat for styles that require triplets (3) or quarter beats (4).
+    // For straight (1) or half-beat (2) styles, preserve the measure's existing stepsPerBeat.
     const newMeasures: Measure[] = measures.map(m => ({
       timeSignature: {
         beats: m.timeSignature.beats,
         subdivision: m.timeSignature.subdivision,
-        stepsPerBeat: style.stepsPerBeat,
+        stepsPerBeat: style.stepsPerBeat >= 3
+          ? style.stepsPerBeat
+          : Math.max(m.timeSignature.stepsPerBeat ?? 1, style.stepsPerBeat),
       },
     }));
     // Generate pattern for each measure, accumulating offsets
@@ -95,11 +98,14 @@ function App() {
       const spb = m.timeSignature.stepsPerBeat ?? 1;
       const measureSteps = beats * spb;
       const hit = style.getPattern(beats);
+      // Scale hit positions from the style's step space to the measure's actual step space
+      const scale = spb / style.stepsPerBeat;
       for (const id of INSTRUMENT_IDS) {
         const steps = hit[id] ?? [];
         for (const s of steps) {
-          if (s >= 0 && s < measureSteps) {
-            pattern[id][offset + s] = true;
+          const scaledS = Math.round(s * scale);
+          if (scaledS >= 0 && scaledS < measureSteps) {
+            pattern[id][offset + scaledS] = true;
           }
         }
       }
