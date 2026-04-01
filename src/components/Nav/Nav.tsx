@@ -82,11 +82,10 @@ export function Nav() {
               <span className="block text-[0.65rem] font-bold uppercase tracking-wider text-[#666] px-4 pt-2 pb-1">
                 {group.label}
               </span>
-              {group.items.map(({ to, label, end }) => (
+              {group.items.map(({ to, label }) => (
                 <NavLink
                   key={to}
                   to={to}
-                  end={end}
                   className={({ isActive }) => linkCls(isActive)}
                   onClick={() => setOpen(false)}
                 >
