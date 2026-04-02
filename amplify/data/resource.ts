@@ -53,6 +53,18 @@ const schema = a.schema({
     lessonId: a.string().required(),
     moduleId: a.string().required(),
   }).authorization(allow => [allow.owner()]),
+
+  // Fret memorizer game scores — one record per completed session
+  FretMemorizerScore: a.model({
+    score: a.integer().required(),
+    wrongAnswers: a.integer().required(),
+    totalQuestions: a.integer().required(),
+    elapsedSeconds: a.integer().required(),
+    gameMode: a.string().required(),
+    stringCount: a.integer().required(),
+    tuning: a.string().required(),
+    completedAt: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

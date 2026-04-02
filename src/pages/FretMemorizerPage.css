@@ -1,0 +1,33 @@
+.fm-string-glow {
+  filter: drop-shadow(0 0 4px #5b7fff);
+}
+
+.fm-note-reveal {
+  animation: fm-reveal 1.5s ease-out forwards;
+}
+
+@keyframes fm-reveal {
+  0%   { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.fm-feedback-correct {
+  animation: fm-pop 0.2s ease-out;
+}
+
+.fm-feedback-wrong {
+  animation: fm-shake 0.3s ease-out;
+}
+
+@keyframes fm-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes fm-shake {
+  0%, 100% { transform: translateX(0); }
+  25%       { transform: translateX(-4px); }
+  75%       { transform: translateX(4px); }
+}

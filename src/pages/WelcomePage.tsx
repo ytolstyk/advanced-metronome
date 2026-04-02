@@ -54,6 +54,13 @@ const FEATURES = [
     route: "/lessons",
     color: "#f97316",
   },
+  {
+    icon: "🎯",
+    title: "Fret Memorizer",
+    desc: "Quiz yourself on note positions across the fretboard",
+    route: "/fret-memorizer",
+    color: "#e0703a",
+  },
 ] as const;
 
 export function WelcomePage() {
