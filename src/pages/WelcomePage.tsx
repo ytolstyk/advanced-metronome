@@ -59,7 +59,7 @@ const FEATURES = [
     title: "Fret Memorizer",
     desc: "Quiz yourself on note positions across the fretboard",
     route: "/fret-memorizer",
-    color: "#e0703a",
+    color: "#06b6d4",
   },
 ] as const;
 
