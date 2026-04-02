@@ -6,7 +6,7 @@
 
 ![Drumma Llama screenshot](public/screenshot.png)
 
-Drumma Llama is a browser-based drum machine, step sequencer, guitar tuner, chord library, and music theory tool built with React 19, TypeScript, and the Web Audio API. No plugins, no dependencies on your patience — just beats.
+Drumma Llama is a browser-based drum machine, step sequencer, click track builder, guitar tuner, fretboard trainer, chord library, scale visualizer, and music theory tool built with React 19, TypeScript, and the Web Audio API. No plugins, no dependencies on your patience — just beats.
 
 ---
 
@@ -138,15 +138,54 @@ Navigate to the **Circle of 5ths** tab for an interactive music theory reference
 
 ---
 
+## Click Track
+
+Navigate to the **Click Track** tab to build and export tempo-change sequences.
+
+- **Segment-based timeline** — add pieces with individual BPM, time signature, subdivision, and repeat count
+- **Subdivision options** — whole, half, quarter, eighth, sixteenth, quarter triplet, eighth triplet
+- **Color-coded segments** — 8-color palette for visual organization
+- **Drag-and-drop reordering** — rearrange segments on the fly
+- **WAV export** — render the full click track to a downloadable audio file
+- **Cloud save/load** — save and share click tracks (requires sign-in)
+- **Send to Drum Machine** — convert a click track to drum machine measures
+
+---
+
+## Fret Memorizer
+
+Navigate to the **Fret Memorizer** tab to drill fretboard note recognition.
+
+- **Interactive SVG fretboard** — 24 frets, color-coded by note
+- **6, 7, and 8-string support** with tuning selection
+- **Quiz mode** — a random note is shown; click the correct dot on the fretboard
+- **Audio feedback** — correct answers play a plucked string sound
+- **Score tracking** — session accuracy tracked and saved to the cloud (requires sign-in)
+
+---
+
+## Lessons
+
+Navigate to the **Lessons** tab for structured guitar technique and theory lessons.
+
+- **Module browser** — lessons organized into technique and theory modules
+- **Progress tracking** — completed lessons and favorites persist across sessions
+- **Favorites** — star lessons to find them quickly later
+- **Lesson content** — step-by-step tabs with interactive components
+
+---
+
 ## Tech Stack
 
 - **React 19** + **TypeScript** + **Vite**
-- **React Router** — client-side routing between Drum Machine, Tuner, Chords, and Circle of Fifths screens
-- **Web Audio API** — lookahead drum scheduler (25ms interval, 100ms lookahead), fire-and-forget synthesis, microphone pitch detection via `getUserMedia`
+- **React Router** — client-side routing between all pages
+- **Web Audio API** — lookahead drum scheduler (25ms interval, 100ms lookahead), click track engine, fire-and-forget synthesis, microphone pitch detection via `getUserMedia`
 - **`useReducer`** — all drum machine state in one place, pure reducer, no external state library
 - **Tailwind CSS v4** + vanilla CSS — component-scoped stylesheets, no CSS-in-JS
 - **shadcn/ui** — Radix UI-based component primitives
-- **localStorage** — auto-saves your current loop and user presets
+- **AWS Amplify** — authentication (sign-in/sign-up) for cloud features
+- **localStorage** — auto-saves your current loop, user presets, and lesson progress
+- **Cloud API** — save/load click tracks and fret memorizer scores (authenticated users)
 
 ---
 
@@ -154,35 +193,69 @@ Navigate to the **Circle of 5ths** tab for an interactive music theory reference
 
 ```
 src/
-├── main.tsx             # BrowserRouter, Nav, top-level routes
+├── main.tsx             # BrowserRouter, Nav, Amplify auth provider, context providers, routes
 ├── App.tsx              # Drum machine: useReducer, undo history, keyboard shortcuts
 ├── state.ts             # Reducer + Action union
 ├── types.ts             # AppState, Pattern, LoopConfig, TimeSignature
 ├── presets.ts           # 8 built-in beat patterns
 ├── userPresets.ts       # Custom preset persistence (localStorage)
 ├── constants.ts         # Instruments, defaults, limits
+├── auth/
+│   └── amplify.ts       # AWS Amplify configuration
+├── api/
+│   ├── clickTrackApi.ts     # Cloud save/load for click tracks
+│   └── fretMemorizerApi.ts  # Cloud score saving for fret memorizer
 ├── audio/
-│   ├── AudioEngine.ts   # Web Audio scheduler class (master GainNode for volume)
-│   ├── drumSynths.ts    # Per-instrument synthesis functions
-│   ├── exportAudio.ts   # WAV export via OfflineAudioContext
-│   ├── pianoSynth.ts    # Piano synthesis
-│   └── pianoPresets.ts  # Piano preset definitions
+│   ├── AudioEngine.ts       # Web Audio drum scheduler (master GainNode for volume)
+│   ├── drumSynths.ts        # Per-instrument synthesis functions
+│   ├── exportAudio.ts       # WAV export via OfflineAudioContext
+│   ├── ClickTrackEngine.ts  # Click track segment sequencer
+│   ├── exportClickTrack.ts  # Click track WAV export
+│   ├── pianoSynth.ts        # Piano synthesis
+│   ├── pianoPresets.ts      # Piano preset definitions
+│   └── pluckString.ts       # Plucked string sound for fret memorizer
+├── context/
+│   ├── FavoritesContext.tsx        # Lesson favorites (localStorage)
+│   └── LessonsProgressContext.tsx  # Lesson completion tracking (localStorage)
+├── data/
+│   ├── lessons.ts   # Static lesson content (modules + lessons)
+│   └── tunings.ts   # Guitar tunings for 6/7/8-string
 ├── hooks/
 │   ├── useAudioEngine.ts    # React bridge: callbacks → dispatch, volume/humanize sync
-│   └── usePlaybackCursor.ts # Auto-scroll logic for the beat grid
+│   ├── usePlaybackCursor.ts # Auto-scroll logic for the beat grid
+│   └── useLessonsProgress.ts # Consumes LessonsProgressContext
+├── utils/
+│   └── clickTrackToDrum.ts  # Convert click track segments to drum machine measures
 ├── pages/
+│   ├── WelcomePage.tsx         # Landing page
+│   ├── DrumMachinePage.tsx     # Wraps App.tsx drum machine
 │   ├── TunerPage.tsx           # Guitar tuner: pitch detection (NSDF/MPM), vertical meter
 │   ├── ChordsPage.tsx          # Chord library: diagrams, tab view, playback
 │   ├── ScalesPage.tsx          # 24-fret fretboard scale visualizer + practice mode
-│   └── CircleOfFifthsPage.tsx  # Interactive circle of fifths diagram
+│   ├── CircleOfFifthsPage.tsx  # Interactive circle of fifths diagram
+│   ├── ClickTrackPage.tsx      # Click track builder + export + cloud save
+│   ├── FretMemorizerPage.tsx   # Fretboard note recognition game
+│   ├── LessonsPage.tsx         # Lesson module browser
+│   ├── ModulePage.tsx          # Lessons within a module
+│   ├── LessonPage.tsx          # Individual lesson steps
+│   └── BuildLessonPage.tsx     # Admin lesson authoring tool
 └── components/
     ├── Nav/               # Sticky top navigation
+    ├── NavDropdown/       # Dropdown nav for grouped routes
     ├── DrumGrid/          # Scrollable step sequencer grid
     ├── MeasureHeaders/    # Time signature editors + copy/paste
     ├── InstrumentRow/     # One row per instrument
     ├── BeatCell/          # Individual step button
     ├── TransportControls/ # Playback, BPM, volume, humanize, presets, undo
-    └── PianoKeyboard/     # Playable piano with presets
+    ├── PianoKeyboard/     # Playable piano with presets
+    ├── Fretboard/         # Shared SVG fretboard component
+    ├── ChordRow/          # Chord card row for chord library
+    ├── LessonTabView/     # Tab-based lesson step renderer
+    ├── AuthModal/         # Sign-in/sign-up modal
+    ├── DonationModal/     # Donation prompt
+    ├── StorageErrorBanner/    # localStorage quota error banner
+    ├── ChordPickerModal/      # Chord selection modal
+    └── GenerateDrumsModal/    # AI drum pattern generation modal
 ```
 
 ---

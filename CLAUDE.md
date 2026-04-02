@@ -16,10 +16,22 @@ No test framework is configured yet.
 
 ## Architecture
 
-Two-screen app (React Router) with a shared `<Nav>` rendered in `src/main.tsx`:
+Multi-page app (React Router) with a shared `<Nav>` rendered in `src/main.tsx`. Auth wraps the tree via `Authenticator.Provider` (AWS Amplify). Two contexts at root: `FavoritesProvider`, `LessonsProgressProvider`.
 
-- `/` — Drum machine (`src/App.tsx`)
+Routes:
+
+- `/` — Welcome/landing (`src/pages/WelcomePage.tsx`)
+- `/drums` — Drum machine (`src/pages/DrumMachinePage.tsx`, logic in `src/App.tsx`)
 - `/tuner` — Guitar tuner (`src/pages/TunerPage.tsx`)
+- `/chords` — Chord library (`src/pages/ChordsPage.tsx`)
+- `/scales` — Scale fretboard (`src/pages/ScalesPage.tsx`)
+- `/circle` — Circle of Fifths (`src/pages/CircleOfFifthsPage.tsx`)
+- `/click-track` — Click track builder (`src/pages/ClickTrackPage.tsx`)
+- `/fret-memorizer` — Fretboard note memorizer game (`src/pages/FretMemorizerPage.tsx`)
+- `/lessons` — Lesson library (`src/pages/LessonsPage.tsx`)
+- `/lessons/:moduleId` — Module view (`src/pages/ModulePage.tsx`)
+- `/lessons/:moduleId/:lessonId` — Individual lesson (`src/pages/LessonPage.tsx`)
+- `/build-lesson` — Admin lesson builder (`src/pages/BuildLessonPage.tsx`)
 
 Entry point: `index.html` → `src/main.tsx`.
 
@@ -53,6 +65,18 @@ Drum sounds are fire-and-forget synthesis in `src/audio/drumSynths.ts`. Each syn
 ## Guitar tuner
 
 Self-contained in `src/pages/TunerPage.tsx` + `TunerPage.css`. No shared state with the drum machine. Uses the McLeod Pitch Method (NSDF autocorrelation) on mic input via `getUserMedia` + `AnalyserNode` (fftSize 4096). Runs at ~20fps (every 3rd RAF frame) with a 5-frame median filter for stability. Displays a vertical meter: cursor moves up when sharp, down when flat.
+
+## Click track
+
+`src/pages/ClickTrackPage.tsx`. Timeline-based click track builder. Sequences `TrackPiece` segments (each with a time signature, BPM, subdivision, color, and repeat count) via `ClickTrackEngine` (`src/audio/ClickTrackEngine.ts`). Supports WAV export (`exportClickTrack.ts`), drag-and-drop segment reordering, and cloud save/load via `src/api/clickTrackApi.ts` (requires auth). Segments can be sent to the drum machine via `clickTrackToDrum` util.
+
+## Fret memorizer
+
+`src/pages/FretMemorizerPage.tsx`. SVG fretboard game — flashes a random note, the user clicks the correct dot. Tracks accuracy per session, saves scores to cloud via `src/api/fretMemorizerApi.ts` (requires auth). Supports 6/7/8-string tunings from `src/data/tunings.ts`. Uses `pluckString` audio for feedback.
+
+## Lessons
+
+Three nested pages: `LessonsPage` → `ModulePage` → `LessonPage`. Lesson content lives in `src/data/lessons.ts` (static). Progress (completed/favorites) is tracked in `LessonsProgressContext` and persisted to localStorage. `BuildLessonPage` is an admin tool for drafting new lessons. `LessonTabView` component renders individual lesson steps.
 
 ## TypeScript strictness
 
