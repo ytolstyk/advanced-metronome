@@ -110,6 +110,7 @@ interface FretboardProps {
   numStrings: number;
   stringNames: string[];        // top → bottom (high → low)
   showNotes: boolean;
+  focusedSvgStrings: Set<number>;
   highlightedKey: string | null;
   revealedKey: string | null;
   gamePhase: GamePhase;
@@ -119,7 +120,7 @@ interface FretboardProps {
 }
 
 function Fretboard({
-  openMidi, numStrings, stringNames, showNotes,
+  openMidi, numStrings, stringNames, showNotes, focusedSvgStrings,
   highlightedKey, revealedKey,
   gamePhase, targetSvgStr, answerReveal,
   onFretClick,
@@ -176,13 +177,25 @@ function Fretboard({
       let opacity = 1;
       let textOpacity = 1;
 
+      const isFocused = focusedSvgStrings.has(svgStr);
+
       if (isHighlighted) {
         fill = '#22dd88';
         stroke = '#66ffbb';
       } else if (isAnswerReveal) {
         fill = '#e09020';
         stroke = '#ffd060';
-      } else if (!showNotes && gamePhase === 'idle') {
+      } else if (gamePhase === 'playing') {
+        fill = 'transparent';
+        stroke = 'transparent';
+        opacity = 0;
+        textOpacity = 0;
+      } else if (!isFocused) {
+        fill = 'transparent';
+        stroke = 'transparent';
+        opacity = 0;
+        textOpacity = 0;
+      } else if (!showNotes) {
         if (isRevealed) {
           fill = NOTE_FILL[noteName] ?? '#888';
           stroke = NOTE_STROKE[noteName] ?? '#aaa';
@@ -192,11 +205,6 @@ function Fretboard({
           opacity = 0;
           textOpacity = 0;
         }
-      } else if (gamePhase === 'playing') {
-        fill = 'transparent';
-        stroke = 'transparent';
-        opacity = 0;
-        textOpacity = 0;
       } else {
         fill = NOTE_FILL[noteName] ?? '#888';
         stroke = NOTE_STROKE[noteName] ?? '#aaa';
@@ -711,6 +719,7 @@ export function FretMemorizerPage() {
             numStrings={stringCount}
             stringNames={stringNames}
             showNotes={showNotes}
+            focusedSvgStrings={focusedSvgStrings}
             highlightedKey={highlightedKey}
             revealedKey={revealedKey}
             gamePhase={gamePhase}
