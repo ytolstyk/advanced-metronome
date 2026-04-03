@@ -344,8 +344,15 @@ export function FretMemorizerPage() {
   const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
 
   // ── Guitar config ────────────────────────────────────────────────────────
-  const [stringCount, setStringCount] = useState<StringCount>(6);
-  const [tuningIdx, setTuningIdx] = useState(0);
+  const [stringCount, setStringCount] = useState<StringCount>(() => {
+    const v = localStorage.getItem('fretMem.stringCount');
+    const n = Number(v);
+    return (n === 6 || n === 7 || n === 8) ? n as StringCount : 6;
+  });
+  const [tuningIdx, setTuningIdx] = useState(() => {
+    const v = parseInt(localStorage.getItem('fretMem.tuningIdx') ?? '0', 10);
+    return isNaN(v) ? 0 : v;
+  });
 
   // Keep tuningIdx in range when stringCount changes
   const safeTuningIdx = Math.min(tuningIdx, TUNINGS[stringCount].length - 1);
@@ -359,12 +366,19 @@ export function FretMemorizerPage() {
   const stringNames = [...tuning.strings].reverse().map((s) => s.note);
 
   // ── String focus ─────────────────────────────────────────────────────────
-  const [focusedSvgStrings, setFocusedSvgStrings] = useState<Set<number>>(
-    () => new Set(Array.from({ length: stringCount }, (_, i) => i)),
-  );
+  const [focusedSvgStrings, setFocusedSvgStrings] = useState<Set<number>>(() => {
+    try {
+      const raw = localStorage.getItem(`fretMem.focusedStrings.${stringCount}`);
+      if (raw) {
+        const arr = JSON.parse(raw) as number[];
+        if (Array.isArray(arr)) return new Set(arr);
+      }
+    } catch { /* ignore */ }
+    return new Set(Array.from({ length: stringCount }, (_, i) => i));
+  });
 
   // ── Explore state ────────────────────────────────────────────────────────
-  const [showNotes, setShowNotes] = useState(true);
+  const [showNotes, setShowNotes] = useState(() => localStorage.getItem('fretMem.showNotes') !== 'false');
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -372,7 +386,10 @@ export function FretMemorizerPage() {
 
   // ── Game state ───────────────────────────────────────────────────────────
   const [gamePhase, setGamePhase] = useState<GamePhase>('idle');
-  const [gameMode, setGameMode] = useState<GameMode>('10');
+  const [gameMode, setGameMode] = useState<GameMode>(() => {
+    const v = localStorage.getItem('fretMem.gameMode');
+    return (v === '10' || v === '20' || v === '30' || v === 'infinite') ? v as GameMode : '10';
+  });
   const [question, setQuestion] = useState<Question | null>(null);
   const [score, setScore] = useState(0);
   const [wrongAnswers, setWrongAnswers] = useState(0);
@@ -392,13 +409,26 @@ export function FretMemorizerPage() {
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   // ── Input mode + mic state ────────────────────────────────────────────────
-  const [inputMode, setInputMode] = useState<InputMode>('click');
+  const [inputMode, setInputMode] = useState<InputMode>(() => {
+    const v = localStorage.getItem('fretMem.inputMode');
+    return (v === 'click' || v === 'mic') ? v as InputMode : 'click';
+  });
   const [micError, setMicError] = useState<string | null>(null);
   const [micNote, setMicNote] = useState<string | null>(null);
   // 'waiting_silence' = waiting for audio to go quiet before accepting a new answer
   // 'active'          = listening for the player's note
   // 'off'             = not running
   const [micListenPhase, setMicListenPhase] = useState<'off' | 'waiting_silence' | 'active'>('off');
+
+  // ── Persist selections ────────────────────────────────────────────────────
+  useEffect(() => { localStorage.setItem('fretMem.stringCount', String(stringCount)); }, [stringCount]);
+  useEffect(() => { localStorage.setItem('fretMem.tuningIdx', String(tuningIdx)); }, [tuningIdx]);
+  useEffect(() => {
+    localStorage.setItem(`fretMem.focusedStrings.${stringCount}`, JSON.stringify([...focusedSvgStrings]));
+  }, [stringCount, focusedSvgStrings]);
+  useEffect(() => { localStorage.setItem('fretMem.showNotes', String(showNotes)); }, [showNotes]);
+  useEffect(() => { localStorage.setItem('fretMem.gameMode', gameMode); }, [gameMode]);
+  useEffect(() => { localStorage.setItem('fretMem.inputMode', inputMode); }, [inputMode]);
 
   const micCtxRef = useRef<AudioContext | null>(null);
   const micAnalyserRef = useRef<AnalyserNode | null>(null);
@@ -727,7 +757,21 @@ export function FretMemorizerPage() {
     const n = Number(v) as StringCount;
     setStringCount(n);
     setTuningIdx(0);
-    setFocusedSvgStrings(new Set(Array.from({ length: n }, (_, i) => i)));
+    try {
+      const raw = localStorage.getItem(`fretMem.focusedStrings.${n}`);
+      if (raw) {
+        const arr = JSON.parse(raw) as number[];
+        if (Array.isArray(arr) && arr.length > 0) {
+          setFocusedSvgStrings(new Set(arr));
+        } else {
+          setFocusedSvgStrings(new Set(Array.from({ length: n }, (_, i) => i)));
+        }
+      } else {
+        setFocusedSvgStrings(new Set(Array.from({ length: n }, (_, i) => i)));
+      }
+    } catch {
+      setFocusedSvgStrings(new Set(Array.from({ length: n }, (_, i) => i)));
+    }
     setGamePhase('idle');
     setQuestion(null);
   }
