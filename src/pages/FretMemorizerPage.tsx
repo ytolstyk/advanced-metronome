@@ -58,6 +58,7 @@ function svgH(numStrings: number) {
 type GameMode = '10' | '20' | '30' | 'infinite';
 type GamePhase = 'idle' | 'playing' | 'result';
 type Feedback = 'correct' | 'wrong' | null;
+type InputMode = 'click' | 'mic';
 
 interface Question {
   targetNote: string;
@@ -102,6 +103,47 @@ function formatTime(secs: number): string {
   const m = Math.floor(secs / 60);
   const s = secs % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// ── Pitch detection (McLeod / NSDF) ────────────────────────────────────────
+function detectPitch(buffer: Float32Array, sampleRate: number): number {
+  const N = buffer.length;
+  let rms = 0;
+  for (let i = 0; i < N; i++) rms += buffer[i] * buffer[i];
+  rms = Math.sqrt(rms / N);
+  if (rms < 0.02) return -1; // higher gate than tuner to reject ambient noise
+
+  const maxLag = Math.floor(N / 2);
+  const nsdf = new Float32Array(maxLag);
+  for (let tau = 0; tau < maxLag; tau++) {
+    let acf = 0, energy = 0;
+    for (let i = 0; i < N - tau; i++) {
+      acf += buffer[i] * buffer[i + tau];
+      energy += buffer[i] * buffer[i] + buffer[i + tau] * buffer[i + tau];
+    }
+    nsdf[tau] = energy > 0 ? 2 * acf / energy : 0;
+  }
+  let start = 0;
+  while (start < maxLag - 1 && nsdf[start] > 0) start++;
+  let globalMax = 0;
+  for (let i = start; i < maxLag; i++) if (nsdf[i] > globalMax) globalMax = nsdf[i];
+  if (globalMax < 0.25) return -1;
+  const threshold = 0.8 * globalMax;
+  let peakPos = -1;
+  for (let i = start + 1; i < maxLag - 1; i++) {
+    if (nsdf[i] > threshold && nsdf[i] >= nsdf[i - 1] && nsdf[i] >= nsdf[i + 1]) {
+      peakPos = i; break;
+    }
+  }
+  if (peakPos < 1 || peakPos >= maxLag - 1) return -1;
+  const y1 = nsdf[peakPos - 1], y2 = nsdf[peakPos], y3 = nsdf[peakPos + 1];
+  const d = 2 * y2 - y1 - y3;
+  const shift = d !== 0 ? (y3 - y1) / (2 * d) : 0;
+  return sampleRate / (peakPos + shift);
+}
+
+function freqToMidi(freq: number): number {
+  return 69 + 12 * Math.log2(freq / 440);
 }
 
 // ── Fretboard ──────────────────────────────────────────────────────────────
@@ -349,11 +391,103 @@ export function FretMemorizerPage() {
 
   const audioCtxRef = useRef<AudioContext | null>(null);
 
+  // ── Input mode + mic state ────────────────────────────────────────────────
+  const [inputMode, setInputMode] = useState<InputMode>('click');
+  const [micError, setMicError] = useState<string | null>(null);
+  const [micNote, setMicNote] = useState<string | null>(null);
+
+  const micCtxRef = useRef<AudioContext | null>(null);
+  const micAnalyserRef = useRef<AnalyserNode | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const micRafRef = useRef<number | null>(null);
+  const micFrameRef = useRef(0);
+  const pitchBufRef = useRef<number[]>([]);
+  const detectActiveRef = useRef(false);
+  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleMicAnswerRef = useRef<((pc: number) => void) | null>(null);
+
   function getOrCreateAudioCtx(): AudioContext {
     if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
       audioCtxRef.current = new AudioContext();
     }
     return audioCtxRef.current;
+  }
+
+  // ── Mic lifecycle ────────────────────────────────────────────────────────
+  const stopMic = useCallback(() => {
+    if (micRafRef.current !== null) cancelAnimationFrame(micRafRef.current);
+    micRafRef.current = null;
+    micStreamRef.current?.getTracks().forEach((t) => t.stop());
+    micStreamRef.current = null;
+    if (micCtxRef.current) void micCtxRef.current.close();
+    micCtxRef.current = null;
+    micAnalyserRef.current = null;
+    micFrameRef.current = 0;
+    pitchBufRef.current = [];
+    detectActiveRef.current = false;
+    if (graceTimerRef.current) { clearTimeout(graceTimerRef.current); graceTimerRef.current = null; }
+    setMicNote(null);
+  }, [setMicNote]);
+
+  const startMic = useCallback(async (): Promise<boolean> => {
+    setMicError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      micStreamRef.current = stream;
+      const ctx = new AudioContext();
+      micCtxRef.current = ctx;
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 4096;
+      analyser.smoothingTimeConstant = 0;
+      micAnalyserRef.current = analyser;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      const buf = new Float32Array(analyser.fftSize);
+
+      const tick = () => {
+        micRafRef.current = requestAnimationFrame(tick);
+        micFrameRef.current++;
+        if (micFrameRef.current % 3 !== 0) return;
+
+        analyser.getFloatTimeDomainData(buf);
+        const freq = detectPitch(buf, ctx.sampleRate);
+
+        if (freq >= 60 && freq <= 1400) {
+          const midi = freqToMidi(freq);
+          const cents = (midi - Math.round(midi)) * 100;
+          if (Math.abs(cents) <= 25) {
+            const pc = ((Math.round(midi) % 12) + 12) % 12;
+            pitchBufRef.current = [...pitchBufRef.current.slice(-3), pc];
+            setMicNote(NOTE_NAMES[pc]);
+
+            if (detectActiveRef.current && pitchBufRef.current.length >= 3) {
+              const recent = pitchBufRef.current.slice(-4);
+              const counts = new Map<number, number>();
+              for (const p of recent) counts.set(p, (counts.get(p) ?? 0) + 1);
+              const dominant = [...counts.entries()].find(([, c]) => c >= 3);
+              if (dominant) handleMicAnswerRef.current?.(dominant[0]);
+            }
+          }
+        } else {
+          setMicNote(null);
+        }
+      };
+
+      micRafRef.current = requestAnimationFrame(tick);
+      return true;
+    } catch (err) {
+      setMicError(err instanceof Error ? err.message : 'Microphone access denied');
+      return false;
+    }
+  }, [setMicError, setMicNote]);
+
+  function enableDetectionAfterGrace() {
+    if (graceTimerRef.current) clearTimeout(graceTimerRef.current);
+    pitchBufRef.current = [];
+    detectActiveRef.current = false;
+    graceTimerRef.current = setTimeout(() => {
+      detectActiveRef.current = true;
+      graceTimerRef.current = null;
+    }, 300);
   }
 
   // ── Timer ────────────────────────────────────────────────────────────────
@@ -375,10 +509,11 @@ export function FretMemorizerPage() {
 
   // ── Cleanup on unmount ───────────────────────────────────────────────────
   useEffect(() => () => {
-    [timerRef, feedbackTimer, answerTimer, advanceTimer, highlightTimer, revealTimer].forEach((r) => {
+    [timerRef, feedbackTimer, answerTimer, advanceTimer, highlightTimer, revealTimer, graceTimerRef].forEach((r) => {
       if (r.current) clearTimeout(r.current as ReturnType<typeof setTimeout>);
     });
-  }, []);
+    stopMic();
+  }, [stopMic]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const clearFeedbackTimers = useCallback(() => {
@@ -390,8 +525,9 @@ export function FretMemorizerPage() {
     advanceTimer.current = null;
   }, []);
 
-  const endGame = useCallback((finalScore: number, finalWrong: number, finalTotal: number, finalElapsed: number) => {
+  function endGame(finalScore: number, finalWrong: number, finalTotal: number, finalElapsed: number) {
     clearFeedbackTimers();
+    stopMic();
     setGamePhase('result');
     setHighlightedKey(null);
     setAnswerReveal(null);
@@ -409,9 +545,13 @@ export function FretMemorizerPage() {
         tuning: tuning.name,
       }).then((ok) => setScoreSaved(ok));
     }
-  }, [authStatus, clearFeedbackTimers, gameMode, stringCount, tuning.name]);
+  }
 
-  function startGame() {
+  async function handleStartGame() {
+    if (inputMode === 'mic') {
+      const ok = await startMic();
+      if (!ok) return;
+    }
     clearFeedbackTimers();
     setScore(0);
     setWrongAnswers(0);
@@ -426,10 +566,12 @@ export function FretMemorizerPage() {
     const q = generateQuestion(openMidi, stringCount, [...focusedSvgStrings]);
     setQuestion(q);
     setGamePhase('playing');
+    if (inputMode === 'mic') enableDetectionAfterGrace();
   }
 
   function stopGame() {
     clearFeedbackTimers();
+    stopMic();
     setGamePhase('result');
     setStoppedEarly(true);
     setHighlightedKey(null);
@@ -443,9 +585,9 @@ export function FretMemorizerPage() {
     setQuestion(null);
   }
 
-  const advanceToNext = useCallback((
+  function advanceToNext(
     nextScore: number, nextWrong: number, nextAnswered: number, currentElapsed: number, excludeKey: string | null,
-  ) => {
+  ) {
     const limit = gameMode === 'infinite' ? Infinity : parseInt(gameMode, 10);
     if (nextAnswered >= limit) {
       endGame(nextScore, nextWrong, nextAnswered, currentElapsed);
@@ -456,8 +598,9 @@ export function FretMemorizerPage() {
       setAnswerReveal(null);
       setFeedback(null);
       processingRef.current = false;
+      if (inputMode === 'mic') enableDetectionAfterGrace();
     }
-  }, [gameMode, openMidi, stringCount, focusedSvgStrings, endGame]);
+  }
 
   // ── Fret click handler ───────────────────────────────────────────────────
   function handleFretClick(svgStr: number, fret: number, midiNote: number) {
@@ -484,6 +627,7 @@ export function FretMemorizerPage() {
     }
 
     if (gamePhase !== 'playing' || !question || processingRef.current) return;
+    if (inputMode === 'mic') return; // mic mode: answers come from microphone only
 
     const isCorrectStr = svgStr === question.targetSvgStr;
     const isCorrectFret = question.validFrets.includes(fret);
@@ -547,6 +691,48 @@ export function FretMemorizerPage() {
   // ── Derived ──────────────────────────────────────────────────────────────
   const limit = gameMode === 'infinite' ? null : parseInt(gameMode, 10);
   const targetStringName = question != null ? stringNames[question.targetSvgStr] : null;
+
+  // ── Mic answer handler (kept fresh via effect so closures always see latest state) ─
+  useEffect(() => {
+    handleMicAnswerRef.current = (pc: number) => {
+      if (!detectActiveRef.current || !question) return;
+      detectActiveRef.current = false;
+      pitchBufRef.current = [];
+      processingRef.current = true;
+      clearFeedbackTimers();
+
+      const isCorrect = pc === question.targetPc;
+      if (isCorrect) {
+        const nextScore = score + 1;
+        const nextAnswered = questionsAnswered + 1;
+        setScore(nextScore);
+        setQuestionsAnswered(nextAnswered);
+        setFeedback('correct');
+        const currentKey = `${question.targetPc}-${question.targetSvgStr}`;
+        feedbackTimer.current = setTimeout(() => {
+          advanceToNext(nextScore, wrongAnswers, nextAnswered, elapsedSeconds, currentKey);
+        }, 600);
+      } else {
+        const nextWrong = wrongAnswers + 1;
+        setWrongAnswers(nextWrong);
+        setFeedback('wrong');
+        if (gameMode === 'infinite') {
+          setAnswerReveal({ svgStr: question.targetSvgStr, frets: question.validFrets });
+          answerTimer.current = setTimeout(() => {
+            endGame(score, nextWrong, questionsAnswered, elapsedSeconds);
+          }, 1200);
+        } else {
+          const nextAnswered = questionsAnswered + 1;
+          setQuestionsAnswered(nextAnswered);
+          setAnswerReveal({ svgStr: question.targetSvgStr, frets: question.validFrets });
+          const currentKey = `${question.targetPc}-${question.targetSvgStr}`;
+          answerTimer.current = setTimeout(() => {
+            advanceToNext(score, nextWrong, nextAnswered, elapsedSeconds, currentKey);
+          }, 900);
+        }
+      }
+    };
+  });
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
@@ -678,6 +864,15 @@ export function FretMemorizerPage() {
                 {feedback === 'correct' ? '✓ Correct!' : '✗ Wrong — highlighted in orange'}
               </div>
             )}
+            {inputMode === 'mic' && !feedback && (
+              <div className="mt-1 text-sm text-[#8080b8] flex items-center gap-1.5">
+                <span>🎤</span>
+                {micNote
+                  ? <span style={{ color: NOTE_FILL[micNote] ?? '#aaa', fontWeight: 700 }}>{micNote}</span>
+                  : <span>listening…</span>
+                }
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-6 shrink-0">
@@ -752,14 +947,30 @@ export function FretMemorizerPage() {
                 ))}
               </ToggleGroup>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[0.75rem] text-[#9898c8]">Input:</span>
+              <ToggleGroup
+                type="single"
+                value={inputMode}
+                onValueChange={(v) => { if (v) { setInputMode(v as InputMode); setMicError(null); } }}
+                className="flex gap-1"
+              >
+                <ToggleGroupItem value="click" className={TOGGLE_CLS}>Click</ToggleGroupItem>
+                <ToggleGroupItem value="mic" className={TOGGLE_CLS}>🎤 Microphone</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+            {micError && (
+              <p className="text-[0.75rem] text-[#ff7777]">Mic error: {micError}</p>
+            )}
             <p className="text-[0.75rem] text-[#606080]">
               {gameMode === 'infinite'
                 ? 'Answer until you make a mistake or stop.'
                 : `Answer ${gameMode} questions. Wrong answers are tracked but the game continues.`}
+              {inputMode === 'mic' && ' Play the note on your guitar — the mic will listen.'}
             </p>
           </div>
           <button
-            onClick={startGame}
+            onClick={() => { void handleStartGame(); }}
             className="h-10 px-6 text-[0.9rem] font-semibold rounded-md border border-[#22dd88] bg-[#081a10] text-[#22dd88] hover:border-[#66ffbb] hover:text-[#66ffbb] transition-colors shrink-0"
           >
             ▶ Start Practice
