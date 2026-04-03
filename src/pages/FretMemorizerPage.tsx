@@ -395,15 +395,23 @@ export function FretMemorizerPage() {
   const [inputMode, setInputMode] = useState<InputMode>('click');
   const [micError, setMicError] = useState<string | null>(null);
   const [micNote, setMicNote] = useState<string | null>(null);
+  // 'waiting_silence' = waiting for audio to go quiet before accepting a new answer
+  // 'active'          = listening for the player's note
+  // 'off'             = not running
+  const [micListenPhase, setMicListenPhase] = useState<'off' | 'waiting_silence' | 'active'>('off');
 
   const micCtxRef = useRef<AudioContext | null>(null);
   const micAnalyserRef = useRef<AnalyserNode | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const micRafRef = useRef<number | null>(null);
   const micFrameRef = useRef(0);
-  const pitchBufRef = useRef<number[]>([]);
-  const detectActiveRef = useRef(false);
-  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Silence-gate: how many consecutive frames have been below the silence threshold
+  const silenceFramesRef = useRef(0);
+  // Consecutive-note detection: reset whenever pitch class changes
+  const consecutivePcRef = useRef<number | null>(null);
+  const consecutiveCountRef = useRef(0);
+  // Current detection state (ref so RAF always sees latest value)
+  const micDetectStateRef = useRef<'off' | 'waiting_silence' | 'active'>('off');
   const handleMicAnswerRef = useRef<((pc: number) => void) | null>(null);
 
   function getOrCreateAudioCtx(): AudioContext {
@@ -414,6 +422,11 @@ export function FretMemorizerPage() {
   }
 
   // ── Mic lifecycle ────────────────────────────────────────────────────────
+  // RMS must stay below this for SILENCE_FRAMES consecutive ticks before detection activates.
+  // Using the original TunerPage gate (0.008) so even quiet rooms trigger quickly.
+  const SILENCE_RMS = 0.008;
+  const SILENCE_FRAMES = 6; // ~300ms at 20fps — guitar string must have decayed
+
   const stopMic = useCallback(() => {
     if (micRafRef.current !== null) cancelAnimationFrame(micRafRef.current);
     micRafRef.current = null;
@@ -423,11 +436,13 @@ export function FretMemorizerPage() {
     micCtxRef.current = null;
     micAnalyserRef.current = null;
     micFrameRef.current = 0;
-    pitchBufRef.current = [];
-    detectActiveRef.current = false;
-    if (graceTimerRef.current) { clearTimeout(graceTimerRef.current); graceTimerRef.current = null; }
+    silenceFramesRef.current = 0;
+    consecutivePcRef.current = null;
+    consecutiveCountRef.current = 0;
+    micDetectStateRef.current = 'off';
     setMicNote(null);
-  }, [setMicNote]);
+    setMicListenPhase('off');
+  }, [setMicNote, setMicListenPhase]);
 
   const startMic = useCallback(async (): Promise<boolean> => {
     setMicError(null);
@@ -449,6 +464,32 @@ export function FretMemorizerPage() {
         if (micFrameRef.current % 3 !== 0) return;
 
         analyser.getFloatTimeDomainData(buf);
+
+        if (micDetectStateRef.current === 'waiting_silence') {
+          // Compute RMS to detect silence (without full pitch detection)
+          let rms = 0;
+          for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
+          rms = Math.sqrt(rms / buf.length);
+
+          if (rms < SILENCE_RMS) {
+            silenceFramesRef.current++;
+            if (silenceFramesRef.current >= SILENCE_FRAMES) {
+              // String has stopped — now safe to listen for the player's answer
+              micDetectStateRef.current = 'active';
+              silenceFramesRef.current = 0;
+              consecutivePcRef.current = null;
+              consecutiveCountRef.current = 0;
+              setMicNote(null);
+              setMicListenPhase('active');
+            }
+          } else {
+            silenceFramesRef.current = 0; // string still ringing — keep waiting
+          }
+          return;
+        }
+
+        if (micDetectStateRef.current !== 'active') return;
+
         const freq = detectPitch(buf, ctx.sampleRate);
 
         if (freq >= 60 && freq <= 1400) {
@@ -456,18 +497,26 @@ export function FretMemorizerPage() {
           const cents = (midi - Math.round(midi)) * 100;
           if (Math.abs(cents) <= 25) {
             const pc = ((Math.round(midi) % 12) + 12) % 12;
-            pitchBufRef.current = [...pitchBufRef.current.slice(-3), pc];
             setMicNote(NOTE_NAMES[pc]);
-
-            if (detectActiveRef.current && pitchBufRef.current.length >= 3) {
-              const recent = pitchBufRef.current.slice(-4);
-              const counts = new Map<number, number>();
-              for (const p of recent) counts.set(p, (counts.get(p) ?? 0) + 1);
-              const dominant = [...counts.entries()].find(([, c]) => c >= 3);
-              if (dominant) handleMicAnswerRef.current?.(dominant[0]);
+            // Require 3 CONSECUTIVE frames of the same pc — resets on any change
+            if (pc === consecutivePcRef.current) {
+              consecutiveCountRef.current++;
+            } else {
+              consecutivePcRef.current = pc;
+              consecutiveCountRef.current = 1;
             }
+            if (consecutiveCountRef.current >= 3) {
+              handleMicAnswerRef.current?.(pc);
+            }
+          } else {
+            // Pitch exists but not close enough to any semitone — reset streak
+            consecutivePcRef.current = null;
+            consecutiveCountRef.current = 0;
           }
         } else {
+          // No pitch detected — reset streak
+          consecutivePcRef.current = null;
+          consecutiveCountRef.current = 0;
           setMicNote(null);
         }
       };
@@ -478,16 +527,16 @@ export function FretMemorizerPage() {
       setMicError(err instanceof Error ? err.message : 'Microphone access denied');
       return false;
     }
-  }, [setMicError, setMicNote]);
+  }, [setMicError, setMicNote, setMicListenPhase, SILENCE_RMS, SILENCE_FRAMES]);
 
-  function enableDetectionAfterGrace() {
-    if (graceTimerRef.current) clearTimeout(graceTimerRef.current);
-    pitchBufRef.current = [];
-    detectActiveRef.current = false;
-    graceTimerRef.current = setTimeout(() => {
-      detectActiveRef.current = true;
-      graceTimerRef.current = null;
-    }, 300);
+  // Called after each question is set — waits for silence before listening
+  function beginSilenceWait() {
+    micDetectStateRef.current = 'waiting_silence';
+    silenceFramesRef.current = 0;
+    consecutivePcRef.current = null;
+    consecutiveCountRef.current = 0;
+    setMicListenPhase('waiting_silence');
+    setMicNote(null);
   }
 
   // ── Timer ────────────────────────────────────────────────────────────────
@@ -509,7 +558,7 @@ export function FretMemorizerPage() {
 
   // ── Cleanup on unmount ───────────────────────────────────────────────────
   useEffect(() => () => {
-    [timerRef, feedbackTimer, answerTimer, advanceTimer, highlightTimer, revealTimer, graceTimerRef].forEach((r) => {
+    [timerRef, feedbackTimer, answerTimer, advanceTimer, highlightTimer, revealTimer].forEach((r) => {
       if (r.current) clearTimeout(r.current as ReturnType<typeof setTimeout>);
     });
     stopMic();
@@ -566,7 +615,7 @@ export function FretMemorizerPage() {
     const q = generateQuestion(openMidi, stringCount, [...focusedSvgStrings]);
     setQuestion(q);
     setGamePhase('playing');
-    if (inputMode === 'mic') enableDetectionAfterGrace();
+    if (inputMode === 'mic') beginSilenceWait();
   }
 
   function stopGame() {
@@ -598,7 +647,7 @@ export function FretMemorizerPage() {
       setAnswerReveal(null);
       setFeedback(null);
       processingRef.current = false;
-      if (inputMode === 'mic') enableDetectionAfterGrace();
+      if (inputMode === 'mic') beginSilenceWait();
     }
   }
 
@@ -695,9 +744,10 @@ export function FretMemorizerPage() {
   // ── Mic answer handler (kept fresh via effect so closures always see latest state) ─
   useEffect(() => {
     handleMicAnswerRef.current = (pc: number) => {
-      if (!detectActiveRef.current || !question) return;
-      detectActiveRef.current = false;
-      pitchBufRef.current = [];
+      if (micDetectStateRef.current !== 'active' || !question) return;
+      micDetectStateRef.current = 'off';
+      consecutivePcRef.current = null;
+      consecutiveCountRef.current = 0;
       processingRef.current = true;
       clearFeedbackTimers();
 
@@ -867,9 +917,11 @@ export function FretMemorizerPage() {
             {inputMode === 'mic' && !feedback && (
               <div className="mt-1 text-sm text-[#8080b8] flex items-center gap-1.5">
                 <span>🎤</span>
-                {micNote
-                  ? <span style={{ color: NOTE_FILL[micNote] ?? '#aaa', fontWeight: 700 }}>{micNote}</span>
-                  : <span>listening…</span>
+                {micListenPhase === 'waiting_silence'
+                  ? <span>let the string stop ringing…</span>
+                  : micNote
+                    ? <span style={{ color: NOTE_FILL[micNote] ?? '#aaa', fontWeight: 700 }}>{micNote}</span>
+                    : <span>play the note</span>
                 }
               </div>
             )}
