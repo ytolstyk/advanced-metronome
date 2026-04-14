@@ -5,30 +5,9 @@ import { pluckString } from '@/audio/pluckString';
 import type { StringCount } from '../data/tunings';
 import { TUNINGS } from '../data/tunings';
 import { saveScore } from '../api/fretMemorizerApi';
+import { NOTE_NAMES } from '../data/noteColors';
+import { useNoteColors } from '../context/noteColorsContextDef';
 import './FretMemorizerPage.css';
-
-// ── Note names & colors ────────────────────────────────────────────────────
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-const NOTE_FILL: Record<string, string> = {
-  'C':  '#e05050', 'C#': '#b03838',
-  'D':  '#e07828', 'D#': '#b05010',
-  'E':  '#c8a800',
-  'F':  '#9050e0', 'F#': '#6830b0',
-  'G':  '#20b090', 'G#': '#107060',
-  'A':  '#3878e0', 'A#': '#1050b0',
-  'B':  '#d04080',
-};
-
-const NOTE_STROKE: Record<string, string> = {
-  'C':  '#ff9999', 'C#': '#e06060',
-  'D':  '#ffaa70', 'D#': '#e07840',
-  'E':  '#f0d050',
-  'F':  '#c090ff', 'F#': '#9868e0',
-  'G':  '#50ddb0', 'G#': '#30a080',
-  'A':  '#70aaff', 'A#': '#4080d0',
-  'B':  '#ff90c0',
-};
 
 // ── Fretboard constants ────────────────────────────────────────────────────
 const NUM_FRETS = 24;
@@ -159,13 +138,15 @@ interface FretboardProps {
   targetSvgStr: number | null;
   answerReveal: AnswerReveal | null;
   onFretClick: (svgStr: number, fret: number, midiNote: number, noteName: string) => void;
+  noteFill: Record<string, string>;
+  noteStroke: Record<string, string>;
 }
 
 function Fretboard({
   openMidi, numStrings, stringNames, showNotes, focusedSvgStrings,
   highlightedKey, revealedKey,
   gamePhase, targetSvgStr, answerReveal,
-  onFretClick,
+  onFretClick, noteFill, noteStroke,
 }: FretboardProps) {
   const height = svgH(numStrings);
   const markerY = TOP_PAD + (numStrings - 1) * STRING_H + 24;
@@ -239,8 +220,8 @@ function Fretboard({
         textOpacity = 0;
       } else if (!showNotes) {
         if (isRevealed) {
-          fill = NOTE_FILL[noteName] ?? '#888';
-          stroke = NOTE_STROKE[noteName] ?? '#aaa';
+          fill = noteFill[noteName] ?? '#888';
+          stroke = noteStroke[noteName] ?? '#aaa';
         } else {
           fill = 'transparent';
           stroke = 'transparent';
@@ -248,8 +229,8 @@ function Fretboard({
           textOpacity = 0;
         }
       } else {
-        fill = NOTE_FILL[noteName] ?? '#888';
-        stroke = NOTE_STROKE[noteName] ?? '#aaa';
+        fill = noteFill[noteName] ?? '#888';
+        stroke = noteStroke[noteName] ?? '#aaa';
       }
 
       // Make invisible dots still clickable with a larger transparent hit area
@@ -342,6 +323,7 @@ const TOGGLE_CLS =
 // ── FretMemorizerPage ──────────────────────────────────────────────────────
 export function FretMemorizerPage() {
   const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
+  const { noteFill, noteStroke } = useNoteColors();
 
   // ── Guitar config ────────────────────────────────────────────────────────
   const [stringCount, setStringCount] = useState<StringCount>(() => {
@@ -926,7 +908,7 @@ export function FretMemorizerPage() {
           {NOTE_NAMES.map((note) => (
             <span key={note} className="flex items-center gap-1 text-[0.72rem] text-[#aaaacc]">
               <svg width="14" height="14">
-                <circle cx="7" cy="7" r="6" fill={NOTE_FILL[note]} stroke={NOTE_STROKE[note]} strokeWidth="1.5" />
+                <circle cx="7" cy="7" r="6" fill={noteFill[note]} stroke={noteStroke[note]} strokeWidth="1.5" />
               </svg>
               {note}
             </span>
@@ -946,7 +928,7 @@ export function FretMemorizerPage() {
               Find this note
             </div>
             <div className="text-2xl font-bold text-white tracking-wide">
-              <span style={{ color: NOTE_FILL[question.targetNote] ?? '#fff' }}>
+              <span style={{ color: noteFill[question.targetNote] ?? '#fff' }}>
                 {question.targetNote}
               </span>
               <span className="text-[#666688] mx-2 text-xl font-normal">on</span>
@@ -964,7 +946,7 @@ export function FretMemorizerPage() {
                 {micListenPhase === 'waiting_silence'
                   ? <span>let the string stop ringing…</span>
                   : micNote
-                    ? <span style={{ color: NOTE_FILL[micNote] ?? '#aaa', fontWeight: 700 }}>{micNote}</span>
+                    ? <span style={{ color: noteFill[micNote] ?? '#aaa', fontWeight: 700 }}>{micNote}</span>
                     : <span>play the note</span>
                 }
               </div>
@@ -1017,6 +999,8 @@ export function FretMemorizerPage() {
             targetSvgStr={question?.targetSvgStr ?? null}
             answerReveal={answerReveal}
             onFretClick={handleFretClick}
+            noteFill={noteFill}
+            noteStroke={noteStroke}
           />
         </div>
       )}

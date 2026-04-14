@@ -16,6 +16,7 @@ import { ScalesPage } from './pages/ScalesPage.tsx'
 import { TooltipProvider } from './components/ui/tooltip.tsx'
 import { FavoritesProvider } from './context/FavoritesContext.tsx'
 import { LessonsProgressProvider } from './context/LessonsProgressContext.tsx'
+import { NoteColorsProvider } from './context/NoteColorsContext.tsx'
 import { LessonsPage } from './pages/LessonsPage.tsx'
 import { ModulePage } from './pages/ModulePage.tsx'
 import { LessonPage } from './pages/LessonPage.tsx'
@@ -28,6 +29,7 @@ createRoot(document.getElementById('root')!).render(
     <Authenticator.Provider>
       <FavoritesProvider>
       <LessonsProgressProvider>
+      <NoteColorsProvider>
       <TooltipProvider>
       <BrowserRouter>
         <Nav />
@@ -51,6 +53,7 @@ createRoot(document.getElementById('root')!).render(
         </footer>
       </BrowserRouter>
       </TooltipProvider>
+      </NoteColorsProvider>
       </LessonsProgressProvider>
       </FavoritesProvider>
     </Authenticator.Provider>

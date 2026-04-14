@@ -1,0 +1,45 @@
+.settings-note-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 1.5rem;
+}
+
+.settings-note-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-note-label {
+  width: 2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #b0b0b0;
+  flex-shrink: 0;
+}
+
+.settings-color-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0;
+  background: none;
+}
+
+.settings-color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.settings-color-input::-webkit-color-swatch {
+  border: 2px solid #333;
+  border-radius: 6px;
+}
+
+.settings-color-input::-moz-color-swatch {
+  border: 2px solid #333;
+  border-radius: 6px;
+}

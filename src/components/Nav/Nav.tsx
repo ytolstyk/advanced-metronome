@@ -4,6 +4,7 @@ import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuthModal } from "@/components/AuthModal/AuthModal";
 import { NavDropdown } from "@/components/NavDropdown/NavDropdown";
+import { SettingsModal } from "@/components/SettingsModal/SettingsModal";
 
 const NAV_GROUPS = [
   {
@@ -57,8 +58,9 @@ export function Nav() {
             ))}
           </div>
 
-          {/* Auth button — desktop */}
-          <div className="hidden sm:block ml-1">
+          {/* Settings + Auth — desktop */}
+          <div className="hidden sm:flex items-center gap-1 ml-1">
+            <SettingsModal />
             <AuthModal />
           </div>
 
@@ -95,7 +97,8 @@ export function Nav() {
               ))}
             </div>
           ))}
-          <div className="pt-1 border-t border-[#1a1a1a] mt-0.5">
+          <div className="pt-1 border-t border-[#1a1a1a] mt-0.5 flex items-center gap-1">
+            <SettingsModal />
             <AuthModal />
           </div>
         </div>

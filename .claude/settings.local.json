@@ -52,7 +52,8 @@
       "Bash(rtk proxy:*)",
       "Bash(./node_modules/.bin/eslint src/pages/FretMemorizerPage.tsx --format=compact 2>&1)",
       "Bash(./node_modules/.bin/eslint src/pages/FretMemorizerPage.tsx 2>&1)",
-      "Bash(./node_modules/.bin/eslint src/pages/FretMemorizerPage.tsx src/data/tunings.ts src/api/fretMemorizerApi.ts src/pages/TunerPage.tsx 2>&1)"
+      "Bash(./node_modules/.bin/eslint src/pages/FretMemorizerPage.tsx src/data/tunings.ts src/api/fretMemorizerApi.ts src/pages/TunerPage.tsx 2>&1)",
+      "Bash(./node_modules/.bin/eslint --no-color src/pages/FretMemorizerPage.tsx src/context/NoteColorsContext.tsx)"
     ]
   },
   "enableAllProjectMcpServers": true,

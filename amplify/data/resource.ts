@@ -54,6 +54,11 @@ const schema = a.schema({
     moduleId: a.string().required(),
   }).authorization(allow => [allow.owner()]),
 
+  // Note color preferences — one record per user
+  UserNoteColors: a.model({
+    colorsJson: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
+
   // Fret memorizer game scores — one record per completed session
   FretMemorizerScore: a.model({
     score: a.integer().required(),
