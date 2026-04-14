@@ -157,10 +157,13 @@ Navigate to the **Click Track** tab to build and export tempo-change sequences.
 Navigate to the **Fret Memorizer** tab to drill fretboard note recognition.
 
 - **Interactive SVG fretboard** — 24 frets, color-coded by note
-- **6, 7, and 8-string support** with tuning selection
+- **6, 7, and 8-string support** with tuning selection (selection persists across sessions)
+- **String focus filter** — click a string to restrict both the quiz and fretboard display to that string
 - **Quiz mode** — a random note is shown; click the correct dot on the fretboard
+- **Microphone input mode** — answer questions by playing the note on your instrument instead of clicking
 - **Audio feedback** — correct answers play a plucked string sound
 - **Score tracking** — session accuracy tracked and saved to the cloud (requires sign-in)
+- **Customizable note colors** — open Settings to assign any color to each of the 12 chromatic notes; colors sync to the cloud (requires sign-in)
 
 ---
 
@@ -204,7 +207,8 @@ src/
 │   └── amplify.ts       # AWS Amplify configuration
 ├── api/
 │   ├── clickTrackApi.ts     # Cloud save/load for click tracks
-│   └── fretMemorizerApi.ts  # Cloud score saving for fret memorizer
+│   ├── fretMemorizerApi.ts  # Cloud score saving for fret memorizer
+│   └── noteColorsApi.ts     # Cloud save/load for note color preferences
 ├── audio/
 │   ├── AudioEngine.ts       # Web Audio drum scheduler (master GainNode for volume)
 │   ├── drumSynths.ts        # Per-instrument synthesis functions
@@ -216,10 +220,13 @@ src/
 │   └── pluckString.ts       # Plucked string sound for fret memorizer
 ├── context/
 │   ├── FavoritesContext.tsx        # Lesson favorites (localStorage)
-│   └── LessonsProgressContext.tsx  # Lesson completion tracking (localStorage)
+│   ├── LessonsProgressContext.tsx  # Lesson completion tracking (localStorage)
+│   ├── NoteColorsContext.tsx       # Note fill/stroke colors with cloud sync
+│   └── noteColorsContextDef.ts     # Context definition + useNoteColors hook
 ├── data/
 │   ├── lessons.ts   # Static lesson content (modules + lessons)
-│   └── tunings.ts   # Guitar tunings for 6/7/8-string
+│   ├── tunings.ts   # Guitar tunings for 6/7/8-string
+│   └── noteColors.ts  # DEFAULT_NOTE_FILL palette + color utilities (lightenHex)
 ├── hooks/
 │   ├── useAudioEngine.ts    # React bridge: callbacks → dispatch, volume/humanize sync
 │   ├── usePlaybackCursor.ts # Auto-scroll logic for the beat grid
@@ -255,7 +262,8 @@ src/
     ├── DonationModal/     # Donation prompt
     ├── StorageErrorBanner/    # localStorage quota error banner
     ├── ChordPickerModal/      # Chord selection modal
-    └── GenerateDrumsModal/    # AI drum pattern generation modal
+    ├── GenerateDrumsModal/    # AI drum pattern generation modal
+    └── SettingsModal/         # Note color picker (per chromatic note, cloud-synced)
 ```
 
 ---
