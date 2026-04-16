@@ -1,0 +1,389 @@
+.tab-editor-page {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 56px);
+  background: #0e0e0e;
+  color: #e0e0e0;
+  font-family: 'Courier New', monospace;
+}
+
+/* ── Header ── */
+.tab-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #111;
+  border-bottom: 1px solid #222;
+  flex-wrap: wrap;
+}
+
+.tab-editor-title-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #333;
+  color: #f0f0f0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  outline: none;
+  min-width: 160px;
+  padding: 2px 4px;
+}
+
+.tab-editor-title-input:focus {
+  border-bottom-color: #888;
+}
+
+.tab-header-sep {
+  width: 1px;
+  height: 24px;
+  background: #333;
+}
+
+/* ── Toolbar ── */
+.tab-toolbar {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: #111;
+  border-bottom: 1px solid #222;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+.tab-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border-right: 1px solid #222;
+  flex-shrink: 0;
+}
+
+.tab-toolbar-group:last-child {
+  border-right: none;
+}
+
+.tab-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #aaa;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.1s;
+  font-family: 'Courier New', monospace;
+  flex-shrink: 0;
+}
+
+.tab-tool-btn:hover {
+  background: #1e1e1e;
+  color: #eee;
+  border-color: #333;
+}
+
+.tab-tool-btn.active {
+  background: #1a3a5c;
+  color: #7ac0ff;
+  border-color: #2a5a8c;
+}
+
+.tab-tool-btn.active-effect {
+  background: #2d1f0e;
+  color: #ffaa44;
+  border-color: #5a3a10;
+}
+
+.tab-tool-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.tab-tool-label {
+  font-size: 0.65rem;
+  color: #666;
+  padding: 0 4px;
+  white-space: nowrap;
+  align-self: center;
+}
+
+/* ── Playback bar ── */
+.tab-playback-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  background: #0e0e0e;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.tab-bpm-display {
+  font-size: 0.85rem;
+  color: #888;
+  min-width: 80px;
+}
+
+.tab-view-toggle {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.tab-view-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid #333;
+  background: transparent;
+  color: #888;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tab-view-btn.active {
+  background: #1a3a5c;
+  color: #7ac0ff;
+  border-color: #2a5a8c;
+}
+
+/* ── Canvas ── */
+.tab-canvas {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  outline: none;
+}
+
+.tab-canvas:focus {
+  /* subtle glow to show focus */
+  box-shadow: inset 0 0 0 1px #2a5a8c;
+}
+
+/* ── Staff row ── */
+.tab-staff-row {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  gap: 0;
+}
+
+/* ── Measure ── */
+.tab-measure {
+  display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  position: relative;
+  border-right: 2px solid #555;
+  padding: 0;
+}
+
+.tab-measure-number {
+  font-size: 0.6rem;
+  color: #555;
+  padding: 0 4px;
+  text-align: right;
+  height: 14px;
+  line-height: 14px;
+}
+
+.tab-measure-repeat-start::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 0;
+  width: 4px;
+  border-left: 2px solid #888;
+  border-right: 1px solid #888;
+}
+
+.tab-measure-repeat-end::after {
+  content: '';
+  position: absolute;
+  right: 2px;
+  top: 14px;
+  bottom: 0;
+  width: 4px;
+  border-right: 2px solid #888;
+  border-left: 1px solid #888;
+}
+
+/* ── Tab strings row ── */
+.tab-strings-container {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  padding: 8px 0;
+}
+
+.tab-string-row {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  position: relative;
+}
+
+.tab-string-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: #3a3a3a;
+  pointer-events: none;
+}
+
+/* ── Beat cell ── */
+.tab-beat-col {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tab-beat-col.cursor-col {
+  background: rgba(42, 90, 140, 0.25);
+}
+
+.tab-beat-col.selected-col {
+  background: rgba(90, 60, 20, 0.35);
+}
+
+.tab-beat-col.playhead-col {
+  background: rgba(30, 100, 50, 0.3);
+}
+
+.tab-note-cell {
+  width: 100%;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  font-size: 0.75rem;
+  z-index: 1;
+  user-select: none;
+  cursor: pointer;
+}
+
+.tab-note-cell.cursor-note {
+  background: rgba(42, 90, 180, 0.5);
+  border-radius: 2px;
+}
+
+.tab-fret-num {
+  font-weight: 600;
+  color: #e8e8e8;
+  background: #111;
+  padding: 0 2px;
+  border-radius: 2px;
+  min-width: 14px;
+  text-align: center;
+  line-height: 1;
+}
+
+.tab-fret-num.ghost {
+  color: #888;
+}
+
+.tab-fret-num.dead {
+  color: #cc4444;
+}
+
+.tab-fret-num.harmonic {
+  color: #88ccff;
+  font-style: italic;
+}
+
+/* Duration indicator (tiny marks at top of beat col) */
+.tab-duration-mark {
+  height: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.5rem;
+  color: #555;
+  user-select: none;
+}
+
+/* Modifier overlays */
+.tab-modifier-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.tab-modifier-text {
+  font-size: 0.5rem;
+  color: #aaa;
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tab-pm-text {
+  font-size: 0.55rem;
+  color: #ffaa44;
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* String labels */
+.tab-string-labels {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  margin-right: 4px;
+}
+
+.tab-string-label {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  font-size: 0.6rem;
+  color: #666;
+  width: 18px;
+  justify-content: flex-end;
+  padding-right: 4px;
+}
+
+/* ── Staff view ── */
+.tab-staff-view {
+  padding: 0 16px 16px;
+}
+
+.tab-staff-row-svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+/* ── Misc ── */
+.tab-empty-hint {
+  color: #444;
+  font-size: 0.8rem;
+  padding: 8px;
+  text-align: center;
+}
+
+/* Scrollbar styling */
+.tab-toolbar::-webkit-scrollbar {
+  height: 4px;
+}
+.tab-toolbar::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 2px;
+}
