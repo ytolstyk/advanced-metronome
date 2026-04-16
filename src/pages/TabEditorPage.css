@@ -161,222 +161,25 @@
 }
 
 .tab-canvas:focus {
-  /* subtle glow to show focus */
   box-shadow: inset 0 0 0 1px #2a5a8c;
 }
 
-/* ── Staff row ── */
-.tab-staff-row {
-  display: flex;
-  align-items: flex-start;
-  margin-bottom: 32px;
-  gap: 0;
-}
-
-/* ── Measure ── */
-.tab-measure {
-  display: flex;
-  align-items: stretch;
-  flex-direction: column;
-  position: relative;
-  border-right: 2px solid #555;
-  padding: 0;
-}
-
-.tab-measure-number {
-  font-size: 0.6rem;
-  color: #555;
-  padding: 0 4px;
-  text-align: right;
-  height: 14px;
-  line-height: 14px;
-}
-
-.tab-measure-repeat-start::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 14px;
-  bottom: 0;
-  width: 4px;
-  border-left: 2px solid #888;
-  border-right: 1px solid #888;
-}
-
-.tab-measure-repeat-end::after {
-  content: '';
-  position: absolute;
-  right: 2px;
-  top: 14px;
-  bottom: 0;
-  width: 4px;
-  border-right: 2px solid #888;
-  border-left: 1px solid #888;
-}
-
-/* ── Tab strings row ── */
-.tab-strings-container {
-  position: relative;
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  padding: 8px 0;
-}
-
-.tab-string-row {
-  display: flex;
-  align-items: center;
-  height: 24px;
-  position: relative;
-}
-
-.tab-string-row::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background: #3a3a3a;
-  pointer-events: none;
-}
-
-/* ── Beat cell ── */
-.tab-beat-col {
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  flex-shrink: 0;
-}
-
-.tab-beat-col.cursor-col {
-  background: rgba(42, 90, 140, 0.25);
-}
-
-.tab-beat-col.selected-col {
-  background: rgba(90, 60, 20, 0.35);
-}
-
-.tab-beat-col.playhead-col {
-  background: rgba(30, 100, 50, 0.3);
-}
-
-.tab-note-cell {
-  width: 100%;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  font-size: 0.75rem;
-  z-index: 1;
+/* ── SVG rows (tab view) ── */
+.tab-svg-row {
+  display: block;
+  overflow: visible;
+  cursor: default;
   user-select: none;
-  cursor: pointer;
-}
-
-.tab-note-cell.cursor-note {
-  background: rgba(42, 90, 180, 0.5);
-  border-radius: 2px;
-}
-
-.tab-fret-num {
-  font-weight: 600;
-  color: #e8e8e8;
-  background: #111;
-  padding: 0 2px;
-  border-radius: 2px;
-  min-width: 14px;
-  text-align: center;
-  line-height: 1;
-}
-
-.tab-fret-num.ghost {
-  color: #888;
-}
-
-.tab-fret-num.dead {
-  color: #cc4444;
-}
-
-.tab-fret-num.harmonic {
-  color: #88ccff;
-  font-style: italic;
-}
-
-/* Duration indicator (tiny marks at top of beat col) */
-.tab-duration-mark {
-  height: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.5rem;
-  color: #555;
-  user-select: none;
-}
-
-/* Modifier overlays */
-.tab-modifier-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  pointer-events: none;
-}
-
-.tab-modifier-text {
-  font-size: 0.5rem;
-  color: #aaa;
-  position: absolute;
-  top: -10px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.tab-pm-text {
-  font-size: 0.55rem;
-  color: #ffaa44;
-  position: absolute;
-  bottom: -2px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-/* String labels */
-.tab-string-labels {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 0;
-  margin-right: 4px;
-}
-
-.tab-string-label {
-  height: 24px;
-  display: flex;
-  align-items: center;
-  font-size: 0.6rem;
-  color: #666;
-  width: 18px;
-  justify-content: flex-end;
-  padding-right: 4px;
 }
 
 /* ── Staff view ── */
 .tab-staff-view {
-  padding: 0 16px 16px;
+  padding: 0 0 16px;
 }
 
 .tab-staff-row-svg {
   display: block;
-  width: 100%;
   overflow: visible;
-}
-
-/* ── Misc ── */
-.tab-empty-hint {
-  color: #444;
-  font-size: 0.8rem;
-  padding: 8px;
-  text-align: center;
 }
 
 /* Scrollbar styling */

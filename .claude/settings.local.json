@@ -53,7 +53,10 @@
       "Bash(./node_modules/.bin/eslint src/pages/FretMemorizerPage.tsx --format=compact 2>&1)",
       "Bash(./node_modules/.bin/eslint src/pages/FretMemorizerPage.tsx 2>&1)",
       "Bash(./node_modules/.bin/eslint src/pages/FretMemorizerPage.tsx src/data/tunings.ts src/api/fretMemorizerApi.ts src/pages/TunerPage.tsx 2>&1)",
-      "Bash(./node_modules/.bin/eslint --no-color src/pages/FretMemorizerPage.tsx src/context/NoteColorsContext.tsx)"
+      "Bash(./node_modules/.bin/eslint --no-color src/pages/FretMemorizerPage.tsx src/context/NoteColorsContext.tsx)",
+      "Bash(./node_modules/.bin/eslint src/components/TabEditor/TabTechniquePaths.tsx src/pages/TabEditorPage.tsx 2>&1)",
+      "Bash(./node_modules/.bin/eslint src/components/TabEditor/ 2>&1)",
+      "Bash(/usr/local/bin/npm run:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
