@@ -3,10 +3,11 @@ import { BEAT_WIDTHS } from '../../tabEditorState'
 
 export const STRING_SPACING = 24
 export const STRING_LABEL_W = 28
-export const MEASURE_NUMBER_H = 14
+export const MEASURE_NUMBER_H = 16
 export const TECHNIQUE_ZONE_H = 18
 export const DURATION_MARK_H = 12
-export const TOP_MARGIN = DURATION_MARK_H + TECHNIQUE_ZONE_H + MEASURE_NUMBER_H // 44
+// Top zone order (from y=0 downward): MEASURE_NUMBER_H | TECHNIQUE_ZONE_H | DURATION_MARK_H | strings…
+export const TOP_MARGIN = MEASURE_NUMBER_H + TECHNIQUE_ZONE_H + DURATION_MARK_H
 export const BOTTOM_PADDING = 8
 export const BARLINE_W = 2
 export const TIME_SIG_W = 40 // horizontal space reserved for a stacked time signature

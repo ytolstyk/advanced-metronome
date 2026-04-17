@@ -22,12 +22,14 @@ interface TabMeasureSvgProps {
   track: TabTrack
   cursor: TabCursor
   selection: TabSelection | null
+  noteSelection: TabCursor[]
   playheadMeasure: number
   playheadBeat: number
   showTimeSig?: boolean
+  showStringLabels?: boolean
   timeSig?: { numerator: number; denominator: number }
   onTimeSigClick?: (measureIndex: number) => void
-  onBeatMouseDown: (mi: number, bi: number, si: number) => void
+  onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
 }
 
@@ -43,6 +45,18 @@ function durationSymbol(d: DurationValue): string {
   }
 }
 
+function restSymbol(d: DurationValue): string {
+  switch (d) {
+    case 'whole': return '𝄻'
+    case 'half': return '𝄼'
+    case 'quarter': return '𝄽'
+    case 'eighth': return '𝄾'
+    case 'sixteenth': return '𝄿'
+    case 'thirtysecond': return '𝅀'
+    default: return '𝅁'
+  }
+}
+
 export function TabMeasureSvg({
   measure,
   measureIndex,
@@ -50,9 +64,11 @@ export function TabMeasureSvg({
   track,
   cursor,
   selection,
+  noteSelection,
   playheadMeasure,
   playheadBeat,
   showTimeSig = false,
+  showStringLabels = false,
   timeSig,
   onTimeSigClick,
   onBeatMouseDown,
@@ -77,12 +93,13 @@ export function TabMeasureSvg({
 
   return (
     <g transform={`translate(${xOffset}, 0)`}>
-      {/* Measure number */}
+      {/* Measure number — pinned to very top of row */}
       <text
         x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + 2}
-        y={DURATION_MARK_H + TECHNIQUE_ZONE_H + MEASURE_NUMBER_H / 2}
-        fontSize={11}
-        fill="#888"
+        y={MEASURE_NUMBER_H / 2}
+        fontSize={12}
+        fontWeight={600}
+        fill="#a0a0b8"
         dominantBaseline="middle"
       >
         {measureIndex + 1}
@@ -185,10 +202,10 @@ export function TabMeasureSvg({
               />
             )}
 
-            {/* Duration mark */}
+            {/* Duration mark — sits just above the top string */}
             <text
               x={beatCX}
-              y={DURATION_MARK_H / 2}
+              y={MEASURE_NUMBER_H + TECHNIQUE_ZONE_H + DURATION_MARK_H / 2}
               fontSize={11}
               textAnchor="middle"
               dominantBaseline="middle"
@@ -196,6 +213,21 @@ export function TabMeasureSvg({
             >
               {durationSymbol(beat.duration)}{dotSuffix}
             </text>
+
+            {/* Rest glyph — when every string on this beat is empty */}
+            {beat.notes.every((n) => n.fret < 0) && (
+              <text
+                x={beatCX}
+                y={(topStringY + bottomStringY) / 2}
+                fontSize={22}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="#666"
+                style={{ pointerEvents: 'none' }}
+              >
+                {restSymbol(beat.duration)}
+              </text>
+            )}
 
             {/* Beat-level hit target (for drag selection) */}
             <rect
@@ -214,6 +246,9 @@ export function TabMeasureSvg({
               const note = beat.notes[si]
               const sy = stringY(si, stringCount)
               const isCursorNote = isCursorCol && cursor.stringIndex === si
+              const isNoteSelected = noteSelection.some(
+                (s) => s.measureIndex === measureIndex && s.beatIndex === bi && s.stringIndex === si,
+              )
 
               // Fret label and color
               let fretLabel = ''
@@ -248,8 +283,22 @@ export function TabMeasureSvg({
                       y={sy - 11}
                       width={labelW + 2}
                       height={22}
-                      fill="rgba(42,90,180,0.5)"
+                      fill="rgba(99,102,241,0.45)"
                       rx={2}
+                    />
+                  )}
+
+                  {/* Shift-selected note outline */}
+                  {isNoteSelected && (
+                    <rect
+                      x={beatCX - labelW / 2 - 2}
+                      y={sy - 12}
+                      width={labelW + 4}
+                      height={24}
+                      fill="none"
+                      stroke="#14b8a6"
+                      strokeWidth={2}
+                      rx={3}
                     />
                   )}
 
@@ -304,7 +353,7 @@ export function TabMeasureSvg({
                     style={{ cursor: 'pointer' }}
                     onMouseDown={(e) => {
                       e.stopPropagation()
-                      onBeatMouseDown(measureIndex, bi, si)
+                      onBeatMouseDown(measureIndex, bi, si, e.shiftKey)
                     }}
                   />
                 </g>
@@ -327,25 +376,27 @@ export function TabMeasureSvg({
       {/* Technique overlays (post-pass) */}
       <TechniqueOverlay measure={measure} track={track} beatPositions={beatPositions} />
 
-      {/* String labels (in left gutter, one per string) */}
-      {Array.from({ length: stringCount }, (_, rawSi) => {
-        const si = stringCount - 1 - rawSi
-        const sy = stringY(si, stringCount)
-        const label = preset.strings[si]?.note ?? ''
-        return (
-          <text
-            key={si}
-            x={-4}
-            y={sy}
-            fontSize={11}
-            textAnchor="end"
-            dominantBaseline="middle"
-            fill="#aaa"
-          >
-            {label}
-          </text>
-        )
-      })}
+      {/* String labels (in left gutter, one per string) — only on first measure of a row */}
+      {showStringLabels &&
+        Array.from({ length: stringCount }, (_, rawSi) => {
+          const si = stringCount - 1 - rawSi
+          const sy = stringY(si, stringCount)
+          const label = preset.strings[si]?.note ?? ''
+          return (
+            <text
+              key={si}
+              x={-4}
+              y={sy}
+              fontSize={11}
+              fontWeight={600}
+              textAnchor="end"
+              dominantBaseline="middle"
+              fill="#a0a0b8"
+            >
+              {label}
+            </text>
+          )
+        })}
     </g>
   )
 }

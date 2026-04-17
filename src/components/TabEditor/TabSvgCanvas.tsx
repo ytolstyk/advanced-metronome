@@ -12,7 +12,7 @@ interface TabSvgCanvasProps {
   containerWidth: number
   canvasRef: RefObject<HTMLDivElement | null>
   dispatch: React.Dispatch<TabEditorAction>
-  onBeatMouseDown: (mi: number, bi: number, si: number) => void
+  onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
 }
 
@@ -49,7 +49,7 @@ export function TabSvgCanvas({
   onBeatMouseDown,
   onBeatMouseEnter,
 }: TabSvgCanvasProps) {
-  const { track, cursor, selection, playheadMeasure, playheadBeat, viewMode } = state
+  const { track, cursor, selection, noteSelection, playheadMeasure, playheadBeat, viewMode } = state
 
   // Determine which measures show a time signature
   const showTimeSigMap: boolean[] = track.measures.map((m, i) => {
@@ -162,9 +162,11 @@ export function TabSvgCanvas({
                   track={track}
                   cursor={cursor}
                   selection={selection}
+                  noteSelection={noteSelection}
                   playheadMeasure={playheadMeasure}
                   playheadBeat={playheadBeat}
                   showTimeSig={showTs}
+                  showStringLabels={mIdx === 0}
                   timeSig={sig}
                   onTimeSigClick={openTimeSigEditor}
                   onBeatMouseDown={onBeatMouseDown}

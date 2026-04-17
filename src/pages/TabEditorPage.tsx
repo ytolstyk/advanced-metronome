@@ -69,13 +69,13 @@ export function TabEditorPage() {
     [state.track.openMidi],
   )
 
-  // commitFretAt accepts an explicit cursor position to avoid stale closures
+  // commitFretAt accepts an explicit cursor position to avoid stale closures.
+  // Cursor does NOT auto-advance — user moves it explicitly with arrow keys or click.
   const commitFretAt = useCallback(
     (fret: number, at: TabCursor) => {
       if (fret > 24) return
       dispatch({ type: 'ADD_NOTE', measureIndex: at.measureIndex, beatIndex: at.beatIndex, stringIndex: at.stringIndex, fret })
       previewNote(at.stringIndex, fret)
-      dispatch({ type: 'MOVE_CURSOR', direction: 'right' })
     },
     [previewNote],
   )
@@ -84,14 +84,13 @@ export function TabEditorPage() {
     (d: number) => {
       if (digitTimerRef.current !== null) clearTimeout(digitTimerRef.current)
       if (digitBufRef.current !== null && prevCursorRef.current !== null) {
-        // Second digit: undo first commit, restore cursor, commit combined value
+        // Second digit: undo first commit, replace with combined value at same cursor
         const combined = digitBufRef.current * 10 + d
         const prevAt = prevCursorRef.current
         digitBufRef.current = null
         prevCursorRef.current = null
         if (combined <= 24) {
           dispatch({ type: 'UNDO' })
-          dispatch({ type: 'SET_CURSOR', cursor: prevAt })
           commitFretAt(combined, prevAt)
         }
       } else if (d === 0) {
@@ -100,7 +99,7 @@ export function TabEditorPage() {
         prevCursorRef.current = null
         commitFretAt(0, state.cursor)
       } else {
-        // Digits 1–9: commit immediately, but keep buffer for potential second digit
+        // Digits 1–9: commit immediately, keep buffer open for a second digit
         prevCursorRef.current = { ...state.cursor }
         digitBufRef.current = d
         commitFretAt(d, state.cursor)
@@ -234,10 +233,17 @@ export function TabEditorPage() {
     dispatch({ type: 'SET_PLAYHEAD', measureIndex: 0, beatIndex: 0 })
   }
 
-  // Drag selection
-  function onBeatMouseDown(mi: number, bi: number, si: number) {
+  // Drag selection + shift-click multi-note selection
+  function onBeatMouseDown(mi: number, bi: number, si: number, shiftKey: boolean) {
+    if (shiftKey) {
+      dispatch({ type: 'TOGGLE_NOTE_IN_SELECTION', cursor: { measureIndex: mi, beatIndex: bi, stringIndex: si } })
+      dispatch({ type: 'SET_CURSOR', cursor: { measureIndex: mi, beatIndex: bi, stringIndex: si } })
+      canvasRef.current?.focus()
+      return
+    }
     dragRef.current = { measureIndex: mi, beatIndex: bi }
     dispatch({ type: 'SET_SELECTION', selection: null })
+    dispatch({ type: 'CLEAR_NOTE_SELECTION' })
     dispatch({ type: 'SET_CURSOR', cursor: { measureIndex: mi, beatIndex: bi, stringIndex: si } })
     canvasRef.current?.focus()
   }

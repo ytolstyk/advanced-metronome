@@ -1,7 +1,15 @@
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { DotModifier, DurationValue, NoteModifierKey, TabEditorState } from '../../tabEditorTypes'
+import type {
+  ConnectionModifierKey,
+  DotModifier,
+  DurationValue,
+  NoteModifierKey,
+  TabEditorState,
+} from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
+
+const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide', 'shiftSlide']
 
 const DURATIONS: { label: string; value: DurationValue }[] = [
   { label: '1/1', value: 'whole' },
@@ -75,15 +83,38 @@ function ToolBtn({
 }
 
 export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
-  const { activeDuration, activeDot, activeModifiers, cursor } = state
+  const { activeDuration, activeDot, activeModifiers, cursor, noteSelection } = state
   const mi = cursor.measureIndex
   const bi = cursor.beatIndex
 
+  // Toolbar mirrors the beat under the cursor so changing duration acts on that beat.
+  const currentBeat = state.track.measures[mi]?.beats[bi]
+  const displayedDuration: DurationValue = currentBeat?.duration ?? activeDuration
+  const displayedDot: DotModifier = currentBeat?.dot ?? activeDot
+
+  function pickDuration(duration: DurationValue) {
+    dispatch({ type: 'SET_ACTIVE_DURATION', duration })
+    if (currentBeat) {
+      dispatch({ type: 'SET_BEAT_DURATION', measureIndex: mi, beatIndex: bi, duration })
+    }
+  }
+
   function toggleDot(key: keyof DotModifier) {
-    const next: DotModifier = { ...activeDot, [key]: !activeDot[key] }
+    const next: DotModifier = { ...displayedDot, [key]: !displayedDot[key] }
     if (key === 'dotted' && next.dotted) next.doubleDotted = false
     if (key === 'doubleDotted' && next.doubleDotted) next.dotted = false
     dispatch({ type: 'SET_ACTIVE_DOT', dot: next })
+    if (currentBeat) {
+      dispatch({ type: 'SET_BEAT_DOT', measureIndex: mi, beatIndex: bi, dot: next })
+    }
+  }
+
+  function onConnectionClick(key: NoteModifierKey) {
+    if (noteSelection.length >= 2 && (CONNECTION_KEYS as NoteModifierKey[]).includes(key)) {
+      dispatch({ type: 'APPLY_CONNECTION_TO_SELECTION', modifier: key as ConnectionModifierKey })
+      return
+    }
+    dispatch({ type: 'TOGGLE_MODIFIER', modifier: key })
   }
 
   return (
@@ -95,26 +126,20 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
           <ToolBtn
             key={d.value}
             title={d.label}
-            active={activeDuration === d.value}
-            onClick={() => dispatch({ type: 'SET_ACTIVE_DURATION', duration: d.value })}
+            active={displayedDuration === d.value}
+            onClick={() => pickDuration(d.value)}
           >
             {d.label}
           </ToolBtn>
         ))}
-        <ToolBtn title="Dotted" active={activeDot.dotted} onClick={() => toggleDot('dotted')}>·</ToolBtn>
-        <ToolBtn title="Double dotted" active={activeDot.doubleDotted} onClick={() => toggleDot('doubleDotted')}>··</ToolBtn>
+        <ToolBtn title="Dotted" active={displayedDot.dotted} onClick={() => toggleDot('dotted')}>·</ToolBtn>
+        <ToolBtn title="Double dotted" active={displayedDot.doubleDotted} onClick={() => toggleDot('doubleDotted')}>··</ToolBtn>
         <ToolBtn
           title="Triplet"
-          active={activeDot.triplet}
-          onClick={() => dispatch({ type: 'SET_ACTIVE_DOT', dot: { ...activeDot, triplet: !activeDot.triplet } })}
+          active={displayedDot.triplet}
+          onClick={() => toggleDot('triplet')}
         >
           3
-        </ToolBtn>
-        <ToolBtn
-          title="Apply duration to current beat"
-          onClick={() => dispatch({ type: 'SET_BEAT_DURATION', measureIndex: mi, beatIndex: bi, duration: activeDuration })}
-        >
-          ✓dur
         </ToolBtn>
       </div>
 
@@ -135,17 +160,23 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
 
       {/* Connections group */}
       <div className="tab-toolbar-group" data-group="techniques">
-        <span className="tab-tool-label">Techniques</span>
-        {CONNECTIONS.map((c) => (
-          <ToolBtn
-            key={c.key}
-            title={c.title}
-            activeEffect={!!activeModifiers[c.key]}
-            onClick={() => dispatch({ type: 'TOGGLE_MODIFIER', modifier: c.key })}
-          >
-            {c.label}
-          </ToolBtn>
-        ))}
+        <span className="tab-tool-label">
+          Techniques{noteSelection.length >= 2 ? ` · ${noteSelection.length} selected` : ''}
+        </span>
+        {CONNECTIONS.map((c) => {
+          const isConnectionKey = (CONNECTION_KEYS as NoteModifierKey[]).includes(c.key)
+          const multi = noteSelection.length >= 2 && isConnectionKey
+          return (
+            <ToolBtn
+              key={c.key}
+              title={multi ? `Apply ${c.title} between selected notes` : c.title}
+              activeEffect={!multi && !!activeModifiers[c.key]}
+              onClick={() => onConnectionClick(c.key)}
+            >
+              {c.label}
+            </ToolBtn>
+          )
+        })}
       </div>
 
       {/* Structure group */}

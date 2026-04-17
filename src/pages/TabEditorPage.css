@@ -4,7 +4,6 @@
   min-height: calc(100vh - 56px);
   background: #0e0e0e;
   color: #e0e0e0;
-  font-family: 'Courier New', monospace;
 }
 
 /* ── Header ── */
@@ -65,46 +64,56 @@
 }
 
 /* Color-coded toolbar group backgrounds */
-.tab-toolbar-group[data-group="duration"] { background: #0a1520; }
-.tab-toolbar-group[data-group="effects"]  { background: #1a1000; }
-.tab-toolbar-group[data-group="techniques"] { background: #0a1a0a; }
-.tab-toolbar-group[data-group="structure"] { background: #150d1a; }
-.tab-toolbar-group[data-group="edit"]     { background: #0d0d1a; }
-.tab-toolbar-group[data-group="move"]     { background: #0d1414; }
+.tab-toolbar-group[data-group="duration"] { background: #111c2e; }
+.tab-toolbar-group[data-group="effects"]  { background: #241806; }
+.tab-toolbar-group[data-group="techniques"] { background: #0f2416; }
+.tab-toolbar-group[data-group="structure"] { background: #1f1329; }
+.tab-toolbar-group[data-group="edit"]     { background: #14142a; }
+.tab-toolbar-group[data-group="move"]     { background: #0f2023; }
 
 .tab-tool-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
+  min-width: 34px;
   height: 32px;
+  padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 5px;
   background: transparent;
   color: #ccc;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.1s;
-  font-family: 'Courier New', monospace;
   flex-shrink: 0;
 }
 
 .tab-tool-btn:hover {
-  background: #1e1e1e;
-  color: #eee;
-  border-color: #333;
+  background: #20213a;
+  color: #f0f0f0;
+  border-color: #3a3c5e;
 }
 
 .tab-tool-btn.active {
-  background: #1a3a5c;
-  color: #7ac0ff;
-  border-color: #2a5a8c;
+  background: #2d2f6a;
+  color: #c7d2fe;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35);
 }
 
 .tab-tool-btn.active-effect {
-  background: #2d1f0e;
-  color: #ffaa44;
-  border-color: #5a3a10;
+  background: #3a2410;
+  color: #fbbf24;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.35);
+}
+
+.tab-tool-btn.selected-connection {
+  background: #1a3a3f;
+  color: #5eead4;
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 1px rgba(20, 184, 166, 0.35);
 }
 
 .tab-tool-btn:disabled {
@@ -156,9 +165,9 @@
 }
 
 .tab-view-btn.active {
-  background: #1a3a5c;
-  color: #7ac0ff;
-  border-color: #2a5a8c;
+  background: #2d2f6a;
+  color: #c7d2fe;
+  border-color: #6366f1;
 }
 
 /* ── Canvas ── */

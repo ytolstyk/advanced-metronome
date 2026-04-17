@@ -1,5 +1,6 @@
 import type {
   Beat,
+  ConnectionModifierKey,
   DotModifier,
   DurationValue,
   Measure,
@@ -36,12 +37,50 @@ const DURATION_BEATS: Record<DurationValue, number> = {
   sixtyfourth: 0.0625,
 }
 
-export function beatDurationSeconds(duration: DurationValue, dot: DotModifier, bpm: number): number {
+function durationBeats(duration: DurationValue, dot: DotModifier): number {
   let beats = DURATION_BEATS[duration]
   if (dot.doubleDotted) beats *= 1.75
   else if (dot.dotted) beats *= 1.5
   if (dot.triplet) beats *= 2 / 3
-  return (60 / bpm) * beats
+  return beats
+}
+
+export function beatDurationSeconds(duration: DurationValue, dot: DotModifier, bpm: number): number {
+  return (60 / bpm) * durationBeats(duration, dot)
+}
+
+// How many beats of the given duration fit in a time signature
+function slotsInMeasure(
+  timeSig: { numerator: number; denominator: number },
+  duration: DurationValue,
+  dot: DotModifier,
+): number {
+  const measureQuarterBeats = (timeSig.numerator * 4) / timeSig.denominator
+  const unitBeats = durationBeats(duration, dot)
+  return Math.max(1, Math.floor(measureQuarterBeats / unitBeats))
+}
+
+function isBeatEmpty(b: Beat): boolean {
+  return b.notes.every((n) => n.fret < 0)
+}
+
+// If every beat in a measure is empty, resize it to hold `slots` beats of the given duration.
+function resizeEmptyMeasure(
+  m: Measure,
+  stringCount: number,
+  duration: DurationValue,
+  dot: DotModifier,
+  slots: number,
+): Measure {
+  if (!m.beats.every(isBeatEmpty)) return m
+  if (m.beats.length === slots && m.beats.every((b) => b.duration === duration)) return m
+  const beats = Array.from({ length: slots }, () => ({
+    id: crypto.randomUUID(),
+    duration,
+    dot: { ...dot },
+    notes: Array.from({ length: stringCount }, makeEmptyNote),
+  }))
+  return { ...m, beats }
 }
 
 export function tuningNoteToMidi(note: string, octave: number): number {
@@ -106,6 +145,7 @@ export function createInitialTabState(): TabEditorState {
     track,
     cursor: { measureIndex: 0, beatIndex: 0, stringIndex: 0 },
     selection: null,
+    noteSelection: [],
     clipboard: null,
     activeDuration: 'quarter',
     activeDot: { dotted: false, doubleDotted: false, triplet: false },
@@ -228,9 +268,18 @@ export type TabEditorAction =
       beatIndex: number
       duration: DurationValue
     }
+  | {
+      type: 'SET_BEAT_DOT'
+      measureIndex: number
+      beatIndex: number
+      dot: DotModifier
+    }
   | { type: 'SET_ACTIVE_DURATION'; duration: DurationValue }
   | { type: 'SET_ACTIVE_DOT'; dot: DotModifier }
   | { type: 'TOGGLE_MODIFIER'; modifier: NoteModifierKey }
+  | { type: 'TOGGLE_NOTE_IN_SELECTION'; cursor: TabCursor }
+  | { type: 'CLEAR_NOTE_SELECTION' }
+  | { type: 'APPLY_CONNECTION_TO_SELECTION'; modifier: ConnectionModifierKey }
   | {
       type: 'APPLY_MODIFIER'
       measureIndex: number
@@ -286,7 +335,13 @@ export function tabEditorReducer(
               if (si !== action.stringIndex) return n
               return { fret: action.fret, modifiers: { ...state.activeModifiers } }
             })
-            return { ...b, notes }
+            // Placing a note claims this beat at the active duration/dot
+            return {
+              ...b,
+              duration: state.activeDuration,
+              dot: { ...state.activeDot },
+              notes,
+            }
           }),
         }
       })
@@ -328,8 +383,41 @@ export function tabEditorReducer(
       return { ...s, track: { ...s.track, measures } }
     }
 
-    case 'SET_ACTIVE_DURATION':
-      return { ...state, activeDuration: action.duration }
+    case 'SET_BEAT_DOT': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== action.beatIndex) return b
+            return { ...b, dot: { ...action.dot } }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'SET_ACTIVE_DURATION': {
+      // If the cursor's measure is empty, resize it to hold slots of the new duration
+      const { cursor, track, activeDot } = state
+      const measure = track.measures[cursor.measureIndex]
+      if (!measure) return { ...state, activeDuration: action.duration }
+      const timeSig = measure.timeSignature ?? track.globalTimeSig
+      const slots = slotsInMeasure(timeSig, action.duration, activeDot)
+      const resized = resizeEmptyMeasure(measure, track.stringCount, action.duration, activeDot, slots)
+      if (resized === measure) {
+        return { ...state, activeDuration: action.duration }
+      }
+      const measures = track.measures.map((m, i) => (i === cursor.measureIndex ? resized : m))
+      const clampedBeatIdx = Math.min(cursor.beatIndex, resized.beats.length - 1)
+      return {
+        ...state,
+        activeDuration: action.duration,
+        track: { ...track, measures },
+        cursor: { ...cursor, beatIndex: clampedBeatIdx },
+      }
+    }
 
     case 'SET_ACTIVE_DOT':
       return { ...state, activeDot: action.dot }
@@ -474,6 +562,47 @@ export function tabEditorReducer(
 
     case 'SET_SELECTION':
       return { ...state, selection: action.selection }
+
+    case 'TOGGLE_NOTE_IN_SELECTION': {
+      const { measureIndex: mi, beatIndex: bi, stringIndex: si } = action.cursor
+      const exists = state.noteSelection.some(
+        (s) => s.measureIndex === mi && s.beatIndex === bi && s.stringIndex === si,
+      )
+      const noteSelection = exists
+        ? state.noteSelection.filter(
+            (s) => !(s.measureIndex === mi && s.beatIndex === bi && s.stringIndex === si),
+          )
+        : [...state.noteSelection, { ...action.cursor }]
+      return { ...state, noteSelection }
+    }
+
+    case 'CLEAR_NOTE_SELECTION':
+      return { ...state, noteSelection: [] }
+
+    case 'APPLY_CONNECTION_TO_SELECTION': {
+      if (state.noteSelection.length < 2) return state
+      const s = pushUndo(state)
+      // Sort by (measure, beat) so the connection runs in musical order
+      const ordered = [...state.noteSelection].sort((a, b) => {
+        if (a.measureIndex !== b.measureIndex) return a.measureIndex - b.measureIndex
+        return a.beatIndex - b.beatIndex
+      })
+      // Apply the modifier to all but the last — each marks the link to the *next* note
+      const toMark = new Set(
+        ordered.slice(0, -1).map((n) => `${n.measureIndex}:${n.beatIndex}:${n.stringIndex}`),
+      )
+      const measures = s.track.measures.map((m, mi) => ({
+        ...m,
+        beats: m.beats.map((b, bi) => ({
+          ...b,
+          notes: b.notes.map((n, si) => {
+            if (!toMark.has(`${mi}:${bi}:${si}`)) return n
+            return { ...n, modifiers: { ...n.modifiers, [action.modifier]: true } }
+          }),
+        })),
+      }))
+      return { ...s, track: { ...s.track, measures } }
+    }
 
     case 'COPY': {
       const sel = state.selection

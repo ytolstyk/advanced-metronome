@@ -83,10 +83,13 @@ export interface TabSelection {
   endBeat: number
 }
 
+export type ConnectionModifierKey = 'hammerOn' | 'pullOff' | 'legatoSlide' | 'shiftSlide'
+
 export interface TabEditorState {
   track: TabTrack
   cursor: TabCursor
   selection: TabSelection | null
+  noteSelection: TabCursor[]
   clipboard: Beat[] | null
   activeDuration: DurationValue
   activeDot: DotModifier
