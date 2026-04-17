@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import type { DotModifier, DurationValue, NoteModifierKey, TabEditorState } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
 
@@ -42,6 +44,36 @@ interface TabEditorToolbarProps {
   dispatch: React.Dispatch<TabEditorAction>
 }
 
+function ToolBtn({
+  title,
+  active,
+  activeEffect,
+  onClick,
+  children,
+}: {
+  title: string
+  active?: boolean
+  activeEffect?: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      title={title}
+      className={cn(
+        'tab-tool-btn',
+        active && 'active',
+        activeEffect && 'active-effect',
+      )}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  )
+}
+
 export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
   const { activeDuration, activeDot, activeModifiers, cursor } = state
   const mi = cursor.measureIndex
@@ -57,194 +89,93 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
   return (
     <div className="tab-toolbar">
       {/* Duration group */}
-      <div className="tab-toolbar-group">
+      <div className="tab-toolbar-group" data-group="duration">
         <span className="tab-tool-label">Duration</span>
         {DURATIONS.map((d) => (
-          <button
+          <ToolBtn
             key={d.value}
             title={d.label}
-            className={`tab-tool-btn${activeDuration === d.value ? ' active' : ''}`}
+            active={activeDuration === d.value}
             onClick={() => dispatch({ type: 'SET_ACTIVE_DURATION', duration: d.value })}
           >
             {d.label}
-          </button>
+          </ToolBtn>
         ))}
-        <button
-          title="Dotted"
-          className={`tab-tool-btn${activeDot.dotted ? ' active' : ''}`}
-          onClick={() => toggleDot('dotted')}
-        >
-          ·
-        </button>
-        <button
-          title="Double dotted"
-          className={`tab-tool-btn${activeDot.doubleDotted ? ' active' : ''}`}
-          onClick={() => toggleDot('doubleDotted')}
-        >
-          ··
-        </button>
-        <button
+        <ToolBtn title="Dotted" active={activeDot.dotted} onClick={() => toggleDot('dotted')}>·</ToolBtn>
+        <ToolBtn title="Double dotted" active={activeDot.doubleDotted} onClick={() => toggleDot('doubleDotted')}>··</ToolBtn>
+        <ToolBtn
           title="Triplet"
-          className={`tab-tool-btn${activeDot.triplet ? ' active' : ''}`}
-          onClick={() =>
-            dispatch({ type: 'SET_ACTIVE_DOT', dot: { ...activeDot, triplet: !activeDot.triplet } })
-          }
+          active={activeDot.triplet}
+          onClick={() => dispatch({ type: 'SET_ACTIVE_DOT', dot: { ...activeDot, triplet: !activeDot.triplet } })}
         >
           3
-        </button>
-        <button
+        </ToolBtn>
+        <ToolBtn
           title="Apply duration to current beat"
-          className="tab-tool-btn"
-          style={{ fontSize: '0.6rem' }}
-          onClick={() =>
-            dispatch({
-              type: 'SET_BEAT_DURATION',
-              measureIndex: mi,
-              beatIndex: bi,
-              duration: activeDuration,
-            })
-          }
+          onClick={() => dispatch({ type: 'SET_BEAT_DURATION', measureIndex: mi, beatIndex: bi, duration: activeDuration })}
         >
           ✓dur
-        </button>
+        </ToolBtn>
       </div>
 
       {/* Effects group */}
-      <div className="tab-toolbar-group">
+      <div className="tab-toolbar-group" data-group="effects">
         <span className="tab-tool-label">Effects</span>
         {MODIFIERS.map((mod) => (
-          <button
+          <ToolBtn
             key={mod.key}
             title={mod.title}
-            className={`tab-tool-btn${activeModifiers[mod.key] ? ' active-effect' : ''}`}
+            activeEffect={!!activeModifiers[mod.key]}
             onClick={() => dispatch({ type: 'TOGGLE_MODIFIER', modifier: mod.key })}
           >
             {mod.label}
-          </button>
+          </ToolBtn>
         ))}
       </div>
 
       {/* Connections group */}
-      <div className="tab-toolbar-group">
+      <div className="tab-toolbar-group" data-group="techniques">
         <span className="tab-tool-label">Techniques</span>
         {CONNECTIONS.map((c) => (
-          <button
+          <ToolBtn
             key={c.key}
             title={c.title}
-            className={`tab-tool-btn${activeModifiers[c.key] ? ' active-effect' : ''}`}
+            activeEffect={!!activeModifiers[c.key]}
             onClick={() => dispatch({ type: 'TOGGLE_MODIFIER', modifier: c.key })}
           >
             {c.label}
-          </button>
+          </ToolBtn>
         ))}
       </div>
 
       {/* Structure group */}
-      <div className="tab-toolbar-group">
+      <div className="tab-toolbar-group" data-group="structure">
         <span className="tab-tool-label">Structure</span>
-        <button
-          title="Insert beat before"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'INSERT_BEAT_BEFORE', measureIndex: mi, beatIndex: bi })}
-        >
-          ←+
-        </button>
-        <button
-          title="Insert beat after"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'INSERT_BEAT_AFTER', measureIndex: mi, beatIndex: bi })}
-        >
-          +→
-        </button>
-        <button
-          title="Delete beat"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'DELETE_BEAT', measureIndex: mi, beatIndex: bi })}
-        >
-          -♩
-        </button>
-        <button
-          title="Insert measure before"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'INSERT_MEASURE_BEFORE', measureIndex: mi })}
-        >
-          ←𝄀
-        </button>
-        <button
-          title="Insert measure after"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'INSERT_MEASURE_AFTER', measureIndex: mi })}
-        >
-          𝄀→
-        </button>
-        <button
-          title="Delete measure"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'DELETE_MEASURE', measureIndex: mi })}
-        >
-          -𝄀
-        </button>
+        <ToolBtn title="Insert beat before" onClick={() => dispatch({ type: 'INSERT_BEAT_BEFORE', measureIndex: mi, beatIndex: bi })}>←+</ToolBtn>
+        <ToolBtn title="Insert beat after" onClick={() => dispatch({ type: 'INSERT_BEAT_AFTER', measureIndex: mi, beatIndex: bi })}>+→</ToolBtn>
+        <ToolBtn title="Delete beat" onClick={() => dispatch({ type: 'DELETE_BEAT', measureIndex: mi, beatIndex: bi })}>-♩</ToolBtn>
+        <ToolBtn title="Insert measure before" onClick={() => dispatch({ type: 'INSERT_MEASURE_BEFORE', measureIndex: mi })}>←𝄀</ToolBtn>
+        <ToolBtn title="Insert measure after" onClick={() => dispatch({ type: 'INSERT_MEASURE_AFTER', measureIndex: mi })}>𝄀→</ToolBtn>
+        <ToolBtn title="Delete measure" onClick={() => dispatch({ type: 'DELETE_MEASURE', measureIndex: mi })}>-𝄀</ToolBtn>
       </div>
 
       {/* Edit group */}
-      <div className="tab-toolbar-group">
+      <div className="tab-toolbar-group" data-group="edit">
         <span className="tab-tool-label">Edit</span>
-        <button title="Undo (Cmd+Z)" className="tab-tool-btn" onClick={() => dispatch({ type: 'UNDO' })}>
-          ↩
-        </button>
-        <button
-          title="Redo (Cmd+Shift+Z)"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'REDO' })}
-        >
-          ↪
-        </button>
-        <button title="Copy (Cmd+C)" className="tab-tool-btn" onClick={() => dispatch({ type: 'COPY' })}>
-          ⧉
-        </button>
-        <button title="Cut (Cmd+X)" className="tab-tool-btn" onClick={() => dispatch({ type: 'CUT' })}>
-          ✂
-        </button>
-        <button
-          title="Paste (Cmd+V)"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'PASTE', measureIndex: mi, beatIndex: bi })}
-        >
-          ⧫
-        </button>
+        <ToolBtn title="Undo (Cmd+Z)" onClick={() => dispatch({ type: 'UNDO' })}>↩</ToolBtn>
+        <ToolBtn title="Redo (Cmd+Shift+Z)" onClick={() => dispatch({ type: 'REDO' })}>↪</ToolBtn>
+        <ToolBtn title="Copy (Cmd+C)" onClick={() => dispatch({ type: 'COPY' })}>⧉</ToolBtn>
+        <ToolBtn title="Cut (Cmd+X)" onClick={() => dispatch({ type: 'CUT' })}>✂</ToolBtn>
+        <ToolBtn title="Paste (Cmd+V)" onClick={() => dispatch({ type: 'PASTE', measureIndex: mi, beatIndex: bi })}>⧫</ToolBtn>
       </div>
 
       {/* Move group */}
-      <div className="tab-toolbar-group">
+      <div className="tab-toolbar-group" data-group="move">
         <span className="tab-tool-label">Move</span>
-        <button
-          title="String up"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'up' })}
-        >
-          ▲str
-        </button>
-        <button
-          title="String down"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'down' })}
-        >
-          ▼str
-        </button>
-        <button
-          title="Beat left"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'left' })}
-        >
-          ◀
-        </button>
-        <button
-          title="Beat right"
-          className="tab-tool-btn"
-          onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'right' })}
-        >
-          ▶
-        </button>
+        <ToolBtn title="String up" onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'up' })}>▲str</ToolBtn>
+        <ToolBtn title="String down" onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'down' })}>▼str</ToolBtn>
+        <ToolBtn title="Beat left" onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'left' })}>◀</ToolBtn>
+        <ToolBtn title="Beat right" onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'right' })}>▶</ToolBtn>
       </div>
     </div>
   )

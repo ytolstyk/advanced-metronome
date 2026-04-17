@@ -1,6 +1,6 @@
 import { useReducer, useEffect, useRef, useCallback, useState } from 'react'
 import './TabEditorPage.css'
-import type { TabSelection } from '../tabEditorTypes'
+import type { TabCursor, TabSelection } from '../tabEditorTypes'
 import {
   tabEditorReducer,
   createInitialTabState,
@@ -26,6 +26,7 @@ export function TabEditorPage() {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const digitBufRef = useRef<number | null>(null)
   const digitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const prevCursorRef = useRef<TabCursor | null>(null)
   const dragRef = useRef<{ measureIndex: number; beatIndex: number } | null>(null)
 
   // Persist track on every change
@@ -68,46 +69,55 @@ export function TabEditorPage() {
     [state.track.openMidi],
   )
 
-  const commitFret = useCallback(
-    (fret: number) => {
+  // commitFretAt accepts an explicit cursor position to avoid stale closures
+  const commitFretAt = useCallback(
+    (fret: number, at: TabCursor) => {
       if (fret > 24) return
-      const { measureIndex, beatIndex, stringIndex } = state.cursor
-      dispatch({ type: 'ADD_NOTE', measureIndex, beatIndex, stringIndex, fret })
-      previewNote(stringIndex, fret)
+      dispatch({ type: 'ADD_NOTE', measureIndex: at.measureIndex, beatIndex: at.beatIndex, stringIndex: at.stringIndex, fret })
+      previewNote(at.stringIndex, fret)
       dispatch({ type: 'MOVE_CURSOR', direction: 'right' })
     },
-    [state.cursor, previewNote],
+    [previewNote],
   )
 
   const handleDigit = useCallback(
     (d: number) => {
       if (digitTimerRef.current !== null) clearTimeout(digitTimerRef.current)
-      if (digitBufRef.current !== null) {
+      if (digitBufRef.current !== null && prevCursorRef.current !== null) {
+        // Second digit: undo first commit, restore cursor, commit combined value
         const combined = digitBufRef.current * 10 + d
+        const prevAt = prevCursorRef.current
         digitBufRef.current = null
-        commitFret(combined)
-      } else if (d >= 1) {
-        digitBufRef.current = d
-        digitTimerRef.current = setTimeout(() => {
-          const val = digitBufRef.current
-          digitBufRef.current = null
-          if (val !== null) commitFret(val)
-        }, 700)
+        prevCursorRef.current = null
+        if (combined <= 24) {
+          dispatch({ type: 'UNDO' })
+          dispatch({ type: 'SET_CURSOR', cursor: prevAt })
+          commitFretAt(combined, prevAt)
+        }
+      } else if (d === 0) {
+        // Zero commits immediately, no two-digit wait
+        digitBufRef.current = null
+        prevCursorRef.current = null
+        commitFretAt(0, state.cursor)
       } else {
-        commitFret(0)
+        // Digits 1–9: commit immediately, but keep buffer for potential second digit
+        prevCursorRef.current = { ...state.cursor }
+        digitBufRef.current = d
+        commitFretAt(d, state.cursor)
+        digitTimerRef.current = setTimeout(() => {
+          digitBufRef.current = null
+          prevCursorRef.current = null
+        }, 400)
       }
     },
-    [commitFret],
+    [commitFretAt, state.cursor],
   )
 
   const flushDigitBuf = useCallback(() => {
     if (digitTimerRef.current !== null) clearTimeout(digitTimerRef.current)
-    if (digitBufRef.current !== null) {
-      const val = digitBufRef.current
-      digitBufRef.current = null
-      commitFret(val)
-    }
-  }, [commitFret])
+    digitBufRef.current = null
+    prevCursorRef.current = null
+  }, [])
 
   // Keyboard handler
   useEffect(() => {
@@ -264,6 +274,7 @@ export function TabEditorPage() {
         state={state}
         containerWidth={containerWidth}
         canvasRef={canvasRef}
+        dispatch={dispatch}
         onBeatMouseDown={onBeatMouseDown}
         onBeatMouseEnter={onBeatMouseEnter}
       />

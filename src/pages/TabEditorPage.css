@@ -44,12 +44,10 @@
 .tab-toolbar {
   display: flex;
   align-items: stretch;
+  flex-wrap: wrap;
   gap: 0;
   background: #111;
   border-bottom: 1px solid #222;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #333 transparent;
 }
 
 .tab-toolbar-group {
@@ -58,6 +56,7 @@
   gap: 2px;
   padding: 4px 8px;
   border-right: 1px solid #222;
+  border-bottom: 1px solid #1a1a1a;
   flex-shrink: 0;
 }
 
@@ -65,17 +64,25 @@
   border-right: none;
 }
 
+/* Color-coded toolbar group backgrounds */
+.tab-toolbar-group[data-group="duration"] { background: #0a1520; }
+.tab-toolbar-group[data-group="effects"]  { background: #1a1000; }
+.tab-toolbar-group[data-group="techniques"] { background: #0a1a0a; }
+.tab-toolbar-group[data-group="structure"] { background: #150d1a; }
+.tab-toolbar-group[data-group="edit"]     { background: #0d0d1a; }
+.tab-toolbar-group[data-group="move"]     { background: #0d1414; }
+
 .tab-tool-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 30px;
+  width: 34px;
+  height: 32px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #aaa;
-  font-size: 0.7rem;
+  color: #ccc;
+  font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.1s;
   font-family: 'Courier New', monospace;
@@ -106,11 +113,13 @@
 }
 
 .tab-tool-label {
-  font-size: 0.65rem;
-  color: #666;
+  font-size: 0.7rem;
+  color: #888;
   padding: 0 4px;
   white-space: nowrap;
   align-self: center;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
 
 /* ── Playback bar ── */
@@ -124,8 +133,8 @@
 }
 
 .tab-bpm-display {
-  font-size: 0.85rem;
-  color: #888;
+  font-size: 0.9rem;
+  color: #aaa;
   min-width: 80px;
 }
 
@@ -161,6 +170,10 @@
 }
 
 .tab-canvas:focus {
+  outline: none;
+}
+
+.tab-canvas:focus-visible {
   box-shadow: inset 0 0 0 1px #2a5a8c;
 }
 

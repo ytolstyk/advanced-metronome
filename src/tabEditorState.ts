@@ -264,6 +264,8 @@ export type TabEditorAction =
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'LOAD_TRACK'; track: TabTrack }
+  | { type: 'SET_GLOBAL_TIME_SIG'; numerator: number; denominator: number }
+  | { type: 'SET_MEASURE_TIME_SIG'; measureIndex: number; numerator: number; denominator: number }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -442,17 +444,26 @@ export function tabEditorReducer(
     case 'MOVE_CURSOR': {
       const { cursor, track } = state
       if (action.direction === 'right') {
-        return { ...state, cursor: advanceCursorRight(cursor, track), selection: null }
+        const advanced = advanceCursorRight(cursor, track)
+        // At the end of the last measure: create a new measure
+        if (advanced === cursor) {
+          const lastMeasure = track.measures[track.measures.length - 1]
+          const newMeasure = makeMeasure(track.stringCount, lastMeasure?.beats.length ?? 4)
+          const measures = [...track.measures, newMeasure]
+          const newCursor = { ...cursor, measureIndex: measures.length - 1, beatIndex: 0 }
+          return { ...state, track: { ...track, measures }, cursor: newCursor, selection: null }
+        }
+        return { ...state, cursor: advanced, selection: null }
       }
       if (action.direction === 'left') {
         return { ...state, cursor: advanceCursorLeft(cursor, track), selection: null }
       }
       if (action.direction === 'up') {
-        const si = Math.max(0, cursor.stringIndex - 1)
+        const si = Math.min(track.stringCount - 1, cursor.stringIndex + 1)
         return { ...state, cursor: { ...cursor, stringIndex: si } }
       }
       if (action.direction === 'down') {
-        const si = Math.min(track.stringCount - 1, cursor.stringIndex + 1)
+        const si = Math.max(0, cursor.stringIndex - 1)
         return { ...state, cursor: { ...cursor, stringIndex: si } }
       }
       return state
@@ -615,6 +626,20 @@ export function tabEditorReducer(
         undoStack: [],
         redoStack: [],
       }
+
+    case 'SET_GLOBAL_TIME_SIG': {
+      const s = pushUndo(state)
+      return { ...s, track: { ...s.track, globalTimeSig: { numerator: action.numerator, denominator: action.denominator } } }
+    }
+
+    case 'SET_MEASURE_TIME_SIG': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        return { ...m, timeSignature: { numerator: action.numerator, denominator: action.denominator } }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
 
     default:
       return state

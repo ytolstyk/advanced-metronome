@@ -8,6 +8,7 @@ import {
   DURATION_MARK_H,
   TECHNIQUE_ZONE_H,
   MEASURE_NUMBER_H,
+  TIME_SIG_W,
   stringY,
   rowSvgHeight,
   measureWidth,
@@ -23,6 +24,9 @@ interface TabMeasureSvgProps {
   selection: TabSelection | null
   playheadMeasure: number
   playheadBeat: number
+  showTimeSig?: boolean
+  timeSig?: { numerator: number; denominator: number }
+  onTimeSigClick?: (measureIndex: number) => void
   onBeatMouseDown: (mi: number, bi: number, si: number) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
 }
@@ -48,18 +52,24 @@ export function TabMeasureSvg({
   selection,
   playheadMeasure,
   playheadBeat,
+  showTimeSig = false,
+  timeSig,
+  onTimeSigClick,
   onBeatMouseDown,
   onBeatMouseEnter,
 }: TabMeasureSvgProps) {
   const { stringCount } = track
   const svgH = rowSvgHeight(stringCount)
-  const mw = measureWidth(measure)
+  const mw = measureWidth(measure, showTimeSig)
   const contentW = mw - BARLINE_W * 2
-  const beatPositions = computeBeatPositions(measure)
+  const beatPositions = computeBeatPositions(measure, showTimeSig)
 
   // String line y range: from topmost string to bottommost
   const topStringY = stringY(stringCount - 1, stringCount)
   const bottomStringY = stringY(0, stringCount)
+
+  // Center of the string area (for time sig vertical centering)
+  const strAreaMid = (topStringY + bottomStringY) / 2
 
   // Determine string label names for this tuning
   const tuning = TUNINGS[track.stringCount]
@@ -69,14 +79,57 @@ export function TabMeasureSvg({
     <g transform={`translate(${xOffset}, 0)`}>
       {/* Measure number */}
       <text
-        x={BARLINE_W + 2}
+        x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + 2}
         y={DURATION_MARK_H + TECHNIQUE_ZONE_H + MEASURE_NUMBER_H / 2}
-        fontSize={9}
-        fill="#555"
+        fontSize={11}
+        fill="#888"
         dominantBaseline="middle"
       >
         {measureIndex + 1}
       </text>
+
+      {/* Stacked time signature */}
+      {showTimeSig && timeSig && (
+        <g
+          style={{ cursor: onTimeSigClick ? 'pointer' : 'default' }}
+          onClick={onTimeSigClick ? () => onTimeSigClick(measureIndex) : undefined}
+        >
+          {/* Clickable hit area */}
+          <rect
+            x={BARLINE_W}
+            y={topStringY - 4}
+            width={TIME_SIG_W}
+            height={bottomStringY - topStringY + 8}
+            fill="transparent"
+          />
+          {/* Numerator (top) */}
+          <text
+            x={BARLINE_W + TIME_SIG_W / 2}
+            y={strAreaMid - 2}
+            fontSize={26}
+            fontWeight="bold"
+            fontFamily="serif"
+            textAnchor="middle"
+            dominantBaseline="auto"
+            fill="#ddd"
+          >
+            {timeSig.numerator}
+          </text>
+          {/* Denominator (bottom) */}
+          <text
+            x={BARLINE_W + TIME_SIG_W / 2}
+            y={strAreaMid + 2}
+            fontSize={26}
+            fontWeight="bold"
+            fontFamily="serif"
+            textAnchor="middle"
+            dominantBaseline="hanging"
+            fill="#ddd"
+          >
+            {timeSig.denominator}
+          </text>
+        </g>
+      )}
 
       {/* String lines spanning full measure content */}
       {Array.from({ length: stringCount }, (_, si) => (
@@ -86,7 +139,7 @@ export function TabMeasureSvg({
           y1={stringY(si, stringCount)}
           x2={mw}
           y2={stringY(si, stringCount)}
-          stroke="#3a3a3a"
+          stroke="#555"
           strokeWidth={1}
         />
       ))}
@@ -97,7 +150,7 @@ export function TabMeasureSvg({
         y1={topStringY}
         x2={0}
         y2={bottomStringY}
-        stroke="#555"
+        stroke="#777"
         strokeWidth={BARLINE_W}
       />
 
@@ -136,10 +189,10 @@ export function TabMeasureSvg({
             <text
               x={beatCX}
               y={DURATION_MARK_H / 2}
-              fontSize={8}
+              fontSize={11}
               textAnchor="middle"
               dominantBaseline="middle"
-              fill="#555"
+              fill="#aaa"
             >
               {durationSymbol(beat.duration)}{dotSuffix}
             </text>
@@ -184,7 +237,7 @@ export function TabMeasureSvg({
               }
 
               const hasNote = fretLabel !== ''
-              const labelW = Math.max(fretLabel.length * 6 + 4, 14)
+              const labelW = Math.max(fretLabel.length * 8 + 4, 18)
 
               return (
                 <g key={si}>
@@ -192,9 +245,9 @@ export function TabMeasureSvg({
                   {isCursorNote && (
                     <rect
                       x={beatCX - labelW / 2 - 1}
-                      y={sy - 9}
+                      y={sy - 11}
                       width={labelW + 2}
-                      height={18}
+                      height={22}
                       fill="rgba(42,90,180,0.5)"
                       rx={2}
                     />
@@ -204,9 +257,9 @@ export function TabMeasureSvg({
                   {hasNote && (
                     <rect
                       x={beatCX - labelW / 2}
-                      y={sy - 8}
+                      y={sy - 10}
                       width={labelW}
-                      height={16}
+                      height={20}
                       fill="#111"
                       rx={2}
                     />
@@ -217,7 +270,7 @@ export function TabMeasureSvg({
                     <text
                       x={beatCX}
                       y={sy}
-                      fontSize={10}
+                      fontSize={13}
                       fontWeight="600"
                       fontStyle={fontStyle}
                       fontFamily="'Courier New', monospace"
@@ -267,7 +320,7 @@ export function TabMeasureSvg({
         y1={topStringY}
         x2={mw}
         y2={bottomStringY}
-        stroke="#555"
+        stroke="#777"
         strokeWidth={BARLINE_W}
       />
 
@@ -284,10 +337,10 @@ export function TabMeasureSvg({
             key={si}
             x={-4}
             y={sy}
-            fontSize={8}
+            fontSize={11}
             textAnchor="end"
             dominantBaseline="middle"
-            fill="#666"
+            fill="#aaa"
           >
             {label}
           </text>

@@ -1,3 +1,6 @@
+import { Play, Pause, Square } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import type { TabEditorAction } from '../../tabEditorState'
 
 interface TabEditorPlaybackProps {
@@ -19,34 +22,30 @@ export function TabEditorPlayback({
 }: TabEditorPlaybackProps) {
   return (
     <div className="tab-playback-bar">
-      <button
-        className="tab-tool-btn"
-        style={{ width: 'auto', padding: '0 10px' }}
-        onClick={onPlay}
-      >
-        {isPlaying ? '⏸' : '▶'}
-      </button>
-      <button
-        className="tab-tool-btn"
-        style={{ width: 'auto', padding: '0 10px' }}
-        onClick={onStop}
-      >
-        ⏹
-      </button>
+      <Button variant="ghost" size="icon" onClick={onPlay} title={isPlaying ? 'Pause' : 'Play'}>
+        {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+      </Button>
+      <Button variant="ghost" size="icon" onClick={onStop} title="Stop">
+        <Square size={16} />
+      </Button>
       <span className="tab-bpm-display">{bpm} BPM</span>
       <div className="tab-view-toggle">
-        <button
-          className={`tab-view-btn${viewMode === 'tab' ? ' active' : ''}`}
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn('tab-view-btn', viewMode === 'tab' && 'active')}
           onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode: 'tab' })}
         >
           Tab
-        </button>
-        <button
-          className={`tab-view-btn${viewMode === 'staff' ? ' active' : ''}`}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn('tab-view-btn', viewMode === 'staff' && 'active')}
           onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode: 'staff' })}
         >
           Staff
-        </button>
+        </Button>
       </div>
     </div>
   )
