@@ -30,6 +30,7 @@ interface TabMeasureSvgProps {
   timeSig?: { numerator: number; denominator: number }
   activeDuration: DurationValue
   onTimeSigClick?: (measureIndex: number) => void
+  onMeasureContextMenu?: (measureIndex: number, e: React.MouseEvent) => void
   onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
 }
@@ -73,6 +74,7 @@ export function TabMeasureSvg({
   timeSig,
   activeDuration,
   onTimeSigClick,
+  onMeasureContextMenu,
   onBeatMouseDown,
   onBeatMouseEnter,
 }: TabMeasureSvgProps) {
@@ -100,7 +102,7 @@ export function TabMeasureSvg({
 
   return (
     <g transform={`translate(${xOffset}, 0)`}>
-      {/* Measure number */}
+      {/* Measure number — right-click for context menu */}
       <text
         x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + 2}
         y={MEASURE_NUMBER_H / 2}
@@ -108,6 +110,9 @@ export function TabMeasureSvg({
         fontWeight={600}
         fill="#a0a0b8"
         dominantBaseline="middle"
+        style={{ cursor: onMeasureContextMenu ? 'pointer' : 'default' }}
+        onContextMenu={onMeasureContextMenu ? (e) => { e.preventDefault(); onMeasureContextMenu(measureIndex, e) } : undefined}
+        onClick={onMeasureContextMenu ? (e) => { e.preventDefault(); onMeasureContextMenu(measureIndex, e) } : undefined}
       >
         {measureIndex + 1}
       </text>

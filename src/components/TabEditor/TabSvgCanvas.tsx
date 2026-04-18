@@ -98,6 +98,16 @@ export function TabSvgCanvas({
   const [editDen, setEditDen] = useState('')
   const numInputRef = useRef<HTMLInputElement>(null)
 
+  const [measureMenu, setMeasureMenu] = useState<{ mi: number; x: number; y: number } | null>(null)
+
+  function openMeasureMenu(mi: number, e: React.MouseEvent) {
+    setMeasureMenu({ mi, x: e.clientX, y: e.clientY })
+  }
+
+  function closeMeasureMenu() {
+    setMeasureMenu(null)
+  }
+
   useEffect(() => {
     if (editingTimeSig !== null) {
       numInputRef.current?.focus()
@@ -195,6 +205,7 @@ export function TabSvgCanvas({
                   timeSig={sig}
                   activeDuration={activeDuration}
                   onTimeSigClick={openTimeSigEditor}
+                  onMeasureContextMenu={openMeasureMenu}
                   onBeatMouseDown={onBeatMouseDown}
                   onBeatMouseEnter={onBeatMouseEnter}
                 />
@@ -203,6 +214,59 @@ export function TabSvgCanvas({
           </svg>
         )
       })}
+
+      {/* Measure context menu */}
+      {measureMenu !== null && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 200 }}
+          onMouseDown={closeMeasureMenu}
+        >
+          <div
+            style={{
+              position: 'fixed',
+              left: measureMenu.x,
+              top: measureMenu.y,
+              background: '#1e1e2e',
+              border: '1px solid #333',
+              borderRadius: 6,
+              padding: '4px 0',
+              minWidth: 160,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+              zIndex: 201,
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '2px 8px 6px', fontSize: '0.7rem', color: '#666', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Measure {measureMenu.mi + 1}
+            </div>
+            {[
+              { label: 'Insert before', action: () => { dispatch({ type: 'INSERT_MEASURE_BEFORE', measureIndex: measureMenu.mi }); closeMeasureMenu() } },
+              { label: 'Insert after', action: () => { dispatch({ type: 'INSERT_MEASURE_AFTER', measureIndex: measureMenu.mi }); closeMeasureMenu() } },
+              { label: 'Delete', action: () => { dispatch({ type: 'DELETE_MEASURE', measureIndex: measureMenu.mi }); closeMeasureMenu() }, danger: true },
+            ].map((item) => (
+              <button
+                key={item.label}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '6px 12px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: item.danger ? '#f87171' : '#e0e0e0',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = item.danger ? 'rgba(248,113,113,0.1)' : 'rgba(255,255,255,0.07)' }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+                onMouseDown={item.action}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Time signature editor overlay */}
       {editingTimeSig !== null && (
