@@ -201,7 +201,7 @@ export function TabMeasureSvg({
         return (
           <g key={beat.id}>
             {overlayFill !== 'none' && (
-              <rect x={beatX} y={0} width={beatW} height={svgH} fill={overlayFill} />
+              <rect x={beatX} y={MEASURE_NUMBER_H} width={beatW} height={svgH - MEASURE_NUMBER_H} fill={overlayFill} />
             )}
 
             {/* Tie arc entering from left barline for tied-from beats */}
@@ -382,7 +382,7 @@ export function TabMeasureSvg({
         return (
           <g>
             {overlayFill !== 'none' && (
-              <rect x={vX} y={0} width={vW} height={svgH} fill={overlayFill} />
+              <rect x={vX} y={MEASURE_NUMBER_H} width={vW} height={svgH - MEASURE_NUMBER_H} fill={overlayFill} />
             )}
 
             {/* Duration symbol showing active duration */}

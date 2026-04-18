@@ -100,6 +100,16 @@ export function TabSvgCanvas({
 
   const [measureMenu, setMeasureMenu] = useState<{ mi: number; x: number; y: number } | null>(null)
 
+  const [timingChangeEdit, setTimingChangeEdit] = useState<{ mi: number; num: string; den: string } | null>(null)
+  const timingChangeNumRef = useRef<HTMLInputElement>(null)
+  const [timingChangeConfirm, setTimingChangeConfirm] = useState<{
+    mi: number
+    rangeEnd: number
+    num: number
+    den: number
+    affectedCount: number
+  } | null>(null)
+
   function openMeasureMenu(mi: number, e: React.MouseEvent) {
     setMeasureMenu({ mi, x: e.clientX, y: e.clientY })
   }
@@ -115,12 +125,45 @@ export function TabSvgCanvas({
     }
   }, [editingTimeSig])
 
+  useEffect(() => {
+    if (timingChangeEdit !== null) {
+      timingChangeNumRef.current?.focus()
+      timingChangeNumRef.current?.select()
+    }
+  }, [timingChangeEdit])
+
+  function findTimingRangeEnd(fromIndex: number): number {
+    const next = track.measures.findIndex((m, i) => i > fromIndex && m.timeSignature !== undefined)
+    return next === -1 ? track.measures.length : next
+  }
+
   function openTimeSigEditor(mi: number) {
     const m = track.measures[mi]
     const sig = m.timeSignature ?? track.globalTimeSig
     setEditNum(String(sig.numerator))
     setEditDen(String(sig.denominator))
     setEditingTimeSig(mi)
+  }
+
+  function submitTimingChange() {
+    if (!timingChangeEdit) return
+    const n = parseInt(timingChangeEdit.num, 10)
+    const d = parseInt(timingChangeEdit.den, 10)
+    if (!n || !d || n <= 0 || d <= 0) return
+
+    const mi = timingChangeEdit.mi
+    const rangeEnd = findTimingRangeEnd(mi)
+    const affectedCount = rangeEnd - mi
+
+    const hasNotesInFollowing = track.measures.slice(mi + 1, rangeEnd).some(m => m.beats.length > 0)
+
+    setTimingChangeEdit(null)
+
+    if (hasNotesInFollowing && affectedCount > 1) {
+      setTimingChangeConfirm({ mi, rangeEnd, num: n, den: d, affectedCount })
+    } else {
+      dispatch({ type: 'SET_MEASURE_TIME_SIG_RANGE', fromIndex: mi, toIndex: rangeEnd - 1, numerator: n, denominator: d })
+    }
   }
 
   function commitTimeSig() {
@@ -242,6 +285,15 @@ export function TabSvgCanvas({
             {[
               { label: 'Insert before', action: () => { dispatch({ type: 'INSERT_MEASURE_BEFORE', measureIndex: measureMenu.mi }); closeMeasureMenu() } },
               { label: 'Insert after', action: () => { dispatch({ type: 'INSERT_MEASURE_AFTER', measureIndex: measureMenu.mi }); closeMeasureMenu() } },
+              {
+                label: 'Change timing',
+                action: () => {
+                  const m = track.measures[measureMenu.mi]!
+                  const sig = m.timeSignature ?? track.globalTimeSig
+                  setTimingChangeEdit({ mi: measureMenu.mi, num: String(sig.numerator), den: String(sig.denominator) })
+                  closeMeasureMenu()
+                },
+              },
               { label: 'Delete', action: () => { dispatch({ type: 'DELETE_MEASURE', measureIndex: measureMenu.mi }); closeMeasureMenu() }, danger: true },
             ].map((item) => (
               <button
@@ -264,6 +316,160 @@ export function TabSvgCanvas({
                 {item.label}
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Timing change edit dialog (from context menu) */}
+      {timingChangeEdit !== null && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.5)',
+          }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setTimingChangeEdit(null) }}
+        >
+          <div
+            style={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              borderRadius: 8,
+              padding: '16px 20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              minWidth: 220,
+            }}
+          >
+            <span style={{ color: '#ccc', fontSize: '0.85rem', fontWeight: 600 }}>
+              Change Timing — Measure {timingChangeEdit.mi + 1}
+            </span>
+            <div style={{ color: '#888', fontSize: '0.75rem' }}>
+              Will apply to all measures until the next timing change.
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                ref={timingChangeNumRef}
+                type="number"
+                min={1}
+                max={32}
+                value={timingChangeEdit.num}
+                onChange={(e) => setTimingChangeEdit(prev => prev ? { ...prev, num: e.target.value } : null)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitTimingChange() } if (e.key === 'Escape') setTimingChangeEdit(null) }}
+                style={{
+                  width: 60,
+                  background: '#111',
+                  color: '#e0e0e0',
+                  border: '1px solid #444',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  fontSize: '1.2rem',
+                  textAlign: 'center',
+                }}
+              />
+              <span style={{ color: '#888', fontSize: '1.4rem' }}>/</span>
+              <input
+                type="number"
+                min={1}
+                max={32}
+                value={timingChangeEdit.den}
+                onChange={(e) => setTimingChangeEdit(prev => prev ? { ...prev, den: e.target.value } : null)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitTimingChange() } if (e.key === 'Escape') setTimingChangeEdit(null) }}
+                style={{
+                  width: 60,
+                  background: '#111',
+                  color: '#e0e0e0',
+                  border: '1px solid #444',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  fontSize: '1.2rem',
+                  textAlign: 'center',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setTimingChangeEdit(null)}
+                style={{ padding: '4px 12px', background: 'transparent', border: '1px solid #333', borderRadius: 4, color: '#888', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitTimingChange}
+                style={{ padding: '4px 12px', background: '#1a3a5c', border: '1px solid #2a5a8c', borderRadius: 4, color: '#7ac0ff', cursor: 'pointer' }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Timing change confirmation dialog */}
+      {timingChangeConfirm !== null && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.5)',
+          }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setTimingChangeConfirm(null) }}
+        >
+          <div
+            style={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              borderRadius: 8,
+              padding: '20px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+              minWidth: 280,
+              maxWidth: 360,
+            }}
+          >
+            <span style={{ color: '#ccc', fontSize: '0.85rem', fontWeight: 600 }}>
+              Change timing to {timingChangeConfirm.num}/{timingChangeConfirm.den}
+            </span>
+            <div style={{ color: '#aaa', fontSize: '0.8rem', lineHeight: 1.5 }}>
+              The following {timingChangeConfirm.affectedCount - 1} measure{timingChangeConfirm.affectedCount - 1 === 1 ? '' : 's'} have notes.
+              Apply timing change to just this measure, or all {timingChangeConfirm.affectedCount} measures until the next timing change?
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button
+                onClick={() => {
+                  dispatch({ type: 'SET_MEASURE_TIME_SIG', measureIndex: timingChangeConfirm.mi, numerator: timingChangeConfirm.num, denominator: timingChangeConfirm.den })
+                  setTimingChangeConfirm(null)
+                }}
+                style={{ padding: '7px 12px', background: 'transparent', border: '1px solid #444', borderRadius: 4, color: '#e0e0e0', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+              >
+                This measure only
+              </button>
+              <button
+                onClick={() => {
+                  dispatch({ type: 'SET_MEASURE_TIME_SIG_RANGE', fromIndex: timingChangeConfirm.mi, toIndex: timingChangeConfirm.rangeEnd - 1, numerator: timingChangeConfirm.num, denominator: timingChangeConfirm.den })
+                  setTimingChangeConfirm(null)
+                }}
+                style={{ padding: '7px 12px', background: '#1a3a5c', border: '1px solid #2a5a8c', borderRadius: 4, color: '#7ac0ff', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+              >
+                All {timingChangeConfirm.affectedCount} measures (until next timing change)
+              </button>
+              <button
+                onClick={() => setTimingChangeConfirm(null)}
+                style={{ padding: '7px 12px', background: 'transparent', border: 'none', borderRadius: 4, color: '#666', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

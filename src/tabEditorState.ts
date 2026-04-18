@@ -389,6 +389,7 @@ export type TabEditorAction =
   | { type: 'LOAD_TRACK'; track: TabTrack }
   | { type: 'SET_GLOBAL_TIME_SIG'; numerator: number; denominator: number }
   | { type: 'SET_MEASURE_TIME_SIG'; measureIndex: number; numerator: number; denominator: number }
+  | { type: 'SET_MEASURE_TIME_SIG_RANGE'; fromIndex: number; toIndex: number; numerator: number; denominator: number }
   | { type: 'RESOLVE_OVERFLOW_TRIM' }
   | { type: 'RESOLVE_OVERFLOW_BLEED' }
   | { type: 'DISMISS_OVERFLOW' }
@@ -802,6 +803,15 @@ export function tabEditorReducer(
       const s = pushUndo(state)
       const measures = s.track.measures.map((m, mi) => {
         if (mi !== action.measureIndex) return m
+        return { ...m, timeSignature: { numerator: action.numerator, denominator: action.denominator } }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'SET_MEASURE_TIME_SIG_RANGE': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi < action.fromIndex || mi > action.toIndex) return m
         return { ...m, timeSignature: { numerator: action.numerator, denominator: action.denominator } }
       })
       return { ...s, track: { ...s.track, measures } }
