@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import type { RefObject } from 'react'
 import type { Measure, TabEditorState } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
-import { BEAT_WIDTHS } from '../../tabEditorState'
+import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
 import { StaffViewSvg } from './StaffViewSvg'
 import { STRING_LABEL_W, measureWidth, rowSvgHeight } from './tabSvgConstants'
@@ -16,7 +16,21 @@ interface TabSvgCanvasProps {
   onBeatMouseEnter: (mi: number, bi: number) => void
 }
 
-function computeRows(measures: Measure[], showTimeSigMap: boolean[], containerWidth: number): Measure[][] {
+function getVirtualSlots(
+  measure: Measure,
+  timeSig: { numerator: number; denominator: number },
+): number {
+  const capacity = measureCapacityBeats(timeSig)
+  const used = measureUsedBeats(measure.beats)
+  return used < capacity - 1e-9 ? 1 : 0
+}
+
+function computeRows(
+  measures: Measure[],
+  showTimeSigMap: boolean[],
+  timeSigs: Array<{ numerator: number; denominator: number }>,
+  containerWidth: number,
+): Measure[][] {
   const usable = containerWidth - STRING_LABEL_W - 32
   const rows: Measure[][] = []
   let row: Measure[] = []
@@ -24,7 +38,8 @@ function computeRows(measures: Measure[], showTimeSigMap: boolean[], containerWi
   for (let i = 0; i < measures.length; i++) {
     const m = measures[i]
     const showTs = showTimeSigMap[i] ?? false
-    const mw = measureWidth(m, showTs)
+    const vSlots = getVirtualSlots(m, timeSigs[i]!)
+    const mw = measureWidth(m, showTs, vSlots)
     if (rowW + mw > usable && row.length > 0) {
       rows.push(row)
       row = []
@@ -37,8 +52,20 @@ function computeRows(measures: Measure[], showTimeSigMap: boolean[], containerWi
   return rows
 }
 
-function rowSvgWidth(rowMeasures: Measure[], rowStart: number, showTimeSigMap: boolean[]): number {
-  return STRING_LABEL_W + rowMeasures.reduce((s, m, i) => s + measureWidth(m, showTimeSigMap[rowStart + i] ?? false), 0)
+function rowSvgWidth(
+  rowMeasures: Measure[],
+  rowStart: number,
+  showTimeSigMap: boolean[],
+  timeSigs: Array<{ numerator: number; denominator: number }>,
+): number {
+  return (
+    STRING_LABEL_W +
+    rowMeasures.reduce((s, m, i) => {
+      const globalI = rowStart + i
+      const vSlots = getVirtualSlots(m, timeSigs[globalI]!)
+      return s + measureWidth(m, showTimeSigMap[globalI] ?? false, vSlots)
+    }, 0)
+  )
 }
 
 export function TabSvgCanvas({
@@ -49,9 +76,8 @@ export function TabSvgCanvas({
   onBeatMouseDown,
   onBeatMouseEnter,
 }: TabSvgCanvasProps) {
-  const { track, cursor, selection, noteSelection, playheadMeasure, playheadBeat, viewMode } = state
+  const { track, cursor, selection, noteSelection, playheadMeasure, playheadBeat, viewMode, activeDuration } = state
 
-  // Determine which measures show a time signature
   const showTimeSigMap: boolean[] = track.measures.map((m, i) => {
     if (i === 0) return true
     const prev = track.measures[i - 1]
@@ -60,18 +86,18 @@ export function TabSvgCanvas({
     return prevSig.numerator !== curSig.numerator || prevSig.denominator !== curSig.denominator
   })
 
-  const rows = computeRows(track.measures, showTimeSigMap, containerWidth)
+  const timeSigs = track.measures.map((m) => m.timeSignature ?? track.globalTimeSig)
+
+  const rows = computeRows(track.measures, showTimeSigMap, timeSigs, containerWidth)
 
   const globalMeasureMap = new Map<string, number>()
   track.measures.forEach((m, i) => globalMeasureMap.set(m.id, i))
 
-  // Time sig editing state
   const [editingTimeSig, setEditingTimeSig] = useState<number | null>(null)
   const [editNum, setEditNum] = useState('')
   const [editDen, setEditDen] = useState('')
   const numInputRef = useRef<HTMLInputElement>(null)
 
-  // Focus numerator input when editing starts
   useEffect(() => {
     if (editingTimeSig !== null) {
       numInputRef.current?.focus()
@@ -118,7 +144,6 @@ export function TabSvgCanvas({
 
   const svgH = rowSvgHeight(track.stringCount)
 
-  // Precompute cumulative measure start index per row
   const rowStartIndices: number[] = []
   let acc = 0
   for (const rowMeasures of rows) {
@@ -130,15 +155,15 @@ export function TabSvgCanvas({
     <div className="tab-canvas" ref={canvasRef} tabIndex={0}>
       {rows.map((rowMeasures, rowIdx) => {
         const currentRowStart = rowStartIndices[rowIdx] ?? 0
-        const svgW = rowSvgWidth(rowMeasures, currentRowStart, showTimeSigMap)
+        const svgW = rowSvgWidth(rowMeasures, currentRowStart, showTimeSigMap, timeSigs)
 
-        // Compute xOffset for each measure within this row
         const measureOffsets: number[] = []
         let xAcc = STRING_LABEL_W
         for (let mIdx = 0; mIdx < rowMeasures.length; mIdx++) {
           measureOffsets.push(xAcc)
           const globalMi = currentRowStart + mIdx
-          xAcc += measureWidth(rowMeasures[mIdx], showTimeSigMap[globalMi] ?? false)
+          const vSlots = getVirtualSlots(rowMeasures[mIdx]!, timeSigs[globalMi]!)
+          xAcc += measureWidth(rowMeasures[mIdx]!, showTimeSigMap[globalMi] ?? false, vSlots)
         }
 
         return (
@@ -168,6 +193,7 @@ export function TabSvgCanvas({
                   showTimeSig={showTs}
                   showStringLabels={mIdx === 0}
                   timeSig={sig}
+                  activeDuration={activeDuration}
                   onTimeSigClick={openTimeSigEditor}
                   onBeatMouseDown={onBeatMouseDown}
                   onBeatMouseEnter={onBeatMouseEnter}

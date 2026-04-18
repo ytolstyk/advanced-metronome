@@ -48,6 +48,7 @@ export interface Beat {
   duration: DurationValue
   dot: DotModifier
   notes: TabNote[] // index 0 = lowest string
+  tiedFrom?: true  // this beat is a tied continuation from the previous measure
   dynamics?: 'ppp' | 'pp' | 'p' | 'mp' | 'mf' | 'f' | 'ff' | 'fff'
   repeatStart?: true
   repeatEnd?: true
@@ -72,7 +73,7 @@ export interface TabTrack {
 
 export interface TabCursor {
   measureIndex: number
-  beatIndex: number
+  beatIndex: number // can equal measure.beats.length to point at the virtual pending slot
   stringIndex: number // 0 = lowest string
 }
 
@@ -84,6 +85,16 @@ export interface TabSelection {
 }
 
 export type ConnectionModifierKey = 'hammerOn' | 'pullOff' | 'legatoSlide' | 'shiftSlide'
+
+export interface OverflowPending {
+  fret: number
+  measureIndex: number
+  beatIndex: number
+  stringIndex: number
+  newDuration: DurationValue
+  newDot: DotModifier
+  overshootBeats: number // quarter-beats past measure capacity
+}
 
 export interface TabEditorState {
   track: TabTrack
@@ -98,6 +109,7 @@ export interface TabEditorState {
   playheadMeasure: number
   playheadBeat: number
   viewMode: 'tab' | 'staff'
+  pendingOverflow: OverflowPending | null
   undoStack: TabTrack[]
   redoStack: TabTrack[]
 }

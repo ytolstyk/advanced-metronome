@@ -1,5 +1,5 @@
 import type { Measure } from '../../tabEditorTypes'
-import { BEAT_WIDTHS } from '../../tabEditorState'
+import { BEAT_WIDTH } from '../../tabEditorState'
 
 export const STRING_SPACING = 24
 export const STRING_LABEL_W = 28
@@ -20,8 +20,9 @@ export function stringY(si: number, stringCount: number): number {
   return TOP_MARGIN + (stringCount - 1 - si) * STRING_SPACING
 }
 
-export function measureWidth(m: Measure, showTimeSig = false): number {
-  return BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + m.beats.reduce((s, b) => s + BEAT_WIDTHS[b.duration], 0) + BARLINE_W
+// virtualSlots: 0 or 1 — whether to include width for the pending virtual beat slot
+export function measureWidth(m: Measure, showTimeSig = false, virtualSlots = 0): number {
+  return BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + (m.beats.length + virtualSlots) * BEAT_WIDTH + BARLINE_W
 }
 
 export interface BeatPosition {
@@ -30,13 +31,13 @@ export interface BeatPosition {
   w: number  // width
 }
 
-export function computeBeatPositions(m: Measure, showTimeSig = false): BeatPosition[] {
+export function computeBeatPositions(m: Measure, showTimeSig = false, virtualSlots = 0): BeatPosition[] {
   const positions: BeatPosition[] = []
   let x = BARLINE_W + (showTimeSig ? TIME_SIG_W : 0)
-  for (const beat of m.beats) {
-    const w = BEAT_WIDTHS[beat.duration]
-    positions.push({ x, cx: x + w / 2, w })
-    x += w
+  const totalSlots = m.beats.length + virtualSlots
+  for (let i = 0; i < totalSlots; i++) {
+    positions.push({ x, cx: x + BEAT_WIDTH / 2, w: BEAT_WIDTH })
+    x += BEAT_WIDTH
   }
   return positions
 }

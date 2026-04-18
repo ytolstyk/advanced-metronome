@@ -1,5 +1,5 @@
 import type { DurationValue, Measure, TabCursor, TabSelection, TabTrack } from '../../tabEditorTypes'
-import { isInSelection } from '../../tabEditorState'
+import { isInSelection, measureCapacityBeats, measureUsedBeats } from '../../tabEditorState'
 import { TUNINGS } from '../../data/tunings'
 import { TechniqueOverlay } from './TabTechniquePaths'
 import {
@@ -28,6 +28,7 @@ interface TabMeasureSvgProps {
   showTimeSig?: boolean
   showStringLabels?: boolean
   timeSig?: { numerator: number; denominator: number }
+  activeDuration: DurationValue
   onTimeSigClick?: (measureIndex: number) => void
   onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
@@ -70,30 +71,36 @@ export function TabMeasureSvg({
   showTimeSig = false,
   showStringLabels = false,
   timeSig,
+  activeDuration,
   onTimeSigClick,
   onBeatMouseDown,
   onBeatMouseEnter,
 }: TabMeasureSvgProps) {
   const { stringCount } = track
   const svgH = rowSvgHeight(stringCount)
-  const mw = measureWidth(measure, showTimeSig)
-  const contentW = mw - BARLINE_W * 2
-  const beatPositions = computeBeatPositions(measure, showTimeSig)
 
-  // String line y range: from topmost string to bottommost
+  const sig = timeSig ?? track.globalTimeSig
+  const capacity = measureCapacityBeats(sig)
+  const used = measureUsedBeats(measure.beats)
+  const hasVirtualSlot = used < capacity - 1e-9
+  const virtualSlots = hasVirtualSlot ? 1 : 0
+
+  const mw = measureWidth(measure, showTimeSig, virtualSlots)
+  const beatPositions = computeBeatPositions(measure, showTimeSig, virtualSlots)
+
   const topStringY = stringY(stringCount - 1, stringCount)
   const bottomStringY = stringY(0, stringCount)
-
-  // Center of the string area (for time sig vertical centering)
   const strAreaMid = (topStringY + bottomStringY) / 2
 
-  // Determine string label names for this tuning
   const tuning = TUNINGS[track.stringCount]
   const preset = tuning.find((p) => p.name === track.tuningName) ?? tuning[0]
 
+  const isCursorOnThisMeasure = cursor.measureIndex === measureIndex
+  const isVirtualCursor = isCursorOnThisMeasure && cursor.beatIndex === measure.beats.length
+
   return (
     <g transform={`translate(${xOffset}, 0)`}>
-      {/* Measure number — pinned to very top of row */}
+      {/* Measure number */}
       <text
         x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + 2}
         y={MEASURE_NUMBER_H / 2}
@@ -111,7 +118,6 @@ export function TabMeasureSvg({
           style={{ cursor: onTimeSigClick ? 'pointer' : 'default' }}
           onClick={onTimeSigClick ? () => onTimeSigClick(measureIndex) : undefined}
         >
-          {/* Clickable hit area */}
           <rect
             x={BARLINE_W}
             y={topStringY - 4}
@@ -119,7 +125,6 @@ export function TabMeasureSvg({
             height={bottomStringY - topStringY + 8}
             fill="transparent"
           />
-          {/* Numerator (top) */}
           <text
             x={BARLINE_W + TIME_SIG_W / 2}
             y={strAreaMid - 2}
@@ -132,7 +137,6 @@ export function TabMeasureSvg({
           >
             {timeSig.numerator}
           </text>
-          {/* Denominator (bottom) */}
           <text
             x={BARLINE_W + TIME_SIG_W / 2}
             y={strAreaMid + 2}
@@ -148,7 +152,7 @@ export function TabMeasureSvg({
         </g>
       )}
 
-      {/* String lines spanning full measure content */}
+      {/* String lines */}
       {Array.from({ length: stringCount }, (_, si) => (
         <line
           key={si}
@@ -171,54 +175,58 @@ export function TabMeasureSvg({
         strokeWidth={BARLINE_W}
       />
 
-      {/* Beat columns */}
+      {/* Real beat columns */}
       {measure.beats.map((beat, bi) => {
         const pos = beatPositions[bi]
         if (!pos) return null
         const { x: beatX, cx: beatCX, w: beatW } = pos
 
-        const isCursorCol = cursor.measureIndex === measureIndex && cursor.beatIndex === bi
+        const isCursorCol = isCursorOnThisMeasure && cursor.beatIndex === bi
         const isSelected = isInSelection(selection, measureIndex, bi)
         const isPlayhead = playheadMeasure === measureIndex && playheadBeat === bi
 
-        // Background overlay for cursor / selection / playhead
         let overlayFill = 'none'
         if (isPlayhead) overlayFill = 'rgba(30,100,50,0.3)'
         else if (isCursorCol) overlayFill = 'rgba(42,90,140,0.25)'
         else if (isSelected) overlayFill = 'rgba(90,60,20,0.35)'
 
         const dotSuffix = beat.dot.dotted ? '·' : beat.dot.doubleDotted ? '··' : beat.dot.triplet ? '³' : ''
+        const isTied = beat.tiedFrom === true
 
         return (
           <g key={beat.id}>
-            {/* Column overlay */}
             {overlayFill !== 'none' && (
-              <rect
-                x={beatX}
-                y={0}
-                width={beatW}
-                height={svgH}
-                fill={overlayFill}
+              <rect x={beatX} y={0} width={beatW} height={svgH} fill={overlayFill} />
+            )}
+
+            {/* Tie arc entering from left barline for tied-from beats */}
+            {isTied && (
+              <path
+                d={`M 0,${strAreaMid} Q ${beatCX},${strAreaMid + 14} ${beatCX},${strAreaMid}`}
+                fill="none"
+                stroke="#888"
+                strokeWidth={1.5}
+                strokeLinecap="round"
               />
             )}
 
-            {/* Duration mark — sits just above the top string */}
+            {/* Duration mark */}
             <text
               x={beatCX}
               y={MEASURE_NUMBER_H + TECHNIQUE_ZONE_H + DURATION_MARK_H / 2}
               fontSize={11}
               textAnchor="middle"
               dominantBaseline="middle"
-              fill="#aaa"
+              fill={isTied ? '#555' : '#aaa'}
             >
               {durationSymbol(beat.duration)}{dotSuffix}
             </text>
 
-            {/* Rest glyph — when every string on this beat is empty */}
+            {/* Rest glyph — only when every string is empty */}
             {beat.notes.every((n) => n.fret < 0) && (
               <text
                 x={beatCX}
-                y={(topStringY + bottomStringY) / 2}
+                y={strAreaMid}
                 fontSize={22}
                 textAnchor="middle"
                 dominantBaseline="middle"
@@ -229,19 +237,18 @@ export function TabMeasureSvg({
               </text>
             )}
 
-            {/* Beat-level hit target (for drag selection) */}
+            {/* Beat-level drag hit target */}
             <rect
               x={beatX}
               y={TOP_MARGIN}
               width={beatW}
-              height={contentW > 0 ? svgH - TOP_MARGIN : 0}
+              height={svgH - TOP_MARGIN}
               fill="transparent"
               onMouseEnter={() => onBeatMouseEnter(measureIndex, bi)}
             />
 
-            {/* Per-string fret numbers + hit targets */}
+            {/* Per-string fret numbers */}
             {Array.from({ length: stringCount }, (_, rawSi) => {
-              // Display high→low: rawSi=0 is highest string (stringCount-1 in data)
               const si = stringCount - 1 - rawSi
               const note = beat.notes[si]
               const sy = stringY(si, stringCount)
@@ -250,13 +257,15 @@ export function TabMeasureSvg({
                 (s) => s.measureIndex === measureIndex && s.beatIndex === bi && s.stringIndex === si,
               )
 
-              // Fret label and color
               let fretLabel = ''
               let fretFill = '#e8e8e8'
               let fontStyle: 'normal' | 'italic' = 'normal'
 
               if (note && note.fret >= 0) {
-                if (note.modifiers.dead) {
+                if (isTied) {
+                  fretLabel = `(${note.fret})`
+                  fretFill = '#666'
+                } else if (note.modifiers.dead) {
                   fretLabel = 'X'
                   fretFill = '#cc4444'
                 } else if (note.modifiers.naturalHarmonic) {
@@ -276,7 +285,6 @@ export function TabMeasureSvg({
 
               return (
                 <g key={si}>
-                  {/* Cursor note background */}
                   {isCursorNote && (
                     <rect
                       x={beatCX - labelW / 2 - 1}
@@ -288,7 +296,6 @@ export function TabMeasureSvg({
                     />
                   )}
 
-                  {/* Shift-selected note outline */}
                   {isNoteSelected && (
                     <rect
                       x={beatCX - labelW / 2 - 2}
@@ -302,7 +309,6 @@ export function TabMeasureSvg({
                     />
                   )}
 
-                  {/* Fret number background rect */}
                   {hasNote && (
                     <rect
                       x={beatCX - labelW / 2}
@@ -314,7 +320,6 @@ export function TabMeasureSvg({
                     />
                   )}
 
-                  {/* Fret number text */}
                   {hasNote && (
                     <text
                       x={beatCX}
@@ -331,8 +336,7 @@ export function TabMeasureSvg({
                     </text>
                   )}
 
-                  {/* Accent mark */}
-                  {note?.fret >= 0 && note.modifiers.accent && (
+                  {note?.fret >= 0 && note.modifiers.accent && !isTied && (
                     <text
                       x={beatCX + labelW / 2 + 1}
                       y={sy - 6}
@@ -363,6 +367,77 @@ export function TabMeasureSvg({
         )
       })}
 
+      {/* Virtual pending slot — shown when measure has remaining capacity */}
+      {hasVirtualSlot && (() => {
+        const vPos = beatPositions[measure.beats.length]
+        if (!vPos) return null
+        const { x: vX, cx: vCX, w: vW } = vPos
+        const overlayFill = isVirtualCursor ? 'rgba(42,90,140,0.25)' : 'none'
+
+        return (
+          <g>
+            {overlayFill !== 'none' && (
+              <rect x={vX} y={0} width={vW} height={svgH} fill={overlayFill} />
+            )}
+
+            {/* Duration symbol showing active duration */}
+            <text
+              x={vCX}
+              y={MEASURE_NUMBER_H + TECHNIQUE_ZONE_H + DURATION_MARK_H / 2}
+              fontSize={11}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#555"
+            >
+              {durationSymbol(activeDuration)}
+            </text>
+
+            {/* Rest glyph */}
+            <text
+              x={vCX}
+              y={strAreaMid}
+              fontSize={22}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#333"
+              style={{ pointerEvents: 'none' }}
+            >
+              {restSymbol(activeDuration)}
+            </text>
+
+            {/* Cursor highlight for active string in virtual slot */}
+            {isVirtualCursor && (() => {
+              const sy = stringY(cursor.stringIndex, stringCount)
+              return (
+                <rect
+                  x={vCX - 10}
+                  y={sy - 11}
+                  width={20}
+                  height={22}
+                  fill="rgba(99,102,241,0.45)"
+                  rx={2}
+                />
+              )
+            })()}
+
+            {/* Click target for virtual slot */}
+            <rect
+              x={vX}
+              y={TOP_MARGIN}
+              width={vW}
+              height={svgH - TOP_MARGIN}
+              fill="transparent"
+              style={{ cursor: 'pointer' }}
+              onMouseDown={(e) => {
+                e.stopPropagation()
+                onBeatMouseDown(measureIndex, measure.beats.length, cursor.stringIndex, e.shiftKey)
+              }}
+              onMouseEnter={() => onBeatMouseEnter(measureIndex, measure.beats.length)}
+            />
+          </g>
+        )
+      })()}
+
       {/* Right barline */}
       <line
         x1={mw}
@@ -373,10 +448,10 @@ export function TabMeasureSvg({
         strokeWidth={BARLINE_W}
       />
 
-      {/* Technique overlays (post-pass) */}
+      {/* Technique overlays */}
       <TechniqueOverlay measure={measure} track={track} beatPositions={beatPositions} />
 
-      {/* String labels (in left gutter, one per string) — only on first measure of a row */}
+      {/* String labels */}
       {showStringLabels &&
         Array.from({ length: stringCount }, (_, rawSi) => {
           const si = stringCount - 1 - rawSi

@@ -5,6 +5,8 @@ import type {
   DurationValue,
   Measure,
   NoteModifierKey,
+  NoteModifiers,
+  OverflowPending,
   TabCursor,
   TabEditorState,
   TabNote,
@@ -17,14 +19,16 @@ import { TUNINGS } from './data/tunings'
 const TAB_STORAGE_KEY = 'tab-editor-track'
 const MAX_UNDO = 50
 
+// All beats are the same visual width regardless of duration
+export const BEAT_WIDTH = 40
 export const BEAT_WIDTHS: Record<DurationValue, number> = {
-  whole: 160,
-  half: 80,
-  quarter: 40,
-  eighth: 20,
-  sixteenth: 14,
-  thirtysecond: 10,
-  sixtyfourth: 8,
+  whole: BEAT_WIDTH,
+  half: BEAT_WIDTH,
+  quarter: BEAT_WIDTH,
+  eighth: BEAT_WIDTH,
+  sixteenth: BEAT_WIDTH,
+  thirtysecond: BEAT_WIDTH,
+  sixtyfourth: BEAT_WIDTH,
 }
 
 const DURATION_BEATS: Record<DurationValue, number> = {
@@ -49,39 +53,41 @@ export function beatDurationSeconds(duration: DurationValue, dot: DotModifier, b
   return (60 / bpm) * durationBeats(duration, dot)
 }
 
-// How many beats of the given duration fit in a time signature
-function slotsInMeasure(
-  timeSig: { numerator: number; denominator: number },
-  duration: DurationValue,
-  dot: DotModifier,
-): number {
-  const measureQuarterBeats = (timeSig.numerator * 4) / timeSig.denominator
-  const unitBeats = durationBeats(duration, dot)
-  return Math.max(1, Math.floor(measureQuarterBeats / unitBeats))
+export function measureCapacityBeats(timeSig: { numerator: number; denominator: number }): number {
+  return (timeSig.numerator * 4) / timeSig.denominator
 }
 
-function isBeatEmpty(b: Beat): boolean {
-  return b.notes.every((n) => n.fret < 0)
+export function measureUsedBeats(beats: Beat[]): number {
+  return beats.reduce((s, b) => s + durationBeats(b.duration, b.dot), 0)
 }
 
-// If every beat in a measure is empty, resize it to hold `slots` beats of the given duration.
-function resizeEmptyMeasure(
-  m: Measure,
-  stringCount: number,
-  duration: DurationValue,
-  dot: DotModifier,
-  slots: number,
-): Measure {
-  if (!m.beats.every(isBeatEmpty)) return m
-  if (m.beats.length === slots && m.beats.every((b) => b.duration === duration)) return m
-  const beats = Array.from({ length: slots }, () => ({
-    id: crypto.randomUUID(),
-    duration,
-    dot: { ...dot },
-    notes: Array.from({ length: stringCount }, makeEmptyNote),
-  }))
-  return { ...m, beats }
+// Maps a quarter-beat count to the closest (duration, dot) pair that fits within it
+export function quarterBeatsToNearestDuration(qBeats: number): { duration: DurationValue; dot: DotModifier } {
+  const noDot: DotModifier = { dotted: false, doubleDotted: false, triplet: false }
+  const dotted: DotModifier = { dotted: true, doubleDotted: false, triplet: false }
+
+  const options: Array<{ beats: number; duration: DurationValue; dot: DotModifier }> = [
+    { beats: 4,       duration: 'whole',        dot: noDot },
+    { beats: 3,       duration: 'half',         dot: dotted },
+    { beats: 2,       duration: 'half',         dot: noDot },
+    { beats: 1.5,     duration: 'quarter',      dot: dotted },
+    { beats: 1,       duration: 'quarter',      dot: noDot },
+    { beats: 0.75,    duration: 'eighth',       dot: dotted },
+    { beats: 0.5,     duration: 'eighth',       dot: noDot },
+    { beats: 0.375,   duration: 'sixteenth',    dot: dotted },
+    { beats: 0.25,    duration: 'sixteenth',    dot: noDot },
+    { beats: 0.1875,  duration: 'thirtysecond', dot: dotted },
+    { beats: 0.125,   duration: 'thirtysecond', dot: noDot },
+    { beats: 0.09375, duration: 'sixtyfourth',  dot: dotted },
+    { beats: 0.0625,  duration: 'sixtyfourth',  dot: noDot },
+  ]
+
+  for (const opt of options) {
+    if (opt.beats <= qBeats + 1e-9) return { duration: opt.duration, dot: opt.dot }
+  }
+  return { duration: 'sixtyfourth', dot: noDot }
 }
+
 
 export function tuningNoteToMidi(note: string, octave: number): number {
   const pc = NOTE_NAMES.indexOf(note)
@@ -105,10 +111,11 @@ function makeBeat(duration: DurationValue = 'quarter', stringCount = 6): Beat {
   }
 }
 
-function makeMeasure(stringCount = 6, beatsCount = 4): Measure {
+// Measures start empty — beats are only created when notes are explicitly placed
+function makeMeasure(): Measure {
   return {
     id: crypto.randomUUID(),
-    beats: Array.from({ length: beatsCount }, () => makeBeat('quarter', stringCount)),
+    beats: [],
   }
 }
 
@@ -129,7 +136,7 @@ function createDefaultTrack(): TabTrack {
     stringCount,
     tuningName,
     openMidi,
-    measures: [makeMeasure(stringCount, 4)],
+    measures: [makeMeasure()],
   }
 }
 
@@ -154,6 +161,7 @@ export function createInitialTabState(): TabEditorState {
     playheadMeasure: 0,
     playheadBeat: 0,
     viewMode: 'tab',
+    pendingOverflow: null,
     undoStack: [],
     redoStack: [],
   }
@@ -172,7 +180,6 @@ function pushUndo(state: TabEditorState): TabEditorState {
   return { ...state, undoStack: stack, redoStack: [] }
 }
 
-// Helper: clone deep a Beat array
 function cloneBeats(beats: Beat[]): Beat[] {
   return beats.map((b) => ({
     ...b,
@@ -180,13 +187,26 @@ function cloneBeats(beats: Beat[]): Beat[] {
   }))
 }
 
-// Advance cursor right within track, wrapping across measures
+// Advance cursor right, allowing the virtual pending slot (beatIndex = beats.length)
 function advanceCursorRight(cursor: TabCursor, track: TabTrack): TabCursor {
   const measure = track.measures[cursor.measureIndex]
   if (!measure) return cursor
-  if (cursor.beatIndex < measure.beats.length - 1) {
-    return { ...cursor, beatIndex: cursor.beatIndex + 1 }
+
+  const timeSig = measure.timeSignature ?? track.globalTimeSig
+  const capacity = measureCapacityBeats(timeSig)
+  const used = measureUsedBeats(measure.beats)
+  const hasVirtualSlot = used < capacity - 1e-9
+  const isAtVirtualSlot = cursor.beatIndex === measure.beats.length
+
+  if (!isAtVirtualSlot) {
+    if (cursor.beatIndex < measure.beats.length - 1) {
+      return { ...cursor, beatIndex: cursor.beatIndex + 1 }
+    }
+    if (hasVirtualSlot) {
+      return { ...cursor, beatIndex: measure.beats.length }
+    }
   }
+
   if (cursor.measureIndex < track.measures.length - 1) {
     return { ...cursor, measureIndex: cursor.measureIndex + 1, beatIndex: 0 }
   }
@@ -199,16 +219,16 @@ function advanceCursorLeft(cursor: TabCursor, track: TabTrack): TabCursor {
   }
   if (cursor.measureIndex > 0) {
     const prevMeasure = track.measures[cursor.measureIndex - 1]
+    const prevBeatIdx = Math.max(0, prevMeasure.beats.length - 1)
     return {
       ...cursor,
       measureIndex: cursor.measureIndex - 1,
-      beatIndex: prevMeasure.beats.length - 1,
+      beatIndex: prevBeatIdx,
     }
   }
   return cursor
 }
 
-// Collect beats from selection (flat array across measures, in order)
 function getSelectedBeats(track: TabTrack, sel: TabSelection): Beat[] {
   const result: Beat[] = []
   const { startMeasure, startBeat, endMeasure, endBeat } = normalizeSelection(sel)
@@ -244,6 +264,60 @@ export function isInSelection(
   if (measureIndex === startMeasure && beatIndex < startBeat) return false
   if (measureIndex === endMeasure && beatIndex > endBeat) return false
   return true
+}
+
+// Helper: place a note on an existing beat or append a new beat, with capacity checking
+function placeNoteInMeasure(
+  measure: Measure,
+  beatIndex: number,
+  stringIndex: number,
+  fret: number,
+  duration: DurationValue,
+  dot: DotModifier,
+  activeModifiers: NoteModifiers,
+  stringCount: number,
+  timeSig: { numerator: number; denominator: number },
+): { measure: Measure; overflow: Omit<OverflowPending, 'measureIndex'> | null } {
+  const capacity = measureCapacityBeats(timeSig)
+  const newBeatBeats = durationBeats(duration, dot)
+
+  if (beatIndex === measure.beats.length) {
+    // Virtual slot: append new beat
+    const used = measureUsedBeats(measure.beats)
+    if (used + newBeatBeats > capacity + 1e-9) {
+      return {
+        measure,
+        overflow: { fret, beatIndex, stringIndex, newDuration: duration, newDot: dot, overshootBeats: used + newBeatBeats - capacity },
+      }
+    }
+    const newBeat = makeBeat(duration, stringCount)
+    newBeat.dot = { ...dot }
+    newBeat.notes[stringIndex] = { fret, modifiers: { ...activeModifiers } }
+    return { measure: { ...measure, beats: [...measure.beats, newBeat] }, overflow: null }
+  }
+
+  // Existing beat: check capacity after duration change
+  const existingBeat = measure.beats[beatIndex]
+  if (!existingBeat) return { measure, overflow: null }
+
+  const oldBeatBeats = durationBeats(existingBeat.duration, existingBeat.dot)
+  const usedWithoutThis = measureUsedBeats(measure.beats) - oldBeatBeats
+  if (usedWithoutThis + newBeatBeats > capacity + 1e-9) {
+    return {
+      measure,
+      overflow: { fret, beatIndex, stringIndex, newDuration: duration, newDot: dot, overshootBeats: usedWithoutThis + newBeatBeats - capacity },
+    }
+  }
+
+  const beats = measure.beats.map((b, bi) => {
+    if (bi !== beatIndex) return b
+    const notes = b.notes.map((n, si) => {
+      if (si !== stringIndex) return n
+      return { fret, modifiers: { ...activeModifiers } }
+    })
+    return { ...b, duration, dot: { ...dot }, notes }
+  })
+  return { measure: { ...measure, beats }, overflow: null }
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────
@@ -315,6 +389,9 @@ export type TabEditorAction =
   | { type: 'LOAD_TRACK'; track: TabTrack }
   | { type: 'SET_GLOBAL_TIME_SIG'; numerator: number; denominator: number }
   | { type: 'SET_MEASURE_TIME_SIG'; measureIndex: number; numerator: number; denominator: number }
+  | { type: 'RESOLVE_OVERFLOW_TRIM' }
+  | { type: 'RESOLVE_OVERFLOW_BLEED' }
+  | { type: 'DISMISS_OVERFLOW' }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -324,29 +401,29 @@ export function tabEditorReducer(
 ): TabEditorState {
   switch (action.type) {
     case 'ADD_NOTE': {
+      const measure = state.track.measures[action.measureIndex]
+      if (!measure) return state
+
+      const timeSig = measure.timeSignature ?? state.track.globalTimeSig
       const s = pushUndo(state)
-      const measures = s.track.measures.map((m, mi) => {
-        if (mi !== action.measureIndex) return m
-        return {
-          ...m,
-          beats: m.beats.map((b, bi) => {
-            if (bi !== action.beatIndex) return b
-            const notes = b.notes.map((n, si) => {
-              if (si !== action.stringIndex) return n
-              return { fret: action.fret, modifiers: { ...state.activeModifiers } }
-            })
-            // Placing a note claims this beat at the active duration/dot
-            return {
-              ...b,
-              duration: state.activeDuration,
-              dot: { ...state.activeDot },
-              notes,
-            }
-          }),
-        }
-      })
-      const track = { ...s.track, measures }
-      return { ...s, track }
+      const { measure: updatedMeasure, overflow } = placeNoteInMeasure(
+        measure,
+        action.beatIndex,
+        action.stringIndex,
+        action.fret,
+        s.activeDuration,
+        s.activeDot,
+        s.activeModifiers,
+        s.track.stringCount,
+        timeSig,
+      )
+
+      if (overflow) {
+        return { ...state, pendingOverflow: { ...overflow, measureIndex: action.measureIndex } }
+      }
+
+      const measures = s.track.measures.map((m, mi) => mi === action.measureIndex ? updatedMeasure : m)
+      return { ...s, track: { ...s.track, measures }, pendingOverflow: null }
     }
 
     case 'DELETE_NOTE': {
@@ -398,26 +475,8 @@ export function tabEditorReducer(
       return { ...s, track: { ...s.track, measures } }
     }
 
-    case 'SET_ACTIVE_DURATION': {
-      // If the cursor's measure is empty, resize it to hold slots of the new duration
-      const { cursor, track, activeDot } = state
-      const measure = track.measures[cursor.measureIndex]
-      if (!measure) return { ...state, activeDuration: action.duration }
-      const timeSig = measure.timeSignature ?? track.globalTimeSig
-      const slots = slotsInMeasure(timeSig, action.duration, activeDot)
-      const resized = resizeEmptyMeasure(measure, track.stringCount, action.duration, activeDot, slots)
-      if (resized === measure) {
-        return { ...state, activeDuration: action.duration }
-      }
-      const measures = track.measures.map((m, i) => (i === cursor.measureIndex ? resized : m))
-      const clampedBeatIdx = Math.min(cursor.beatIndex, resized.beats.length - 1)
-      return {
-        ...state,
-        activeDuration: action.duration,
-        track: { ...track, measures },
-        cursor: { ...cursor, beatIndex: clampedBeatIdx },
-      }
-    }
+    case 'SET_ACTIVE_DURATION':
+      return { ...state, activeDuration: action.duration }
 
     case 'SET_ACTIVE_DOT':
       return { ...state, activeDot: action.dot }
@@ -482,7 +541,7 @@ export function tabEditorReducer(
       const s = pushUndo(state)
       const measures = s.track.measures.map((m, mi) => {
         if (mi !== action.measureIndex) return m
-        if (m.beats.length <= 1) return m // keep at least 1 beat
+        if (m.beats.length <= 1) return m
         const beats = m.beats.filter((_, bi) => bi !== action.beatIndex)
         return { ...m, beats }
       })
@@ -491,29 +550,21 @@ export function tabEditorReducer(
       return {
         ...s,
         track: { ...s.track, measures },
-        cursor: { ...state.cursor, beatIndex: newBeatIdx },
+        cursor: { ...state.cursor, beatIndex: Math.max(0, newBeatIdx) },
       }
     }
 
     case 'INSERT_MEASURE_BEFORE': {
       const s = pushUndo(state)
       const measures = [...s.track.measures]
-      measures.splice(
-        action.measureIndex,
-        0,
-        makeMeasure(s.track.stringCount, s.track.globalTimeSig.numerator),
-      )
+      measures.splice(action.measureIndex, 0, makeMeasure())
       return { ...s, track: { ...s.track, measures } }
     }
 
     case 'INSERT_MEASURE_AFTER': {
       const s = pushUndo(state)
       const measures = [...s.track.measures]
-      measures.splice(
-        action.measureIndex + 1,
-        0,
-        makeMeasure(s.track.stringCount, s.track.globalTimeSig.numerator),
-      )
+      measures.splice(action.measureIndex + 1, 0, makeMeasure())
       return { ...s, track: { ...s.track, measures } }
     }
 
@@ -533,10 +584,8 @@ export function tabEditorReducer(
       const { cursor, track } = state
       if (action.direction === 'right') {
         const advanced = advanceCursorRight(cursor, track)
-        // At the end of the last measure: create a new measure
         if (advanced === cursor) {
-          const lastMeasure = track.measures[track.measures.length - 1]
-          const newMeasure = makeMeasure(track.stringCount, lastMeasure?.beats.length ?? 4)
+          const newMeasure = makeMeasure()
           const measures = [...track.measures, newMeasure]
           const newCursor = { ...cursor, measureIndex: measures.length - 1, beatIndex: 0 }
           return { ...state, track: { ...track, measures }, cursor: newCursor, selection: null }
@@ -582,12 +631,10 @@ export function tabEditorReducer(
     case 'APPLY_CONNECTION_TO_SELECTION': {
       if (state.noteSelection.length < 2) return state
       const s = pushUndo(state)
-      // Sort by (measure, beat) so the connection runs in musical order
       const ordered = [...state.noteSelection].sort((a, b) => {
         if (a.measureIndex !== b.measureIndex) return a.measureIndex - b.measureIndex
         return a.beatIndex - b.beatIndex
       })
-      // Apply the modifier to all but the last — each marks the link to the *next* note
       const toMark = new Set(
         ordered.slice(0, -1).map((n) => `${n.measureIndex}:${n.beatIndex}:${n.stringIndex}`),
       )
@@ -607,7 +654,6 @@ export function tabEditorReducer(
     case 'COPY': {
       const sel = state.selection
       if (!sel) {
-        // Copy current beat
         const m = state.track.measures[state.cursor.measureIndex]
         const b = m?.beats[state.cursor.beatIndex]
         if (!b) return state
@@ -628,7 +674,6 @@ export function tabEditorReducer(
         const b = m?.beats[s.cursor.beatIndex]
         if (!b) return state
         clipboard = cloneBeats([b])
-        // Clear the beat (set all frets to -1)
         measures = s.track.measures.map((meas, mi) => {
           if (mi !== s.cursor.measureIndex) return meas
           return {
@@ -642,7 +687,6 @@ export function tabEditorReducer(
       } else {
         const norm = normalizeSelection(sel)
         clipboard = cloneBeats(getSelectedBeats(s.track, norm))
-        // Clear selected beats
         measures = s.track.measures.map((m, mi) => {
           if (mi < norm.startMeasure || mi > norm.endMeasure) return m
           const bStart = mi === norm.startMeasure ? norm.startBeat : 0
@@ -656,12 +700,7 @@ export function tabEditorReducer(
           }
         })
       }
-      return {
-        ...s,
-        track: { ...s.track, measures },
-        clipboard,
-        selection: null,
-      }
+      return { ...s, track: { ...s.track, measures }, clipboard, selection: null }
     }
 
     case 'PASTE': {
@@ -679,7 +718,11 @@ export function tabEditorReducer(
           id: crypto.randomUUID(),
           notes: srcBeat.notes.map((n) => ({ ...n, modifiers: { ...n.modifiers } })),
         }
-        measures[mi].beats[bi] = newBeat
+        if (bi < measures[mi].beats.length) {
+          measures[mi].beats[bi] = newBeat
+        } else {
+          measures[mi].beats.push(newBeat)
+        }
         bi++
         if (bi >= measures[mi].beats.length) {
           bi = 0
@@ -697,7 +740,6 @@ export function tabEditorReducer(
 
     case 'SET_TUNING': {
       const s = pushUndo(state)
-      // Remap notes: if string count changed, resize each beat's notes array
       const { stringCount, openMidi, tuningName } = action
       const measures = s.track.measures.map((m) => ({
         ...m,
@@ -708,13 +750,7 @@ export function tabEditorReducer(
       }))
       return {
         ...s,
-        track: {
-          ...s.track,
-          stringCount,
-          tuningName,
-          openMidi,
-          measures,
-        },
+        track: { ...s.track, stringCount, tuningName, openMidi, measures },
         cursor: {
           ...state.cursor,
           stringIndex: Math.min(state.cursor.stringIndex, stringCount - 1),
@@ -736,7 +772,7 @@ export function tabEditorReducer(
       const undoStack = [...state.undoStack]
       const track = undoStack.pop()!
       const redoStack = [state.track, ...state.redoStack].slice(0, MAX_UNDO)
-      return { ...state, track, undoStack, redoStack }
+      return { ...state, track, undoStack, redoStack, pendingOverflow: null }
     }
 
     case 'REDO': {
@@ -754,6 +790,7 @@ export function tabEditorReducer(
         cursor: { measureIndex: 0, beatIndex: 0, stringIndex: 0 },
         undoStack: [],
         redoStack: [],
+        pendingOverflow: null,
       }
 
     case 'SET_GLOBAL_TIME_SIG': {
@@ -770,7 +807,114 @@ export function tabEditorReducer(
       return { ...s, track: { ...s.track, measures } }
     }
 
+    case 'RESOLVE_OVERFLOW_TRIM': {
+      if (!state.pendingOverflow) return state
+      const { fret, measureIndex, beatIndex, stringIndex } = state.pendingOverflow
+      const s = pushUndo(state)
+      const measure = s.track.measures[measureIndex]
+      if (!measure) return state
+
+      const timeSig = measure.timeSignature ?? s.track.globalTimeSig
+      const capacity = measureCapacityBeats(timeSig)
+
+      let usedWithoutThis: number
+      if (beatIndex === measure.beats.length) {
+        usedWithoutThis = measureUsedBeats(measure.beats)
+      } else {
+        const beat = measure.beats[beatIndex]
+        if (!beat) return state
+        usedWithoutThis = measureUsedBeats(measure.beats) - durationBeats(beat.duration, beat.dot)
+      }
+      const remaining = capacity - usedWithoutThis
+
+      const { duration: trimDur, dot: trimDot } = quarterBeatsToNearestDuration(Math.max(0, remaining))
+
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== measureIndex) return m
+        if (beatIndex === m.beats.length) {
+          const newBeat = makeBeat(trimDur, s.track.stringCount)
+          newBeat.dot = { ...trimDot }
+          newBeat.notes[stringIndex] = { fret, modifiers: { ...state.activeModifiers } }
+          return { ...m, beats: [...m.beats, newBeat] }
+        }
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== beatIndex) return b
+            const notes = b.notes.map((n, si) => {
+              if (si !== stringIndex) return n
+              return { fret, modifiers: { ...state.activeModifiers } }
+            })
+            return { ...b, duration: trimDur, dot: { ...trimDot }, notes }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures }, pendingOverflow: null }
+    }
+
+    case 'RESOLVE_OVERFLOW_BLEED': {
+      if (!state.pendingOverflow) return state
+      const { fret, measureIndex, beatIndex, stringIndex, newDuration, newDot, overshootBeats } = state.pendingOverflow
+      const s = pushUndo(state)
+
+      // Place note at full declared duration in current measure
+      let measures = s.track.measures.map((m, mi) => {
+        if (mi !== measureIndex) return m
+        if (beatIndex === m.beats.length) {
+          const newBeat = makeBeat(newDuration, s.track.stringCount)
+          newBeat.dot = { ...newDot }
+          newBeat.notes[stringIndex] = { fret, modifiers: { ...state.activeModifiers } }
+          return { ...m, beats: [...m.beats, newBeat] }
+        }
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== beatIndex) return b
+            const notes = b.notes.map((n, si) => {
+              if (si !== stringIndex) return n
+              return { fret, modifiers: { ...state.activeModifiers } }
+            })
+            return { ...b, duration: newDuration, dot: { ...newDot }, notes }
+          }),
+        }
+      })
+
+      // Insert tied continuation beat at position 0 of next measure
+      const { duration: bleedDur, dot: bleedDot } = quarterBeatsToNearestDuration(Math.max(0.0625, overshootBeats))
+      const nextMi = measureIndex + 1
+
+      if (nextMi < measures.length) {
+        measures = measures.map((m, mi) => {
+          if (mi !== nextMi) return m
+          const tieBeat = makeBeat(bleedDur, s.track.stringCount)
+          tieBeat.dot = { ...bleedDot }
+          tieBeat.tiedFrom = true
+          tieBeat.notes[stringIndex] = { fret, modifiers: {} }
+          return { ...m, beats: [tieBeat, ...m.beats] }
+        })
+      } else {
+        const newMeasure = makeMeasure()
+        const tieBeat = makeBeat(bleedDur, s.track.stringCount)
+        tieBeat.dot = { ...bleedDot }
+        tieBeat.tiedFrom = true
+        tieBeat.notes[stringIndex] = { fret, modifiers: {} }
+        newMeasure.beats = [tieBeat]
+        measures = [...measures, newMeasure]
+      }
+
+      return {
+        ...s,
+        track: { ...s.track, measures },
+        pendingOverflow: null,
+        cursor: { measureIndex: nextMi, beatIndex: 1, stringIndex },
+      }
+    }
+
+    case 'DISMISS_OVERFLOW':
+      return { ...state, pendingOverflow: null }
+
     default:
       return state
   }
 }
+

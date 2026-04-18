@@ -1,11 +1,14 @@
 import { useReducer, useEffect, useRef, useCallback, useState } from 'react'
 import './TabEditorPage.css'
-import type { TabCursor, TabSelection } from '../tabEditorTypes'
+import type { TabCursor } from '../tabEditorTypes'
 import {
   tabEditorReducer,
   createInitialTabState,
   saveTabTrack,
   fretToFreq,
+  quarterBeatsToNearestDuration,
+  measureCapacityBeats,
+  measureUsedBeats,
 } from '../tabEditorState'
 import { TabPlaybackEngine } from '../audio/TabPlaybackEngine'
 import { pluckString } from '../audio/pluckString'
@@ -16,7 +19,6 @@ import {
   TabSvgCanvas,
 } from '../components/TabEditor'
 
-// Module-level playback engine singleton
 const playbackEngine = new TabPlaybackEngine()
 
 export function TabEditorPage() {
@@ -29,17 +31,14 @@ export function TabEditorPage() {
   const prevCursorRef = useRef<TabCursor | null>(null)
   const dragRef = useRef<{ measureIndex: number; beatIndex: number } | null>(null)
 
-  // Persist track on every change
   useEffect(() => {
     saveTabTrack(state.track)
   }, [state.track])
 
-  // Sync playback engine when playing
   useEffect(() => {
     if (state.isPlaying) playbackEngine.updateTrack(state.track)
   }, [state.track, state.isPlaying])
 
-  // ResizeObserver for canvas
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
@@ -50,7 +49,6 @@ export function TabEditorPage() {
     return () => ro.disconnect()
   }, [])
 
-  // Lazy AudioContext
   function ensureCtx(): AudioContext {
     if (!audioCtxRef.current) audioCtxRef.current = new AudioContext()
     if (audioCtxRef.current.state === 'suspended') void audioCtxRef.current.resume()
@@ -69,8 +67,6 @@ export function TabEditorPage() {
     [state.track.openMidi],
   )
 
-  // commitFretAt accepts an explicit cursor position to avoid stale closures.
-  // Cursor does NOT auto-advance — user moves it explicitly with arrow keys or click.
   const commitFretAt = useCallback(
     (fret: number, at: TabCursor) => {
       if (fret > 24) return
@@ -82,9 +78,11 @@ export function TabEditorPage() {
 
   const handleDigit = useCallback(
     (d: number) => {
+      // Don't buffer digits while overflow dialog is open
+      if (state.pendingOverflow) return
+
       if (digitTimerRef.current !== null) clearTimeout(digitTimerRef.current)
       if (digitBufRef.current !== null && prevCursorRef.current !== null) {
-        // Second digit: undo first commit, replace with combined value at same cursor
         const combined = digitBufRef.current * 10 + d
         const prevAt = prevCursorRef.current
         digitBufRef.current = null
@@ -94,12 +92,10 @@ export function TabEditorPage() {
           commitFretAt(combined, prevAt)
         }
       } else if (d === 0) {
-        // Zero commits immediately, no two-digit wait
         digitBufRef.current = null
         prevCursorRef.current = null
         commitFretAt(0, state.cursor)
       } else {
-        // Digits 1–9: commit immediately, keep buffer open for a second digit
         prevCursorRef.current = { ...state.cursor }
         digitBufRef.current = d
         commitFretAt(d, state.cursor)
@@ -109,7 +105,7 @@ export function TabEditorPage() {
         }, 400)
       }
     },
-    [commitFretAt, state.cursor],
+    [commitFretAt, state.cursor, state.pendingOverflow],
   )
 
   const flushDigitBuf = useCallback(() => {
@@ -118,7 +114,6 @@ export function TabEditorPage() {
     prevCursorRef.current = null
   }, [])
 
-  // Keyboard handler
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
@@ -126,6 +121,15 @@ export function TabEditorPage() {
     function onKeyDown(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
+
+      // Block keyboard input while overflow dialog is open
+      if (state.pendingOverflow) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          dispatch({ type: 'DISMISS_OVERFLOW' })
+        }
+        return
+      }
 
       const { cursor } = state
 
@@ -205,7 +209,6 @@ export function TabEditorPage() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [state, flushDigitBuf, handleDigit])
 
-  // Playback controls
   function handlePlay() {
     const ctx = ensureCtx()
     if (state.isPlaying) {
@@ -233,7 +236,6 @@ export function TabEditorPage() {
     dispatch({ type: 'SET_PLAYHEAD', measureIndex: 0, beatIndex: 0 })
   }
 
-  // Drag selection + shift-click multi-note selection
   function onBeatMouseDown(mi: number, bi: number, si: number, shiftKey: boolean) {
     if (shiftKey) {
       dispatch({ type: 'TOGGLE_NOTE_IN_SELECTION', cursor: { measureIndex: mi, beatIndex: bi, stringIndex: si } })
@@ -251,17 +253,46 @@ export function TabEditorPage() {
   function onBeatMouseEnter(mi: number, bi: number) {
     if (!dragRef.current) return
     const start = dragRef.current
-    const sel: TabSelection = {
-      startMeasure: start.measureIndex,
-      startBeat: start.beatIndex,
-      endMeasure: mi,
-      endBeat: bi,
-    }
-    dispatch({ type: 'SET_SELECTION', selection: sel })
+    dispatch({
+      type: 'SET_SELECTION',
+      selection: {
+        startMeasure: start.measureIndex,
+        startBeat: start.beatIndex,
+        endMeasure: mi,
+        endBeat: bi,
+      },
+    })
   }
 
   function onMouseUp() {
     dragRef.current = null
+  }
+
+  // Overflow dialog helpers
+  const overflow = state.pendingOverflow
+  let trimLabel = ''
+  let bleedLabel = ''
+  if (overflow) {
+    const measure = state.track.measures[overflow.measureIndex]
+    if (measure) {
+      const timeSig = measure.timeSignature ?? state.track.globalTimeSig
+      const capacity = measureCapacityBeats(timeSig)
+      const used = measureUsedBeats(
+        overflow.beatIndex === measure.beats.length
+          ? measure.beats
+          : measure.beats.filter((_, i) => i !== overflow.beatIndex),
+      )
+      const remaining = Math.max(0, capacity - used)
+      const { duration: trimDur } = quarterBeatsToNearestDuration(remaining)
+      trimLabel = trimDur.replace('thirtysecond', '1/32').replace('sixtyfourth', '1/64')
+        .replace('sixteenth', '1/16').replace('eighth', '1/8').replace('quarter', '1/4')
+        .replace('half', '1/2').replace('whole', 'whole')
+
+      const overshootStr = overflow.overshootBeats === Math.round(overflow.overshootBeats)
+        ? `${overflow.overshootBeats} beat${overflow.overshootBeats !== 1 ? 's' : ''}`
+        : `${overflow.overshootBeats.toFixed(2)} beats`
+      bleedLabel = `Bleed ${overshootStr} into next measure`
+    }
   }
 
   return (
@@ -284,6 +315,93 @@ export function TabEditorPage() {
         onBeatMouseDown={onBeatMouseDown}
         onBeatMouseEnter={onBeatMouseEnter}
       />
+
+      {/* Overflow dialog */}
+      {overflow && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 200,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.6)',
+          }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) dispatch({ type: 'DISMISS_OVERFLOW' }) }}
+        >
+          <div
+            style={{
+              background: '#1c1c1c',
+              border: '1px solid #444',
+              borderRadius: 10,
+              padding: '20px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+              minWidth: 300,
+              maxWidth: 400,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: '1.2rem' }}>⚠</span>
+              <span style={{ color: '#e0a040', fontWeight: 600, fontSize: '0.95rem' }}>
+                Note doesn't fit in this measure
+              </span>
+            </div>
+            <div style={{ color: '#999', fontSize: '0.82rem', lineHeight: 1.5 }}>
+              A <strong style={{ color: '#ccc' }}>{overflow.newDuration}</strong> note at this position
+              exceeds the measure's remaining capacity.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button
+                onClick={() => dispatch({ type: 'RESOLVE_OVERFLOW_TRIM' })}
+                style={{
+                  padding: '8px 14px',
+                  background: '#1a3a5c',
+                  border: '1px solid #2a5a8c',
+                  borderRadius: 6,
+                  color: '#7ac0ff',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontSize: '0.85rem',
+                }}
+              >
+                Trim to <strong>{trimLabel}</strong> (fits the measure)
+              </button>
+              <button
+                onClick={() => dispatch({ type: 'RESOLVE_OVERFLOW_BLEED' })}
+                style={{
+                  padding: '8px 14px',
+                  background: '#1a2a1c',
+                  border: '1px solid #2a5c2e',
+                  borderRadius: 6,
+                  color: '#7adb8c',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontSize: '0.85rem',
+                }}
+              >
+                {bleedLabel}
+              </button>
+              <button
+                onClick={() => dispatch({ type: 'DISMISS_OVERFLOW' })}
+                style={{
+                  padding: '6px 14px',
+                  background: 'transparent',
+                  border: '1px solid #333',
+                  borderRadius: 6,
+                  color: '#666',
+                  cursor: 'pointer',
+                  fontSize: '0.82rem',
+                }}
+              >
+                Cancel (Esc)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
