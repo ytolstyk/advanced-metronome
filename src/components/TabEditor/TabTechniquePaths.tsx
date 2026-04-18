@@ -74,41 +74,42 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
       // Legato slide
       if (note.modifiers.legatoSlide) {
         const nextPos = beatPositions[bi + 1]
-        const dx = nextPos ? nextPos.cx - 4 : measureRightEdge + 4
-        const nextNote = nextPos ? measure.beats[bi + 1]?.notes[si] : null
-        const dy =
-          nextNote && nextNote.fret >= 0 && nextNote.fret !== note.fret
-            ? stringY(si, stringCount) + (nextNote.fret > note.fret ? 3 : -3)
-            : sy
-        elements.push(
-          <line
-            key={`ls-${key}`}
-            x1={cx + 4}
-            y1={sy - 3}
-            x2={dx}
-            y2={dy - 3}
-            stroke="#aaddff"
-            strokeWidth={1.5}
-          />,
-        )
+        const nextNote = measure.beats[bi + 1]?.notes[si]
+        if (nextPos && nextNote && nextNote.fret >= 0) {
+          const dx = nextPos.cx - 4
+          const dy = nextNote.fret > note.fret ? sy - 6 : nextNote.fret < note.fret ? sy + 6 : sy
+          elements.push(
+            <line
+              key={`ls-${key}`}
+              x1={cx + 4}
+              y1={sy}
+              x2={dx}
+              y2={dy}
+              stroke="#aaddff"
+              strokeWidth={1.5}
+            />,
+          )
+        }
       }
 
       // Shift slide (with arrowhead)
       if (note.modifiers.shiftSlide) {
         const nextPos = beatPositions[bi + 1]
-        const dx = nextPos ? nextPos.cx - 4 : measureRightEdge + 4
-        const nextNote = nextPos ? measure.beats[bi + 1]?.notes[si] : null
-        const ascending = nextNote ? nextNote.fret >= note.fret : true
-        const dy = ascending ? sy - 6 : sy + 6
-        elements.push(
-          <g key={`ss-${key}`}>
-            <line x1={cx + 4} y1={sy - 3} x2={dx} y2={dy} stroke="#ffcc88" strokeWidth={1.5} />
-            <polygon
-              points={`${dx - 6},${dy - 4} ${dx},${dy} ${dx - 6},${dy + 4}`}
-              fill="#ffcc88"
-            />
-          </g>,
-        )
+        const nextNote = measure.beats[bi + 1]?.notes[si]
+        if (nextPos && nextNote && nextNote.fret >= 0) {
+          const dx = nextPos.cx - 4
+          const ascending = nextNote.fret >= note.fret
+          const dy = ascending ? sy - 6 : sy + 6
+          elements.push(
+            <g key={`ss-${key}`}>
+              <line x1={cx + 4} y1={sy - 3} x2={dx} y2={dy} stroke="#ffcc88" strokeWidth={1.5} />
+              <polygon
+                points={`${dx - 6},${dy - 4} ${dx},${dy} ${dx - 6},${dy + 4}`}
+                fill="#ffcc88"
+              />
+            </g>,
+          )
+        }
       }
 
       // Slide in from below

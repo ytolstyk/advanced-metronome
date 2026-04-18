@@ -93,11 +93,6 @@ export function TabSvgCanvas({
   const globalMeasureMap = new Map<string, number>()
   track.measures.forEach((m, i) => globalMeasureMap.set(m.id, i))
 
-  const [editingTimeSig, setEditingTimeSig] = useState<number | null>(null)
-  const [editNum, setEditNum] = useState('')
-  const [editDen, setEditDen] = useState('')
-  const numInputRef = useRef<HTMLInputElement>(null)
-
   const [measureMenu, setMeasureMenu] = useState<{ mi: number; x: number; y: number } | null>(null)
 
   const [timingChangeEdit, setTimingChangeEdit] = useState<{ mi: number; num: string; den: string } | null>(null)
@@ -119,30 +114,21 @@ export function TabSvgCanvas({
   }
 
   useEffect(() => {
-    if (editingTimeSig !== null) {
-      numInputRef.current?.focus()
-      numInputRef.current?.select()
-    }
-  }, [editingTimeSig])
-
-  useEffect(() => {
     if (timingChangeEdit !== null) {
       timingChangeNumRef.current?.focus()
       timingChangeNumRef.current?.select()
     }
   }, [timingChangeEdit])
 
-  function findTimingRangeEnd(fromIndex: number): number {
-    const next = track.measures.findIndex((m, i) => i > fromIndex && m.timeSignature !== undefined)
-    return next === -1 ? track.measures.length : next
-  }
-
   function openTimeSigEditor(mi: number) {
     const m = track.measures[mi]
     const sig = m.timeSignature ?? track.globalTimeSig
-    setEditNum(String(sig.numerator))
-    setEditDen(String(sig.denominator))
-    setEditingTimeSig(mi)
+    setTimingChangeEdit({ mi, num: String(sig.numerator), den: String(sig.denominator) })
+  }
+
+  function findTimingRangeEnd(fromIndex: number): number {
+    const next = track.measures.findIndex((m, i) => i > fromIndex && m.timeSignature !== undefined)
+    return next === -1 ? track.measures.length : next
   }
 
   function submitTimingChange() {
@@ -164,20 +150,6 @@ export function TabSvgCanvas({
     } else {
       dispatch({ type: 'SET_MEASURE_TIME_SIG_RANGE', fromIndex: mi, toIndex: rangeEnd - 1, numerator: n, denominator: d })
     }
-  }
-
-  function commitTimeSig() {
-    if (editingTimeSig === null) return
-    const n = parseInt(editNum, 10)
-    const d = parseInt(editDen, 10)
-    if (n > 0 && d > 0) {
-      if (editingTimeSig === 0 && !track.measures[0].timeSignature) {
-        dispatch({ type: 'SET_GLOBAL_TIME_SIG', numerator: n, denominator: d })
-      } else {
-        dispatch({ type: 'SET_MEASURE_TIME_SIG', measureIndex: editingTimeSig, numerator: n, denominator: d })
-      }
-    }
-    setEditingTimeSig(null)
   }
 
   if (viewMode === 'staff') {
@@ -474,92 +446,6 @@ export function TabSvgCanvas({
         </div>
       )}
 
-      {/* Time signature editor overlay */}
-      {editingTimeSig !== null && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0,0,0,0.5)',
-          }}
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setEditingTimeSig(null) }}
-        >
-          <div
-            style={{
-              background: '#1a1a1a',
-              border: '1px solid #333',
-              borderRadius: 8,
-              padding: '16px 20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              minWidth: 200,
-            }}
-          >
-            <span style={{ color: '#ccc', fontSize: '0.85rem', fontWeight: 600 }}>
-              Time Signature — Measure {editingTimeSig + 1}
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input
-                ref={numInputRef}
-                type="number"
-                min={1}
-                max={32}
-                value={editNum}
-                onChange={(e) => setEditNum(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitTimeSig() } if (e.key === 'Escape') setEditingTimeSig(null) }}
-                style={{
-                  width: 60,
-                  background: '#111',
-                  color: '#e0e0e0',
-                  border: '1px solid #444',
-                  borderRadius: 4,
-                  padding: '4px 8px',
-                  fontSize: '1.2rem',
-                  textAlign: 'center',
-                }}
-              />
-              <span style={{ color: '#888', fontSize: '1.4rem' }}>/</span>
-              <input
-                type="number"
-                min={1}
-                max={32}
-                value={editDen}
-                onChange={(e) => setEditDen(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitTimeSig() } if (e.key === 'Escape') setEditingTimeSig(null) }}
-                style={{
-                  width: 60,
-                  background: '#111',
-                  color: '#e0e0e0',
-                  border: '1px solid #444',
-                  borderRadius: 4,
-                  padding: '4px 8px',
-                  fontSize: '1.2rem',
-                  textAlign: 'center',
-                }}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setEditingTimeSig(null)}
-                style={{ padding: '4px 12px', background: 'transparent', border: '1px solid #333', borderRadius: 4, color: '#888', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={commitTimeSig}
-                style={{ padding: '4px 12px', background: '#1a3a5c', border: '1px solid #2a5a8c', borderRadius: 4, color: '#7ac0ff', cursor: 'pointer' }}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
