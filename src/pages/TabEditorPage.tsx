@@ -217,8 +217,8 @@ export function TabEditorPage() {
     } else {
       playbackEngine.start(
         state.track,
-        state.playheadMeasure,
-        state.playheadBeat,
+        state.cursor.measureIndex,
+        state.cursor.beatIndex,
         (mi, bi) => dispatch({ type: 'SET_PLAYHEAD', measureIndex: mi, beatIndex: bi }),
         () => {
           dispatch({ type: 'SET_PLAYING', isPlaying: false })

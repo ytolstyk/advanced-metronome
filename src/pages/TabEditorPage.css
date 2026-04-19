@@ -66,10 +66,20 @@
 /* Color-coded toolbar group backgrounds */
 .tab-toolbar-group[data-group="duration"] { background: #111c2e; }
 .tab-toolbar-group[data-group="effects"]  { background: #241806; }
+.tab-toolbar-group[data-group="note-info"] { background: #1a1406; }
 .tab-toolbar-group[data-group="techniques"] { background: #0f2416; }
 .tab-toolbar-group[data-group="structure"] { background: #1f1329; }
 .tab-toolbar-group[data-group="edit"]     { background: #14142a; }
 .tab-toolbar-group[data-group="move"]     { background: #0f2023; }
+
+.tab-note-effects-strip {
+  font-size: 0.75rem;
+  color: #f59e0b;
+  padding: 0 4px;
+  white-space: nowrap;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
 
 .tab-tool-btn {
   display: inline-flex;

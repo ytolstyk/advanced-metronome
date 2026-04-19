@@ -76,7 +76,7 @@ export function TabSvgCanvas({
   onBeatMouseDown,
   onBeatMouseEnter,
 }: TabSvgCanvasProps) {
-  const { track, cursor, selection, noteSelection, playheadMeasure, playheadBeat, viewMode, activeDuration } = state
+  const { track, cursor, selection, noteSelection, isPlaying, playheadMeasure, playheadBeat, viewMode, activeDuration } = state
 
   const showTimeSigMap: boolean[] = track.measures.map((m, i) => {
     if (i === 0) return true
@@ -213,6 +213,7 @@ export function TabSvgCanvas({
                   cursor={cursor}
                   selection={selection}
                   noteSelection={noteSelection}
+                  isPlaying={isPlaying}
                   playheadMeasure={playheadMeasure}
                   playheadBeat={playheadBeat}
                   showTimeSig={showTs}

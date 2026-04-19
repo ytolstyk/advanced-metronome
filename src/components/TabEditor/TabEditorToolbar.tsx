@@ -11,6 +11,29 @@ import type { TabEditorAction } from '../../tabEditorState'
 
 const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide', 'shiftSlide']
 
+const MODIFIER_LABELS: Record<string, string> = {
+  ghost: 'Ghost',
+  accent: 'Accent',
+  staccato: 'Staccato',
+  letRing: 'Let ring',
+  palmMute: 'Palm mute',
+  dead: 'Dead',
+  naturalHarmonic: 'Harmonic',
+  hammerOn: 'Hammer-on',
+  pullOff: 'Pull-off',
+  legatoSlide: 'Legato slide',
+  shiftSlide: 'Shift slide',
+  slideInBelow: 'Slide in↗',
+  slideInAbove: 'Slide in↘',
+  slideOutDown: 'Slide out↙',
+  slideOutUp: 'Slide out↖',
+  bend: 'Bend',
+  vibrato: 'Vibrato',
+  trill: 'Trill',
+  pickDown: 'Pick↓',
+  pickUp: 'Pick↑',
+}
+
 const DURATIONS: { label: string; value: DurationValue }[] = [
   { label: '1/1', value: 'whole' },
   { label: '1/2', value: 'half' },
@@ -92,6 +115,9 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
   const displayedDuration: DurationValue = currentBeat?.duration ?? activeDuration
   const displayedDot: DotModifier = currentBeat?.dot ?? activeDot
 
+  const currentNote = currentBeat?.notes[cursor.stringIndex]
+  const isOnNote = !!currentNote && currentNote.fret >= 0
+
   function pickDuration(duration: DurationValue) {
     dispatch({ type: 'SET_ACTIVE_DURATION', duration })
     if (currentBeat) {
@@ -112,6 +138,12 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
   function onConnectionClick(key: NoteModifierKey) {
     if (noteSelection.length >= 2 && (CONNECTION_KEYS as NoteModifierKey[]).includes(key)) {
       dispatch({ type: 'APPLY_CONNECTION_TO_SELECTION', modifier: key as ConnectionModifierKey })
+      return
+    }
+    if (isOnNote) {
+      if (key === 'legatoSlide' || key === 'shiftSlide') return
+      if (key === 'pullOff') return
+      dispatch({ type: 'APPLY_MODIFIER', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, modifier: key })
       return
     }
     dispatch({ type: 'TOGGLE_MODIFIER', modifier: key })
@@ -150,13 +182,32 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
           <ToolBtn
             key={mod.key}
             title={mod.title}
-            activeEffect={!!activeModifiers[mod.key]}
-            onClick={() => dispatch({ type: 'TOGGLE_MODIFIER', modifier: mod.key })}
+            activeEffect={isOnNote ? !!currentNote.modifiers[mod.key] : !!activeModifiers[mod.key]}
+            onClick={() => {
+              if (isOnNote) {
+                dispatch({ type: 'APPLY_MODIFIER', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, modifier: mod.key })
+              } else {
+                dispatch({ type: 'TOGGLE_MODIFIER', modifier: mod.key })
+              }
+            }}
           >
             {mod.label}
           </ToolBtn>
         ))}
       </div>
+
+      {/* Note info strip — shows applied effects on highlighted note */}
+      {isOnNote && Object.keys(currentNote.modifiers).length > 0 && (
+        <div className="tab-toolbar-group" data-group="note-info">
+          <span className="tab-tool-label">Applied</span>
+          <span className="tab-note-effects-strip">
+            {(Object.keys(currentNote.modifiers) as (keyof typeof currentNote.modifiers)[])
+              .filter((k) => currentNote.modifiers[k])
+              .map((k) => MODIFIER_LABELS[k] ?? k)
+              .join(' · ')}
+          </span>
+        </div>
+      )}
 
       {/* Connections group */}
       <div className="tab-toolbar-group" data-group="techniques">
@@ -166,11 +217,16 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
         {CONNECTIONS.map((c) => {
           const isConnectionKey = (CONNECTION_KEYS as NoteModifierKey[]).includes(c.key)
           const multi = noteSelection.length >= 2 && isConnectionKey
+          const activeEffectVal = multi
+            ? false
+            : isOnNote
+              ? !!currentNote.modifiers[c.key]
+              : !!activeModifiers[c.key]
           return (
             <ToolBtn
               key={c.key}
               title={multi ? `Apply ${c.title} between selected notes` : c.title}
-              activeEffect={!multi && !!activeModifiers[c.key]}
+              activeEffect={activeEffectVal}
               onClick={() => onConnectionClick(c.key)}
             >
               {c.label}

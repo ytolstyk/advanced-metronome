@@ -505,8 +505,13 @@ export function tabEditorReducer(
               if (si !== action.stringIndex) return n
               const cur = n.modifiers[action.modifier]
               const mods = { ...n.modifiers }
-              if (cur) delete mods[action.modifier]
-              else mods[action.modifier] = true
+              if (cur) {
+                delete mods[action.modifier]
+              } else {
+                mods[action.modifier] = true
+                if (action.modifier === 'hammerOn') delete mods.pullOff
+                if (action.modifier === 'pullOff') delete mods.hammerOn
+              }
               return { ...n, modifiers: mods }
             })
             return { ...b, notes }
@@ -636,16 +641,38 @@ export function tabEditorReducer(
         if (a.measureIndex !== b.measureIndex) return a.measureIndex - b.measureIndex
         return a.beatIndex - b.beatIndex
       })
-      const toMark = new Set(
-        ordered.slice(0, -1).map((n) => `${n.measureIndex}:${n.beatIndex}:${n.stringIndex}`),
-      )
+
+      const toMark = new Set<string>()
+      const isHO = action.modifier === 'hammerOn'
+      const isPO = action.modifier === 'pullOff'
+
+      for (let i = 0; i < ordered.length - 1; i++) {
+        const curr = ordered[i]!
+        const next = ordered[i + 1]!
+        const key = `${curr.measureIndex}:${curr.beatIndex}:${curr.stringIndex}`
+
+        if (isHO || isPO) {
+          if (curr.stringIndex !== next.stringIndex) continue
+          const currFret = s.track.measures[curr.measureIndex]?.beats[curr.beatIndex]?.notes[curr.stringIndex]?.fret ?? -1
+          const nextFret = s.track.measures[next.measureIndex]?.beats[next.beatIndex]?.notes[next.stringIndex]?.fret ?? -1
+          if (currFret < 0 || nextFret < 0) continue
+          if (isHO && nextFret > currFret) toMark.add(key)
+          if (isPO && nextFret < currFret) toMark.add(key)
+        } else {
+          toMark.add(key)
+        }
+      }
+
+      const conflictKey = isHO ? 'pullOff' : isPO ? 'hammerOn' : null
       const measures = s.track.measures.map((m, mi) => ({
         ...m,
         beats: m.beats.map((b, bi) => ({
           ...b,
           notes: b.notes.map((n, si) => {
             if (!toMark.has(`${mi}:${bi}:${si}`)) return n
-            return { ...n, modifiers: { ...n.modifiers, [action.modifier]: true } }
+            const mods = { ...n.modifiers, [action.modifier]: true as const }
+            if (conflictKey) delete mods[conflictKey]
+            return { ...n, modifiers: mods }
           }),
         })),
       }))

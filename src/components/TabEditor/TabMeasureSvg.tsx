@@ -23,6 +23,7 @@ interface TabMeasureSvgProps {
   cursor: TabCursor
   selection: TabSelection | null
   noteSelection: TabCursor[]
+  isPlaying: boolean
   playheadMeasure: number
   playheadBeat: number
   showTimeSig?: boolean
@@ -67,6 +68,7 @@ export function TabMeasureSvg({
   cursor,
   selection,
   noteSelection,
+  isPlaying,
   playheadMeasure,
   playheadBeat,
   showTimeSig = false,
@@ -188,7 +190,7 @@ export function TabMeasureSvg({
 
         const isCursorCol = isCursorOnThisMeasure && cursor.beatIndex === bi
         const isSelected = isInSelection(selection, measureIndex, bi)
-        const isPlayhead = playheadMeasure === measureIndex && playheadBeat === bi
+        const isPlayhead = isPlaying && playheadMeasure === measureIndex && playheadBeat === bi
 
         let overlayFill = 'none'
         if (isPlayhead) overlayFill = 'rgba(30,100,50,0.3)'
