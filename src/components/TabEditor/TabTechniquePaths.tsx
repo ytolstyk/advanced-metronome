@@ -39,12 +39,12 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
         elements.push(
           <g key={`h-${key}`}>
             <path
-              d={`M ${cx},${sy - 4} Q ${mx},${sy - 16} ${dx},${sy - 4}`}
+              d={`M ${cx},${sy - 10} Q ${mx},${sy - 24} ${dx},${sy - 10}`}
               stroke="#88ffaa"
               strokeWidth={1.5}
               fill="none"
             />
-            <text x={mx} y={sy - 18} fontSize={9} textAnchor="middle" fill="#88ffaa">
+            <text x={mx} y={sy - 26} fontSize={9} textAnchor="middle" fill="#88ffaa">
               h
             </text>
           </g>,
@@ -59,12 +59,12 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
         elements.push(
           <g key={`p-${key}`}>
             <path
-              d={`M ${cx},${sy - 4} Q ${mx},${sy - 16} ${dx},${sy - 4}`}
+              d={`M ${cx},${sy - 10} Q ${mx},${sy - 24} ${dx},${sy - 10}`}
               stroke="#88ffaa"
               strokeWidth={1.5}
               fill="none"
             />
-            <text x={mx} y={sy - 18} fontSize={9} textAnchor="middle" fill="#88ffaa">
+            <text x={mx} y={sy - 26} fontSize={9} textAnchor="middle" fill="#88ffaa">
               p
             </text>
           </g>,
