@@ -66,6 +66,7 @@ const CONNECTIONS: { label: string; key: NoteModifierKey; title: string }[] = [
   { label: '⌒', key: 'bend', title: 'Bend' },
   { label: '~', key: 'vibrato', title: 'Vibrato' },
   { label: 'tr', key: 'trill', title: 'Trill' },
+  { label: 'T', key: 'tapping', title: 'Tapping' },
   { label: '⬇', key: 'pickDown', title: 'Pickstroke down' },
   { label: '⬆', key: 'pickUp', title: 'Pickstroke up' },
 ]
@@ -136,13 +137,17 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
   }
 
   function onConnectionClick(key: NoteModifierKey) {
-    if (noteSelection.length >= 2 && (CONNECTION_KEYS as NoteModifierKey[]).includes(key)) {
-      dispatch({ type: 'APPLY_CONNECTION_TO_SELECTION', modifier: key as ConnectionModifierKey })
+    if (noteSelection.length >= 2) {
+      if ((CONNECTION_KEYS as NoteModifierKey[]).includes(key)) {
+        dispatch({ type: 'APPLY_CONNECTION_TO_SELECTION', modifier: key as ConnectionModifierKey })
+      } else {
+        dispatch({ type: 'APPLY_MODIFIER_TO_SELECTION', modifier: key })
+      }
       return
     }
     if (isOnNote) {
       if (key === 'legatoSlide' || key === 'shiftSlide') return
-      if (key === 'pullOff') return
+      if (key === 'pullOff' || key === 'hammerOn') return
       dispatch({ type: 'APPLY_MODIFIER', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, modifier: key })
       return
     }

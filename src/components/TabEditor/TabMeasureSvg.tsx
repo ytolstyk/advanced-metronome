@@ -5,8 +5,6 @@ import { TechniqueOverlay } from './TabTechniquePaths'
 import {
   TOP_MARGIN,
   BARLINE_W,
-  DURATION_MARK_H,
-  TECHNIQUE_ZONE_H,
   MEASURE_NUMBER_H,
   TIME_SIG_W,
   stringY,
@@ -34,18 +32,6 @@ interface TabMeasureSvgProps {
   onMeasureContextMenu?: (measureIndex: number, e: React.MouseEvent) => void
   onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
-}
-
-function durationSymbol(d: DurationValue): string {
-  switch (d) {
-    case 'whole': return '𝅝'
-    case 'half': return '𝅗'
-    case 'quarter': return '♩'
-    case 'eighth': return '♪'
-    case 'sixteenth': return '♬'
-    case 'thirtysecond': return '⋮'
-    default: return '⋱'
-  }
 }
 
 function restSymbol(d: DurationValue): string {
@@ -118,6 +104,29 @@ export function TabMeasureSvg({
       >
         {measureIndex + 1}
       </text>
+
+      {/* Measure fill warning — shown when cursor is not on this measure */}
+      {!isCursorOnThisMeasure && measure.beats.length > 0 && (() => {
+        const delta = used - capacity
+        if (Math.abs(delta) < 1e-9) return null
+        const sign = delta > 0 ? '+' : '−'
+        const abs = Math.abs(delta)
+        const label = `⚠ ${sign}${abs % 1 === 0 ? abs : abs.toFixed(2)}b`
+        const fill = delta > 0 ? '#ff5555' : '#ffaa44'
+        return (
+          <text
+            x={mw - BARLINE_W - 2}
+            y={MEASURE_NUMBER_H / 2}
+            fontSize={9}
+            textAnchor="end"
+            dominantBaseline="middle"
+            fill={fill}
+            style={{ pointerEvents: 'none' }}
+          >
+            {label}
+          </text>
+        )
+      })()}
 
       {/* Stacked time signature */}
       {showTimeSig && timeSig && (
@@ -197,7 +206,6 @@ export function TabMeasureSvg({
         else if (isCursorCol) overlayFill = 'rgba(42,90,140,0.25)'
         else if (isSelected) overlayFill = 'rgba(90,60,20,0.35)'
 
-        const dotSuffix = beat.dot.dotted ? '·' : beat.dot.doubleDotted ? '··' : beat.dot.triplet ? '³' : ''
         const isTied = beat.tiedFrom === true
 
         return (
@@ -216,18 +224,6 @@ export function TabMeasureSvg({
                 strokeLinecap="round"
               />
             )}
-
-            {/* Duration mark */}
-            <text
-              x={beatCX}
-              y={MEASURE_NUMBER_H + TECHNIQUE_ZONE_H + DURATION_MARK_H / 2}
-              fontSize={11}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fill={isTied ? '#555' : '#aaa'}
-            >
-              {durationSymbol(beat.duration)}{dotSuffix}
-            </text>
 
             {/* Rest glyph — only when every string is empty */}
             {beat.notes.every((n) => n.fret < 0) && (
@@ -260,9 +256,10 @@ export function TabMeasureSvg({
               const note = beat.notes[si]
               const sy = stringY(si, stringCount)
               const isCursorNote = isCursorCol && cursor.stringIndex === si
-              const isNoteSelected = noteSelection.some(
-                (s) => s.measureIndex === measureIndex && s.beatIndex === bi && s.stringIndex === si,
-              )
+              const isNoteSelected =
+                noteSelection.some(
+                  (s) => s.measureIndex === measureIndex && s.beatIndex === bi && s.stringIndex === si,
+                ) || (isCursorNote && !!note && note.fret >= 0)
 
               let fretLabel = ''
               let fretFill = '#e8e8e8'
@@ -386,18 +383,6 @@ export function TabMeasureSvg({
             {overlayFill !== 'none' && (
               <rect x={vX} y={MEASURE_NUMBER_H} width={vW} height={svgH - MEASURE_NUMBER_H} fill={overlayFill} />
             )}
-
-            {/* Duration symbol showing active duration */}
-            <text
-              x={vCX}
-              y={MEASURE_NUMBER_H + TECHNIQUE_ZONE_H + DURATION_MARK_H / 2}
-              fontSize={11}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fill="#555"
-            >
-              {durationSymbol(activeDuration)}
-            </text>
 
             {/* Rest glyph */}
             <text

@@ -238,6 +238,7 @@ export function TabEditorPage() {
 
   function onBeatMouseDown(mi: number, bi: number, si: number, shiftKey: boolean) {
     if (shiftKey) {
+      dispatch({ type: 'ENSURE_NOTE_IN_SELECTION', cursor: state.cursor })
       dispatch({ type: 'TOGGLE_NOTE_IN_SELECTION', cursor: { measureIndex: mi, beatIndex: bi, stringIndex: si } })
       dispatch({ type: 'SET_CURSOR', cursor: { measureIndex: mi, beatIndex: bi, stringIndex: si } })
       canvasRef.current?.focus()

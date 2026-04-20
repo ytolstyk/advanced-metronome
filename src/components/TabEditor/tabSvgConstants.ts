@@ -4,10 +4,15 @@ import { BEAT_WIDTH } from '../../tabEditorState'
 export const STRING_SPACING = 24
 export const STRING_LABEL_W = 28
 export const MEASURE_NUMBER_H = 16
-export const TECHNIQUE_ZONE_H = 18
-export const DURATION_MARK_H = 12
-// Top zone order (from y=0 downward): MEASURE_NUMBER_H | TECHNIQUE_ZONE_H | DURATION_MARK_H | strings…
+export const TECHNIQUE_ZONE_H = 42
+export const DURATION_MARK_H = 0
+// Top zone order (from y=0 downward): MEASURE_NUMBER_H | TECHNIQUE_ZONE_H | strings…
 export const TOP_MARGIN = MEASURE_NUMBER_H + TECHNIQUE_ZONE_H + DURATION_MARK_H
+
+// Y positions for specific technique rows within TECHNIQUE_ZONE_H
+export const TAPPING_ZONE_Y = MEASURE_NUMBER_H + 20    // row 1: tapping "T"
+export const VIBRATO_ZONE_Y = MEASURE_NUMBER_H + 20   // row 2: vibrato sine wave
+export const PALM_MUTE_ZONE_Y = MEASURE_NUMBER_H + 20 // row 3: palm mute bracket
 export const BOTTOM_PADDING = 8
 export const BARLINE_W = 2
 export const TIME_SIG_W = 40 // horizontal space reserved for a stacked time signature

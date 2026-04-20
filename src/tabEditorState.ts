@@ -352,8 +352,10 @@ export type TabEditorAction =
   | { type: 'SET_ACTIVE_DOT'; dot: DotModifier }
   | { type: 'TOGGLE_MODIFIER'; modifier: NoteModifierKey }
   | { type: 'TOGGLE_NOTE_IN_SELECTION'; cursor: TabCursor }
+  | { type: 'ENSURE_NOTE_IN_SELECTION'; cursor: TabCursor }
   | { type: 'CLEAR_NOTE_SELECTION' }
   | { type: 'APPLY_CONNECTION_TO_SELECTION'; modifier: ConnectionModifierKey }
+  | { type: 'APPLY_MODIFIER_TO_SELECTION'; modifier: NoteModifierKey }
   | {
       type: 'APPLY_MODIFIER'
       measureIndex: number
@@ -631,8 +633,36 @@ export function tabEditorReducer(
       return { ...state, noteSelection }
     }
 
+    case 'ENSURE_NOTE_IN_SELECTION': {
+      const { measureIndex: mi, beatIndex: bi, stringIndex: si } = action.cursor
+      const exists = state.noteSelection.some(
+        (s) => s.measureIndex === mi && s.beatIndex === bi && s.stringIndex === si,
+      )
+      if (exists) return state
+      return { ...state, noteSelection: [...state.noteSelection, { ...action.cursor }] }
+    }
+
     case 'CLEAR_NOTE_SELECTION':
       return { ...state, noteSelection: [] }
+
+    case 'APPLY_MODIFIER_TO_SELECTION': {
+      if (state.noteSelection.length < 1) return state
+      const s = pushUndo(state)
+      const selSet = new Set(
+        state.noteSelection.map((c) => `${c.measureIndex}:${c.beatIndex}:${c.stringIndex}`),
+      )
+      const measures = s.track.measures.map((m, mi) => ({
+        ...m,
+        beats: m.beats.map((b, bi) => ({
+          ...b,
+          notes: b.notes.map((n, si) => {
+            if (!selSet.has(`${mi}:${bi}:${si}`)) return n
+            return { ...n, modifiers: { ...n.modifiers, [action.modifier]: true as const } }
+          }),
+        })),
+      }))
+      return { ...s, track: { ...s.track, measures } }
+    }
 
     case 'APPLY_CONNECTION_TO_SELECTION': {
       if (state.noteSelection.length < 2) return state

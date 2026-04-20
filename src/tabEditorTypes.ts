@@ -32,6 +32,7 @@ export interface NoteModifiers {
   bend?: true
   vibrato?: true
   trill?: true
+  tapping?: true
   pickDown?: true
   pickUp?: true
 }

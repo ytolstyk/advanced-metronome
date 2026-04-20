@@ -1,5 +1,12 @@
 import type { Measure, TabTrack } from '../../tabEditorTypes'
-import { type BeatPosition, BARLINE_W, stringY, TECHNIQUE_ZONE_H } from './tabSvgConstants'
+import {
+  type BeatPosition,
+  BARLINE_W,
+  TAPPING_ZONE_Y,
+  VIBRATO_ZONE_Y,
+  PALM_MUTE_ZONE_Y,
+  stringY,
+} from './tabSvgConstants'
 
 interface TechniqueOverlayProps {
   measure: Measure
@@ -20,54 +27,81 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
     const pos = beatPositions[bi]
     if (!pos) continue
 
-    // Palm mute runs — collected per string, rendered below last string
-    // (handled separately below)
+    const { cx } = pos
+
+    // Tapping: render one "T" per beat column if any string has tapping
+    const hasTapping = beat.notes.some((n) => n.fret >= 0 && n.modifiers.tapping)
+    if (hasTapping) {
+      elements.push(
+        <text
+          key={`tap-${bi}`}
+          x={cx}
+          y={TAPPING_ZONE_Y}
+          fontSize={10}
+          fontWeight="bold"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#ffdd88"
+        >
+          T
+        </text>,
+      )
+    }
+
+    // Vibrato: render one sine-wave per beat column if any string has vibrato
+    const hasVibrato = beat.notes.some((n) => n.fret >= 0 && n.modifiers.vibrato)
+    if (hasVibrato) {
+      const w = pos.w
+      const step = w / 4
+      const x0 = cx - w / 2
+      const vy = VIBRATO_ZONE_Y
+      elements.push(
+        <path
+          key={`vib-${bi}`}
+          d={`M ${x0},${vy} Q ${x0 + step / 2},${vy - 5} ${x0 + step},${vy} Q ${x0 + step * 1.5},${vy + 5} ${x0 + step * 2},${vy} Q ${x0 + step * 2.5},${vy - 5} ${x0 + step * 3},${vy} Q ${x0 + step * 3.5},${vy + 5} ${x0 + step * 4},${vy}`}
+          stroke="#ddaaff"
+          strokeWidth={1.5}
+          fill="none"
+        />,
+      )
+    }
 
     for (let si = 0; si < beat.notes.length; si++) {
       const note = beat.notes[si]
       if (!note || note.fret < 0) continue
 
       const sy = stringY(si, stringCount)
-      const cx = pos.cx
       const key = `${bi}-${si}`
 
-      // Hammer-on arc
+      // Hammer-on arc (no label)
       if (note.modifiers.hammerOn) {
         const nextPos = beatPositions[bi + 1]
         const dx = nextPos ? nextPos.cx : measureRightEdge + 4
         const mx = (cx + dx) / 2
         elements.push(
-          <g key={`h-${key}`}>
-            <path
-              d={`M ${cx},${sy - 10} Q ${mx},${sy - 24} ${dx},${sy - 10}`}
-              stroke="#88ffaa"
-              strokeWidth={1.5}
-              fill="none"
-            />
-            <text x={mx} y={sy - 26} fontSize={9} textAnchor="middle" fill="#88ffaa">
-              h
-            </text>
-          </g>,
+          <path
+            key={`h-${key}`}
+            d={`M ${cx},${sy - 10} Q ${mx},${sy - 24} ${dx},${sy - 10}`}
+            stroke="#88ffaa"
+            strokeWidth={1.5}
+            fill="none"
+          />,
         )
       }
 
-      // Pull-off arc
+      // Pull-off arc (no label)
       if (note.modifiers.pullOff) {
         const nextPos = beatPositions[bi + 1]
         const dx = nextPos ? nextPos.cx : measureRightEdge + 4
         const mx = (cx + dx) / 2
         elements.push(
-          <g key={`p-${key}`}>
-            <path
-              d={`M ${cx},${sy - 10} Q ${mx},${sy - 24} ${dx},${sy - 10}`}
-              stroke="#88ffaa"
-              strokeWidth={1.5}
-              fill="none"
-            />
-            <text x={mx} y={sy - 26} fontSize={9} textAnchor="middle" fill="#88ffaa">
-              p
-            </text>
-          </g>,
+          <path
+            key={`p-${key}`}
+            d={`M ${cx},${sy - 10} Q ${mx},${sy - 24} ${dx},${sy - 10}`}
+            stroke="#88ffaa"
+            strokeWidth={1.5}
+            fill="none"
+          />,
         )
       }
 
@@ -188,23 +222,6 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
         )
       }
 
-      // Vibrato — sine wave above the note
-      if (note.modifiers.vibrato) {
-        const vibratoY = sy - 16
-        const w = pos.w
-        const step = w / 4
-        const x0 = cx - w / 2
-        elements.push(
-          <path
-            key={`vib-${key}`}
-            d={`M ${x0},${vibratoY} Q ${x0 + step / 2},${vibratoY - 5} ${x0 + step},${vibratoY} Q ${x0 + step * 1.5},${vibratoY + 5} ${x0 + step * 2},${vibratoY} Q ${x0 + step * 2.5},${vibratoY - 5} ${x0 + step * 3},${vibratoY} Q ${x0 + step * 3.5},${vibratoY + 5} ${x0 + step * 4},${vibratoY}`}
-            stroke="#ddaaff"
-            strokeWidth={1.5}
-            fill="none"
-          />,
-        )
-      }
-
       // Trill
       if (note.modifiers.trill) {
         elements.push(
@@ -220,9 +237,10 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
           <text
             key={`pd-${key}`}
             x={cx}
-            y={TECHNIQUE_ZONE_H / 2}
+            y={TAPPING_ZONE_Y}
             fontSize={9}
             textAnchor="middle"
+            dominantBaseline="middle"
             fill="#cccccc"
           >
             ⬇
@@ -234,9 +252,10 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
           <text
             key={`pu-${key}`}
             x={cx}
-            y={TECHNIQUE_ZONE_H / 2}
+            y={TAPPING_ZONE_Y}
             fontSize={9}
             textAnchor="middle"
+            dominantBaseline="middle"
             fill="#cccccc"
           >
             ⬆
@@ -246,8 +265,8 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
     }
   }
 
-  // Palm mute: collect consecutive beats with palmMute on any string, render dashed line
-  renderPalmMuteRuns(measure, beatPositions, stringCount, elements)
+  // Palm mute: collect consecutive beats with palmMute on any string, render dashed line at top
+  renderPalmMuteRuns(measure, beatPositions, elements)
 
   return <g>{elements}</g>
 }
@@ -255,11 +274,9 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
 function renderPalmMuteRuns(
   measure: Measure,
   beatPositions: BeatPosition[],
-  stringCount: number,
   elements: React.ReactNode[],
 ) {
-  // Find the y position below the last (lowest) string
-  const bottomY = stringY(0, stringCount) + 10
+  const topY = PALM_MUTE_ZONE_Y
 
   let runStart: number | null = null
 
@@ -274,14 +291,14 @@ function renderPalmMuteRuns(
       <g key={`pm-${runStart}-${endBi}`}>
         <line
           x1={x1}
-          y1={bottomY}
+          y1={topY}
           x2={x2}
-          y2={bottomY}
+          y2={topY}
           stroke="#ffaa44"
           strokeWidth={1.5}
           strokeDasharray="4 2"
         />
-        <text x={x1 + 2} y={bottomY + 10} fontSize={8} fill="#ffaa44">
+        <text x={x1 + 2} y={topY - 2} fontSize={8} fill="#ffaa44" dominantBaseline="auto">
           P.M.
         </text>
       </g>,
