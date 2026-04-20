@@ -93,11 +93,11 @@ export function TabMeasureSvg({
       {/* Measure number — right-click for context menu */}
       <text
         x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + 2}
-        y={MEASURE_NUMBER_H / 2}
+        y={topStringY - 4}
         fontSize={12}
         fontWeight={600}
         fill="#a0a0b8"
-        dominantBaseline="middle"
+        dominantBaseline="auto"
         style={{ cursor: onMeasureContextMenu ? 'pointer' : 'default' }}
         onContextMenu={onMeasureContextMenu ? (e) => { e.preventDefault(); onMeasureContextMenu(measureIndex, e) } : undefined}
         onClick={onMeasureContextMenu ? (e) => { e.preventDefault(); onMeasureContextMenu(measureIndex, e) } : undefined}
@@ -116,10 +116,10 @@ export function TabMeasureSvg({
         return (
           <text
             x={mw - BARLINE_W - 2}
-            y={MEASURE_NUMBER_H / 2}
+            y={topStringY - 4}
             fontSize={9}
             textAnchor="end"
-            dominantBaseline="middle"
+            dominantBaseline="auto"
             fill={fill}
             style={{ pointerEvents: 'none' }}
           >
@@ -209,10 +209,22 @@ export function TabMeasureSvg({
 
         const isTied = beat.tiedFrom === true
 
+        const colW = beat.notes.reduce((max, n) => {
+          let label = ''
+          if (n && n.fret >= 0) {
+            if (isTied) label = `(${n.fret})`
+            else if (n.modifiers.dead) label = 'X'
+            else if (n.modifiers.naturalHarmonic) label = `<${n.fret}>`
+            else if (n.modifiers.ghost) label = `(${n.fret})`
+            else label = String(n.fret)
+          }
+          return Math.max(max, Math.max(label.length * 8 + 4, 18))
+        }, 18)
+
         return (
           <g key={beat.id}>
             {overlayFill !== 'none' && (
-              <rect x={beatX} y={MEASURE_NUMBER_H} width={beatW} height={svgH - MEASURE_NUMBER_H} fill={overlayFill} />
+              <rect x={beatCX - colW / 2} y={MEASURE_NUMBER_H} width={colW} height={svgH - MEASURE_NUMBER_H} fill={overlayFill} />
             )}
 
             {/* Tie arc entering from left barline for tied-from beats */}
@@ -292,9 +304,9 @@ export function TabMeasureSvg({
                 <g key={si}>
                   {isCursorNote && (
                     <rect
-                      x={beatCX - labelW / 2 - 1}
+                      x={beatCX - labelW / 2}
                       y={sy - 11}
-                      width={labelW + 2}
+                      width={labelW}
                       height={22}
                       fill="rgba(99,102,241,0.45)"
                       rx={2}
@@ -382,7 +394,7 @@ export function TabMeasureSvg({
         return (
           <g>
             {overlayFill !== 'none' && (
-              <rect x={vX} y={MEASURE_NUMBER_H} width={vW} height={svgH - MEASURE_NUMBER_H} fill={overlayFill} />
+              <rect x={vCX - 9} y={MEASURE_NUMBER_H} width={18} height={svgH - MEASURE_NUMBER_H} fill={overlayFill} />
             )}
 
             {/* Rest glyph */}
