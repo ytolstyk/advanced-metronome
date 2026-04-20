@@ -1,7 +1,7 @@
 import type { Measure } from '../../tabEditorTypes'
 import { BEAT_WIDTH } from '../../tabEditorState'
 
-export const STRING_SPACING = 24
+export const STRING_SPACING = 20
 export const STRING_LABEL_W = 28
 export const MEASURE_NUMBER_H = 16
 export const TECHNIQUE_ZONE_H = 42
