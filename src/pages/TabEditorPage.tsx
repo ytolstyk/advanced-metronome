@@ -166,15 +166,40 @@ export function TabEditorPage() {
           dispatch({ type: 'MOVE_CURSOR', direction: 'right' })
           return
         case 'Backspace':
-        case 'Delete':
+        case 'Delete': {
           e.preventDefault()
-          dispatch({
-            type: 'DELETE_NOTE',
-            measureIndex: cursor.measureIndex,
-            beatIndex: cursor.beatIndex,
-            stringIndex: cursor.stringIndex,
+          const beat = state.track.measures[cursor.measureIndex]?.beats[cursor.beatIndex]
+          if (!beat) return
+          const currentNote = beat.notes[cursor.stringIndex]
+          if (currentNote && currentNote.fret >= 0) {
+            dispatch({
+              type: 'DELETE_NOTE',
+              measureIndex: cursor.measureIndex,
+              beatIndex: cursor.beatIndex,
+              stringIndex: cursor.stringIndex,
+            })
+            return
+          }
+          // Current string is empty — delete the beat only if all notes are empty
+          // or all non-empty notes are highlighted
+          const hasUnhighlightedNote = beat.notes.some((n, si) => {
+            if (n.fret < 0) return false
+            return !state.noteSelection.some(
+              (sel) =>
+                sel.measureIndex === cursor.measureIndex &&
+                sel.beatIndex === cursor.beatIndex &&
+                sel.stringIndex === si,
+            )
           })
+          if (!hasUnhighlightedNote) {
+            dispatch({
+              type: 'DELETE_BEAT',
+              measureIndex: cursor.measureIndex,
+              beatIndex: cursor.beatIndex,
+            })
+          }
           return
+        }
       }
 
       if (e.metaKey || e.ctrlKey) {
