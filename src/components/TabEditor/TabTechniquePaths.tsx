@@ -51,9 +51,13 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
     // Vibrato: render one sine-wave per beat column if any string has vibrato
     const hasVibrato = beat.notes.some((n) => n.fret >= 0 && n.modifiers.vibrato)
     if (hasVibrato) {
-      const w = pos.w
-      const step = w / 4
-      const x0 = cx - w / 2
+      const PAD = 4
+      const prevHasVibrato = bi > 0 && measure.beats[bi - 1].notes.some((n) => n.fret >= 0 && n.modifiers.vibrato)
+      const nextHasVibrato = bi < measure.beats.length - 1 && measure.beats[bi + 1].notes.some((n) => n.fret >= 0 && n.modifiers.vibrato)
+      const x0 = cx - pos.w / 2 + (prevHasVibrato ? 0 : PAD)
+      const x1 = cx + pos.w / 2 - (nextHasVibrato ? 0 : PAD)
+      const totalW = x1 - x0
+      const step = totalW / 4
       const vy = VIBRATO_ZONE_Y
       elements.push(
         <path
@@ -278,6 +282,7 @@ function renderPalmMuteRuns(
 ) {
   const topY = PALM_MUTE_ZONE_Y
 
+  const PAD = 4
   let runStart: number | null = null
 
   function flushRun(endBi: number) {
@@ -285,8 +290,8 @@ function renderPalmMuteRuns(
     const startPos = beatPositions[runStart]
     const endPos = beatPositions[endBi]
     if (!startPos || !endPos) { runStart = null; return }
-    const x1 = startPos.x
-    const x2 = endPos.x + endPos.w
+    const x1 = startPos.x + PAD
+    const x2 = endPos.x + endPos.w - PAD
     elements.push(
       <g key={`pm-${runStart}-${endBi}`}>
         <line
