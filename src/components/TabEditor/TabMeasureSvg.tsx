@@ -92,7 +92,7 @@ export function TabMeasureSvg({
     <g transform={`translate(${xOffset}, 0)`}>
       {/* Measure number — right-click for context menu */}
       <text
-        x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + 2}
+        x={BARLINE_W + 2}
         y={topStringY - 4}
         fontSize={12}
         fontWeight={600}
