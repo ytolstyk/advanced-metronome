@@ -128,7 +128,21 @@ export function TabMeasureSvg({
         )
       })()}
 
-      {/* Stacked time signature */}
+
+      {/* String lines */}
+      {Array.from({ length: stringCount }, (_, si) => (
+        <line
+          key={si}
+          x1={0}
+          y1={stringY(si, stringCount)}
+          x2={mw}
+          y2={stringY(si, stringCount)}
+          stroke="#555"
+          strokeWidth={1}
+        />
+      ))}
+
+      {/* Stacked time signature — rendered after strings so it sits on top */}
       {showTimeSig && timeSig && (
         <g
           style={{ cursor: onTimeSigClick ? 'pointer' : 'default' }}
@@ -143,10 +157,10 @@ export function TabMeasureSvg({
           />
           <text
             x={BARLINE_W + TIME_SIG_W / 2}
-            y={strAreaMid - 2}
-            fontSize={26}
+            y={strAreaMid - 8}
+            fontSize={30}
             fontWeight="bold"
-            fontFamily="serif"
+            fontFamily="sans-serif"
             textAnchor="middle"
             dominantBaseline="auto"
             fill="#ddd"
@@ -155,10 +169,10 @@ export function TabMeasureSvg({
           </text>
           <text
             x={BARLINE_W + TIME_SIG_W / 2}
-            y={strAreaMid + 2}
-            fontSize={26}
+            y={strAreaMid + 8}
+            fontSize={30}
             fontWeight="bold"
-            fontFamily="serif"
+            fontFamily="sans-serif"
             textAnchor="middle"
             dominantBaseline="hanging"
             fill="#ddd"
@@ -167,19 +181,6 @@ export function TabMeasureSvg({
           </text>
         </g>
       )}
-
-      {/* String lines */}
-      {Array.from({ length: stringCount }, (_, si) => (
-        <line
-          key={si}
-          x1={0}
-          y1={stringY(si, stringCount)}
-          x2={mw}
-          y2={stringY(si, stringCount)}
-          stroke="#555"
-          strokeWidth={1}
-        />
-      ))}
 
       {/* Left barline */}
       <line
