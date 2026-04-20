@@ -491,6 +491,10 @@ export function tabEditorReducer(
         delete next[action.modifier]
       } else {
         next[action.modifier] = true
+        if (action.modifier === 'slideInBelow') delete next.slideInAbove
+        if (action.modifier === 'slideInAbove') delete next.slideInBelow
+        if (action.modifier === 'slideOutDown') delete next.slideOutUp
+        if (action.modifier === 'slideOutUp') delete next.slideOutDown
       }
       return { ...state, activeModifiers: next }
     }
@@ -513,6 +517,10 @@ export function tabEditorReducer(
                 mods[action.modifier] = true
                 if (action.modifier === 'hammerOn') delete mods.pullOff
                 if (action.modifier === 'pullOff') delete mods.hammerOn
+                if (action.modifier === 'slideInBelow') delete mods.slideInAbove
+                if (action.modifier === 'slideInAbove') delete mods.slideInBelow
+                if (action.modifier === 'slideOutDown') delete mods.slideOutUp
+                if (action.modifier === 'slideOutUp') delete mods.slideOutDown
               }
               return { ...n, modifiers: mods }
             })
