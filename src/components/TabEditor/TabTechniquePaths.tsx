@@ -5,6 +5,7 @@ import {
   TAPPING_ZONE_Y,
   VIBRATO_ZONE_Y,
   PALM_MUTE_ZONE_Y,
+  PALM_MUTE_ELEVATED_Y,
   stringY,
 } from './tabSvgConstants'
 
@@ -275,13 +276,19 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
   return <g>{elements}</g>
 }
 
+function runHasOverlap(measure: Measure, startBi: number, endBi: number): boolean {
+  for (let bi = startBi; bi <= endBi; bi++) {
+    const beat = measure.beats[bi]
+    if (beat.notes.some((n) => n.fret >= 0 && (n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.pickDown || n.modifiers.pickUp))) return true
+  }
+  return false
+}
+
 function renderPalmMuteRuns(
   measure: Measure,
   beatPositions: BeatPosition[],
   elements: React.ReactNode[],
 ) {
-  const topY = PALM_MUTE_ZONE_Y
-
   const PAD = 4
   let runStart: number | null = null
 
@@ -290,6 +297,7 @@ function renderPalmMuteRuns(
     const startPos = beatPositions[runStart]
     const endPos = beatPositions[endBi]
     if (!startPos || !endPos) { runStart = null; return }
+    const topY = runHasOverlap(measure, runStart, endBi) ? PALM_MUTE_ELEVATED_Y : PALM_MUTE_ZONE_Y
     const x1 = startPos.x + PAD
     const x2 = endPos.x + endPos.w - PAD
     elements.push(

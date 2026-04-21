@@ -189,6 +189,10 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
             title={mod.title}
             activeEffect={isOnNote ? !!currentNote.modifiers[mod.key] : !!activeModifiers[mod.key]}
             onClick={() => {
+              if (noteSelection.length >= 2) {
+                dispatch({ type: 'APPLY_MODIFIER_TO_SELECTION', modifier: mod.key })
+                return
+              }
               if (isOnNote) {
                 dispatch({ type: 'APPLY_MODIFIER', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, modifier: mod.key })
               } else {
