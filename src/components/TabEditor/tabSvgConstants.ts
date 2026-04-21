@@ -1,5 +1,11 @@
-import type { Measure } from '../../tabEditorTypes'
+import type { Beat, Measure } from '../../tabEditorTypes'
 import { BEAT_WIDTH } from '../../tabEditorState'
+
+export const BEND_EXTRA_W = 16 // extra width added to beats that contain a bend
+
+export function beatHasBend(beat: Beat): boolean {
+  return beat.notes.some((n) => n.fret >= 0 && n.modifiers.bend)
+}
 
 export const STRING_SPACING = 20
 export const STRING_LABEL_W = 28
@@ -29,7 +35,8 @@ export function stringY(si: number, stringCount: number): number {
 
 // virtualSlots: 0 or 1 — whether to include width for the pending virtual beat slot
 export function measureWidth(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false): number {
-  return BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + (m.beats.length + virtualSlots) * BEAT_WIDTH + BARLINE_W
+  const bendBonus = m.beats.reduce((acc, b) => acc + (beatHasBend(b) ? BEND_EXTRA_W : 0), 0)
+  return BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + (m.beats.length + virtualSlots) * BEAT_WIDTH + bendBonus + BARLINE_W
 }
 
 export interface BeatPosition {
@@ -43,8 +50,10 @@ export function computeBeatPositions(m: Measure, showTimeSig = false, virtualSlo
   let x = BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0)
   const totalSlots = m.beats.length + virtualSlots
   for (let i = 0; i < totalSlots; i++) {
-    positions.push({ x, cx: x + BEAT_WIDTH / 2, w: BEAT_WIDTH })
-    x += BEAT_WIDTH
+    const beat = m.beats[i]
+    const w = BEAT_WIDTH + (beat && beatHasBend(beat) ? BEND_EXTRA_W : 0)
+    positions.push({ x, cx: x + w / 2, w })
+    x += w
   }
   return positions
 }
