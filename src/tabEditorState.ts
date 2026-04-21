@@ -403,6 +403,7 @@ export type TabEditorAction =
   | { type: 'RESOLVE_OVERFLOW_TRIM' }
   | { type: 'RESOLVE_OVERFLOW_BLEED' }
   | { type: 'DISMISS_OVERFLOW' }
+  | { type: 'SET_BEND_AMOUNT'; measureIndex: number; beatIndex: number; stringIndex: number; amount: number }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -1015,6 +1016,25 @@ export function tabEditorReducer(
 
     case 'DISMISS_OVERFLOW':
       return { ...state, pendingOverflow: null }
+
+    case 'SET_BEND_AMOUNT': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== action.beatIndex) return b
+            const notes = b.notes.map((n, si) => {
+              if (si !== action.stringIndex) return n
+              return { ...n, bendAmount: action.amount }
+            })
+            return { ...b, notes }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
 
     default:
       return state

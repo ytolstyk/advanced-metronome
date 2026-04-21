@@ -101,6 +101,8 @@ export function TabSvgCanvas({
 
   const [measureMenu, setMeasureMenu] = useState<{ mi: number; x: number; y: number } | null>(null)
 
+  const [bendEdit, setBendEdit] = useState<{ mi: number; bi: number; si: number } | null>(null)
+
   const [bpmEdit, setBpmEdit] = useState<{ mi: number; val: string } | null>(null)
   const bpmEditRef = useRef<HTMLInputElement>(null)
 
@@ -248,6 +250,7 @@ export function TabSvgCanvas({
                   onMeasureContextMenu={openMeasureMenu}
                   onBeatMouseDown={onBeatMouseDown}
                   onBeatMouseEnter={onBeatMouseEnter}
+                  onBendAmountClick={(mi, bi, si) => setBendEdit({ mi, bi, si })}
                 />
               )
             })}
@@ -412,6 +415,79 @@ export function TabSvgCanvas({
           </div>
         </div>
       )}
+
+      {/* Bend amount picker */}
+      {bendEdit !== null && (() => {
+        const note = track.measures[bendEdit.mi]?.beats[bendEdit.bi]?.notes[bendEdit.si]
+        const current = note?.bendAmount ?? 1
+        const BEND_VALUES = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
+        function fmt(v: number): string {
+          const whole = Math.floor(v)
+          const hasHalf = v % 1 !== 0
+          if (whole === 0) return '½'
+          if (hasHalf) return `${whole}½`
+          return `${whole}`
+        }
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 100,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0,0,0,0.5)',
+            }}
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setBendEdit(null) }}
+          >
+            <div
+              style={{
+                background: '#1a1a1a',
+                border: '1px solid #333',
+                borderRadius: 8,
+                padding: '16px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                minWidth: 200,
+              }}
+            >
+              <span style={{ color: '#ccc', fontSize: '0.85rem', fontWeight: 600 }}>Bend Amount</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {BEND_VALUES.map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => {
+                      dispatch({ type: 'SET_BEND_AMOUNT', measureIndex: bendEdit.mi, beatIndex: bendEdit.bi, stringIndex: bendEdit.si, amount: v })
+                      setBendEdit(null)
+                    }}
+                    style={{
+                      width: 44,
+                      padding: '6px 0',
+                      background: v === current ? '#2a4a2a' : 'transparent',
+                      border: `1px solid ${v === current ? '#4a8a4a' : '#444'}`,
+                      borderRadius: 4,
+                      color: v === current ? '#88ff88' : '#e0e0e0',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {fmt(v)}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setBendEdit(null)}
+                style={{ padding: '6px 12px', background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Timing change edit dialog (from context menu) */}
       {timingChangeEdit !== null && (

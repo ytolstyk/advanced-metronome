@@ -42,6 +42,7 @@ export type NoteModifierKey = keyof NoteModifiers
 export interface TabNote {
   fret: number // 0-24; -1 = no note on this string
   modifiers: NoteModifiers
+  bendAmount?: number // 0.5–5 in 0.5 increments; defaults to 1 when modifiers.bend is set
 }
 
 export interface Beat {

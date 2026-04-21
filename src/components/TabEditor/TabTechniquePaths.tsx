@@ -2,6 +2,7 @@ import type { Measure, TabTrack } from '../../tabEditorTypes'
 import {
   type BeatPosition,
   BARLINE_W,
+  MEASURE_NUMBER_H,
   TAPPING_ZONE_Y,
   VIBRATO_ZONE_Y,
   PALM_MUTE_ZONE_Y,
@@ -9,13 +10,28 @@ import {
   stringY,
 } from './tabSvgConstants'
 
-interface TechniqueOverlayProps {
-  measure: Measure
-  track: TabTrack
-  beatPositions: BeatPosition[]
+// Fixed Y where bend curves peak (in technique zone, above all strings)
+const BEND_TOP_Y = 32
+// Y for technique-zone effects when a bend is present in the same beat
+const BEND_ELEVATED_Y = MEASURE_NUMBER_H + 4
+
+function formatBendAmount(amount: number): string {
+  const whole = Math.floor(amount)
+  const hasHalf = amount % 1 !== 0
+  if (whole === 0) return '½'
+  if (hasHalf) return `${whole}½`
+  return `${whole}`
 }
 
-export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOverlayProps) {
+interface TechniqueOverlayProps {
+  measure: Measure
+  measureIndex: number
+  track: TabTrack
+  beatPositions: BeatPosition[]
+  onBendAmountClick?: (measureIndex: number, beatIndex: number, stringIndex: number) => void
+}
+
+export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, onBendAmountClick }: TechniqueOverlayProps) {
   const { stringCount } = track
   const elements: React.ReactNode[] = []
   const measureContentW = beatPositions.length > 0
@@ -30,6 +46,10 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
 
     const { cx } = pos
 
+    // Detect if any string in this beat has a bend (affects technique zone Y positions)
+    const hasBend = beat.notes.some((n) => n.fret >= 0 && n.modifiers.bend)
+    const techY = hasBend ? BEND_ELEVATED_Y : TAPPING_ZONE_Y
+
     // Tapping: render one "T" per beat column if any string has tapping
     const hasTapping = beat.notes.some((n) => n.fret >= 0 && n.modifiers.tapping)
     if (hasTapping) {
@@ -37,7 +57,7 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
         <text
           key={`tap-${bi}`}
           x={cx}
-          y={TAPPING_ZONE_Y}
+          y={techY}
           fontSize={10}
           fontWeight="bold"
           textAnchor="middle"
@@ -59,7 +79,7 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
       const x1 = cx + pos.w / 2 - (nextHasVibrato ? 0 : PAD)
       const totalW = x1 - x0
       const step = totalW / 4
-      const vy = VIBRATO_ZONE_Y
+      const vy = hasBend ? BEND_ELEVATED_Y : VIBRATO_ZONE_Y
       elements.push(
         <path
           key={`vib-${bi}`}
@@ -211,18 +231,37 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
         )
       }
 
-      // Bend — cubic bezier upward with arrowhead
+      // Bend — quarter-circle quadratic bezier: horizontal tangent at note, vertical at top
       if (note.modifiers.bend) {
-        const topY = sy - 30
+        const amount = note.bendAmount ?? 1
+        const label = formatBendAmount(amount)
+        const startX = cx + 2
+        const endX = cx + 18
         elements.push(
           <g key={`bend-${key}`}>
             <path
-              d={`M ${cx},${sy - 4} C ${cx},${sy - 24} ${cx + 4},${sy - 28} ${cx},${topY}`}
+              d={`M ${startX},${sy - 6} Q ${endX},${sy - 6} ${endX},${BEND_TOP_Y}`}
               stroke="#ffaadd"
               strokeWidth={1.5}
               fill="none"
             />
-            <polygon points={`${cx - 3},${topY + 4} ${cx},${topY} ${cx + 3},${topY + 4}`} fill="#ffaadd" />
+            <polygon
+              points={`${endX - 3},${BEND_TOP_Y + 5} ${endX},${BEND_TOP_Y} ${endX + 3},${BEND_TOP_Y + 5}`}
+              fill="#ffaadd"
+            />
+            <text
+              x={endX + 4}
+              y={BEND_TOP_Y - 1}
+              fontSize={9}
+              fontWeight="bold"
+              textAnchor="start"
+              dominantBaseline="auto"
+              fill="#ffaadd"
+              style={{ cursor: 'pointer' }}
+              onClick={onBendAmountClick ? () => onBendAmountClick(measureIndex, bi, si) : undefined}
+            >
+              {label}
+            </text>
           </g>,
         )
       }
@@ -242,7 +281,7 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
           <text
             key={`pd-${key}`}
             x={cx}
-            y={TAPPING_ZONE_Y}
+            y={techY}
             fontSize={9}
             textAnchor="middle"
             dominantBaseline="middle"
@@ -257,7 +296,7 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
           <text
             key={`pu-${key}`}
             x={cx}
-            y={TAPPING_ZONE_Y}
+            y={techY}
             fontSize={9}
             textAnchor="middle"
             dominantBaseline="middle"
@@ -279,7 +318,7 @@ export function TechniqueOverlay({ measure, track, beatPositions }: TechniqueOve
 function runHasOverlap(measure: Measure, startBi: number, endBi: number): boolean {
   for (let bi = startBi; bi <= endBi; bi++) {
     const beat = measure.beats[bi]
-    if (beat.notes.some((n) => n.fret >= 0 && (n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.pickDown || n.modifiers.pickUp))) return true
+    if (beat.notes.some((n) => n.fret >= 0 && (n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.pickDown || n.modifiers.pickUp || n.modifiers.bend))) return true
   }
   return false
 }
@@ -297,7 +336,9 @@ function renderPalmMuteRuns(
     const startPos = beatPositions[runStart]
     const endPos = beatPositions[endBi]
     if (!startPos || !endPos) { runStart = null; return }
-    const topY = runHasOverlap(measure, runStart, endBi) ? PALM_MUTE_ELEVATED_Y : PALM_MUTE_ZONE_Y
+    const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.fret >= 0 && n.modifiers.bend))
+    const baseTopY = runHasOverlap(measure, runStart, endBi) ? PALM_MUTE_ELEVATED_Y : PALM_MUTE_ZONE_Y
+    const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
     const x1 = startPos.x + PAD
     const x2 = endPos.x + endPos.w - PAD
     elements.push(

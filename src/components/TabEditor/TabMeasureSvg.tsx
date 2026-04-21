@@ -36,6 +36,7 @@ interface TabMeasureSvgProps {
   onMeasureContextMenu?: (measureIndex: number, e: React.MouseEvent) => void
   onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
+  onBendAmountClick?: (mi: number, bi: number, si: number) => void
 }
 
 function restSymbol(d: DurationValue): string {
@@ -72,6 +73,7 @@ export function TabMeasureSvg({
   onMeasureContextMenu,
   onBeatMouseDown,
   onBeatMouseEnter,
+  onBendAmountClick,
 }: TabMeasureSvgProps) {
   const { stringCount } = track
   const svgH = rowSvgHeight(stringCount)
@@ -478,7 +480,13 @@ export function TabMeasureSvg({
       />
 
       {/* Technique overlays */}
-      <TechniqueOverlay measure={measure} track={track} beatPositions={beatPositions} />
+      <TechniqueOverlay
+        measure={measure}
+        measureIndex={measureIndex}
+        track={track}
+        beatPositions={beatPositions}
+        onBendAmountClick={onBendAmountClick}
+      />
 
       {/* String labels */}
       {showStringLabels &&
