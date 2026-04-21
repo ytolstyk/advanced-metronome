@@ -7,6 +7,7 @@ import {
   BARLINE_W,
   MEASURE_NUMBER_H,
   TIME_SIG_W,
+  BPM_LABEL_W,
   stringY,
   rowSvgHeight,
   measureWidth,
@@ -28,7 +29,10 @@ interface TabMeasureSvgProps {
   showStringLabels?: boolean
   timeSig?: { numerator: number; denominator: number }
   activeDuration: DurationValue
+  showBpm?: boolean
+  bpm?: number
   onTimeSigClick?: (measureIndex: number) => void
+  onBpmClick?: (measureIndex: number) => void
   onMeasureContextMenu?: (measureIndex: number, e: React.MouseEvent) => void
   onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
@@ -61,7 +65,10 @@ export function TabMeasureSvg({
   showStringLabels = false,
   timeSig,
   activeDuration,
+  showBpm = false,
+  bpm,
   onTimeSigClick,
+  onBpmClick,
   onMeasureContextMenu,
   onBeatMouseDown,
   onBeatMouseEnter,
@@ -75,8 +82,8 @@ export function TabMeasureSvg({
   const hasVirtualSlot = used < capacity - 1e-9
   const virtualSlots = hasVirtualSlot ? 1 : 0
 
-  const mw = measureWidth(measure, showTimeSig, virtualSlots)
-  const beatPositions = computeBeatPositions(measure, showTimeSig, virtualSlots)
+  const mw = measureWidth(measure, showTimeSig, virtualSlots, showBpm)
+  const beatPositions = computeBeatPositions(measure, showTimeSig, virtualSlots, showBpm)
 
   const topStringY = stringY(stringCount - 1, stringCount)
   const bottomStringY = stringY(0, stringCount)
@@ -180,6 +187,23 @@ export function TabMeasureSvg({
             {timeSig.denominator}
           </text>
         </g>
+      )}
+
+      {/* BPM label — shown at start of each BPM segment */}
+      {showBpm && bpm !== undefined && (
+        <text
+          x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + BPM_LABEL_W / 2}
+          y={MEASURE_NUMBER_H + 14}
+          fontSize={10}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#aac4e8"
+          fontFamily="sans-serif"
+          style={{ cursor: onBpmClick ? 'pointer' : 'default' }}
+          onClick={onBpmClick ? () => onBpmClick(measureIndex) : undefined}
+        >
+          {`\u2669=${bpm}`}
+        </text>
       )}
 
       {/* Left barline */}

@@ -59,6 +59,7 @@ export interface Beat {
 export interface Measure {
   id: string
   timeSignature?: { numerator: number; denominator: number }
+  bpm?: number
   beats: Beat[]
 }
 

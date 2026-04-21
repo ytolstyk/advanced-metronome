@@ -266,6 +266,13 @@ export function isInSelection(
   return true
 }
 
+export function effectiveBpmAt(track: TabTrack, measureIndex: number): number {
+  for (let i = Math.min(measureIndex, track.measures.length - 1); i >= 0; i--) {
+    if (track.measures[i]?.bpm !== undefined) return track.measures[i].bpm!
+  }
+  return track.globalBpm
+}
+
 // Helper: place a note on an existing beat or append a new beat, with capacity checking
 function placeNoteInMeasure(
   measure: Measure,
@@ -375,7 +382,8 @@ export type TabEditorAction =
   | { type: 'COPY' }
   | { type: 'CUT' }
   | { type: 'PASTE'; measureIndex: number; beatIndex: number }
-  | { type: 'SET_BPM'; bpm: number }
+  | { type: 'SET_MEASURE_BPM_ONLY'; measureIndex: number; bpm: number }
+  | { type: 'SET_MEASURE_BPM_FROM'; fromIndex: number; bpm: number }
   | { type: 'SET_TITLE'; title: string }
   | {
       type: 'SET_TUNING'
@@ -798,8 +806,28 @@ export function tabEditorReducer(
       return { ...s, track: { ...s.track, measures } }
     }
 
-    case 'SET_BPM':
-      return { ...state, track: { ...state.track, globalBpm: Math.max(20, Math.min(300, action.bpm)) } }
+    case 'SET_MEASURE_BPM_ONLY': {
+      const clampedBpm = Math.max(20, Math.min(300, action.bpm))
+      const prevBpm = effectiveBpmAt(state.track, action.measureIndex - 1)
+      const measures = state.track.measures.map((m, i) => {
+        if (i === action.measureIndex) return { ...m, bpm: clampedBpm }
+        if (i === action.measureIndex + 1 && m.bpm === undefined) return { ...m, bpm: prevBpm }
+        return m
+      })
+      return { ...state, track: { ...state.track, measures } }
+    }
+
+    case 'SET_MEASURE_BPM_FROM': {
+      const clampedBpm = Math.max(20, Math.min(300, action.bpm))
+      const nextOverrideIdx = state.track.measures.findIndex((m, i) => i > action.fromIndex && m.bpm !== undefined)
+      const clearUntil = nextOverrideIdx === -1 ? state.track.measures.length : nextOverrideIdx
+      const measures = state.track.measures.map((m, i) => {
+        if (i === action.fromIndex) return { ...m, bpm: clampedBpm }
+        if (i > action.fromIndex && i < clearUntil) return { ...m, bpm: undefined }
+        return m
+      })
+      return { ...state, track: { ...state.track, measures } }
+    }
 
     case 'SET_TITLE':
       return { ...state, track: { ...state.track, title: action.title } }

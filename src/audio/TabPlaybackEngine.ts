@@ -1,6 +1,6 @@
 import { pluckString } from './pluckString'
 import type { TabTrack } from '../tabEditorTypes'
-import { beatDurationSeconds, fretToFreq } from '../tabEditorState'
+import { beatDurationSeconds, fretToFreq, effectiveBpmAt } from '../tabEditorState'
 
 const SCHEDULE_AHEAD_TIME = 0.1
 const SCHEDULER_INTERVAL = 25
@@ -109,7 +109,7 @@ export class TabPlaybackEngine {
 
     const beat = measure.beats[this.beatIndex]
     const t = this.nextBeatTime
-    const bpm = beat.tempoChange ?? track.globalBpm
+    const bpm = beat.tempoChange ?? effectiveBpmAt(track, this.measureIndex)
 
     // Schedule notes for all strings
     for (let s = 0; s < beat.notes.length; s++) {

@@ -5,7 +5,6 @@ import type { TabEditorAction } from '../../tabEditorState'
 
 interface TabEditorPlaybackProps {
   isPlaying: boolean
-  bpm: number
   viewMode: 'tab' | 'staff'
   onPlay: () => void
   onStop: () => void
@@ -14,7 +13,6 @@ interface TabEditorPlaybackProps {
 
 export function TabEditorPlayback({
   isPlaying,
-  bpm,
   viewMode,
   onPlay,
   onStop,
@@ -28,7 +26,6 @@ export function TabEditorPlayback({
       <Button variant="ghost" size="icon" onClick={onStop} title="Stop">
         <Square size={16} />
       </Button>
-      <span className="tab-bpm-display">{bpm} BPM</span>
       <div className="tab-view-toggle">
         <Button
           variant="ghost"

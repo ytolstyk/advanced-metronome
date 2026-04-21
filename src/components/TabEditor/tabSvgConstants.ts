@@ -16,6 +16,7 @@ export const PALM_MUTE_ZONE_Y = MEASURE_NUMBER_H + 20 // row 3: palm mute bracke
 export const BOTTOM_PADDING = 8
 export const BARLINE_W = 2
 export const TIME_SIG_W = 40 // horizontal space reserved for a stacked time signature
+export const BPM_LABEL_W = 52 // horizontal space reserved for a BPM display
 
 export function rowSvgHeight(stringCount: number): number {
   return TOP_MARGIN + stringCount * STRING_SPACING + BOTTOM_PADDING
@@ -26,8 +27,8 @@ export function stringY(si: number, stringCount: number): number {
 }
 
 // virtualSlots: 0 or 1 — whether to include width for the pending virtual beat slot
-export function measureWidth(m: Measure, showTimeSig = false, virtualSlots = 0): number {
-  return BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + (m.beats.length + virtualSlots) * BEAT_WIDTH + BARLINE_W
+export function measureWidth(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false): number {
+  return BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + (m.beats.length + virtualSlots) * BEAT_WIDTH + BARLINE_W
 }
 
 export interface BeatPosition {
@@ -36,9 +37,9 @@ export interface BeatPosition {
   w: number  // width
 }
 
-export function computeBeatPositions(m: Measure, showTimeSig = false, virtualSlots = 0): BeatPosition[] {
+export function computeBeatPositions(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false): BeatPosition[] {
   const positions: BeatPosition[] = []
-  let x = BARLINE_W + (showTimeSig ? TIME_SIG_W : 0)
+  let x = BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0)
   const totalSlots = m.beats.length + virtualSlots
   for (let i = 0; i < totalSlots; i++) {
     positions.push({ x, cx: x + BEAT_WIDTH / 2, w: BEAT_WIDTH })

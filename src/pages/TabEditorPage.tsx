@@ -327,7 +327,6 @@ export function TabEditorPage() {
       <TabEditorToolbar state={state} dispatch={dispatch} />
       <TabEditorPlayback
         isPlaying={state.isPlaying}
-        bpm={state.track.globalBpm}
         viewMode={state.viewMode}
         onPlay={handlePlay}
         onStop={handleStop}

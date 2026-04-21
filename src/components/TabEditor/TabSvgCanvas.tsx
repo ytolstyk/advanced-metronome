@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import type { RefObject } from 'react'
 import type { Measure, TabEditorState } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
-import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats } from '../../tabEditorState'
+import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats, effectiveBpmAt } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
 import { StaffViewSvg } from './StaffViewSvg'
 import { STRING_LABEL_W, measureWidth, rowSvgHeight } from './tabSvgConstants'
@@ -29,6 +29,7 @@ function computeRows(
   measures: Measure[],
   showTimeSigMap: boolean[],
   timeSigs: Array<{ numerator: number; denominator: number }>,
+  showBpmMap: boolean[],
   containerWidth: number,
 ): Measure[][] {
   const usable = containerWidth - STRING_LABEL_W - 32
@@ -38,8 +39,9 @@ function computeRows(
   for (let i = 0; i < measures.length; i++) {
     const m = measures[i]
     const showTs = showTimeSigMap[i] ?? false
+    const showBpm = showBpmMap[i] ?? false
     const vSlots = getVirtualSlots(m, timeSigs[i]!)
-    const mw = measureWidth(m, showTs, vSlots)
+    const mw = measureWidth(m, showTs, vSlots, showBpm)
     if (rowW + mw > usable && row.length > 0) {
       rows.push(row)
       row = []
@@ -57,13 +59,14 @@ function rowSvgWidth(
   rowStart: number,
   showTimeSigMap: boolean[],
   timeSigs: Array<{ numerator: number; denominator: number }>,
+  showBpmMap: boolean[],
 ): number {
   return (
     STRING_LABEL_W +
     rowMeasures.reduce((s, m, i) => {
       const globalI = rowStart + i
       const vSlots = getVirtualSlots(m, timeSigs[globalI]!)
-      return s + measureWidth(m, showTimeSigMap[globalI] ?? false, vSlots)
+      return s + measureWidth(m, showTimeSigMap[globalI] ?? false, vSlots, showBpmMap[globalI] ?? false)
     }, 0)
   )
 }
@@ -88,12 +91,18 @@ export function TabSvgCanvas({
 
   const timeSigs = track.measures.map((m) => m.timeSignature ?? track.globalTimeSig)
 
-  const rows = computeRows(track.measures, showTimeSigMap, timeSigs, containerWidth)
+  const showBpmMap: boolean[] = track.measures.map((m, i) => i === 0 || m.bpm !== undefined)
+  const effectiveBpms: number[] = track.measures.map((_, i) => effectiveBpmAt(track, i))
+
+  const rows = computeRows(track.measures, showTimeSigMap, timeSigs, showBpmMap, containerWidth)
 
   const globalMeasureMap = new Map<string, number>()
   track.measures.forEach((m, i) => globalMeasureMap.set(m.id, i))
 
   const [measureMenu, setMeasureMenu] = useState<{ mi: number; x: number; y: number } | null>(null)
+
+  const [bpmEdit, setBpmEdit] = useState<{ mi: number; val: string } | null>(null)
+  const bpmEditRef = useRef<HTMLInputElement>(null)
 
   const [timingChangeEdit, setTimingChangeEdit] = useState<{ mi: number; num: string; den: string } | null>(null)
   const timingChangeNumRef = useRef<HTMLInputElement>(null)
@@ -114,11 +123,23 @@ export function TabSvgCanvas({
   }
 
   useEffect(() => {
+    if (bpmEdit !== null) {
+      bpmEditRef.current?.focus()
+      bpmEditRef.current?.select()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bpmEdit?.mi])
+
+  useEffect(() => {
     if (timingChangeEdit !== null) {
       timingChangeNumRef.current?.focus()
       timingChangeNumRef.current?.select()
     }
   }, [timingChangeEdit])
+
+  function openBpmEditor(mi: number) {
+    setBpmEdit({ mi, val: String(effectiveBpmAt(track, mi)) })
+  }
 
   function openTimeSigEditor(mi: number) {
     const m = track.measures[mi]
@@ -180,7 +201,7 @@ export function TabSvgCanvas({
     <div className="tab-canvas" ref={canvasRef} tabIndex={0}>
       {rows.map((rowMeasures, rowIdx) => {
         const currentRowStart = rowStartIndices[rowIdx] ?? 0
-        const svgW = rowSvgWidth(rowMeasures, currentRowStart, showTimeSigMap, timeSigs)
+        const svgW = rowSvgWidth(rowMeasures, currentRowStart, showTimeSigMap, timeSigs, showBpmMap)
 
         const measureOffsets: number[] = []
         let xAcc = STRING_LABEL_W
@@ -188,7 +209,7 @@ export function TabSvgCanvas({
           measureOffsets.push(xAcc)
           const globalMi = currentRowStart + mIdx
           const vSlots = getVirtualSlots(rowMeasures[mIdx]!, timeSigs[globalMi]!)
-          xAcc += measureWidth(rowMeasures[mIdx]!, showTimeSigMap[globalMi] ?? false, vSlots)
+          xAcc += measureWidth(rowMeasures[mIdx]!, showTimeSigMap[globalMi] ?? false, vSlots, showBpmMap[globalMi] ?? false)
         }
 
         return (
@@ -220,7 +241,10 @@ export function TabSvgCanvas({
                   showStringLabels={mIdx === 0}
                   timeSig={sig}
                   activeDuration={activeDuration}
+                  showBpm={showBpmMap[mi] ?? false}
+                  bpm={effectiveBpms[mi] ?? track.globalBpm}
                   onTimeSigClick={openTimeSigEditor}
+                  onBpmClick={openBpmEditor}
                   onMeasureContextMenu={openMeasureMenu}
                   onBeatMouseDown={onBeatMouseDown}
                   onBeatMouseEnter={onBeatMouseEnter}
@@ -267,6 +291,14 @@ export function TabSvgCanvas({
                   closeMeasureMenu()
                 },
               },
+              {
+                label: 'Set BPM',
+                action: () => {
+                  const currentBpm = effectiveBpmAt(track, measureMenu.mi)
+                  setBpmEdit({ mi: measureMenu.mi, val: String(currentBpm) })
+                  closeMeasureMenu()
+                },
+              },
               { label: 'Delete', action: () => { dispatch({ type: 'DELETE_MEASURE', measureIndex: measureMenu.mi }); closeMeasureMenu() }, danger: true },
             ].map((item) => (
               <button
@@ -289,6 +321,94 @@ export function TabSvgCanvas({
                 {item.label}
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* BPM edit dialog */}
+      {bpmEdit !== null && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.5)',
+          }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setBpmEdit(null) }}
+        >
+          <div
+            style={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              borderRadius: 8,
+              padding: '20px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              minWidth: 260,
+              maxWidth: 340,
+            }}
+          >
+            <span style={{ color: '#ccc', fontSize: '0.85rem', fontWeight: 600 }}>
+              Set BPM — Measure {bpmEdit.mi + 1}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: '#888', fontSize: '0.8rem' }}>♩ =</span>
+              <input
+                ref={bpmEditRef}
+                type="number"
+                min={20}
+                max={300}
+                value={bpmEdit.val}
+                onChange={(e) => setBpmEdit(prev => prev ? { ...prev, val: e.target.value } : null)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setBpmEdit(null)
+                }}
+                style={{
+                  width: 72,
+                  background: '#111',
+                  color: '#e0e0e0',
+                  border: '1px solid #444',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  fontSize: '1.2rem',
+                  textAlign: 'center',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button
+                onClick={() => {
+                  const bpm = parseInt(bpmEdit.val, 10)
+                  if (!bpm || bpm < 20 || bpm > 300) return
+                  dispatch({ type: 'SET_MEASURE_BPM_ONLY', measureIndex: bpmEdit.mi, bpm })
+                  setBpmEdit(null)
+                }}
+                style={{ padding: '7px 12px', background: 'transparent', border: '1px solid #444', borderRadius: 4, color: '#e0e0e0', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+              >
+                This measure only
+              </button>
+              <button
+                onClick={() => {
+                  const bpm = parseInt(bpmEdit.val, 10)
+                  if (!bpm || bpm < 20 || bpm > 300) return
+                  dispatch({ type: 'SET_MEASURE_BPM_FROM', fromIndex: bpmEdit.mi, bpm })
+                  setBpmEdit(null)
+                }}
+                style={{ padding: '7px 12px', background: '#1a3a5c', border: '1px solid #2a5a8c', borderRadius: 4, color: '#7ac0ff', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+              >
+                This measure and all following
+              </button>
+              <button
+                onClick={() => setBpmEdit(null)}
+                style={{ padding: '7px 12px', background: 'transparent', border: 'none', borderRadius: 4, color: '#666', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

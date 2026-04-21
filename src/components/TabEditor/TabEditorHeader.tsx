@@ -4,7 +4,6 @@ import { buildOpenMidi } from '../../tabEditorState'
 import { TUNINGS } from '../../data/tunings'
 import type { StringCount } from '../../data/tunings'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface TabEditorHeaderProps {
@@ -23,8 +22,6 @@ export function TabEditorHeader({ track, dispatch }: TabEditorHeaderProps) {
       />
       <div className="tab-header-sep" />
       <TuningSelector track={track} dispatch={dispatch} />
-      <div className="tab-header-sep" />
-      <BpmControl bpm={track.globalBpm} dispatch={dispatch} />
     </div>
   )
 }
@@ -77,26 +74,3 @@ function TuningSelector({
   )
 }
 
-function BpmControl({
-  bpm,
-  dispatch,
-}: {
-  bpm: number
-  dispatch: React.Dispatch<TabEditorAction>
-}) {
-  return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-      <Label style={{ fontSize: '0.8rem', color: '#888' }}>BPM</Label>
-      <Input
-        type="number"
-        min={20}
-        max={300}
-        value={bpm}
-        className="h-8 w-16 text-xs text-center"
-        onChange={(e) =>
-          dispatch({ type: 'SET_BPM', bpm: parseInt(e.target.value, 10) || 120 })
-        }
-      />
-    </div>
-  )
-}
