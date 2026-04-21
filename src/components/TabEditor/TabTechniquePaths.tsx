@@ -1,4 +1,4 @@
-import type { Measure, TabTrack } from '../../tabEditorTypes'
+import type { Beat, Measure, TabTrack } from '../../tabEditorTypes'
 import {
   type BeatPosition,
   BARLINE_W,
@@ -69,27 +69,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
       )
     }
 
-    // Vibrato: render one sine-wave per beat column if any string has vibrato
-    const hasVibrato = beat.notes.some((n) => n.fret >= 0 && n.modifiers.vibrato)
-    if (hasVibrato) {
-      const PAD = 4
-      const prevHasVibrato = bi > 0 && measure.beats[bi - 1].notes.some((n) => n.fret >= 0 && n.modifiers.vibrato)
-      const nextHasVibrato = bi < measure.beats.length - 1 && measure.beats[bi + 1].notes.some((n) => n.fret >= 0 && n.modifiers.vibrato)
-      const x0 = cx - pos.w / 2 + (prevHasVibrato ? 0 : PAD)
-      const x1 = cx + pos.w / 2 - (nextHasVibrato ? 0 : PAD)
-      const totalW = x1 - x0
-      const step = totalW / 4
-      const vy = hasBend ? BEND_ELEVATED_Y : VIBRATO_ZONE_Y
-      elements.push(
-        <path
-          key={`vib-${bi}`}
-          d={`M ${x0},${vy} Q ${x0 + step / 2},${vy - 5} ${x0 + step},${vy} Q ${x0 + step * 1.5},${vy + 5} ${x0 + step * 2},${vy} Q ${x0 + step * 2.5},${vy - 5} ${x0 + step * 3},${vy} Q ${x0 + step * 3.5},${vy + 5} ${x0 + step * 4},${vy}`}
-          stroke="#ddaaff"
-          strokeWidth={1.5}
-          fill="none"
-        />,
-      )
-    }
+    // Vibrato rendered after main loop as runs (see renderVibratoRuns below)
 
     for (let si = 0; si < beat.notes.length; si++) {
       const note = beat.notes[si]
@@ -309,10 +289,76 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
     }
   }
 
-  // Palm mute: collect consecutive beats with palmMute on any string, render dashed line at top
+  // Vibrato and palm mute: rendered as runs so the whole connected segment shares one Y level
+  renderVibratoRuns(measure, beatPositions, elements)
   renderPalmMuteRuns(measure, beatPositions, elements)
 
   return <g>{elements}</g>
+}
+
+function computeNoteSlotW(beat: Beat): number {
+  return beat.notes.reduce((max, n) => {
+    if (!n || n.fret < 0) return max
+    let label: string
+    if (beat.tiedFrom) label = `(${n.fret})`
+    else if (n.modifiers.dead) label = 'X'
+    else if (n.modifiers.naturalHarmonic) label = `<${n.fret}>`
+    else if (n.modifiers.ghost) label = `(${n.fret})`
+    else label = String(n.fret)
+    return Math.max(max, Math.max(label.length * 8 + 4, 18))
+  }, 18)
+}
+
+function renderVibratoRuns(
+  measure: Measure,
+  beatPositions: BeatPosition[],
+  elements: React.ReactNode[],
+) {
+  const PAD = 4
+  let runStart: number | null = null
+
+  function flushRun(endBi: number) {
+    if (runStart === null) return
+    const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.fret >= 0 && n.modifiers.bend))
+    const vy = hasBendInRun ? BEND_ELEVATED_Y : VIBRATO_ZONE_Y
+
+    for (let bi = runStart; bi <= endBi; bi++) {
+      const beat = measure.beats[bi]
+      const pos = beatPositions[bi]
+      if (!pos) continue
+      const { cx } = pos
+      const slotW = computeNoteSlotW(beat)
+      const prevPos = beatPositions[bi - 1]
+      const nextPos = beatPositions[bi + 1]
+      const isFirst = bi === runStart
+      const isLast = bi === endBi
+      const x0 = !isFirst && prevPos ? (prevPos.cx + cx) / 2 : cx - slotW / 2 + PAD
+      const x1 = !isLast && nextPos ? (cx + nextPos.cx) / 2 : cx + slotW / 2 - PAD
+      const totalW = x1 - x0
+      const step = totalW / 4
+      elements.push(
+        <path
+          key={`vib-${bi}`}
+          d={`M ${x0},${vy} Q ${x0 + step / 2},${vy - 5} ${x0 + step},${vy} Q ${x0 + step * 1.5},${vy + 5} ${x0 + step * 2},${vy} Q ${x0 + step * 2.5},${vy - 5} ${x0 + step * 3},${vy} Q ${x0 + step * 3.5},${vy + 5} ${x0 + step * 4},${vy}`}
+          stroke="#ddaaff"
+          strokeWidth={1.5}
+          fill="none"
+        />,
+      )
+    }
+    runStart = null
+  }
+
+  for (let bi = 0; bi < measure.beats.length; bi++) {
+    const beat = measure.beats[bi]
+    const hasVibrato = beat.notes.some((n) => n.fret >= 0 && n.modifiers.vibrato)
+    if (hasVibrato) {
+      if (runStart === null) runStart = bi
+    } else {
+      flushRun(bi - 1)
+    }
+  }
+  flushRun(measure.beats.length - 1)
 }
 
 function runHasOverlap(measure: Measure, startBi: number, endBi: number): boolean {
@@ -339,8 +385,10 @@ function renderPalmMuteRuns(
     const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.fret >= 0 && n.modifiers.bend))
     const baseTopY = runHasOverlap(measure, runStart, endBi) ? PALM_MUTE_ELEVATED_Y : PALM_MUTE_ZONE_Y
     const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
-    const x1 = startPos.x + PAD
-    const x2 = endPos.x + endPos.w - PAD
+    const startSlotW = computeNoteSlotW(measure.beats[runStart])
+    const endSlotW = computeNoteSlotW(measure.beats[endBi])
+    const x1 = startPos.cx - startSlotW / 2 + PAD
+    const x2 = endPos.cx + endSlotW / 2 - PAD
     elements.push(
       <g key={`pm-${runStart}-${endBi}`}>
         <line
