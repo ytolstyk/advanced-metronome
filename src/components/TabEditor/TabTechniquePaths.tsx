@@ -156,7 +156,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
             key={`sib-${key}`}
             x1={cx - 18}
             y1={sy + 4}
-            x2={cx - 4}
+            x2={cx - 6}
             y2={sy - 4}
             stroke="#aaddff"
             strokeWidth={1.5}
@@ -171,7 +171,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
             key={`sia-${key}`}
             x1={cx - 18}
             y1={sy - 4}
-            x2={cx - 4}
+            x2={cx - 6}
             y2={sy + 4}
             stroke="#aaddff"
             strokeWidth={1.5}
@@ -184,7 +184,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
         elements.push(
           <line
             key={`sod-${key}`}
-            x1={cx + 4}
+            x1={cx + 6}
             y1={sy - 4}
             x2={cx + 18}
             y2={sy + 4}
@@ -199,7 +199,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
         elements.push(
           <line
             key={`sou-${key}`}
-            x1={cx + 4}
+            x1={cx + 6}
             y1={sy + 4}
             x2={cx + 18}
             y2={sy - 4}
