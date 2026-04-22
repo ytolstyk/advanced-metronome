@@ -227,19 +227,6 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
         ))}
       </div>
 
-      {/* Note info strip — shows applied effects on highlighted note */}
-      {isOnNote && Object.keys(currentNote.modifiers).length > 0 && (
-        <div className="tab-toolbar-group" data-group="note-info">
-          <span className="tab-tool-label">Applied</span>
-          <span className="tab-note-effects-strip">
-            {(Object.keys(currentNote.modifiers) as (keyof typeof currentNote.modifiers)[])
-              .filter((k) => currentNote.modifiers[k])
-              .map((k) => MODIFIER_LABELS[k] ?? k)
-              .join(' · ')}
-          </span>
-        </div>
-      )}
-
       {/* Connections group */}
       <div className="tab-toolbar-group" data-group="techniques">
         <span className="tab-tool-label">
@@ -295,6 +282,23 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
         <ToolBtn title="Beat left" onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'left' })}>◀</ToolBtn>
         <ToolBtn title="Beat right" onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'right' })}>▶</ToolBtn>
       </div>
+
+
+      {/* Line break before Applied */}
+      <div className="tab-toolbar-break" />
+
+      {/* Note info strip — shows applied effects on highlighted note */}
+      {(
+        <div className="tab-toolbar-group" data-group="note-info">
+          <span className="tab-tool-label">Applied</span>
+          <span className="tab-note-effects-strip">
+            {(Object.keys(currentNote.modifiers) as (keyof typeof currentNote.modifiers)[])
+              .filter((k) => currentNote.modifiers[k])
+              .map((k) => MODIFIER_LABELS[k] ?? k)
+              .join(' · ')}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

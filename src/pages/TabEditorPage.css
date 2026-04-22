@@ -72,6 +72,12 @@
 .tab-toolbar-group[data-group="edit"]     { background: #14142a; }
 .tab-toolbar-group[data-group="move"]     { background: #0f2023; }
 
+.tab-toolbar-break {
+  flex-basis: 100%;
+  height: 0;
+  border-bottom: 1px solid #222;
+}
+
 .tab-note-effects-strip {
   font-size: 0.75rem;
   color: #f59e0b;
