@@ -418,13 +418,17 @@ export function tabEditorReducer(
 
       const timeSig = measure.timeSignature ?? state.track.globalTimeSig
       const s = pushUndo(state)
+      // When placing on an existing beat, inherit that beat's duration/dot
+      const existingBeat = measure.beats[action.beatIndex]
+      const duration = existingBeat ? existingBeat.duration : s.activeDuration
+      const dot = existingBeat ? { ...existingBeat.dot } : s.activeDot
       const { measure: placedMeasure, overflow } = placeNoteInMeasure(
         measure,
         action.beatIndex,
         action.stringIndex,
         action.fret,
-        s.activeDuration,
-        s.activeDot,
+        duration,
+        dot,
         s.activeModifiers,
         s.track.stringCount,
         timeSig,
@@ -656,32 +660,43 @@ export function tabEditorReducer(
 
     case 'MOVE_CURSOR': {
       const { cursor, track } = state
+
+      function withBeatSync(newCursor: TabCursor, extraState?: Partial<TabEditorState>): TabEditorState {
+        const beat = track.measures[newCursor.measureIndex]?.beats[newCursor.beatIndex]
+        const durationSync = beat ? { activeDuration: beat.duration, activeDot: { ...beat.dot } } : {}
+        return { ...state, ...durationSync, ...extraState, cursor: newCursor, selection: null }
+      }
+
       if (action.direction === 'right') {
         const advanced = advanceCursorRight(cursor, track)
         if (advanced === cursor) {
           const newMeasure = makeMeasure()
           const measures = [...track.measures, newMeasure]
           const newCursor = { ...cursor, measureIndex: measures.length - 1, beatIndex: 0 }
-          return { ...state, track: { ...track, measures }, cursor: newCursor, selection: null }
+          return withBeatSync(newCursor, { track: { ...track, measures } })
         }
-        return { ...state, cursor: advanced, selection: null }
+        return withBeatSync(advanced)
       }
       if (action.direction === 'left') {
-        return { ...state, cursor: advanceCursorLeft(cursor, track), selection: null }
+        return withBeatSync(advanceCursorLeft(cursor, track))
       }
       if (action.direction === 'up') {
         const si = Math.min(track.stringCount - 1, cursor.stringIndex + 1)
-        return { ...state, cursor: { ...cursor, stringIndex: si } }
+        return withBeatSync({ ...cursor, stringIndex: si })
       }
       if (action.direction === 'down') {
         const si = Math.max(0, cursor.stringIndex - 1)
-        return { ...state, cursor: { ...cursor, stringIndex: si } }
+        return withBeatSync({ ...cursor, stringIndex: si })
       }
       return state
     }
 
-    case 'SET_CURSOR':
-      return { ...state, cursor: action.cursor }
+    case 'SET_CURSOR': {
+      const beatAtCursor = state.track.measures[action.cursor.measureIndex]?.beats[action.cursor.beatIndex]
+      return beatAtCursor
+        ? { ...state, cursor: action.cursor, activeDuration: beatAtCursor.duration, activeDot: { ...beatAtCursor.dot } }
+        : { ...state, cursor: action.cursor }
+    }
 
     case 'SET_SELECTION':
       return { ...state, selection: action.selection }
