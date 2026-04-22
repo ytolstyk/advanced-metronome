@@ -6,7 +6,7 @@
 
 ![Drumma Llama screenshot](public/screenshot.png)
 
-Drumma Llama is a browser-based drum machine, step sequencer, click track builder, guitar tuner, fretboard trainer, chord library, scale visualizer, and music theory tool built with React 19, TypeScript, and the Web Audio API. No plugins, no dependencies on your patience — just beats.
+Drumma Llama is a browser-based drum machine, step sequencer, click track builder, guitar tab editor, guitar tuner, fretboard trainer, chord library, scale visualizer, and music theory tool built with React 19, TypeScript, and the Web Audio API. No plugins, no dependencies on your patience — just beats.
 
 ---
 
@@ -167,6 +167,26 @@ Navigate to the **Fret Memorizer** tab to drill fretboard note recognition.
 
 ---
 
+## Tab Editor
+
+Navigate to the **Tab Editor** tab to write and play back guitar tablature.
+
+- **6, 7, and 8-string support** with standard and custom tunings
+- **Full note duration palette** — whole, half, quarter, eighth, sixteenth, 32nd, 64th; dotted, double-dotted, and triplet modifiers
+- **Guitar techniques** — palm mute, let ring, ghost note, staccato, dead note, natural harmonic, hammer-on, pull-off, legato slide, bend (with amount), vibrato, tapping, pick direction, slide-in/slide-out
+- **Keyboard-first editing** — type fret numbers (two-digit buffering for frets 10–24), navigate with arrow keys, spacebar adds empty beat, Backspace/Delete removes note or beat
+- **Measure overflow dialog** — when a note doesn't fit, choose to trim or bleed into the next measure
+- **Beat-level and note-level selection** — click to select, Shift+click for multi-select, drag to range-select
+- **Copy / Cut / Paste** beats across measures
+- **Undo / Redo** (Cmd+Z / Cmd+Shift+Z)
+- **Per-measure time signatures and BPM** overrides
+- **Dynamics** (ppp–fff) and repeat markers per beat
+- **Tab and staff view** — toggle between tablature and standard notation
+- **Playback** — play from cursor position with live playhead tracking
+- **Auto-save** to localStorage
+
+---
+
 ## Lessons
 
 Navigate to the **Lessons** tab for structured guitar technique and theory lessons.
@@ -242,6 +262,7 @@ src/
 │   ├── CircleOfFifthsPage.tsx  # Interactive circle of fifths diagram
 │   ├── ClickTrackPage.tsx      # Click track builder + export + cloud save
 │   ├── FretMemorizerPage.tsx   # Fretboard note recognition game
+│   ├── TabEditorPage.tsx       # Guitar tab editor
 │   ├── LessonsPage.tsx         # Lesson module browser
 │   ├── ModulePage.tsx          # Lessons within a module
 │   ├── LessonPage.tsx          # Individual lesson steps
@@ -263,7 +284,10 @@ src/
     ├── StorageErrorBanner/    # localStorage quota error banner
     ├── ChordPickerModal/      # Chord selection modal
     ├── GenerateDrumsModal/    # AI drum pattern generation modal
-    └── SettingsModal/         # Note color picker (per chromatic note, cloud-synced)
+    ├── SettingsModal/         # Note color picker (per chromatic note, cloud-synced)
+    └── TabEditor/             # Tab editor SVG canvas, toolbar, header, playback, technique paths
+├── tabEditorTypes.ts    # TabTrack, Measure, Beat, TabNote, TabCursor, NoteModifiers, etc.
+└── tabEditorState.ts    # Tab editor reducer, localStorage persistence, overflow logic
 ```
 
 ---

@@ -28,6 +28,7 @@ Routes:
 - `/circle` — Circle of Fifths (`src/pages/CircleOfFifthsPage.tsx`)
 - `/click-track` — Click track builder (`src/pages/ClickTrackPage.tsx`)
 - `/fret-memorizer` — Fretboard note memorizer game (`src/pages/FretMemorizerPage.tsx`)
+- `/tab-editor` — Guitar tab editor (`src/pages/TabEditorPage.tsx`)
 - `/lessons` — Lesson library (`src/pages/LessonsPage.tsx`)
 - `/lessons/:moduleId` — Module view (`src/pages/ModulePage.tsx`)
 - `/lessons/:moduleId/:lessonId` — Individual lesson (`src/pages/LessonPage.tsx`)
@@ -77,6 +78,37 @@ Self-contained in `src/pages/TunerPage.tsx` + `TunerPage.css`. No shared state w
 Two input modes: `click` (tap the fret dot) and `mic` (microphone pitch detection — same NSDF/MPM pipeline as the tuner). String focus filter: clicking a string label restricts both the quiz and fretboard display to that string.
 
 Note colors are managed globally via `NoteColorsContext` (`src/context/NoteColorsContext.tsx`). Fill colors come from `src/data/noteColors.ts` (`DEFAULT_NOTE_FILL`); stroke is auto-derived by `lightenHex`. Colors persist to localStorage (unauthenticated) or cloud via `src/api/noteColorsApi.ts` (authenticated). The `SettingsModal` (`src/components/SettingsModal/`) exposes a per-note color picker with a reset button.
+
+## Tab Editor
+
+`src/pages/TabEditorPage.tsx` + `src/tabEditorTypes.ts` + `src/tabEditorState.ts` + `src/components/TabEditor/`.
+
+Types in `tabEditorTypes.ts`:
+- `TabTrack` — title, globalBpm, globalTimeSig, stringCount (6/7/8), tuningName, openMidi[], measures[]
+- `Measure` — id, optional per-measure timeSignature/bpm, beats[]
+- `Beat` — id, duration, dot modifier, notes[], optional dynamics/repeatStart/repeatEnd/tempoChange/tiedFrom
+- `TabNote` — fret (0–24; -1 = empty), modifiers (ghost, staccato, letRing, palmMute, dead, naturalHarmonic, hammerOn, pullOff, legatoSlide, slides, bend, vibrato, tapping, pickDown/pickUp), optional bendAmount
+- `DurationValue` — whole | half | quarter | eighth | sixteenth | thirtysecond | sixtyfourth; plus dotted/doubleDotted/triplet modifiers
+
+State (`TabEditorState`) lives in `tabEditorState.ts` (pure reducer). Persisted to localStorage via `saveTabTrack`. Includes undo/redo stacks (separate from drum machine undo).
+
+Keyboard editing: arrow keys move cursor, digits type fret numbers (two-digit buffering with 400ms timeout for frets 10–24), spacebar adds empty beat, Backspace/Delete removes note or beat, Cmd/Ctrl+Z/Shift+Z for undo/redo, Cmd+C/X/V for copy/cut/paste.
+
+Overflow dialog: when a note duration exceeds the remaining measure capacity, `pendingOverflow` is set and a modal offers trim-to-fit or bleed-into-next-measure resolution.
+
+Playback via `TabPlaybackEngine` (`src/audio/TabPlaybackEngine.ts`) — separate from the drum machine engine. Uses `pluckString` for preview notes.
+
+View modes: `tab` (default) and `staff` — toggled via toolbar.
+
+Components in `src/components/TabEditor/`:
+- `TabSvgCanvas` — SVG rendering with drag-to-select, click handlers
+- `TabMeasureSvg` — per-measure SVG
+- `StaffViewSvg` — staff notation view
+- `TabEditorHeader` — title, tuning, time sig, BPM controls
+- `TabEditorToolbar` — duration, modifiers, technique selector
+- `TabEditorPlayback` — play/stop controls + view mode toggle
+- `TabTechniquePaths` — SVG path definitions for technique symbols
+- `tabSvgConstants.ts` — font and layout constants
 
 ## Lessons
 
