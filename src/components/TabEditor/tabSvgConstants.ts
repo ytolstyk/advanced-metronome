@@ -22,6 +22,7 @@ export const PALM_MUTE_ZONE_Y = MEASURE_NUMBER_H + 24 // row 3: palm mute bracke
 export const PALM_MUTE_ELEVATED_Y = MEASURE_NUMBER_H + 6 // palm mute shifted up when overlapping other effects
 export const LET_RING_ZONE_Y = MEASURE_NUMBER_H + 24 // same row as palm mute (mutually exclusive)
 export const LET_RING_ELEVATED_Y = MEASURE_NUMBER_H + 6
+export const STACCATO_ZONE_Y = MEASURE_NUMBER_H + 24 // dot above strings
 export const MEASURE_NUMBER_FONT_SIZE = 12
 export const NOTE_FONT_SIZE = 15
 export const BOTTOM_PADDING = 8

@@ -9,6 +9,7 @@ import {
   PALM_MUTE_ELEVATED_Y,
   LET_RING_ZONE_Y,
   LET_RING_ELEVATED_Y,
+  STACCATO_ZONE_Y,
   stringY,
 } from './tabSvgConstants'
 
@@ -71,6 +72,20 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
       )
     }
 
+    // Staccato: one dot per beat column if any note has staccato
+    const hasStaccato = beat.notes.some((n) => n.fret >= 0 && n.modifiers.staccato)
+    if (hasStaccato) {
+      elements.push(
+        <circle
+          key={`stac-${bi}`}
+          cx={cx}
+          cy={STACCATO_ZONE_Y}
+          r={3}
+          fill="#e8e8e8"
+        />,
+      )
+    }
+
     // Vibrato rendered after main loop as runs (see renderVibratoRuns below)
 
     for (let si = 0; si < beat.notes.length; si++) {
@@ -117,13 +132,14 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
         const nextPos = beatPositions[bi + 1]
         const nextNote = measure.beats[bi + 1]?.notes[si]
         if (nextPos && nextNote && nextNote.fret >= 0) {
-          const dx = nextPos.cx - 4
-          const dy = nextNote.fret > note.fret ? sy - 6 : nextNote.fret < note.fret ? sy + 6 : sy
+          const dx = nextPos.cx - 6
+          const dy = nextNote.fret > note.fret ? sy - 4 : nextNote.fret < note.fret ? sy + 2 : sy
+          const newSy = nextNote.fret > note.fret ? sy + 2 : sy - 4;
           elements.push(
             <line
               key={`ls-${key}`}
-              x1={cx + 4}
-              y1={sy}
+              x1={cx + 6}
+              y1={newSy}
               x2={dx}
               y2={dy}
               stroke="#aaddff"
@@ -139,9 +155,9 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
           <line
             key={`sib-${key}`}
             x1={cx - 18}
-            y1={sy + 6}
-            x2={cx - 2}
-            y2={sy - 2}
+            y1={sy + 4}
+            x2={cx - 4}
+            y2={sy - 4}
             stroke="#aaddff"
             strokeWidth={1.5}
           />,
@@ -154,9 +170,9 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
           <line
             key={`sia-${key}`}
             x1={cx - 18}
-            y1={sy - 6}
-            x2={cx - 2}
-            y2={sy + 2}
+            y1={sy - 4}
+            x2={cx - 4}
+            y2={sy + 4}
             stroke="#aaddff"
             strokeWidth={1.5}
           />,
@@ -169,9 +185,9 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
           <line
             key={`sod-${key}`}
             x1={cx + 4}
-            y1={sy - 2}
-            x2={cx + 20}
-            y2={sy + 6}
+            y1={sy - 4}
+            x2={cx + 18}
+            y2={sy + 4}
             stroke="#aaddff"
             strokeWidth={1.5}
           />,
@@ -184,9 +200,9 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
           <line
             key={`sou-${key}`}
             x1={cx + 4}
-            y1={sy + 2}
-            x2={cx + 20}
-            y2={sy - 6}
+            y1={sy + 4}
+            x2={cx + 18}
+            y2={sy - 4}
             stroke="#aaddff"
             strokeWidth={1.5}
           />,
