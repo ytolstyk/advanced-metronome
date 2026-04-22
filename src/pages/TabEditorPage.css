@@ -79,6 +79,9 @@
 }
 
 .tab-note-effects-strip {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
   font-size: 0.75rem;
   color: #f59e0b;
   padding: 0 4px;
