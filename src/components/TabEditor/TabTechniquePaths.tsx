@@ -131,26 +131,6 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
         }
       }
 
-      // Shift slide (with arrowhead)
-      if (note.modifiers.shiftSlide) {
-        const nextPos = beatPositions[bi + 1]
-        const nextNote = measure.beats[bi + 1]?.notes[si]
-        if (nextPos && nextNote && nextNote.fret >= 0) {
-          const dx = nextPos.cx - 4
-          const ascending = nextNote.fret >= note.fret
-          const dy = ascending ? sy - 6 : sy + 6
-          elements.push(
-            <g key={`ss-${key}`}>
-              <line x1={cx + 4} y1={sy - 3} x2={dx} y2={dy} stroke="#ffcc88" strokeWidth={1.5} />
-              <polygon
-                points={`${dx - 6},${dy - 4} ${dx},${dy} ${dx - 6},${dy + 4}`}
-                fill="#ffcc88"
-              />
-            </g>,
-          )
-        }
-      }
-
       // Slide in from below
       if (note.modifiers.slideInBelow) {
         elements.push(
@@ -243,15 +223,6 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
               {label}
             </text>
           </g>,
-        )
-      }
-
-      // Trill
-      if (note.modifiers.trill) {
-        elements.push(
-          <text key={`tr-${key}`} x={cx} y={sy - 14} fontSize={9} textAnchor="middle" fill="#aaddff">
-            tr~
-          </text>,
         )
       }
 

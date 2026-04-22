@@ -504,6 +504,11 @@ export function tabEditorReducer(
         if (action.modifier === 'slideInAbove') delete next.slideInBelow
         if (action.modifier === 'slideOutDown') delete next.slideOutUp
         if (action.modifier === 'slideOutUp') delete next.slideOutDown
+        if (action.modifier === 'tapping') { delete next.pickDown; delete next.pickUp }
+        if (action.modifier === 'pickDown') { delete next.tapping; delete next.pickUp }
+        if (action.modifier === 'pickUp') { delete next.tapping; delete next.pickDown }
+        if (action.modifier === 'vibrato') delete next.palmMute
+        if (action.modifier === 'palmMute') delete next.vibrato
       }
       return { ...state, activeModifiers: next }
     }
@@ -530,6 +535,11 @@ export function tabEditorReducer(
                 if (action.modifier === 'slideInAbove') delete mods.slideInBelow
                 if (action.modifier === 'slideOutDown') delete mods.slideOutUp
                 if (action.modifier === 'slideOutUp') delete mods.slideOutDown
+                if (action.modifier === 'tapping') { delete mods.pickDown; delete mods.pickUp }
+                if (action.modifier === 'pickDown') { delete mods.tapping; delete mods.pickUp }
+                if (action.modifier === 'pickUp') { delete mods.tapping; delete mods.pickDown }
+                if (action.modifier === 'vibrato') delete mods.palmMute
+                if (action.modifier === 'palmMute') delete mods.vibrato
               }
               return { ...n, modifiers: mods }
             })
@@ -674,7 +684,13 @@ export function tabEditorReducer(
           ...b,
           notes: b.notes.map((n, si) => {
             if (!selSet.has(`${mi}:${bi}:${si}`)) return n
-            return { ...n, modifiers: { ...n.modifiers, [action.modifier]: true as const } }
+            const mods = { ...n.modifiers, [action.modifier]: true as const }
+            if (action.modifier === 'tapping') { delete mods.pickDown; delete mods.pickUp }
+            if (action.modifier === 'pickDown') { delete mods.tapping; delete mods.pickUp }
+            if (action.modifier === 'pickUp') { delete mods.tapping; delete mods.pickDown }
+            if (action.modifier === 'vibrato') delete mods.palmMute
+            if (action.modifier === 'palmMute') delete mods.vibrato
+            return { ...n, modifiers: mods }
           }),
         })),
       }))

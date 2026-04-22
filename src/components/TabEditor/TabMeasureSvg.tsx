@@ -379,17 +379,6 @@ export function TabMeasureSvg({
                     </text>
                   )}
 
-                  {note?.fret >= 0 && note.modifiers.accent && !isTied && (
-                    <text
-                      x={beatCX + labelW / 2 + 1}
-                      y={sy - 6}
-                      fontSize={8}
-                      fill="#ffdd88"
-                    >
-                      &gt;
-                    </text>
-                  )}
-
                   {/* Per-string hit target */}
                   <rect
                     x={beatX}

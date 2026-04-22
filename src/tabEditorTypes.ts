@@ -15,7 +15,6 @@ export interface DotModifier {
 
 export interface NoteModifiers {
   ghost?: true
-  accent?: true
   staccato?: true
   letRing?: true
   palmMute?: true
@@ -24,14 +23,12 @@ export interface NoteModifiers {
   hammerOn?: true
   pullOff?: true
   legatoSlide?: true
-  shiftSlide?: true
   slideInBelow?: true
   slideInAbove?: true
   slideOutDown?: true
   slideOutUp?: true
   bend?: true
   vibrato?: true
-  trill?: true
   tapping?: true
   pickDown?: true
   pickUp?: true
@@ -87,7 +84,7 @@ export interface TabSelection {
   endBeat: number
 }
 
-export type ConnectionModifierKey = 'hammerOn' | 'pullOff' | 'legatoSlide' | 'shiftSlide'
+export type ConnectionModifierKey = 'hammerOn' | 'pullOff' | 'legatoSlide'
 
 export interface OverflowPending {
   fret: number

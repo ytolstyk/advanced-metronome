@@ -9,11 +9,10 @@ import type {
 } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
 
-const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide', 'shiftSlide']
+const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide']
 
 const MODIFIER_LABELS: Record<string, string> = {
   ghost: 'Ghost',
-  accent: 'Accent',
   staccato: 'Staccato',
   letRing: 'Let ring',
   palmMute: 'Palm mute',
@@ -22,14 +21,12 @@ const MODIFIER_LABELS: Record<string, string> = {
   hammerOn: 'Hammer-on',
   pullOff: 'Pull-off',
   legatoSlide: 'Legato slide',
-  shiftSlide: 'Shift slide',
   slideInBelow: 'Slide in↗',
   slideInAbove: 'Slide in↘',
   slideOutDown: 'Slide out↙',
   slideOutUp: 'Slide out↖',
   bend: 'Bend',
   vibrato: 'Vibrato',
-  trill: 'Trill',
   pickDown: 'Pick↓',
   pickUp: 'Pick↑',
 }
@@ -44,9 +41,8 @@ const DURATIONS: { label: string; value: DurationValue }[] = [
   { label: '1/64', value: 'sixtyfourth' },
 ]
 
-const MODIFIERS: { label: string; key: NoteModifierKey; title: string }[] = [
+const MODIFIERS_BASE: { label: string; key: NoteModifierKey; title: string }[] = [
   { label: '( )', key: 'ghost', title: 'Ghost note' },
-  { label: '>', key: 'accent', title: 'Accent' },
   { label: '·', key: 'staccato', title: 'Staccato' },
   { label: '∞', key: 'letRing', title: 'Let ring' },
   { label: 'PM', key: 'palmMute', title: 'Palm mute' },
@@ -54,22 +50,22 @@ const MODIFIERS: { label: string; key: NoteModifierKey; title: string }[] = [
   { label: '◇', key: 'naturalHarmonic', title: 'Natural harmonic' },
 ]
 
-const CONNECTIONS: { label: string; key: NoteModifierKey; title: string }[] = [
+const CONNECTIONS_BASE: { label: string; key: NoteModifierKey; title: string }[] = [
   { label: 'h', key: 'hammerOn', title: 'Hammer-on' },
   { label: 'p', key: 'pullOff', title: 'Pull-off' },
   { label: '/', key: 'legatoSlide', title: 'Legato slide' },
-  { label: '⇗', key: 'shiftSlide', title: 'Shift slide' },
   { label: '↗', key: 'slideInBelow', title: 'Slide in from below' },
   { label: '↘', key: 'slideInAbove', title: 'Slide in from above' },
   { label: '↙', key: 'slideOutDown', title: 'Slide out downward' },
   { label: '↖', key: 'slideOutUp', title: 'Slide out upward' },
   { label: '⌒', key: 'bend', title: 'Bend' },
   { label: '~', key: 'vibrato', title: 'Vibrato' },
-  { label: 'tr', key: 'trill', title: 'Trill' },
   { label: 'T', key: 'tapping', title: 'Tapping' },
   { label: '⬇', key: 'pickDown', title: 'Pickstroke down' },
   { label: '⬆', key: 'pickUp', title: 'Pickstroke up' },
 ]
+
+const PALM_MUTE_ENTRY = MODIFIERS_BASE.find((m) => m.key === 'palmMute')!
 
 interface TabEditorToolbarProps {
   state: TabEditorState
@@ -119,6 +115,19 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
   const currentNote = currentBeat?.notes[cursor.stringIndex]
   const isOnNote = !!currentNote && currentNote.fret >= 0
 
+  const activeSet = isOnNote ? currentNote.modifiers : activeModifiers
+  const hasTapOrPick = !!(activeSet.tapping || activeSet.pickDown || activeSet.pickUp)
+
+  const MODIFIERS = hasTapOrPick
+    ? MODIFIERS_BASE.filter((m) => m.key !== 'palmMute')
+    : MODIFIERS_BASE
+
+  const CONNECTIONS = hasTapOrPick
+    ? CONNECTIONS_BASE.flatMap((c) =>
+        c.key === 'tapping' ? [PALM_MUTE_ENTRY, c] : [c],
+      )
+    : CONNECTIONS_BASE
+
   function pickDuration(duration: DurationValue) {
     dispatch({ type: 'SET_ACTIVE_DURATION', duration })
     if (currentBeat) {
@@ -146,7 +155,7 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
       return
     }
     if (isOnNote) {
-      if (key === 'legatoSlide' || key === 'shiftSlide') return
+      if (key === 'legatoSlide') return
       if (key === 'pullOff' || key === 'hammerOn') return
       dispatch({ type: 'APPLY_MODIFIER', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, modifier: key })
       return
