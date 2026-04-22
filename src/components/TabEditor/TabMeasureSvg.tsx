@@ -196,7 +196,7 @@ export function TabMeasureSvg({
         <text
           x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + BPM_LABEL_W / 2}
           y={MEASURE_NUMBER_H + 14}
-          fontSize={10}
+          fontSize={13}
           textAnchor="middle"
           dominantBaseline="middle"
           fill="#aac4e8"

@@ -11,9 +11,9 @@ import {
 } from './tabSvgConstants'
 
 // Fixed Y where bend curves peak (in technique zone, above all strings)
-const BEND_TOP_Y = 32
+const BEND_TOP_Y = 26
 // Y for technique-zone effects when a bend is present in the same beat
-const BEND_ELEVATED_Y = MEASURE_NUMBER_H + 4
+const BEND_ELEVATED_Y = MEASURE_NUMBER_H + 2
 
 function formatBendAmount(amount: number): string {
   const whole = Math.floor(amount)

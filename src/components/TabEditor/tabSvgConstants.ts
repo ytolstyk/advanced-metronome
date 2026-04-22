@@ -16,10 +16,10 @@ export const DURATION_MARK_H = 0
 export const TOP_MARGIN = MEASURE_NUMBER_H + TECHNIQUE_ZONE_H + DURATION_MARK_H
 
 // Y positions for specific technique rows within TECHNIQUE_ZONE_H
-export const TAPPING_ZONE_Y = MEASURE_NUMBER_H + 30    // row 1: tapping "T"
-export const VIBRATO_ZONE_Y = MEASURE_NUMBER_H + 30   // row 2: vibrato sine wave
-export const PALM_MUTE_ZONE_Y = MEASURE_NUMBER_H + 30 // row 3: palm mute bracket (no overlap)
-export const PALM_MUTE_ELEVATED_Y = MEASURE_NUMBER_H + 12 // palm mute shifted up when overlapping other effects
+export const TAPPING_ZONE_Y = MEASURE_NUMBER_H + 24    // row 1: tapping "T"
+export const VIBRATO_ZONE_Y = MEASURE_NUMBER_H + 24   // row 2: vibrato sine wave
+export const PALM_MUTE_ZONE_Y = MEASURE_NUMBER_H + 24 // row 3: palm mute bracket (no overlap)
+export const PALM_MUTE_ELEVATED_Y = MEASURE_NUMBER_H + 6 // palm mute shifted up when overlapping other effects
 export const BOTTOM_PADDING = 8
 export const BARLINE_W = 2
 export const TIME_SIG_W = 40 // horizontal space reserved for a stacked time signature
