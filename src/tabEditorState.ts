@@ -422,6 +422,11 @@ export function tabEditorReducer(
       const existingBeat = measure.beats[action.beatIndex]
       const duration = existingBeat ? existingBeat.duration : s.activeDuration
       const dot = existingBeat ? { ...existingBeat.dot } : s.activeDot
+      // Preserve legatoSlide from existing note — it's a connection modifier not in activeModifiers
+      const existingNote = existingBeat?.notes[action.stringIndex]
+      const mergedModifiers = existingNote?.modifiers.legatoSlide
+        ? { ...s.activeModifiers, legatoSlide: true as const }
+        : s.activeModifiers
       const { measure: placedMeasure, overflow } = placeNoteInMeasure(
         measure,
         action.beatIndex,
@@ -429,7 +434,7 @@ export function tabEditorReducer(
         action.fret,
         duration,
         dot,
-        s.activeModifiers,
+        mergedModifiers,
         s.track.stringCount,
         timeSig,
       )
@@ -464,7 +469,25 @@ export function tabEditorReducer(
         }),
       }
 
-      const measures = s.track.measures.map((m, mi) => mi === action.measureIndex ? updatedMeasure : m)
+      // Remove legatoSlide where source and destination frets are equal (no direction = invalid)
+      const slideFixedMeasure = {
+        ...updatedMeasure,
+        beats: updatedMeasure.beats.map((b, bi) => ({
+          ...b,
+          notes: b.notes.map((n, si) => {
+            if (!n.modifiers.legatoSlide) return n
+            const nextFret = updatedMeasure.beats[bi + 1]?.notes[si]?.fret ?? -1
+            if (nextFret >= 0 && nextFret === n.fret) {
+              const mods = { ...n.modifiers }
+              delete mods.legatoSlide
+              return { ...n, modifiers: mods }
+            }
+            return n
+          }),
+        })),
+      }
+
+      const measures = s.track.measures.map((m, mi) => mi === action.measureIndex ? slideFixedMeasure : m)
       return { ...s, track: { ...s.track, measures }, pendingOverflow: null }
     }
 
