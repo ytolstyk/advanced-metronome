@@ -55,25 +55,39 @@ export function TabEditorPage() {
     return audioCtxRef.current
   }
 
-  const previewNote = useCallback(
-    (stringIndex: number, fret: number) => {
-      if (fret < 0) return
+  const previewBeat = useCallback(
+    (at: TabCursor, overrideFret?: { stringIndex: number; fret: number }) => {
+      const beat = state.track.measures[at.measureIndex]?.beats[at.beatIndex]
       const ctx = ensureCtx()
-      const openMidi = state.track.openMidi[stringIndex]
-      if (openMidi === undefined) return
-      const freq = fretToFreq(openMidi, fret)
-      pluckString(ctx, freq, ctx.currentTime, 0.7)
+      const openMidi = state.track.openMidi
+      const played = new Set<number>()
+      if (overrideFret) {
+        const { stringIndex, fret } = overrideFret
+        if (fret >= 0 && openMidi[stringIndex] !== undefined) {
+          pluckString(ctx, fretToFreq(openMidi[stringIndex]!, fret), ctx.currentTime, 0.7)
+          played.add(stringIndex)
+        }
+      }
+      if (beat) {
+        beat.notes.forEach((note, si) => {
+          if (played.has(si)) return
+          if (note.fret < 0) return
+          const open = openMidi[si]
+          if (open === undefined) return
+          pluckString(ctx, fretToFreq(open, note.fret), ctx.currentTime, 0.7)
+        })
+      }
     },
-    [state.track.openMidi],
+    [state.track.measures, state.track.openMidi],
   )
 
   const commitFretAt = useCallback(
     (fret: number, at: TabCursor) => {
       if (fret > 24) return
       dispatch({ type: 'ADD_NOTE', measureIndex: at.measureIndex, beatIndex: at.beatIndex, stringIndex: at.stringIndex, fret })
-      previewNote(at.stringIndex, fret)
+      previewBeat(at, { stringIndex: at.stringIndex, fret })
     },
-    [previewNote],
+    [previewBeat],
   )
 
   const handleDigit = useCallback(
