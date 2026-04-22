@@ -304,7 +304,7 @@ function renderVibratoRuns(
       const isFirst = bi === runStart
       const isLast = bi === endBi
       const x0 = !isFirst && prevPos ? (prevPos.cx + cx) / 2 : cx - slotW / 2 + PAD
-      const x1 = !isLast && nextPos ? (cx + nextPos.cx) / 2 : cx + slotW / 2 - PAD
+      const x1 = !isLast && nextPos ? (cx + nextPos.cx) / 2 : cx + slotW / 2 + PAD
       const totalW = x1 - x0
       const step = totalW / 4
       elements.push(
