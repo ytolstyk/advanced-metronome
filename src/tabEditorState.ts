@@ -508,7 +508,8 @@ export function tabEditorReducer(
         if (action.modifier === 'pickDown') { delete next.tapping; delete next.pickUp }
         if (action.modifier === 'pickUp') { delete next.tapping; delete next.pickDown }
         if (action.modifier === 'vibrato') delete next.palmMute
-        if (action.modifier === 'palmMute') delete next.vibrato
+        if (action.modifier === 'palmMute') { delete next.vibrato; delete next.letRing }
+        if (action.modifier === 'letRing') delete next.palmMute
       }
       return { ...state, activeModifiers: next }
     }
@@ -521,26 +522,32 @@ export function tabEditorReducer(
           ...m,
           beats: m.beats.map((b, bi) => {
             if (bi !== action.beatIndex) return b
+            const cur = b.notes[action.stringIndex]?.modifiers[action.modifier]
+            const setting = !cur
             const notes = b.notes.map((n, si) => {
-              if (si !== action.stringIndex) return n
-              const cur = n.modifiers[action.modifier]
               const mods = { ...n.modifiers }
-              if (cur) {
-                delete mods[action.modifier]
-              } else {
-                mods[action.modifier] = true
-                if (action.modifier === 'hammerOn') delete mods.pullOff
-                if (action.modifier === 'pullOff') delete mods.hammerOn
-                if (action.modifier === 'slideInBelow') delete mods.slideInAbove
-                if (action.modifier === 'slideInAbove') delete mods.slideInBelow
-                if (action.modifier === 'slideOutDown') delete mods.slideOutUp
-                if (action.modifier === 'slideOutUp') delete mods.slideOutDown
-                if (action.modifier === 'tapping') { delete mods.pickDown; delete mods.pickUp }
-                if (action.modifier === 'pickDown') { delete mods.tapping; delete mods.pickUp }
-                if (action.modifier === 'pickUp') { delete mods.tapping; delete mods.pickDown }
-                if (action.modifier === 'vibrato') delete mods.palmMute
-                if (action.modifier === 'palmMute') delete mods.vibrato
+              if (si === action.stringIndex) {
+                if (cur) {
+                  delete mods[action.modifier]
+                } else {
+                  mods[action.modifier] = true
+                  if (action.modifier === 'hammerOn') delete mods.pullOff
+                  if (action.modifier === 'pullOff') delete mods.hammerOn
+                  if (action.modifier === 'slideInBelow') delete mods.slideInAbove
+                  if (action.modifier === 'slideInAbove') delete mods.slideInBelow
+                  if (action.modifier === 'slideOutDown') delete mods.slideOutUp
+                  if (action.modifier === 'slideOutUp') delete mods.slideOutDown
+                  if (action.modifier === 'tapping') { delete mods.pickDown; delete mods.pickUp }
+                  if (action.modifier === 'pickDown') { delete mods.tapping; delete mods.pickUp }
+                  if (action.modifier === 'pickUp') { delete mods.tapping; delete mods.pickDown }
+                  if (action.modifier === 'vibrato') delete mods.palmMute
+                  if (action.modifier === 'palmMute') { delete mods.vibrato; delete mods.letRing }
+                  if (action.modifier === 'letRing') delete mods.palmMute
+                }
               }
+              // Beat-level exclusivity: clear the opposing modifier from every note
+              if (setting && action.modifier === 'palmMute') delete mods.letRing
+              if (setting && action.modifier === 'letRing') delete mods.palmMute
               return { ...n, modifiers: mods }
             })
             return { ...b, notes }
@@ -682,11 +689,11 @@ export function tabEditorReducer(
         const note = state.track.measures[c.measureIndex]?.beats[c.beatIndex]?.notes[c.stringIndex]
         return note && note.fret >= 0 && !!note.modifiers[action.modifier]
       })
+      const setting = !allHave
       const measures = s.track.measures.map((m, mi) => ({
         ...m,
-        beats: m.beats.map((b, bi) => ({
-          ...b,
-          notes: b.notes.map((n, si) => {
+        beats: m.beats.map((b, bi) => {
+          const afterModifier = b.notes.map((n, si) => {
             if (!selSet.has(`${mi}:${bi}:${si}`)) return n
             if (allHave) {
               const mods = { ...n.modifiers }
@@ -698,10 +705,20 @@ export function tabEditorReducer(
             if (action.modifier === 'pickDown') { delete mods.tapping; delete mods.pickUp }
             if (action.modifier === 'pickUp') { delete mods.tapping; delete mods.pickDown }
             if (action.modifier === 'vibrato') delete mods.palmMute
-            if (action.modifier === 'palmMute') delete mods.vibrato
+            if (action.modifier === 'palmMute') { delete mods.vibrato; delete mods.letRing }
+            if (action.modifier === 'letRing') delete mods.palmMute
             return { ...n, modifiers: mods }
-          }),
-        })),
+          })
+          // Beat-level exclusivity: clear the opposing modifier from every note in the beat
+          if (setting && (action.modifier === 'palmMute' || action.modifier === 'letRing')) {
+            const opposing = action.modifier === 'palmMute' ? 'letRing' : 'palmMute'
+            const beatHasModifier = afterModifier.some((n) => n.modifiers[action.modifier])
+            if (beatHasModifier) {
+              return { ...b, notes: afterModifier.map((n) => { const mods = { ...n.modifiers }; delete mods[opposing]; return { ...n, modifiers: mods } }) }
+            }
+          }
+          return { ...b, notes: afterModifier }
+        }),
       }))
       return { ...s, track: { ...s.track, measures } }
     }

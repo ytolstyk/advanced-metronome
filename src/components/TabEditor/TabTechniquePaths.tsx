@@ -7,6 +7,8 @@ import {
   VIBRATO_ZONE_Y,
   PALM_MUTE_ZONE_Y,
   PALM_MUTE_ELEVATED_Y,
+  LET_RING_ZONE_Y,
+  LET_RING_ELEVATED_Y,
   stringY,
 } from './tabSvgConstants'
 
@@ -263,6 +265,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
   // Vibrato and palm mute: rendered as runs so the whole connected segment shares one Y level
   renderVibratoRuns(measure, beatPositions, elements)
   renderPalmMuteRuns(measure, beatPositions, elements)
+  renderLetRingRuns(measure, beatPositions, elements)
 
   return <g>{elements}</g>
 }
@@ -383,6 +386,57 @@ function renderPalmMuteRuns(
     const beat = measure.beats[bi]
     const hasPM = beat.notes.some((n) => n.fret >= 0 && n.modifiers.palmMute)
     if (hasPM) {
+      if (runStart === null) runStart = bi
+    } else {
+      flushRun(bi - 1)
+    }
+  }
+  flushRun(measure.beats.length - 1)
+}
+
+function renderLetRingRuns(
+  measure: Measure,
+  beatPositions: BeatPosition[],
+  elements: React.ReactNode[],
+) {
+  const PAD = 4
+  let runStart: number | null = null
+
+  function flushRun(endBi: number) {
+    if (runStart === null) return
+    const startPos = beatPositions[runStart]
+    const endPos = beatPositions[endBi]
+    if (!startPos || !endPos) { runStart = null; return }
+    const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.fret >= 0 && n.modifiers.bend))
+    const baseTopY = runHasOverlap(measure, runStart, endBi) ? LET_RING_ELEVATED_Y : LET_RING_ZONE_Y
+    const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
+    const startSlotW = computeNoteSlotW(measure.beats[runStart])
+    const endSlotW = computeNoteSlotW(measure.beats[endBi])
+    const x1 = startPos.cx - startSlotW / 2 + PAD
+    const x2 = endPos.cx + endSlotW / 2 - PAD
+    elements.push(
+      <g key={`lr-${runStart}-${endBi}`}>
+        <line
+          x1={x1}
+          y1={topY}
+          x2={x2}
+          y2={topY}
+          stroke="#88ddff"
+          strokeWidth={1.5}
+          strokeDasharray="4 2"
+        />
+        <text x={x1} y={topY - 2} fontSize={8} fill="#88ddff" dominantBaseline="auto">
+          ring
+        </text>
+      </g>,
+    )
+    runStart = null
+  }
+
+  for (let bi = 0; bi < measure.beats.length; bi++) {
+    const beat = measure.beats[bi]
+    const hasLR = beat.notes.some((n) => n.fret >= 0 && n.modifiers.letRing)
+    if (hasLR) {
       if (runStart === null) runStart = bi
     } else {
       flushRun(bi - 1)
