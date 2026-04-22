@@ -6,6 +6,8 @@ import {
   TOP_MARGIN,
   BARLINE_W,
   MEASURE_NUMBER_H,
+  MEASURE_NUMBER_FONT_SIZE,
+  NOTE_FONT_SIZE,
   TIME_SIG_W,
   BPM_LABEL_W,
   stringY,
@@ -103,7 +105,7 @@ export function TabMeasureSvg({
       <text
         x={BARLINE_W + 2}
         y={topStringY - 4}
-        fontSize={12}
+        fontSize={MEASURE_NUMBER_FONT_SIZE}
         fontWeight={600}
         fill="#a0a0b8"
         dominantBaseline="auto"
@@ -339,19 +341,6 @@ export function TabMeasureSvg({
                     />
                   )}
 
-                  {isNoteSelected && (
-                    <rect
-                      x={beatCX - labelW / 2 - 2}
-                      y={sy - 12}
-                      width={labelW + 4}
-                      height={24}
-                      fill="none"
-                      stroke="#14b8a6"
-                      strokeWidth={2}
-                      rx={3}
-                    />
-                  )}
-
                   {hasNote && (
                     <rect
                       x={beatCX - labelW / 2}
@@ -367,7 +356,7 @@ export function TabMeasureSvg({
                     <text
                       x={beatCX}
                       y={sy}
-                      fontSize={13}
+                      fontSize={NOTE_FONT_SIZE}
                       fontWeight="600"
                       fontStyle={fontStyle}
                       fontFamily="'Courier New', monospace"
@@ -377,6 +366,19 @@ export function TabMeasureSvg({
                     >
                       {fretLabel}
                     </text>
+                  )}
+
+                  {isNoteSelected && (
+                    <rect
+                      x={beatCX - labelW / 2 - 2}
+                      y={sy - 12}
+                      width={labelW + 4}
+                      height={24}
+                      fill="none"
+                      stroke="#14b8a6"
+                      strokeWidth={2}
+                      rx={3}
+                    />
                   )}
 
                   {/* Per-string hit target */}
