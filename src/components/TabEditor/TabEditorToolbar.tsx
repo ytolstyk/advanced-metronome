@@ -81,7 +81,7 @@ function ToolBtn({
 }: {
   title: string
   active?: boolean
-  activeEffect?: boolean
+  activeEffect?: boolean | 'partial'
   onClick: () => void
   children: React.ReactNode
 }) {
@@ -93,7 +93,8 @@ function ToolBtn({
       className={cn(
         'tab-tool-btn',
         active && 'active',
-        activeEffect && 'active-effect',
+        activeEffect === true && 'active-effect',
+        activeEffect === 'partial' && 'active-effect-partial',
       )}
       onClick={onClick}
     >
@@ -118,12 +119,16 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
   const activeSet = isOnNote ? currentNote.modifiers : activeModifiers
   const hasTapOrPick = !!(activeSet.tapping || activeSet.pickDown || activeSet.pickUp)
 
-  function allSelectedHave(key: NoteModifierKey): boolean {
+  function selectionEffectState(key: NoteModifierKey): true | 'partial' | false {
     if (noteSelection.length < 2) return false
-    return noteSelection.every((c) => {
+    let count = 0
+    for (const c of noteSelection) {
       const note = state.track.measures[c.measureIndex]?.beats[c.beatIndex]?.notes[c.stringIndex]
-      return note && note.fret >= 0 && !!note.modifiers[key]
-    })
+      if (note && note.fret >= 0 && note.modifiers[key]) count++
+    }
+    if (count === 0) return false
+    if (count === noteSelection.length) return true
+    return 'partial'
   }
 
   const MODIFIERS = hasTapOrPick
@@ -204,7 +209,7 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
           <ToolBtn
             key={mod.key}
             title={mod.title}
-            activeEffect={noteSelection.length >= 2 ? allSelectedHave(mod.key) : isOnNote ? !!currentNote.modifiers[mod.key] : !!activeModifiers[mod.key]}
+            activeEffect={noteSelection.length >= 2 ? selectionEffectState(mod.key) : isOnNote ? !!currentNote.modifiers[mod.key] : !!activeModifiers[mod.key]}
             onClick={() => {
               if (noteSelection.length >= 2) {
                 dispatch({ type: 'APPLY_MODIFIER_TO_SELECTION', modifier: mod.key })
@@ -243,8 +248,8 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
         {CONNECTIONS.map((c) => {
           const isConnectionKey = (CONNECTION_KEYS as NoteModifierKey[]).includes(c.key)
           const multi = noteSelection.length >= 2 && isConnectionKey
-          const activeEffectVal = multi
-            ? false
+          const activeEffectVal = noteSelection.length >= 2
+            ? selectionEffectState(c.key)
             : isOnNote
               ? !!currentNote.modifiers[c.key]
               : !!activeModifiers[c.key]
