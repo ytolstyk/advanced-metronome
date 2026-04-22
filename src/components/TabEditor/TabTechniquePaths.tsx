@@ -213,8 +213,8 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
       if (note.modifiers.bend) {
         const amount = note.bendAmount ?? 1
         const label = formatBendAmount(amount)
-        const startX = cx + 2
-        const endX = cx + 18
+        const startX = cx + 6
+        const endX = cx + 24
         elements.push(
           <g key={`bend-${key}`}>
             <path
