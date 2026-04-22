@@ -371,7 +371,7 @@ function renderPalmMuteRuns(
           strokeWidth={1.5}
           strokeDasharray="4 2"
         />
-        <text x={x1 + 2} y={topY - 2} fontSize={8} fill="#ffaa44" dominantBaseline="auto">
+        <text x={x1} y={topY - 2} fontSize={8} fill="#ffaa44" dominantBaseline="auto">
           P.M.
         </text>
       </g>,
