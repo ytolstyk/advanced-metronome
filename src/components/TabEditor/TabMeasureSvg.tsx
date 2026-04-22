@@ -291,112 +291,136 @@ export function TabMeasureSvg({
               onMouseEnter={() => onBeatMouseEnter(measureIndex, bi)}
             />
 
-            {/* Per-string fret numbers */}
-            {Array.from({ length: stringCount }, (_, rawSi) => {
-              const si = stringCount - 1 - rawSi
-              const note = beat.notes[si]
-              const sy = stringY(si, stringCount)
-              const isCursorNote = isCursorCol && cursor.stringIndex === si
-              const isNoteSelected =
-                noteSelection.some(
-                  (s) => s.measureIndex === measureIndex && s.beatIndex === bi && s.stringIndex === si,
-                ) || (isCursorNote && !!note && note.fret >= 0)
-
-              let fretLabel = ''
-              let fretFill = '#e8e8e8'
-              let fontStyle: 'normal' | 'italic' = 'normal'
-
-              if (note && note.fret >= 0) {
-                if (isTied) {
-                  fretLabel = `(${note.fret})`
-                  fretFill = '#666'
-                } else if (note.modifiers.dead) {
-                  fretLabel = 'X'
-                  fretFill = '#cc4444'
-                } else if (note.modifiers.naturalHarmonic) {
-                  fretLabel = `<${note.fret}>`
-                  fretFill = '#88ccff'
-                  fontStyle = 'italic'
-                } else if (note.modifiers.ghost) {
-                  fretLabel = `(${note.fret})`
-                  fretFill = '#888888'
-                } else {
-                  fretLabel = String(note.fret)
-                }
+            {/* Per-string fret numbers — two passes so selection outlines always paint on top */}
+            {(() => {
+              type StringData = {
+                si: number
+                sy: number
+                isCursorNote: boolean
+                isNoteSelected: boolean
+                hasNote: boolean
+                fretLabel: string
+                fretFill: string
+                fontStyle: 'normal' | 'italic'
+                labelW: number
               }
+              const strings: StringData[] = Array.from({ length: stringCount }, (_, rawSi) => {
+                const si = stringCount - 1 - rawSi
+                const note = beat.notes[si]
+                const sy = stringY(si, stringCount)
+                const isCursorNote = isCursorCol && cursor.stringIndex === si
+                const isNoteSelected =
+                  noteSelection.some(
+                    (s) => s.measureIndex === measureIndex && s.beatIndex === bi && s.stringIndex === si,
+                  ) || (isCursorNote && !!note && note.fret >= 0)
 
-              const hasNote = fretLabel !== ''
-              const labelW = Math.max(fretLabel.length * 8 + 4, 18)
+                let fretLabel = ''
+                let fretFill = '#e8e8e8'
+                let fontStyle: 'normal' | 'italic' = 'normal'
+
+                if (note && note.fret >= 0) {
+                  if (isTied) {
+                    fretLabel = `(${note.fret})`
+                    fretFill = '#666'
+                  } else if (note.modifiers.dead) {
+                    fretLabel = 'X'
+                    fretFill = '#cc4444'
+                  } else if (note.modifiers.naturalHarmonic) {
+                    fretLabel = `<${note.fret}>`
+                    fretFill = '#88ccff'
+                    fontStyle = 'italic'
+                  } else if (note.modifiers.ghost) {
+                    fretLabel = `(${note.fret})`
+                    fretFill = '#888888'
+                  } else {
+                    fretLabel = String(note.fret)
+                  }
+                }
+
+                const hasNote = fretLabel !== ''
+                const labelW = Math.max(fretLabel.length * 8 + 4, 18)
+                return { si, sy, isCursorNote, isNoteSelected, hasNote, fretLabel, fretFill, fontStyle, labelW }
+              })
 
               return (
-                <g key={si}>
-                  {isCursorNote && (
-                    <rect
-                      x={beatCX - labelW / 2}
-                      y={sy - 11}
-                      width={labelW}
-                      height={22}
-                      fill="rgba(99,102,241,0.45)"
-                      rx={2}
-                    />
-                  )}
+                <>
+                  {/* Pass 1: cursor highlights, note backgrounds, texts, hit targets */}
+                  {strings.map(({ si, sy, isCursorNote, hasNote, fretLabel, fretFill, fontStyle, labelW }) => (
+                    <g key={si}>
+                      {isCursorNote && (
+                        <rect
+                          x={beatCX - labelW / 2}
+                          y={sy - 11}
+                          width={labelW}
+                          height={22}
+                          fill="rgba(99,102,241,0.45)"
+                          rx={2}
+                        />
+                      )}
 
-                  {hasNote && (
-                    <rect
-                      x={beatCX - labelW / 2}
-                      y={sy - 10}
-                      width={labelW}
-                      height={20}
-                      fill="#111"
-                      rx={2}
-                    />
-                  )}
+                      {hasNote && (
+                        <rect
+                          x={beatCX - labelW / 2}
+                          y={sy - 10}
+                          width={labelW}
+                          height={20}
+                          fill="#111"
+                          rx={2}
+                        />
+                      )}
 
-                  {hasNote && (
-                    <text
-                      x={beatCX}
-                      y={sy}
-                      fontSize={NOTE_FONT_SIZE}
-                      fontWeight="600"
-                      fontStyle={fontStyle}
-                      fontFamily="'Courier New', monospace"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fill={fretFill}
-                    >
-                      {fretLabel}
-                    </text>
-                  )}
+                      {hasNote && (
+                        <text
+                          x={beatCX}
+                          y={sy}
+                          fontSize={NOTE_FONT_SIZE}
+                          fontWeight="600"
+                          fontStyle={fontStyle}
+                          fontFamily="'Courier New', monospace"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill={fretFill}
+                        >
+                          {fretLabel}
+                        </text>
+                      )}
 
-                  {isNoteSelected && (
-                    <rect
-                      x={beatCX - labelW / 2 - 2}
-                      y={sy - 12}
-                      width={labelW + 4}
-                      height={24}
-                      fill="none"
-                      stroke="#14b8a6"
-                      strokeWidth={2}
-                      rx={3}
-                    />
-                  )}
+                      {/* Per-string hit target */}
+                      <rect
+                        x={beatX}
+                        y={sy - 10}
+                        width={beatW}
+                        height={20}
+                        fill="transparent"
+                        style={{ cursor: 'pointer' }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation()
+                          onBeatMouseDown(measureIndex, bi, si, e.shiftKey)
+                        }}
+                      />
+                    </g>
+                  ))}
 
-                  {/* Per-string hit target */}
-                  <rect
-                    x={beatX}
-                    y={sy - 10}
-                    width={beatW}
-                    height={20}
-                    fill="transparent"
-                    style={{ cursor: 'pointer' }}
-                    onMouseDown={(e) => {
-                      e.stopPropagation()
-                      onBeatMouseDown(measureIndex, bi, si, e.shiftKey)
-                    }}
-                  />
-                </g>
+                  {/* Pass 2: selection outlines on top of all note backgrounds */}
+                  {strings.map(({ si, sy, isNoteSelected, labelW }) =>
+                    isNoteSelected ? (
+                      <rect
+                        key={`sel-${si}`}
+                        x={beatCX - labelW / 2 - 2}
+                        y={sy - 12}
+                        width={labelW + 4}
+                        height={24}
+                        fill="none"
+                        stroke="#14b8a6"
+                        strokeWidth={2}
+                        rx={3}
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    ) : null
+                  )}
+                </>
               )
-            })}
+            })()}
           </g>
         )
       })}
