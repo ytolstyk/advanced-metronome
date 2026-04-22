@@ -418,7 +418,7 @@ export function tabEditorReducer(
 
       const timeSig = measure.timeSignature ?? state.track.globalTimeSig
       const s = pushUndo(state)
-      const { measure: updatedMeasure, overflow } = placeNoteInMeasure(
+      const { measure: placedMeasure, overflow } = placeNoteInMeasure(
         measure,
         action.beatIndex,
         action.stringIndex,
@@ -432,6 +432,30 @@ export function tabEditorReducer(
 
       if (overflow) {
         return { ...state, pendingOverflow: { ...overflow, measureIndex: action.measureIndex } }
+      }
+
+      // Beat-level PM/LR sync: if any note in the affected beat has palmMute or letRing,
+      // propagate it to all notes with a fret on that beat (clearing the opposing modifier).
+      const affectedBi = action.beatIndex < measure.beats.length ? action.beatIndex : placedMeasure.beats.length - 1
+      const updatedMeasure = {
+        ...placedMeasure,
+        beats: placedMeasure.beats.map((b, bi) => {
+          if (bi !== affectedBi) return b
+          const hasPM = b.notes.some((n) => n.fret >= 0 && n.modifiers.palmMute)
+          const hasLR = b.notes.some((n) => n.fret >= 0 && n.modifiers.letRing)
+          if (!hasPM && !hasLR) return b
+          const dominant = hasPM ? 'palmMute' : 'letRing'
+          const opposing = hasPM ? 'letRing' : 'palmMute'
+          return {
+            ...b,
+            notes: b.notes.map((n) => {
+              if (n.fret < 0) return n
+              const mods = { ...n.modifiers, [dominant]: true as const }
+              delete mods[opposing]
+              return { ...n, modifiers: mods }
+            }),
+          }
+        }),
       }
 
       const measures = s.track.measures.map((m, mi) => mi === action.measureIndex ? updatedMeasure : m)
@@ -545,9 +569,12 @@ export function tabEditorReducer(
                   if (action.modifier === 'letRing') delete mods.palmMute
                 }
               }
-              // Beat-level exclusivity: clear the opposing modifier from every note
-              if (setting && action.modifier === 'palmMute') delete mods.letRing
-              if (setting && action.modifier === 'letRing') delete mods.palmMute
+              // Beat-level spread: PM/LR applied to one note applies to all notes with a fret
+              if (setting && (action.modifier === 'palmMute' || action.modifier === 'letRing') && n.fret >= 0) {
+                const opposing = action.modifier === 'palmMute' ? 'letRing' : 'palmMute'
+                mods[action.modifier] = true
+                delete mods[opposing]
+              }
               return { ...n, modifiers: mods }
             })
             return { ...b, notes }
