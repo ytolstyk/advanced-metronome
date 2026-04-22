@@ -678,12 +678,21 @@ export function tabEditorReducer(
       const selSet = new Set(
         state.noteSelection.map((c) => `${c.measureIndex}:${c.beatIndex}:${c.stringIndex}`),
       )
+      const allHave = state.noteSelection.every((c) => {
+        const note = state.track.measures[c.measureIndex]?.beats[c.beatIndex]?.notes[c.stringIndex]
+        return note && note.fret >= 0 && !!note.modifiers[action.modifier]
+      })
       const measures = s.track.measures.map((m, mi) => ({
         ...m,
         beats: m.beats.map((b, bi) => ({
           ...b,
           notes: b.notes.map((n, si) => {
             if (!selSet.has(`${mi}:${bi}:${si}`)) return n
+            if (allHave) {
+              const mods = { ...n.modifiers }
+              delete mods[action.modifier]
+              return { ...n, modifiers: mods }
+            }
             const mods = { ...n.modifiers, [action.modifier]: true as const }
             if (action.modifier === 'tapping') { delete mods.pickDown; delete mods.pickUp }
             if (action.modifier === 'pickDown') { delete mods.tapping; delete mods.pickUp }
@@ -727,12 +736,27 @@ export function tabEditorReducer(
       }
 
       const conflictKey = isHO ? 'pullOff' : isPO ? 'hammerOn' : null
+      const allHaveConnection = toMark.size > 0 && [...toMark].every((key) => {
+        const [tmi, tbi, tsi] = key.split(':').map(Number)
+        const note = s.track.measures[tmi!]?.beats[tbi!]?.notes[tsi!]
+        return note && !!note.modifiers[action.modifier]
+      })
+      const selSetAll = new Set(
+        state.noteSelection.map((c) => `${c.measureIndex}:${c.beatIndex}:${c.stringIndex}`),
+      )
       const measures = s.track.measures.map((m, mi) => ({
         ...m,
         beats: m.beats.map((b, bi) => ({
           ...b,
           notes: b.notes.map((n, si) => {
-            if (!toMark.has(`${mi}:${bi}:${si}`)) return n
+            const noteKey = `${mi}:${bi}:${si}`
+            if (allHaveConnection) {
+              if (!selSetAll.has(noteKey)) return n
+              const mods = { ...n.modifiers }
+              delete mods[action.modifier]
+              return { ...n, modifiers: mods }
+            }
+            if (!toMark.has(noteKey)) return n
             const mods = { ...n.modifiers, [action.modifier]: true as const }
             if (conflictKey) delete mods[conflictKey]
             return { ...n, modifiers: mods }

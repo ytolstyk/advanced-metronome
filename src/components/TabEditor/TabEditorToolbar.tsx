@@ -118,6 +118,14 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
   const activeSet = isOnNote ? currentNote.modifiers : activeModifiers
   const hasTapOrPick = !!(activeSet.tapping || activeSet.pickDown || activeSet.pickUp)
 
+  function allSelectedHave(key: NoteModifierKey): boolean {
+    if (noteSelection.length < 2) return false
+    return noteSelection.every((c) => {
+      const note = state.track.measures[c.measureIndex]?.beats[c.beatIndex]?.notes[c.stringIndex]
+      return note && note.fret >= 0 && !!note.modifiers[key]
+    })
+  }
+
   const MODIFIERS = hasTapOrPick
     ? MODIFIERS_BASE.filter((m) => m.key !== 'palmMute')
     : MODIFIERS_BASE
@@ -196,7 +204,7 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
           <ToolBtn
             key={mod.key}
             title={mod.title}
-            activeEffect={isOnNote ? !!currentNote.modifiers[mod.key] : !!activeModifiers[mod.key]}
+            activeEffect={noteSelection.length >= 2 ? allSelectedHave(mod.key) : isOnNote ? !!currentNote.modifiers[mod.key] : !!activeModifiers[mod.key]}
             onClick={() => {
               if (noteSelection.length >= 2) {
                 dispatch({ type: 'APPLY_MODIFIER_TO_SELECTION', modifier: mod.key })
