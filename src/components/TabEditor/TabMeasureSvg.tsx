@@ -220,6 +220,25 @@ export function TabMeasureSvg({
         strokeWidth={BARLINE_W}
       />
 
+      {/* Continuous selection highlight — one rect spanning first→last selected beat */}
+      {(() => {
+        const selBeats = measure.beats.map((_, bi) => bi).filter((bi) => isInSelection(selection, measureIndex, bi))
+        if (selBeats.length === 0) return null
+        const firstPos = beatPositions[selBeats[0]!]
+        const lastPos = beatPositions[selBeats[selBeats.length - 1]!]
+        if (!firstPos || !lastPos) return null
+        return (
+          <rect
+            x={firstPos.x}
+            y={MEASURE_NUMBER_H}
+            width={lastPos.x + lastPos.w - firstPos.x}
+            height={svgH - MEASURE_NUMBER_H}
+            fill="rgba(90,60,20,0.35)"
+            style={{ pointerEvents: 'none' }}
+          />
+        )
+      })()}
+
       {/* Real beat columns */}
       {measure.beats.map((beat, bi) => {
         const pos = beatPositions[bi]
@@ -227,13 +246,11 @@ export function TabMeasureSvg({
         const { x: beatX, cx: beatCX, w: beatW } = pos
 
         const isCursorCol = isCursorOnThisMeasure && cursor.beatIndex === bi
-        const isSelected = isInSelection(selection, measureIndex, bi)
         const isPlayhead = isPlaying && playheadMeasure === measureIndex && playheadBeat === bi
 
         let overlayFill = 'none'
         if (isPlayhead) overlayFill = 'rgba(30,100,50,0.3)'
         else if (isCursorCol) overlayFill = 'rgba(42,90,140,0.25)'
-        else if (isSelected) overlayFill = 'rgba(90,60,20,0.35)'
 
         const isTied = beat.tiedFrom === true
 
