@@ -364,10 +364,12 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
         <div className="tab-toolbar-group" data-group="note-info">
           <span className="tab-tool-label">Applied</span>
           <span className="tab-note-effects-strip">
-            {(Object.keys(currentNote.modifiers) as (keyof typeof currentNote.modifiers)[])
-              .filter((k) => currentNote.modifiers[k])
-              .map((k) => MODIFIER_LABELS[k] ?? k)
-              .join(' · ')}
+            {currentNote
+              ? (Object.keys(currentNote.modifiers) as (keyof typeof currentNote.modifiers)[])
+                  .filter((k) => currentNote.modifiers[k])
+                  .map((k) => MODIFIER_LABELS[k] ?? k)
+                  .join(' · ')
+              : ''}
           </span>
         </div>
       )}
