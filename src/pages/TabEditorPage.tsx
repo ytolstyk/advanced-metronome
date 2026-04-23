@@ -13,6 +13,7 @@ import {
 import { TabPlaybackEngine } from '../audio/TabPlaybackEngine'
 import { pluckString } from '../audio/pluckString'
 import {
+  TabEditorErrorBoundary,
   TabEditorHeader,
   TabEditorToolbar,
   TabEditorPlayback,
@@ -354,14 +355,16 @@ export function TabEditorPage() {
         onStop={handleStop}
         dispatch={dispatch}
       />
-      <TabSvgCanvas
-        state={state}
-        containerWidth={containerWidth}
-        canvasRef={canvasRef}
-        dispatch={dispatch}
-        onBeatMouseDown={onBeatMouseDown}
-        onBeatMouseEnter={onBeatMouseEnter}
-      />
+      <TabEditorErrorBoundary>
+        <TabSvgCanvas
+          state={state}
+          containerWidth={containerWidth}
+          canvasRef={canvasRef}
+          dispatch={dispatch}
+          onBeatMouseDown={onBeatMouseDown}
+          onBeatMouseEnter={onBeatMouseEnter}
+        />
+      </TabEditorErrorBoundary>
 
       {/* Overflow dialog */}
       {overflow && (

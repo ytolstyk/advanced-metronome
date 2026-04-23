@@ -1,3 +1,4 @@
+export { TabEditorErrorBoundary } from './TabEditorErrorBoundary'
 export { TabEditorHeader } from './TabEditorHeader'
 export { TabEditorToolbar } from './TabEditorToolbar'
 export { TabEditorPlayback } from './TabEditorPlayback'
