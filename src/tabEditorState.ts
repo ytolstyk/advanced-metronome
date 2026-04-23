@@ -422,11 +422,10 @@ export function tabEditorReducer(
       const existingBeat = measure.beats[action.beatIndex]
       const duration = existingBeat ? existingBeat.duration : s.activeDuration
       const dot = existingBeat ? { ...existingBeat.dot } : s.activeDot
-      // Preserve legatoSlide from existing note — it's a connection modifier not in activeModifiers
+      // Preserve existing note modifiers when editing; activeModifiers can add on top
       const existingNote = existingBeat?.notes[action.stringIndex]
-      const mergedModifiers = existingNote?.modifiers.legatoSlide
-        ? { ...s.activeModifiers, legatoSlide: true as const }
-        : s.activeModifiers
+      const baseModifiers = (existingNote && existingNote.fret >= 0) ? existingNote.modifiers : {}
+      const mergedModifiers = { ...baseModifiers, ...s.activeModifiers }
       const { measure: placedMeasure, overflow } = placeNoteInMeasure(
         measure,
         action.beatIndex,
@@ -503,6 +502,11 @@ export function tabEditorReducer(
               if (si !== action.stringIndex) return n
               return { fret: -1, modifiers: {} }
             })
+            // If no fret-bearing notes remain, clear beat-level modifiers from all notes
+            const hasAnyFret = notes.some((n) => n.fret >= 0)
+            if (!hasAnyFret) {
+              return { ...b, notes: notes.map((n) => ({ ...n, modifiers: {} })) }
+            }
             return { ...b, notes }
           }),
         }
