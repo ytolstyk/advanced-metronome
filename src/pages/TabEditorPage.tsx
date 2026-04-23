@@ -151,12 +151,20 @@ export function TabEditorPage() {
         case 'ArrowLeft':
           e.preventDefault()
           flushDigitBuf()
-          dispatch({ type: 'MOVE_CURSOR', direction: 'left' })
+          if (e.shiftKey) {
+            dispatch({ type: 'SHIFT_MOVE_CURSOR', direction: 'left' })
+          } else {
+            dispatch({ type: 'MOVE_CURSOR', direction: 'left' })
+          }
           return
         case 'ArrowRight':
           e.preventDefault()
           flushDigitBuf()
-          dispatch({ type: 'MOVE_CURSOR', direction: 'right' })
+          if (e.shiftKey) {
+            dispatch({ type: 'SHIFT_MOVE_CURSOR', direction: 'right' })
+          } else {
+            dispatch({ type: 'MOVE_CURSOR', direction: 'right' })
+          }
           return
         case 'ArrowUp':
           e.preventDefault()

@@ -152,6 +152,7 @@ export function createInitialTabState(): TabEditorState {
     track,
     cursor: { measureIndex: 0, beatIndex: 0, stringIndex: 0 },
     selection: null,
+    selectionAnchor: null,
     noteSelection: [],
     clipboard: null,
     activeDuration: 'quarter',
@@ -244,7 +245,7 @@ function getSelectedBeats(track: TabTrack, sel: TabSelection): Beat[] {
   return result
 }
 
-function normalizeSelection(sel: TabSelection): TabSelection {
+export function normalizeSelection(sel: TabSelection): TabSelection {
   const [sm, sb, em, eb] =
     sel.startMeasure < sel.endMeasure ||
     (sel.startMeasure === sel.endMeasure && sel.startBeat <= sel.endBeat)
@@ -377,6 +378,8 @@ export type TabEditorAction =
   | { type: 'INSERT_MEASURE_AFTER'; measureIndex: number }
   | { type: 'DELETE_MEASURE'; measureIndex: number }
   | { type: 'MOVE_CURSOR'; direction: 'left' | 'right' | 'up' | 'down' }
+  | { type: 'SHIFT_MOVE_CURSOR'; direction: 'left' | 'right' }
+  | { type: 'APPLY_MODIFIER_TO_BEAT_SELECTION'; modifier: NoteModifierKey }
   | { type: 'SET_CURSOR'; cursor: TabCursor }
   | { type: 'SET_SELECTION'; selection: TabSelection | null }
   | { type: 'COPY' }
@@ -691,7 +694,7 @@ export function tabEditorReducer(
       function withBeatSync(newCursor: TabCursor, extraState?: Partial<TabEditorState>): TabEditorState {
         const beat = track.measures[newCursor.measureIndex]?.beats[newCursor.beatIndex]
         const durationSync = beat ? { activeDuration: beat.duration, activeDot: { ...beat.dot } } : {}
-        return { ...state, ...durationSync, ...extraState, cursor: newCursor, selection: null }
+        return { ...state, ...durationSync, ...extraState, cursor: newCursor, selection: null, selectionAnchor: null }
       }
 
       if (action.direction === 'right') {
@@ -726,7 +729,86 @@ export function tabEditorReducer(
     }
 
     case 'SET_SELECTION':
-      return { ...state, selection: action.selection }
+      return { ...state, selection: action.selection, selectionAnchor: action.selection === null ? null : state.selectionAnchor }
+
+    case 'SHIFT_MOVE_CURSOR': {
+      const { cursor, track } = state
+      const anchor = state.selectionAnchor ?? cursor
+      const newCursor = action.direction === 'right'
+        ? advanceCursorRight(cursor, track)
+        : advanceCursorLeft(cursor, track)
+      if (newCursor === cursor) return state
+      const beat = track.measures[newCursor.measureIndex]?.beats[newCursor.beatIndex]
+      const durationSync = beat ? { activeDuration: beat.duration, activeDot: { ...beat.dot } } : {}
+      const selection: TabSelection = {
+        startMeasure: anchor.measureIndex,
+        startBeat: anchor.beatIndex,
+        endMeasure: newCursor.measureIndex,
+        endBeat: newCursor.beatIndex,
+      }
+      return { ...state, ...durationSync, cursor: newCursor, selection, selectionAnchor: anchor }
+    }
+
+    case 'APPLY_MODIFIER_TO_BEAT_SELECTION': {
+      const sel = state.selection
+      if (!sel) return state
+      const s = pushUndo(state)
+      const norm = normalizeSelection(sel)
+
+      const selBeatSet = new Set<string>()
+      for (let mi = norm.startMeasure; mi <= norm.endMeasure; mi++) {
+        const m = state.track.measures[mi]
+        if (!m) continue
+        const bStart = mi === norm.startMeasure ? norm.startBeat : 0
+        const bEnd = mi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+        for (let bi = bStart; bi <= bEnd; bi++) selBeatSet.add(`${mi}:${bi}`)
+      }
+
+      const allHave = [...selBeatSet].every((key) => {
+        const [tmi, tbi] = key.split(':').map(Number)
+        const beat = state.track.measures[tmi!]?.beats[tbi!]
+        if (!beat) return true
+        return beat.notes.every((n) => n.fret < 0 || !!n.modifiers[action.modifier])
+      })
+      const setting = !allHave
+
+      const measures = s.track.measures.map((m, mi) => ({
+        ...m,
+        beats: m.beats.map((b, bi) => {
+          if (!selBeatSet.has(`${mi}:${bi}`)) return b
+          const afterModifier = b.notes.map((n) => {
+            if (n.fret < 0) return n
+            if (!setting) {
+              const mods = { ...n.modifiers }
+              delete mods[action.modifier]
+              return { ...n, modifiers: mods }
+            }
+            const mods = { ...n.modifiers, [action.modifier]: true as const }
+            if (action.modifier === 'tapping') { delete mods.pickDown; delete mods.pickUp }
+            if (action.modifier === 'pickDown') { delete mods.tapping; delete mods.pickUp }
+            if (action.modifier === 'pickUp') { delete mods.tapping; delete mods.pickDown }
+            if (action.modifier === 'staccato') { delete mods.vibrato; delete mods.palmMute; delete mods.letRing }
+            if (action.modifier === 'vibrato') { delete mods.palmMute; delete mods.staccato }
+            if (action.modifier === 'palmMute') { delete mods.vibrato; delete mods.letRing; delete mods.staccato }
+            if (action.modifier === 'letRing') { delete mods.palmMute; delete mods.staccato }
+            return { ...n, modifiers: mods }
+          })
+          if (setting && (action.modifier === 'palmMute' || action.modifier === 'letRing' || action.modifier === 'staccato')) {
+            return {
+              ...b, notes: afterModifier.map((n) => {
+                const mods = { ...n.modifiers }
+                if (action.modifier === 'palmMute') { delete mods.letRing; delete mods.staccato }
+                if (action.modifier === 'letRing') { delete mods.palmMute; delete mods.staccato }
+                if (action.modifier === 'staccato') { delete mods.palmMute; delete mods.letRing; delete mods.vibrato }
+                return { ...n, modifiers: mods }
+              }),
+            }
+          }
+          return { ...b, notes: afterModifier }
+        }),
+      }))
+      return { ...s, track: { ...s.track, measures } }
+    }
 
     case 'TOGGLE_NOTE_IN_SELECTION': {
       const { measureIndex: mi, beatIndex: bi, stringIndex: si } = action.cursor

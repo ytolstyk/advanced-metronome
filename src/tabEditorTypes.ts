@@ -100,6 +100,7 @@ export interface TabEditorState {
   track: TabTrack
   cursor: TabCursor
   selection: TabSelection | null
+  selectionAnchor: TabCursor | null
   noteSelection: TabCursor[]
   clipboard: Beat[] | null
   activeDuration: DurationValue

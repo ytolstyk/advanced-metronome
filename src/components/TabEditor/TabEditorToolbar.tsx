@@ -8,6 +8,7 @@ import type {
   TabEditorState,
 } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
+import { normalizeSelection } from '../../tabEditorState'
 
 const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide']
 
@@ -76,12 +77,14 @@ function ToolBtn({
   title,
   active,
   activeEffect,
+  disabled,
   onClick,
   children,
 }: {
   title: string
   active?: boolean
   activeEffect?: boolean | 'partial'
+  disabled?: boolean
   onClick: () => void
   children: React.ReactNode
 }) {
@@ -90,6 +93,7 @@ function ToolBtn({
       variant="ghost"
       size="sm"
       title={title}
+      disabled={disabled}
       className={cn(
         'tab-tool-btn',
         active && 'active',
@@ -119,6 +123,9 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
   const activeSet = isOnNote ? currentNote.modifiers : activeModifiers
   const hasTapOrPick = !!(activeSet.tapping || activeSet.pickDown || activeSet.pickUp)
 
+  // Beat-range selection (shift+arrow) takes precedence over single-note mode
+  const hasBeatSelection = !!state.selection && noteSelection.length < 2
+
   function selectionEffectState(key: NoteModifierKey): true | 'partial' | false {
     if (noteSelection.length < 2) return false
     let count = 0
@@ -129,6 +136,45 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
     if (count === 0) return false
     if (count === noteSelection.length) return true
     return 'partial'
+  }
+
+  function beatSelectionEffectState(key: NoteModifierKey): true | 'partial' | false {
+    if (!state.selection) return false
+    const norm = normalizeSelection(state.selection)
+    let total = 0, withMod = 0
+    for (let smi = norm.startMeasure; smi <= norm.endMeasure; smi++) {
+      const m = state.track.measures[smi]
+      if (!m) continue
+      const bStart = smi === norm.startMeasure ? norm.startBeat : 0
+      const bEnd = smi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+      for (let sbi = bStart; sbi <= bEnd; sbi++) {
+        const beat = m.beats[sbi]
+        if (!beat) continue
+        beat.notes.forEach((n) => {
+          if (n.fret < 0) return
+          total++
+          if (n.modifiers[key]) withMod++
+        })
+      }
+    }
+    if (total === 0) return false
+    if (withMod === total) return true
+    if (withMod === 0) return false
+    return 'partial'
+  }
+
+  function countBeatSelectionBeats(): number {
+    if (!state.selection) return 0
+    const norm = normalizeSelection(state.selection)
+    let count = 0
+    for (let smi = norm.startMeasure; smi <= norm.endMeasure; smi++) {
+      const m = state.track.measures[smi]
+      if (!m) continue
+      const bStart = smi === norm.startMeasure ? norm.startBeat : 0
+      const bEnd = smi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+      count += Math.max(0, bEnd - bStart + 1)
+    }
+    return count
   }
 
   const MODIFIERS = hasTapOrPick
@@ -158,12 +204,20 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
     }
   }
 
+  const CONNECTION_KEYS_SET = new Set<NoteModifierKey>(CONNECTION_KEYS)
+
   function onConnectionClick(key: NoteModifierKey) {
     if (noteSelection.length >= 2) {
-      if ((CONNECTION_KEYS as NoteModifierKey[]).includes(key)) {
+      if (CONNECTION_KEYS_SET.has(key)) {
         dispatch({ type: 'APPLY_CONNECTION_TO_SELECTION', modifier: key as ConnectionModifierKey })
       } else {
         dispatch({ type: 'APPLY_MODIFIER_TO_SELECTION', modifier: key })
+      }
+      return
+    }
+    if (hasBeatSelection) {
+      if (!CONNECTION_KEYS_SET.has(key)) {
+        dispatch({ type: 'APPLY_MODIFIER_TO_BEAT_SELECTION', modifier: key })
       }
       return
     }
@@ -204,15 +258,29 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
 
       {/* Effects group */}
       <div className="tab-toolbar-group" data-group="effects">
-        <span className="tab-tool-label">Effects</span>
+        <span className="tab-tool-label">
+          Effects{hasBeatSelection ? ` · ${countBeatSelectionBeats()} beats` : ''}
+        </span>
         {MODIFIERS.map((mod) => (
           <ToolBtn
             key={mod.key}
             title={mod.title}
-            activeEffect={noteSelection.length >= 2 ? selectionEffectState(mod.key) : isOnNote ? !!currentNote.modifiers[mod.key] : !!activeModifiers[mod.key]}
+            activeEffect={
+              noteSelection.length >= 2
+                ? selectionEffectState(mod.key)
+                : hasBeatSelection
+                  ? beatSelectionEffectState(mod.key)
+                  : isOnNote
+                    ? !!currentNote.modifiers[mod.key]
+                    : !!activeModifiers[mod.key]
+            }
             onClick={() => {
               if (noteSelection.length >= 2) {
                 dispatch({ type: 'APPLY_MODIFIER_TO_SELECTION', modifier: mod.key })
+                return
+              }
+              if (hasBeatSelection) {
+                dispatch({ type: 'APPLY_MODIFIER_TO_BEAT_SELECTION', modifier: mod.key })
                 return
               }
               if (isOnNote) {
@@ -230,21 +298,25 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
       {/* Connections group */}
       <div className="tab-toolbar-group" data-group="techniques">
         <span className="tab-tool-label">
-          Techniques{noteSelection.length >= 2 ? ` · ${noteSelection.length} selected` : ''}
+          Techniques{noteSelection.length >= 2 ? ` · ${noteSelection.length} selected` : hasBeatSelection ? ` · ${countBeatSelectionBeats()} beats` : ''}
         </span>
         {CONNECTIONS.map((c) => {
-          const isConnectionKey = (CONNECTION_KEYS as NoteModifierKey[]).includes(c.key)
+          const isConnectionKey = CONNECTION_KEYS_SET.has(c.key)
           const multi = noteSelection.length >= 2 && isConnectionKey
+          const disabledForBeatSel = hasBeatSelection && isConnectionKey
           const activeEffectVal = noteSelection.length >= 2
             ? selectionEffectState(c.key)
-            : isOnNote
-              ? !!currentNote.modifiers[c.key]
-              : !!activeModifiers[c.key]
+            : hasBeatSelection
+              ? (isConnectionKey ? false : beatSelectionEffectState(c.key))
+              : isOnNote
+                ? !!currentNote.modifiers[c.key]
+                : !!activeModifiers[c.key]
           return (
             <ToolBtn
               key={c.key}
               title={multi ? `Apply ${c.title} between selected notes` : c.title}
               activeEffect={activeEffectVal}
+              disabled={disabledForBeatSel}
               onClick={() => onConnectionClick(c.key)}
             >
               {c.label}
