@@ -1,11 +1,5 @@
 import type { Beat, Measure, TabNote } from '../../tabEditorTypes'
-import { BEAT_WIDTH } from '../../tabEditorState'
-
-export const BEND_EXTRA_W = 16 // extra width added to beats that contain a bend
-
-export function beatHasBend(beat: Beat): boolean {
-  return beat.notes.some((n) => n.fret >= 0 && n.modifiers.bend)
-}
+import { BEAT_WIDTH, BEAT_WIDTHS } from '../../tabEditorState'
 
 export const STRING_SPACING = 20
 export const STRING_LABEL_W = 28
@@ -30,6 +24,14 @@ export const BARLINE_W = 2
 export const TIME_SIG_W = 40 // horizontal space reserved for a stacked time signature
 export const BPM_LABEL_W = 52 // horizontal space reserved for a BPM display
 
+export function beatHasBend(beat: Beat): boolean {
+  return beat.notes.some((n) => n.fret >= 0 && n.modifiers.bend)
+}
+
+export const BEAT_LEFT_PAD = 12        // fixed left space before every beat's note anchor (same for all durations)
+export const MEASURE_BEATS_OFFSET = 18 // x offset from measure left edge to first beat slot
+export const BEND_EXTRA_W = 16        // extra width added to beats that contain a bend
+
 export function rowSvgHeight(stringCount: number): number {
   return TOP_MARGIN + stringCount * STRING_SPACING + BOTTOM_PADDING
 }
@@ -40,14 +42,14 @@ export function stringY(si: number, stringCount: number): number {
 
 // virtualSlots: 0 or 1 — whether to include width for the pending virtual beat slot
 export function measureWidth(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false): number {
-  const bendBonus = m.beats.reduce((acc, b) => acc + (beatHasBend(b) ? BEND_EXTRA_W : 0), 0)
-  return BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + (m.beats.length + virtualSlots) * BEAT_WIDTH + bendBonus + BARLINE_W
+  const beatsW = m.beats.reduce((acc, b) => acc + BEAT_LEFT_PAD + BEAT_WIDTHS[b.duration] + (beatHasBend(b) ? BEND_EXTRA_W : 0), 0)
+  return MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + beatsW + virtualSlots * (BEAT_LEFT_PAD + BEAT_WIDTH) + BARLINE_W
 }
 
 export interface BeatPosition {
-  x: number  // left edge of beat (after left barline)
-  cx: number // center x
-  w: number  // width
+  x: number  // left edge of beat slot
+  cx: number // note anchor (x + BEAT_LEFT_PAD)
+  w: number  // total slot width (BEAT_LEFT_PAD + right spacing)
 }
 
 export interface FretLabelData {
@@ -67,12 +69,13 @@ export function formatFretLabel(note: TabNote, isTied: boolean): FretLabelData {
 
 export function computeBeatPositions(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false): BeatPosition[] {
   const positions: BeatPosition[] = []
-  let x = BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0)
+  let x = MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0)
   const totalSlots = m.beats.length + virtualSlots
   for (let i = 0; i < totalSlots; i++) {
     const beat = m.beats[i]
-    const w = BEAT_WIDTH + (beat && beatHasBend(beat) ? BEND_EXTRA_W : 0)
-    positions.push({ x, cx: x + w / 2, w })
+    const rightW = beat ? BEAT_WIDTHS[beat.duration] : BEAT_WIDTH
+    const w = BEAT_LEFT_PAD + rightW + (beat && beatHasBend(beat) ? BEND_EXTRA_W : 0)
+    positions.push({ x, cx: x + BEAT_LEFT_PAD, w })
     x += w
   }
   return positions

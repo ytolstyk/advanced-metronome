@@ -53,16 +53,16 @@ function applyBeatSpreadConflicts(mods: NoteModifiers, modifier: NoteModifierKey
   }
 }
 
-// All beats are the same visual width regardless of duration
+// Quarter note reference width; longer durations get more space, shorter get less.
 export const BEAT_WIDTH = 40
 export const BEAT_WIDTHS: Record<DurationValue, number> = {
-  whole: BEAT_WIDTH,
-  half: BEAT_WIDTH,
-  quarter: BEAT_WIDTH,
-  eighth: BEAT_WIDTH,
-  sixteenth: BEAT_WIDTH,
-  thirtysecond: BEAT_WIDTH,
-  sixtyfourth: BEAT_WIDTH,
+  whole:        56,
+  half:         46,
+  quarter:      38,
+  eighth:       32,
+  sixteenth:    28,
+  thirtysecond: 24,
+  sixtyfourth:  20,
 }
 
 const DURATION_BEATS: Record<DurationValue, number> = {
