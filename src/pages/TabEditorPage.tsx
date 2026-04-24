@@ -142,6 +142,8 @@ export function TabEditorPage() {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
 
+      if (state.isPlaying) return
+
       // Block keyboard input while overflow dialog is open
       if (state.pendingOverflow) {
         if (e.key === 'Escape') {

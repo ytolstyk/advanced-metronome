@@ -271,7 +271,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
 
         let overlayFill = 'none'
         if (isPlayhead) overlayFill = 'rgba(30,100,50,0.3)'
-        else if (isCursorCol) overlayFill = 'rgba(42,90,140,0.25)'
+        else if (isCursorCol && !isPlaying) overlayFill = 'rgba(42,90,140,0.25)'
 
         const isTied = beat.tiedFrom === true
 
@@ -360,7 +360,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                   {/* Pass 1: cursor highlights, note backgrounds, texts, hit targets */}
                   {strings.map(({ si, sy, isCursorNote, hasNote, fretLabel, fretFill, fontStyle, labelW }) => (
                     <g key={si}>
-                      {isCursorNote && (
+                      {isCursorNote && !isPlaying && (
                         <rect
                           x={beatCX - labelW / 2}
                           y={sy - 11}
@@ -442,7 +442,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         const vPos = beatPositions[measure.beats.length]
         if (!vPos) return null
         const { x: vX, cx: vCX, w: vW } = vPos
-        const overlayFill = isVirtualCursor ? 'rgba(42,90,140,0.25)' : 'none'
+        const overlayFill = isVirtualCursor && !isPlaying ? 'rgba(42,90,140,0.25)' : 'none'
 
         return (
           <g>
@@ -464,7 +464,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             </text>
 
             {/* Cursor highlight for active string in virtual slot */}
-            {isVirtualCursor && (() => {
+            {isVirtualCursor && !isPlaying && (() => {
               const sy = stringY(cursor.stringIndex, stringCount)
               return (
                 <rect

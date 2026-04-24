@@ -56,13 +56,13 @@ function applyBeatSpreadConflicts(mods: NoteModifiers, modifier: NoteModifierKey
 // Quarter note reference width; longer durations get more space, shorter get less.
 export const BEAT_WIDTH = 40
 export const BEAT_WIDTHS: Record<DurationValue, number> = {
-  whole:        56,
-  half:         46,
-  quarter:      38,
-  eighth:       32,
-  sixteenth:    28,
-  thirtysecond: 24,
-  sixtyfourth:  20,
+  whole:        50,
+  half:         42,
+  quarter:      34,
+  eighth:       26,
+  sixteenth:    20,
+  thirtysecond: 14,
+  sixtyfourth:  10,
 }
 
 const DURATION_BEATS: Record<DurationValue, number> = {
