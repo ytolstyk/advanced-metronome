@@ -45,6 +45,9 @@
   align-items: stretch;
   flex-wrap: wrap;
   gap: 0;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
   background: #111;
   border-bottom: 1px solid #222;
 }
@@ -52,6 +55,7 @@
 .tab-toolbar-group {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 2px;
   padding: 4px 8px;
   border-right: 1px solid #222;
