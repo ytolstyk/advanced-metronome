@@ -31,9 +31,14 @@ export function TabEditorPage() {
   const digitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevCursorRef = useRef<TabCursor | null>(null)
   const dragRef = useRef<{ measureIndex: number; beatIndex: number } | null>(null)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    saveTabTrack(state.track)
+    if (saveTimerRef.current !== null) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => saveTabTrack(state.track), 1000)
+    return () => {
+      if (saveTimerRef.current !== null) clearTimeout(saveTimerRef.current)
+    }
   }, [state.track])
 
   useEffect(() => {

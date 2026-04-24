@@ -1,4 +1,4 @@
-import type { Beat, Measure } from '../../tabEditorTypes'
+import type { Beat, Measure, TabNote } from '../../tabEditorTypes'
 import { BEAT_WIDTH } from '../../tabEditorState'
 
 export const BEND_EXTRA_W = 16 // extra width added to beats that contain a bend
@@ -48,6 +48,21 @@ export interface BeatPosition {
   x: number  // left edge of beat (after left barline)
   cx: number // center x
   w: number  // width
+}
+
+export interface FretLabelData {
+  label: string
+  fill: string
+  fontStyle: 'normal' | 'italic'
+}
+
+export function formatFretLabel(note: TabNote, isTied: boolean): FretLabelData {
+  if (note.fret < 0) return { label: '', fill: '#e8e8e8', fontStyle: 'normal' }
+  if (isTied) return { label: `(${note.fret})`, fill: '#666', fontStyle: 'normal' }
+  if (note.modifiers.dead) return { label: 'X', fill: '#cc4444', fontStyle: 'normal' }
+  if (note.modifiers.naturalHarmonic) return { label: `<${note.fret}>`, fill: '#88ccff', fontStyle: 'italic' }
+  if (note.modifiers.ghost) return { label: `(${note.fret})`, fill: '#888888', fontStyle: 'normal' }
+  return { label: String(note.fret), fill: '#e8e8e8', fontStyle: 'normal' }
 }
 
 export function computeBeatPositions(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false): BeatPosition[] {

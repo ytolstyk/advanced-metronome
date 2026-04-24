@@ -1,3 +1,4 @@
+import { memo, useCallback } from 'react'
 import type { DurationValue, Measure, TabCursor, TabSelection, TabTrack } from '../../tabEditorTypes'
 import { isInSelection, measureCapacityBeats, measureUsedBeats } from '../../tabEditorState'
 import { TUNINGS } from '../../data/tunings'
@@ -14,6 +15,7 @@ import {
   rowSvgHeight,
   measureWidth,
   computeBeatPositions,
+  formatFretLabel,
 } from './tabSvgConstants'
 
 interface TabMeasureSvgProps {
@@ -23,7 +25,7 @@ interface TabMeasureSvgProps {
   track: TabTrack
   cursor: TabCursor
   selection: TabSelection | null
-  noteSelection: TabCursor[]
+  noteSelectionSet: Set<string>
   isPlaying: boolean
   playheadMeasure: number
   playheadBeat: number
@@ -53,14 +55,14 @@ function restSymbol(d: DurationValue): string {
   }
 }
 
-export function TabMeasureSvg({
+export const TabMeasureSvg = memo(function TabMeasureSvg({
   measure,
   measureIndex,
   xOffset,
   track,
   cursor,
   selection,
-  noteSelection,
+  noteSelectionSet,
   isPlaying,
   playheadMeasure,
   playheadBeat,
@@ -98,6 +100,25 @@ export function TabMeasureSvg({
 
   const isCursorOnThisMeasure = cursor.measureIndex === measureIndex
   const isVirtualCursor = isCursorOnThisMeasure && cursor.beatIndex === measure.beats.length
+
+  // Stable event handlers — one closure per measure, not per string × beat
+  const handleStringMouseDown = useCallback(
+    (e: React.MouseEvent<SVGRectElement>) => {
+      e.stopPropagation()
+      const bi = parseInt(e.currentTarget.dataset.bi ?? '0', 10)
+      const si = parseInt(e.currentTarget.dataset.si ?? '0', 10)
+      onBeatMouseDown(measureIndex, bi, si, e.shiftKey)
+    },
+    [onBeatMouseDown, measureIndex],
+  )
+
+  const handleBeatMouseEnter = useCallback(
+    (e: React.MouseEvent<SVGRectElement>) => {
+      const bi = parseInt(e.currentTarget.dataset.bi ?? '0', 10)
+      onBeatMouseEnter(measureIndex, bi)
+    },
+    [onBeatMouseEnter, measureIndex],
+  )
 
   return (
     <g transform={`translate(${xOffset}, 0)`}>
@@ -254,15 +275,9 @@ export function TabMeasureSvg({
 
         const isTied = beat.tiedFrom === true
 
+        // Use formatFretLabel to compute colW — same logic as per-string rendering below
         const colW = beat.notes.reduce((max, n) => {
-          let label = ''
-          if (n && n.fret >= 0) {
-            if (isTied) label = `(${n.fret})`
-            else if (n.modifiers.dead) label = 'X'
-            else if (n.modifiers.naturalHarmonic) label = `<${n.fret}>`
-            else if (n.modifiers.ghost) label = `(${n.fret})`
-            else label = String(n.fret)
-          }
+          const { label } = formatFretLabel(n, isTied)
           return Math.max(max, Math.max(label.length * 8 + 4, 18))
         }, 18)
 
@@ -305,7 +320,8 @@ export function TabMeasureSvg({
               width={beatW}
               height={svgH - TOP_MARGIN}
               fill="transparent"
-              onMouseEnter={() => onBeatMouseEnter(measureIndex, bi)}
+              data-bi={bi}
+              onMouseEnter={handleBeatMouseEnter}
             />
 
             {/* Per-string fret numbers — two passes so selection outlines always paint on top */}
@@ -327,32 +343,12 @@ export function TabMeasureSvg({
                 const sy = stringY(si, stringCount)
                 const isCursorNote = isCursorCol && cursor.stringIndex === si
                 const isNoteSelected =
-                  noteSelection.some(
-                    (s) => s.measureIndex === measureIndex && s.beatIndex === bi && s.stringIndex === si,
-                  ) || (isCursorNote && !!note && note.fret >= 0)
+                  noteSelectionSet.has(`${measureIndex}:${bi}:${si}`) ||
+                  (isCursorNote && !!note && note.fret >= 0)
 
-                let fretLabel = ''
-                let fretFill = '#e8e8e8'
-                let fontStyle: 'normal' | 'italic' = 'normal'
-
-                if (note && note.fret >= 0) {
-                  if (isTied) {
-                    fretLabel = `(${note.fret})`
-                    fretFill = '#666'
-                  } else if (note.modifiers.dead) {
-                    fretLabel = 'X'
-                    fretFill = '#cc4444'
-                  } else if (note.modifiers.naturalHarmonic) {
-                    fretLabel = `<${note.fret}>`
-                    fretFill = '#88ccff'
-                    fontStyle = 'italic'
-                  } else if (note.modifiers.ghost) {
-                    fretLabel = `(${note.fret})`
-                    fretFill = '#888888'
-                  } else {
-                    fretLabel = String(note.fret)
-                  }
-                }
+                const { label: fretLabel, fill: fretFill, fontStyle } = note
+                  ? formatFretLabel(note, isTied)
+                  : { label: '', fill: '#e8e8e8', fontStyle: 'normal' as const }
 
                 const hasNote = fretLabel !== ''
                 const labelW = Math.max(fretLabel.length * 8 + 4, 18)
@@ -402,7 +398,7 @@ export function TabMeasureSvg({
                         </text>
                       )}
 
-                      {/* Per-string hit target */}
+                      {/* Per-string hit target — data attributes carry bi/si so one stable handler serves all */}
                       <rect
                         x={beatX}
                         y={sy - 10}
@@ -410,10 +406,9 @@ export function TabMeasureSvg({
                         height={20}
                         fill="transparent"
                         style={{ cursor: 'pointer' }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation()
-                          onBeatMouseDown(measureIndex, bi, si, e.shiftKey)
-                        }}
+                        data-bi={bi}
+                        data-si={si}
+                        onMouseDown={handleStringMouseDown}
                       />
                     </g>
                   ))}
@@ -483,7 +478,7 @@ export function TabMeasureSvg({
               )
             })()}
 
-            {/* Click target for virtual slot */}
+            {/* Click/hover target for virtual slot */}
             <rect
               x={vX}
               y={TOP_MARGIN}
@@ -491,11 +486,10 @@ export function TabMeasureSvg({
               height={svgH - TOP_MARGIN}
               fill="transparent"
               style={{ cursor: 'pointer' }}
-              onMouseDown={(e) => {
-                e.stopPropagation()
-                onBeatMouseDown(measureIndex, measure.beats.length, cursor.stringIndex, e.shiftKey)
-              }}
-              onMouseEnter={() => onBeatMouseEnter(measureIndex, measure.beats.length)}
+              data-bi={measure.beats.length}
+              data-si={cursor.stringIndex}
+              onMouseDown={handleStringMouseDown}
+              onMouseEnter={handleBeatMouseEnter}
             />
           </g>
         )
@@ -543,4 +537,4 @@ export function TabMeasureSvg({
         })}
     </g>
   )
-}
+})

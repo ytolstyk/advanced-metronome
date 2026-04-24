@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type {
@@ -126,22 +127,35 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
   // Beat-range selection (shift+arrow) takes precedence over single-note mode
   const hasBeatSelection = !!state.selection && noteSelection.length < 2
 
-  function selectionEffectState(key: NoteModifierKey): true | 'partial' | false {
-    if (noteSelection.length < 2) return false
-    let count = 0
+  // Compute modifier counts for all selected notes once — O(selection) vs O(selection × modifiers)
+  const selectionModCounts = useMemo(() => {
+    const counts: Partial<Record<NoteModifierKey, number>> = {}
+    if (noteSelection.length < 2) return counts
     for (const c of noteSelection) {
       const note = state.track.measures[c.measureIndex]?.beats[c.beatIndex]?.notes[c.stringIndex]
-      if (note && note.fret >= 0 && note.modifiers[key]) count++
+      if (note && note.fret >= 0) {
+        for (const k of Object.keys(note.modifiers) as NoteModifierKey[]) {
+          if (note.modifiers[k]) counts[k] = (counts[k] ?? 0) + 1
+        }
+      }
     }
+    return counts
+  }, [noteSelection, state.track])
+
+  function selectionEffectState(key: NoteModifierKey): true | 'partial' | false {
+    if (noteSelection.length < 2) return false
+    const count = selectionModCounts[key] ?? 0
     if (count === 0) return false
     if (count === noteSelection.length) return true
     return 'partial'
   }
 
-  function beatSelectionEffectState(key: NoteModifierKey): true | 'partial' | false {
-    if (!state.selection) return false
+  // Compute modifier totals for the beat-range selection once — O(selection) vs O(selection × modifiers)
+  const beatSelectionStats = useMemo(() => {
+    if (!state.selection) return null
     const norm = normalizeSelection(state.selection)
-    let total = 0, withMod = 0
+    let total = 0
+    const withMod: Partial<Record<NoteModifierKey, number>> = {}
     for (let smi = norm.startMeasure; smi <= norm.endMeasure; smi++) {
       const m = state.track.measures[smi]
       if (!m) continue
@@ -150,16 +164,25 @@ export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
       for (let sbi = bStart; sbi <= bEnd; sbi++) {
         const beat = m.beats[sbi]
         if (!beat) continue
-        beat.notes.forEach((n) => {
-          if (n.fret < 0) return
+        for (const n of beat.notes) {
+          if (n.fret < 0) continue
           total++
-          if (n.modifiers[key]) withMod++
-        })
+          for (const k of Object.keys(n.modifiers) as NoteModifierKey[]) {
+            if (n.modifiers[k]) withMod[k] = (withMod[k] ?? 0) + 1
+          }
+        }
       }
     }
+    return { total, withMod }
+  }, [state.selection, state.track])
+
+  function beatSelectionEffectState(key: NoteModifierKey): true | 'partial' | false {
+    if (!beatSelectionStats) return false
+    const { total, withMod } = beatSelectionStats
     if (total === 0) return false
-    if (withMod === total) return true
-    if (withMod === 0) return false
+    const count = withMod[key] ?? 0
+    if (count === total) return true
+    if (count === 0) return false
     return 'partial'
   }
 

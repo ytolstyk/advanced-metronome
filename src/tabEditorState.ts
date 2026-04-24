@@ -19,6 +19,40 @@ import { TUNINGS } from './data/tunings'
 const TAB_STORAGE_KEY = 'tab-editor-track'
 const MAX_UNDO = 50
 
+const MODIFIER_CONFLICTS: Partial<Record<NoteModifierKey, NoteModifierKey[]>> = {
+  hammerOn: ['pullOff'],
+  pullOff: ['hammerOn'],
+  slideInBelow: ['slideInAbove'],
+  slideInAbove: ['slideInBelow'],
+  slideOutDown: ['slideOutUp'],
+  slideOutUp: ['slideOutDown'],
+  tapping: ['pickDown', 'pickUp'],
+  pickDown: ['tapping', 'pickUp'],
+  pickUp: ['tapping', 'pickDown'],
+  staccato: ['vibrato', 'palmMute', 'letRing'],
+  vibrato: ['palmMute', 'staccato'],
+  palmMute: ['vibrato', 'letRing', 'staccato'],
+  letRing: ['palmMute', 'staccato'],
+}
+
+function applyModifierConflicts(mods: NoteModifiers, modifier: NoteModifierKey): void {
+  for (const conflict of MODIFIER_CONFLICTS[modifier] ?? []) {
+    delete mods[conflict]
+  }
+}
+
+const BEAT_SPREAD_CONFLICTS: Partial<Record<NoteModifierKey, NoteModifierKey[]>> = {
+  palmMute: ['letRing', 'staccato'],
+  letRing: ['palmMute', 'staccato'],
+  staccato: ['palmMute', 'letRing', 'vibrato'],
+}
+
+function applyBeatSpreadConflicts(mods: NoteModifiers, modifier: NoteModifierKey): void {
+  for (const conflict of BEAT_SPREAD_CONFLICTS[modifier] ?? []) {
+    delete mods[conflict]
+  }
+}
+
 // All beats are the same visual width regardless of duration
 export const BEAT_WIDTH = 40
 export const BEAT_WIDTHS: Record<DurationValue, number> = {
@@ -560,17 +594,7 @@ export function tabEditorReducer(
         delete next[action.modifier]
       } else {
         next[action.modifier] = true
-        if (action.modifier === 'slideInBelow') delete next.slideInAbove
-        if (action.modifier === 'slideInAbove') delete next.slideInBelow
-        if (action.modifier === 'slideOutDown') delete next.slideOutUp
-        if (action.modifier === 'slideOutUp') delete next.slideOutDown
-        if (action.modifier === 'tapping') { delete next.pickDown; delete next.pickUp }
-        if (action.modifier === 'pickDown') { delete next.tapping; delete next.pickUp }
-        if (action.modifier === 'pickUp') { delete next.tapping; delete next.pickDown }
-        if (action.modifier === 'staccato') { delete next.vibrato; delete next.palmMute; delete next.letRing }
-        if (action.modifier === 'vibrato') { delete next.palmMute; delete next.staccato }
-        if (action.modifier === 'palmMute') { delete next.vibrato; delete next.letRing; delete next.staccato }
-        if (action.modifier === 'letRing') { delete next.palmMute; delete next.staccato }
+        applyModifierConflicts(next, action.modifier)
       }
       return { ...state, activeModifiers: next }
     }
@@ -592,27 +616,13 @@ export function tabEditorReducer(
                   delete mods[action.modifier]
                 } else {
                   mods[action.modifier] = true
-                  if (action.modifier === 'hammerOn') delete mods.pullOff
-                  if (action.modifier === 'pullOff') delete mods.hammerOn
-                  if (action.modifier === 'slideInBelow') delete mods.slideInAbove
-                  if (action.modifier === 'slideInAbove') delete mods.slideInBelow
-                  if (action.modifier === 'slideOutDown') delete mods.slideOutUp
-                  if (action.modifier === 'slideOutUp') delete mods.slideOutDown
-                  if (action.modifier === 'tapping') { delete mods.pickDown; delete mods.pickUp }
-                  if (action.modifier === 'pickDown') { delete mods.tapping; delete mods.pickUp }
-                  if (action.modifier === 'pickUp') { delete mods.tapping; delete mods.pickDown }
-                  if (action.modifier === 'staccato') { delete mods.vibrato; delete mods.palmMute; delete mods.letRing }
-                  if (action.modifier === 'vibrato') { delete mods.palmMute; delete mods.staccato }
-                  if (action.modifier === 'palmMute') { delete mods.vibrato; delete mods.letRing; delete mods.staccato }
-                  if (action.modifier === 'letRing') { delete mods.palmMute; delete mods.staccato }
+                  applyModifierConflicts(mods, action.modifier)
                 }
               }
               // Beat-level spread: PM/LR/staccato applied to one note applies to all notes with a fret
               if (setting && (action.modifier === 'palmMute' || action.modifier === 'letRing' || action.modifier === 'staccato') && n.fret >= 0) {
                 mods[action.modifier] = true
-                if (action.modifier === 'palmMute') { delete mods.letRing; delete mods.staccato }
-                if (action.modifier === 'letRing') { delete mods.palmMute; delete mods.staccato }
-                if (action.modifier === 'staccato') { delete mods.palmMute; delete mods.letRing; delete mods.vibrato }
+                applyBeatSpreadConflicts(mods, action.modifier)
               }
               return { ...n, modifiers: mods }
             })
@@ -784,22 +794,14 @@ export function tabEditorReducer(
               return { ...n, modifiers: mods }
             }
             const mods = { ...n.modifiers, [action.modifier]: true as const }
-            if (action.modifier === 'tapping') { delete mods.pickDown; delete mods.pickUp }
-            if (action.modifier === 'pickDown') { delete mods.tapping; delete mods.pickUp }
-            if (action.modifier === 'pickUp') { delete mods.tapping; delete mods.pickDown }
-            if (action.modifier === 'staccato') { delete mods.vibrato; delete mods.palmMute; delete mods.letRing }
-            if (action.modifier === 'vibrato') { delete mods.palmMute; delete mods.staccato }
-            if (action.modifier === 'palmMute') { delete mods.vibrato; delete mods.letRing; delete mods.staccato }
-            if (action.modifier === 'letRing') { delete mods.palmMute; delete mods.staccato }
+            applyModifierConflicts(mods, action.modifier)
             return { ...n, modifiers: mods }
           })
           if (setting && (action.modifier === 'palmMute' || action.modifier === 'letRing' || action.modifier === 'staccato')) {
             return {
               ...b, notes: afterModifier.map((n) => {
                 const mods = { ...n.modifiers }
-                if (action.modifier === 'palmMute') { delete mods.letRing; delete mods.staccato }
-                if (action.modifier === 'letRing') { delete mods.palmMute; delete mods.staccato }
-                if (action.modifier === 'staccato') { delete mods.palmMute; delete mods.letRing; delete mods.vibrato }
+                applyBeatSpreadConflicts(mods, action.modifier)
                 return { ...n, modifiers: mods }
               }),
             }
@@ -857,13 +859,7 @@ export function tabEditorReducer(
               return { ...n, modifiers: mods }
             }
             const mods = { ...n.modifiers, [action.modifier]: true as const }
-            if (action.modifier === 'tapping') { delete mods.pickDown; delete mods.pickUp }
-            if (action.modifier === 'pickDown') { delete mods.tapping; delete mods.pickUp }
-            if (action.modifier === 'pickUp') { delete mods.tapping; delete mods.pickDown }
-            if (action.modifier === 'staccato') { delete mods.vibrato; delete mods.palmMute; delete mods.letRing }
-            if (action.modifier === 'vibrato') { delete mods.palmMute; delete mods.staccato }
-            if (action.modifier === 'palmMute') { delete mods.vibrato; delete mods.letRing; delete mods.staccato }
-            if (action.modifier === 'letRing') { delete mods.palmMute; delete mods.staccato }
+            applyModifierConflicts(mods, action.modifier)
             return { ...n, modifiers: mods }
           })
           // Beat-level exclusivity: clear opposing modifiers from every note in the beat
@@ -873,9 +869,7 @@ export function tabEditorReducer(
               return {
                 ...b, notes: afterModifier.map((n) => {
                   const mods = { ...n.modifiers }
-                  if (action.modifier === 'palmMute') { delete mods.letRing; delete mods.staccato }
-                  if (action.modifier === 'letRing') { delete mods.palmMute; delete mods.staccato }
-                  if (action.modifier === 'staccato') { delete mods.palmMute; delete mods.letRing; delete mods.vibrato }
+                  applyBeatSpreadConflicts(mods, action.modifier)
                   return { ...n, modifiers: mods }
                 }),
               }

@@ -58,7 +58,9 @@
       "Bash(./node_modules/.bin/eslint src/components/TabEditor/ 2>&1)",
       "Bash(/usr/local/bin/npm run:*)",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__press_key",
-      "Bash(node_modules/.bin/vite build *)"
+      "Bash(node_modules/.bin/vite build *)",
+      "Bash(npm --version)",
+      "Bash(npm build *)"
     ]
   },
   "enableAllProjectMcpServers": true,

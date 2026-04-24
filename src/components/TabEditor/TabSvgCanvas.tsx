@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import type { RefObject } from 'react'
 import type { Measure, TabEditorState } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
@@ -81,23 +81,54 @@ export function TabSvgCanvas({
 }: TabSvgCanvasProps) {
   const { track, cursor, selection, noteSelection, isPlaying, playheadMeasure, playheadBeat, viewMode, activeDuration } = state
 
-  const showTimeSigMap: boolean[] = track.measures.map((m, i) => {
+  const showTimeSigMap = useMemo<boolean[]>(() => track.measures.map((m, i) => {
     if (i === 0) return true
     const prev = track.measures[i - 1]
     const prevSig = prev.timeSignature ?? track.globalTimeSig
     const curSig = m.timeSignature ?? track.globalTimeSig
     return prevSig.numerator !== curSig.numerator || prevSig.denominator !== curSig.denominator
-  })
+  }), [track.measures, track.globalTimeSig])
 
-  const timeSigs = track.measures.map((m) => m.timeSignature ?? track.globalTimeSig)
+  const timeSigs = useMemo(
+    () => track.measures.map((m) => m.timeSignature ?? track.globalTimeSig),
+    [track.measures, track.globalTimeSig],
+  )
 
-  const showBpmMap: boolean[] = track.measures.map((m, i) => i === 0 || m.bpm !== undefined)
-  const effectiveBpms: number[] = track.measures.map((_, i) => effectiveBpmAt(track, i))
+  const showBpmMap = useMemo<boolean[]>(
+    () => track.measures.map((m, i) => i === 0 || m.bpm !== undefined),
+    [track.measures],
+  )
 
-  const rows = computeRows(track.measures, showTimeSigMap, timeSigs, showBpmMap, containerWidth)
+  const effectiveBpms = useMemo<number[]>(
+    () => track.measures.map((_, i) => effectiveBpmAt(track, i)),
+    [track],
+  )
 
-  const globalMeasureMap = new Map<string, number>()
-  track.measures.forEach((m, i) => globalMeasureMap.set(m.id, i))
+  const rows = useMemo(
+    () => computeRows(track.measures, showTimeSigMap, timeSigs, showBpmMap, containerWidth),
+    [track.measures, showTimeSigMap, timeSigs, showBpmMap, containerWidth],
+  )
+
+  const globalMeasureMap = useMemo(() => {
+    const map = new Map<string, number>()
+    track.measures.forEach((m, i) => map.set(m.id, i))
+    return map
+  }, [track.measures])
+
+  const noteSelectionSet = useMemo(
+    () => new Set(noteSelection.map((c) => `${c.measureIndex}:${c.beatIndex}:${c.stringIndex}`)),
+    [noteSelection],
+  )
+
+  const rowStartIndices = useMemo(() => {
+    const indices: number[] = []
+    let acc = 0
+    for (const rowMeasures of rows) {
+      indices.push(acc)
+      acc += rowMeasures.length
+    }
+    return indices
+  }, [rows])
 
   const [measureMenu, setMeasureMenu] = useState<{ mi: number; x: number; y: number } | null>(null)
 
@@ -115,6 +146,10 @@ export function TabSvgCanvas({
     den: number
     affectedCount: number
   } | null>(null)
+
+  const handleBendAmountClick = useCallback((mi: number, bi: number, si: number) => {
+    setBendEdit({ mi, bi, si })
+  }, [])
 
   function openMeasureMenu(mi: number, e: React.MouseEvent) {
     setMeasureMenu({ mi, x: e.clientX, y: e.clientY })
@@ -192,13 +227,6 @@ export function TabSvgCanvas({
 
   const svgH = rowSvgHeight(track.stringCount)
 
-  const rowStartIndices: number[] = []
-  let acc = 0
-  for (const rowMeasures of rows) {
-    rowStartIndices.push(acc)
-    acc += rowMeasures.length
-  }
-
   return (
     <div className="tab-canvas" ref={canvasRef} tabIndex={0}>
       {rows.map((rowMeasures, rowIdx) => {
@@ -235,7 +263,7 @@ export function TabSvgCanvas({
                   track={track}
                   cursor={cursor}
                   selection={selection}
-                  noteSelection={noteSelection}
+                  noteSelectionSet={noteSelectionSet}
                   isPlaying={isPlaying}
                   playheadMeasure={playheadMeasure}
                   playheadBeat={playheadBeat}
@@ -250,7 +278,7 @@ export function TabSvgCanvas({
                   onMeasureContextMenu={openMeasureMenu}
                   onBeatMouseDown={onBeatMouseDown}
                   onBeatMouseEnter={onBeatMouseEnter}
-                  onBendAmountClick={(mi, bi, si) => setBendEdit({ mi, bi, si })}
+                  onBendAmountClick={handleBendAmountClick}
                 />
               )
             })}
