@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import type { RefObject } from 'react'
 import type { Measure, TabEditorState } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
-import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats, effectiveBpmAt } from '../../tabEditorState'
+import { BEAT_WIDTHS, BEAT_WIDTH, measureCapacityBeats, measureUsedBeats, effectiveBpmAt } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
 import { StaffViewSvg } from './StaffViewSvg'
 import { STRING_LABEL_W, measureWidth, rowSvgHeight } from './tabSvgConstants'
@@ -60,15 +60,28 @@ function rowSvgWidth(
   showTimeSigMap: boolean[],
   timeSigs: Array<{ numerator: number; denominator: number }>,
   showBpmMap: boolean[],
+  beatWidthScale = 1.0,
 ): number {
   return (
     STRING_LABEL_W +
     rowMeasures.reduce((s, m, i) => {
       const globalI = rowStart + i
       const vSlots = getVirtualSlots(m, timeSigs[globalI]!)
-      return s + measureWidth(m, showTimeSigMap[globalI] ?? false, vSlots, showBpmMap[globalI] ?? false)
+      return s + measureWidth(m, showTimeSigMap[globalI] ?? false, vSlots, showBpmMap[globalI] ?? false, beatWidthScale)
     }, 0)
   )
+}
+
+function rowScalableWidth(
+  rowMeasures: Measure[],
+  rowStart: number,
+  timeSigs: Array<{ numerator: number; denominator: number }>,
+): number {
+  return rowMeasures.reduce((s, m, i) => {
+    const globalI = rowStart + i
+    const vSlots = getVirtualSlots(m, timeSigs[globalI]!)
+    return s + m.beats.reduce((acc, b) => acc + BEAT_WIDTHS[b.duration], 0) + vSlots * BEAT_WIDTH
+  }, 0)
 }
 
 export function TabSvgCanvas({
@@ -231,7 +244,14 @@ export function TabSvgCanvas({
     <div className="tab-canvas" ref={canvasRef} tabIndex={0}>
       {rows.map((rowMeasures, rowIdx) => {
         const currentRowStart = rowStartIndices[rowIdx] ?? 0
-        const svgW = rowSvgWidth(rowMeasures, currentRowStart, showTimeSigMap, timeSigs, showBpmMap)
+        const naturalW = rowSvgWidth(rowMeasures, currentRowStart, showTimeSigMap, timeSigs, showBpmMap)
+        const fullW = containerWidth - 32
+        const needsScale = naturalW <= fullW * 0.5 || naturalW > fullW
+        const scalableW = needsScale ? rowScalableWidth(rowMeasures, currentRowStart, timeSigs) : 0
+        const beatWidthScale = needsScale && scalableW > 0
+          ? (fullW - (naturalW - scalableW)) / scalableW
+          : 1.0
+        const displayW = needsScale ? fullW : naturalW
 
         const measureOffsets: number[] = []
         let xAcc = STRING_LABEL_W
@@ -239,14 +259,14 @@ export function TabSvgCanvas({
           measureOffsets.push(xAcc)
           const globalMi = currentRowStart + mIdx
           const vSlots = getVirtualSlots(rowMeasures[mIdx]!, timeSigs[globalMi]!)
-          xAcc += measureWidth(rowMeasures[mIdx]!, showTimeSigMap[globalMi] ?? false, vSlots, showBpmMap[globalMi] ?? false)
+          xAcc += measureWidth(rowMeasures[mIdx]!, showTimeSigMap[globalMi] ?? false, vSlots, showBpmMap[globalMi] ?? false, beatWidthScale)
         }
 
         return (
           <svg
             key={rowIdx}
             className="tab-svg-row"
-            width={svgW}
+            width={displayW}
             height={svgH}
             style={{ marginBottom: 24 }}
           >
@@ -273,6 +293,7 @@ export function TabSvgCanvas({
                   activeDuration={activeDuration}
                   showBpm={showBpmMap[mi] ?? false}
                   bpm={effectiveBpms[mi] ?? track.globalBpm}
+                  beatWidthScale={beatWidthScale}
                   onTimeSigClick={openTimeSigEditor}
                   onBpmClick={openBpmEditor}
                   onMeasureContextMenu={openMeasureMenu}

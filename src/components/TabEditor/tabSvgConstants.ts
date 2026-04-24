@@ -41,9 +41,10 @@ export function stringY(si: number, stringCount: number): number {
 }
 
 // virtualSlots: 0 or 1 — whether to include width for the pending virtual beat slot
-export function measureWidth(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false): number {
-  const beatsW = m.beats.reduce((acc, b) => acc + BEAT_LEFT_PAD + BEAT_WIDTHS[b.duration] + (beatHasBend(b) ? BEND_EXTRA_W : 0), 0)
-  return MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + beatsW + virtualSlots * (BEAT_LEFT_PAD + BEAT_WIDTH) + BARLINE_W
+// beatWidthScale: multiplier applied only to BEAT_WIDTHS (the post-note spacing), not to any padding or structural widths
+export function measureWidth(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false, beatWidthScale = 1.0): number {
+  const beatsW = m.beats.reduce((acc, b) => acc + BEAT_LEFT_PAD + BEAT_WIDTHS[b.duration] * beatWidthScale + (beatHasBend(b) ? BEND_EXTRA_W : 0), 0)
+  return MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + beatsW + virtualSlots * (BEAT_LEFT_PAD + BEAT_WIDTH * beatWidthScale) + BARLINE_W
 }
 
 export interface BeatPosition {
@@ -67,13 +68,13 @@ export function formatFretLabel(note: TabNote, isTied: boolean): FretLabelData {
   return { label: String(note.fret), fill: '#e8e8e8', fontStyle: 'normal' }
 }
 
-export function computeBeatPositions(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false): BeatPosition[] {
+export function computeBeatPositions(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false, beatWidthScale = 1.0): BeatPosition[] {
   const positions: BeatPosition[] = []
   let x = MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0)
   const totalSlots = m.beats.length + virtualSlots
   for (let i = 0; i < totalSlots; i++) {
     const beat = m.beats[i]
-    const rightW = beat ? BEAT_WIDTHS[beat.duration] : BEAT_WIDTH
+    const rightW = (beat ? BEAT_WIDTHS[beat.duration] : BEAT_WIDTH) * beatWidthScale
     const w = BEAT_LEFT_PAD + rightW + (beat && beatHasBend(beat) ? BEND_EXTRA_W : 0)
     positions.push({ x, cx: x + BEAT_LEFT_PAD, w })
     x += w

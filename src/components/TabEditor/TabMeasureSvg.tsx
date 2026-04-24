@@ -35,6 +35,7 @@ interface TabMeasureSvgProps {
   activeDuration: DurationValue
   showBpm?: boolean
   bpm?: number
+  beatWidthScale?: number
   onTimeSigClick?: (measureIndex: number) => void
   onBpmClick?: (measureIndex: number) => void
   onMeasureContextMenu?: (measureIndex: number, e: React.MouseEvent) => void
@@ -72,6 +73,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   activeDuration,
   showBpm = false,
   bpm,
+  beatWidthScale = 1.0,
   onTimeSigClick,
   onBpmClick,
   onMeasureContextMenu,
@@ -88,8 +90,8 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   const hasVirtualSlot = used < capacity - 1e-9
   const virtualSlots = hasVirtualSlot ? 1 : 0
 
-  const mw = measureWidth(measure, showTimeSig, virtualSlots, showBpm)
-  const beatPositions = computeBeatPositions(measure, showTimeSig, virtualSlots, showBpm)
+  const mw = measureWidth(measure, showTimeSig, virtualSlots, showBpm, beatWidthScale)
+  const beatPositions = computeBeatPositions(measure, showTimeSig, virtualSlots, showBpm, beatWidthScale)
 
   const topStringY = stringY(stringCount - 1, stringCount)
   const bottomStringY = stringY(0, stringCount)
