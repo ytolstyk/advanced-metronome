@@ -26,6 +26,7 @@ export function TabEditorPage() {
   const [state, dispatch] = useReducer(tabEditorReducer, undefined, createInitialTabState)
   const canvasRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(800)
+  const [menuOpen, setMenuOpen] = useState(true)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const digitBufRef = useRef<number | null>(null)
   const digitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -353,15 +354,23 @@ export function TabEditorPage() {
 
   return (
     <div className="tab-editor-page" onMouseUp={onMouseUp}>
-      <TabEditorHeader track={state.track} dispatch={dispatch} />
-      <TabEditorToolbar state={state} dispatch={dispatch} />
-      <TabEditorPlayback
-        isPlaying={state.isPlaying}
-        viewMode={state.viewMode}
-        onPlay={handlePlay}
-        onStop={handleStop}
-        dispatch={dispatch}
-      />
+      <div className="tab-sticky-top">
+        {menuOpen && (
+          <>
+            <TabEditorHeader track={state.track} dispatch={dispatch} />
+            <TabEditorToolbar state={state} dispatch={dispatch} />
+          </>
+        )}
+        <TabEditorPlayback
+          isPlaying={state.isPlaying}
+          viewMode={state.viewMode}
+          onPlay={handlePlay}
+          onStop={handleStop}
+          dispatch={dispatch}
+          menuOpen={menuOpen}
+          onToggleMenu={() => setMenuOpen((m) => !m)}
+        />
+      </div>
       <TabEditorErrorBoundary>
         <TabSvgCanvas
           state={state}

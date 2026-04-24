@@ -6,6 +6,16 @@
   color: #e0e0e0;
 }
 
+.tab-sticky-top {
+  position: sticky;
+  top: 56px;
+  z-index: 40;
+}
+
+.tab-menu-toggle {
+  display: none;
+}
+
 /* ── Header ── */
 .tab-editor-header {
   display: flex;
@@ -240,4 +250,26 @@
 .tab-toolbar::-webkit-scrollbar-thumb {
   background: #333;
   border-radius: 2px;
+}
+
+@media (max-width: 767px) {
+  .tab-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid #333;
+    border-radius: 5px;
+    background: transparent;
+    color: #aaa;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.1s, border-color 0.1s;
+  }
+
+  .tab-menu-toggle:hover {
+    color: #e0e0e0;
+    border-color: #555;
+  }
 }
