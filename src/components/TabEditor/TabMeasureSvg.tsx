@@ -27,8 +27,6 @@ interface TabMeasureSvgProps {
   selection: TabSelection | null
   noteSelectionSet: Set<string>
   isPlaying: boolean
-  playheadMeasure: number
-  playheadBeat: number
   showTimeSig?: boolean
   showStringLabels?: boolean
   timeSig?: { numerator: number; denominator: number }
@@ -65,8 +63,6 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   selection,
   noteSelectionSet,
   isPlaying,
-  playheadMeasure,
-  playheadBeat,
   showTimeSig = false,
   showStringLabels = false,
   timeSig,
@@ -269,11 +265,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         const { x: beatX, cx: beatCX, w: beatW } = pos
 
         const isCursorCol = isCursorOnThisMeasure && cursor.beatIndex === bi
-        const isPlayhead = isPlaying && playheadMeasure === measureIndex && playheadBeat === bi
-
-        let overlayFill = 'none'
-        if (isPlayhead) overlayFill = 'rgba(30,100,50,0.3)'
-        else if (isCursorCol && !isPlaying) overlayFill = 'rgba(42,90,140,0.25)'
+        const overlayFill = isCursorCol && !isPlaying ? 'rgba(60,120,240,0.45)' : 'none'
 
         const isTied = beat.tiedFrom === true
 
@@ -368,7 +360,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                           y={sy - 11}
                           width={labelW}
                           height={22}
-                          fill="rgba(99,102,241,0.45)"
+                          fill="rgba(110,120,255,0.75)"
                           rx={2}
                         />
                       )}
@@ -444,7 +436,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         const vPos = beatPositions[measure.beats.length]
         if (!vPos) return null
         const { x: vX, cx: vCX, w: vW } = vPos
-        const overlayFill = isVirtualCursor && !isPlaying ? 'rgba(42,90,140,0.25)' : 'none'
+        const overlayFill = isVirtualCursor && !isPlaying ? 'rgba(60,120,240,0.45)' : 'none'
 
         return (
           <g>
@@ -474,7 +466,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                   y={sy - 11}
                   width={20}
                   height={22}
-                  fill="rgba(99,102,241,0.45)"
+                  fill="rgba(110,120,255,0.75)"
                   rx={2}
                 />
               )

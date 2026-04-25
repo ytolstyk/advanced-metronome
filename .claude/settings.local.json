@@ -60,7 +60,8 @@
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__press_key",
       "Bash(node_modules/.bin/vite build *)",
       "Bash(npm --version)",
-      "Bash(npm build *)"
+      "Bash(npm build *)",
+      "Bash(kill %1)"
     ]
   },
   "enableAllProjectMcpServers": true,

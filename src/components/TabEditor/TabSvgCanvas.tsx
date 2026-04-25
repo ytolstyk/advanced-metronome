@@ -2,10 +2,10 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import type { RefObject } from 'react'
 import type { Measure, TabEditorState } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
-import { BEAT_WIDTHS, BEAT_WIDTH, measureCapacityBeats, measureUsedBeats, effectiveBpmAt } from '../../tabEditorState'
+import { BEAT_WIDTHS, BEAT_WIDTH, measureCapacityBeats, measureUsedBeats, effectiveBpmAt, beatDurationSeconds } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
 import { StaffViewSvg } from './StaffViewSvg'
-import { STRING_LABEL_W, measureWidth, rowSvgHeight } from './tabSvgConstants'
+import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, formatFretLabel } from './tabSvgConstants'
 
 interface TabSvgCanvasProps {
   state: TabEditorState
@@ -143,6 +143,128 @@ export function TabSvgCanvas({
     return indices
   }, [rows])
 
+  const rowLayouts = useMemo(() => {
+    return rows.map((rowMeasures, rowIdx) => {
+      const currentRowStart = rowStartIndices[rowIdx] ?? 0
+      const naturalW = rowSvgWidth(rowMeasures, currentRowStart, showTimeSigMap, timeSigs, showBpmMap)
+      const fullW = containerWidth - 32
+      const needsScale = naturalW <= fullW * 0.5 || naturalW > fullW
+      const scalableW = needsScale ? rowScalableWidth(rowMeasures, currentRowStart, timeSigs) : 0
+      const beatWidthScale = needsScale && scalableW > 0
+        ? (fullW - (naturalW - scalableW)) / scalableW
+        : 1.0
+      const displayW = needsScale ? fullW : naturalW
+
+      const measureOffsets: number[] = []
+      let xAcc = STRING_LABEL_W
+      for (let mIdx = 0; mIdx < rowMeasures.length; mIdx++) {
+        measureOffsets.push(xAcc)
+        const globalI = currentRowStart + mIdx
+        const vSlots = getVirtualSlots(rowMeasures[mIdx]!, timeSigs[globalI]!)
+        xAcc += measureWidth(rowMeasures[mIdx]!, showTimeSigMap[globalI] ?? false, vSlots, showBpmMap[globalI] ?? false, beatWidthScale)
+      }
+      return { beatWidthScale, displayW, measureOffsets, rowStart: currentRowStart }
+    })
+  }, [rows, rowStartIndices, showTimeSigMap, timeSigs, showBpmMap, containerWidth])
+
+  const beatAbsolutePositions = useMemo(() => {
+    const map = new Map<string, { x: number; rowIdx: number }>()
+    rows.forEach((rowMeasures, rowIdx) => {
+      const layout = rowLayouts[rowIdx]
+      if (!layout) return
+      rowMeasures.forEach((measure, mIdx) => {
+        const globalMI = layout.rowStart + mIdx
+        const vSlots = getVirtualSlots(measure, timeSigs[globalMI]!)
+        const positions = computeBeatPositions(measure, showTimeSigMap[globalMI] ?? false, vSlots, showBpmMap[globalMI] ?? false, layout.beatWidthScale)
+        positions.forEach((pos, bi) => {
+          map.set(`${globalMI}:${bi}`, { x: (layout.measureOffsets[mIdx] ?? 0) + pos.cx, rowIdx })
+        })
+      })
+    })
+    return map
+  }, [rows, rowLayouts, timeSigs, showTimeSigMap, showBpmMap])
+
+  const playheadRectRefs = useRef(new Map<number, SVGRectElement>())
+  const animStateRef = useRef<{
+    startTime: number
+    durationMs: number
+    fromX: number
+    fromRow: number
+    toX: number
+    toRow: number
+    colW: number
+  } | null>(null)
+  const rafRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!isPlaying) return
+    const fromPos = beatAbsolutePositions.get(`${playheadMeasure}:${playheadBeat}`)
+    if (!fromPos) return
+
+    const measure = track.measures[playheadMeasure]
+    let nextMi = playheadMeasure
+    let nextBi = playheadBeat + 1
+    if (!measure || nextBi >= measure.beats.length) {
+      nextMi = playheadMeasure + 1
+      nextBi = 0
+    }
+    const toPos = beatAbsolutePositions.get(`${nextMi}:${nextBi}`)
+
+    const beat = measure?.beats[playheadBeat]
+    const bpm = beat?.tempoChange ?? effectiveBpmAt(track, playheadMeasure)
+    const durationMs = beat ? beatDurationSeconds(beat.duration, beat.dot, bpm) * 1000 : 500
+    const isTied = beat?.tiedFrom === true
+    const colW = beat
+      ? beat.notes.reduce((max, n) => {
+          const { label } = formatFretLabel(n, isTied)
+          return Math.max(max, Math.max(label.length * 8 + 4, 18))
+        }, 18)
+      : 20
+
+    animStateRef.current = {
+      startTime: performance.now(),
+      durationMs,
+      fromX: fromPos.x,
+      fromRow: fromPos.rowIdx,
+      toX: toPos?.x ?? fromPos.x,
+      toRow: toPos?.rowIdx ?? fromPos.rowIdx,
+      colW,
+    }
+  }, [isPlaying, playheadMeasure, playheadBeat, beatAbsolutePositions, track])
+
+  useEffect(() => {
+    if (!isPlaying) {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+      for (const rect of playheadRectRefs.current.values()) rect.style.display = 'none'
+      return
+    }
+    function tick() {
+      const anim = animStateRef.current
+      if (anim) {
+        const elapsed = performance.now() - anim.startTime
+        const t = Math.min(1, elapsed / anim.durationMs)
+        const sameRow = anim.fromRow === anim.toRow
+        const x = sameRow ? anim.fromX + (anim.toX - anim.fromX) * t : anim.fromX
+        for (const [ri, rect] of playheadRectRefs.current) {
+          if (ri === anim.fromRow) {
+            rect.setAttribute('x', String(x - anim.colW / 2))
+            rect.setAttribute('width', String(anim.colW))
+            rect.style.display = ''
+          } else {
+            rect.style.display = 'none'
+          }
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+  }, [isPlaying])
+
   const [measureMenu, setMeasureMenu] = useState<{ mi: number; x: number; y: number } | null>(null)
 
   const [bendEdit, setBendEdit] = useState<{ mi: number; bi: number; si: number } | null>(null)
@@ -243,24 +365,8 @@ export function TabSvgCanvas({
   return (
     <div className="tab-canvas" ref={canvasRef} tabIndex={0}>
       {rows.map((rowMeasures, rowIdx) => {
-        const currentRowStart = rowStartIndices[rowIdx] ?? 0
-        const naturalW = rowSvgWidth(rowMeasures, currentRowStart, showTimeSigMap, timeSigs, showBpmMap)
-        const fullW = containerWidth - 32
-        const needsScale = naturalW <= fullW * 0.5 || naturalW > fullW
-        const scalableW = needsScale ? rowScalableWidth(rowMeasures, currentRowStart, timeSigs) : 0
-        const beatWidthScale = needsScale && scalableW > 0
-          ? (fullW - (naturalW - scalableW)) / scalableW
-          : 1.0
-        const displayW = needsScale ? fullW : naturalW
-
-        const measureOffsets: number[] = []
-        let xAcc = STRING_LABEL_W
-        for (let mIdx = 0; mIdx < rowMeasures.length; mIdx++) {
-          measureOffsets.push(xAcc)
-          const globalMi = currentRowStart + mIdx
-          const vSlots = getVirtualSlots(rowMeasures[mIdx]!, timeSigs[globalMi]!)
-          xAcc += measureWidth(rowMeasures[mIdx]!, showTimeSigMap[globalMi] ?? false, vSlots, showBpmMap[globalMi] ?? false, beatWidthScale)
-        }
+        const layout = rowLayouts[rowIdx]!
+        const { beatWidthScale, displayW, measureOffsets } = layout
 
         return (
           <svg
@@ -284,8 +390,6 @@ export function TabSvgCanvas({
                   selection={selection}
                   noteSelectionSet={noteSelectionSet}
                   isPlaying={isPlaying}
-                  playheadMeasure={playheadMeasure}
-                  playheadBeat={playheadBeat}
                   showTimeSig={showTs}
                   showStringLabels={mIdx === 0}
                   timeSig={sig}
@@ -302,6 +406,19 @@ export function TabSvgCanvas({
                 />
               )
             })}
+            {/* Animated playback highlight — driven by RAF, replaces per-measure static highlight */}
+            <rect
+              ref={(el) => {
+                if (el) playheadRectRefs.current.set(rowIdx, el)
+                else playheadRectRefs.current.delete(rowIdx)
+              }}
+              x={0}
+              y={MEASURE_NUMBER_H}
+              width={20}
+              height={svgH - MEASURE_NUMBER_H}
+              fill="rgba(0,200,100,0.35)"
+              style={{ display: 'none', pointerEvents: 'none' }}
+            />
           </svg>
         )
       })}

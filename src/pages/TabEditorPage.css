@@ -78,13 +78,30 @@
 }
 
 /* Color-coded toolbar group backgrounds */
-.tab-toolbar-group[data-group="duration"] { background: #111c2e; }
-.tab-toolbar-group[data-group="effects"]  { background: #241806; }
-.tab-toolbar-group[data-group="note-info"] { background: #1a1406; }
-.tab-toolbar-group[data-group="techniques"] { background: #0f2416; }
-.tab-toolbar-group[data-group="structure"] { background: #1f1329; }
-.tab-toolbar-group[data-group="edit"]     { background: #14142a; }
-.tab-toolbar-group[data-group="move"]     { background: #0f2023; }
+.tab-toolbar-group[data-group="duration"]   { background: #0d2248; border-right-color: #1e3a6e; }
+.tab-toolbar-group[data-group="effects"]    { background: #2e1500; border-right-color: #5c3000; }
+.tab-toolbar-group[data-group="note-info"]  { background: #231a00; border-right-color: #3d2d00; }
+.tab-toolbar-group[data-group="techniques"] { background: #092e18; border-right-color: #124d2b; }
+.tab-toolbar-group[data-group="structure"]  { background: #28103e; border-right-color: #481b70; }
+.tab-toolbar-group[data-group="edit"]       { background: #141438; border-right-color: #252580; }
+.tab-toolbar-group[data-group="move"]       { background: #082830; border-right-color: #0e4550; }
+
+/* Colored group labels */
+.tab-toolbar-group[data-group="duration"]   > .tab-tool-label { color: #6ea8fe; }
+.tab-toolbar-group[data-group="effects"]    > .tab-tool-label { color: #fb923c; }
+.tab-toolbar-group[data-group="note-info"]  > .tab-tool-label { color: #fbbf24; }
+.tab-toolbar-group[data-group="techniques"] > .tab-tool-label { color: #4ade80; }
+.tab-toolbar-group[data-group="structure"]  > .tab-tool-label { color: #c084fc; }
+.tab-toolbar-group[data-group="edit"]       > .tab-tool-label { color: #818cf8; }
+.tab-toolbar-group[data-group="move"]       > .tab-tool-label { color: #22d3ee; }
+
+/* Colored hover per group */
+.tab-toolbar-group[data-group="duration"]   .tab-tool-btn:hover { background: #1a3a6e; border-color: #3a6abf; color: #93c5fd; }
+.tab-toolbar-group[data-group="effects"]    .tab-tool-btn:hover { background: #5c2800; border-color: #a04000; color: #fdba74; }
+.tab-toolbar-group[data-group="techniques"] .tab-tool-btn:hover { background: #124a25; border-color: #1e7a40; color: #86efac; }
+.tab-toolbar-group[data-group="structure"]  .tab-tool-btn:hover { background: #3d1860; border-color: #7c3aaa; color: #d8b4fe; }
+.tab-toolbar-group[data-group="edit"]       .tab-tool-btn:hover { background: #1e1e60; border-color: #4040a0; color: #a5b4fc; }
+.tab-toolbar-group[data-group="move"]       .tab-tool-btn:hover { background: #0a3d4a; border-color: #0e6577; color: #67e8f9; }
 
 .tab-toolbar-break {
   flex-basis: 100%;
