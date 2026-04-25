@@ -61,7 +61,8 @@
       "Bash(node_modules/.bin/vite build *)",
       "Bash(npm --version)",
       "Bash(npm build *)",
-      "Bash(kill %1)"
+      "Bash(kill %1)",
+      "Bash(./node_modules/.bin/eslint src/pages/TabEditorPage.tsx)"
     ]
   },
   "enableAllProjectMcpServers": true,

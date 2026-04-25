@@ -35,6 +35,7 @@ export function TabEditorPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isNavigating, setIsNavigating] = useState(false)
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handlePlayRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     if (saveTimerRef.current !== null) clearTimeout(saveTimerRef.current)
@@ -145,6 +146,12 @@ export function TabEditorPage() {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
 
+      if (e.key === ' ' && !state.pendingOverflow) {
+        e.preventDefault()
+        handlePlayRef.current()
+        return
+      }
+
       if (state.isPlaying) return
 
       // Block keyboard input while overflow dialog is open
@@ -181,17 +188,6 @@ export function TabEditorPage() {
           }
           return
         }
-        case ' ':
-          e.preventDefault()
-          dispatch({
-            type: 'ADD_NOTE',
-            measureIndex: cursor.measureIndex,
-            beatIndex: cursor.beatIndex,
-            stringIndex: cursor.stringIndex,
-            fret: -1,
-          })
-          dispatch({ type: 'MOVE_CURSOR', direction: 'right' })
-          return
         case 'Backspace':
         case 'Delete': {
           e.preventDefault()
@@ -281,6 +277,7 @@ export function TabEditorPage() {
       dispatch({ type: 'SET_PLAYING', isPlaying: true })
     }
   }
+  useEffect(() => { handlePlayRef.current = handlePlay })
 
   function handleStop() {
     playbackEngine.stop()
