@@ -1,5 +1,5 @@
 import { memo, useCallback } from 'react'
-import type { DurationValue, Measure, TabCursor, TabSelection, TabTrack } from '../../tabEditorTypes'
+import type { DotModifier, DurationValue, Measure, TabCursor, TabSelection, TabTrack } from '../../tabEditorTypes'
 import { isInSelection, measureCapacityBeats, measureUsedBeats } from '../../tabEditorState'
 import { TUNINGS } from '../../data/tunings'
 import { TechniqueOverlay } from './TabTechniquePaths'
@@ -30,7 +30,7 @@ interface TabMeasureSvgProps {
   showTimeSig?: boolean
   showStringLabels?: boolean
   timeSig?: { numerator: number; denominator: number }
-  activeDuration: DurationValue
+  fillRests: DurationValue[]
   showBpm?: boolean
   bpm?: number
   beatWidthScale?: number
@@ -42,16 +42,121 @@ interface TabMeasureSvgProps {
   onBendAmountClick?: (mi: number, bi: number, si: number) => void
 }
 
-function restSymbol(d: DurationValue): string {
-  switch (d) {
-    case 'whole': return '𝄻'
-    case 'half': return '𝄼'
-    case 'quarter': return '𝄽'
-    case 'eighth': return '𝄾'
-    case 'sixteenth': return '𝄿'
-    case 'thirtysecond': return '𝅀'
-    default: return '𝅁'
+interface RestSymbolProps {
+  duration: DurationValue
+  dot: DotModifier
+  cx: number
+  cy: number
+  fill?: string
+}
+
+function RestSymbol({ duration, dot, cx, cy, fill = '#666' }: RestSymbolProps) {
+  const isDotted = dot.dotted
+  const isDoubleDotted = dot.doubleDotted
+
+  let dotX = 11
+  let dotY = 0
+  let symbol: React.ReactNode
+
+  switch (duration) {
+    case 'whole':
+      // Thick rect hanging below a horizontal line
+      dotY = 2
+      symbol = (
+        <>
+          <line x1={-10} y1={-3} x2={10} y2={-3} stroke={fill} strokeWidth={1.5} />
+          <rect x={-8} y={-3} width={16} height={7} fill={fill} />
+        </>
+      )
+      break
+    case 'half':
+      // Thick rect sitting on a horizontal line
+      dotY = -5
+      symbol = (
+        <>
+          <rect x={-8} y={-7} width={16} height={7} fill={fill} />
+          <line x1={-10} y1={0} x2={10} y2={0} stroke={fill} strokeWidth={1.5} />
+        </>
+      )
+      break
+    case 'quarter':
+      // Classic zigzag quarter rest
+      dotX = 10
+      symbol = (
+        <path
+          d="M 3.5,-9 C 5.5,-6 -2,-5 2,-1.5 C -2,-1 -4,4 -2,7 C -3.5,7 -4,9 -2.5,10"
+          fill="none"
+          stroke={fill}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )
+      break
+    case 'eighth':
+      // Diagonal stem with one filled circle and one flag curve
+      dotX = 11
+      symbol = (
+        <>
+          <line x1={-3} y1={9} x2={4} y2={-7} stroke={fill} strokeWidth={1.8} strokeLinecap="round" />
+          <circle cx={4} cy={-7} r={3} fill={fill} />
+          <path d="M 4,-7 C 9,-4 8,2 4,4" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
+        </>
+      )
+      break
+    case 'sixteenth':
+      // Diagonal stem with two flags
+      dotX = 11
+      symbol = (
+        <>
+          <line x1={-3} y1={9} x2={4} y2={-11} stroke={fill} strokeWidth={1.8} strokeLinecap="round" />
+          <circle cx={4} cy={-11} r={3} fill={fill} />
+          <path d="M 4,-11 C 9,-8 8,-2 4,0" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
+          <circle cx={4} cy={0} r={3} fill={fill} />
+          <path d="M 4,0 C 9,3 8,9 4,11" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
+        </>
+      )
+      break
+    case 'thirtysecond':
+      // Diagonal stem with three flags
+      dotX = 11
+      symbol = (
+        <>
+          <line x1={-4} y1={10} x2={4} y2={-16} stroke={fill} strokeWidth={1.8} strokeLinecap="round" />
+          <circle cx={4} cy={-16} r={2.5} fill={fill} />
+          <path d="M 4,-16 C 8,-13 7,-8 4,-6" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
+          <circle cx={4} cy={-6} r={2.5} fill={fill} />
+          <path d="M 4,-6 C 8,-3 7,2 4,4" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
+          <circle cx={4} cy={4} r={2.5} fill={fill} />
+          <path d="M 4,4 C 8,7 7,12 4,14" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
+        </>
+      )
+      break
+    default:
+      // 64th: four flags
+      dotX = 11
+      symbol = (
+        <>
+          <line x1={-4} y1={10} x2={4} y2={-20} stroke={fill} strokeWidth={1.8} strokeLinecap="round" />
+          <circle cx={4} cy={-20} r={2.5} fill={fill} />
+          <path d="M 4,-20 C 8,-17 7,-12 4,-10" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
+          <circle cx={4} cy={-10} r={2.5} fill={fill} />
+          <path d="M 4,-10 C 8,-7 7,-2 4,0" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
+          <circle cx={4} cy={0} r={2.5} fill={fill} />
+          <path d="M 4,0 C 8,3 7,8 4,10" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
+          <circle cx={4} cy={10} r={2.5} fill={fill} />
+          <path d="M 4,10 C 8,13 7,18 4,20" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
+        </>
+      )
   }
+
+  return (
+    <g transform={`translate(${cx}, ${cy})`} style={{ pointerEvents: 'none' }}>
+      {symbol}
+      {(isDotted || isDoubleDotted) && <circle cx={dotX} cy={dotY} r={2} fill={fill} />}
+      {isDoubleDotted && <circle cx={dotX + 6} cy={dotY} r={2} fill={fill} />}
+    </g>
+  )
 }
 
 export const TabMeasureSvg = memo(function TabMeasureSvg({
@@ -66,7 +171,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   showTimeSig = false,
   showStringLabels = false,
   timeSig,
-  activeDuration,
+  fillRests,
   showBpm = false,
   bpm,
   beatWidthScale = 1.0,
@@ -83,11 +188,9 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   const sig = timeSig ?? track.globalTimeSig
   const capacity = measureCapacityBeats(sig)
   const used = measureUsedBeats(measure.beats)
-  const hasVirtualSlot = used < capacity - 1e-9
-  const virtualSlots = hasVirtualSlot ? 1 : 0
 
-  const mw = measureWidth(measure, showTimeSig, virtualSlots, showBpm, beatWidthScale)
-  const beatPositions = computeBeatPositions(measure, showTimeSig, virtualSlots, showBpm, beatWidthScale)
+  const mw = measureWidth(measure, showTimeSig, fillRests, showBpm, beatWidthScale)
+  const beatPositions = computeBeatPositions(measure, showTimeSig, fillRests, showBpm, beatWidthScale)
 
   const topStringY = stringY(stringCount - 1, stringCount)
   const bottomStringY = stringY(0, stringCount)
@@ -294,17 +397,13 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
 
             {/* Rest glyph — only when every string is empty */}
             {beat.notes.every((n) => n.fret < 0) && (
-              <text
-                x={beatCX}
-                y={strAreaMid}
-                fontSize={22}
-                textAnchor="middle"
-                dominantBaseline="middle"
+              <RestSymbol
+                duration={beat.duration}
+                dot={beat.dot}
+                cx={beatCX}
+                cy={strAreaMid}
                 fill="#666"
-                style={{ pointerEvents: 'none' }}
-              >
-                {restSymbol(beat.duration)}
-              </text>
+              />
             )}
 
             {/* Beat-level drag hit target */}
@@ -431,34 +530,30 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         )
       })}
 
-      {/* Virtual pending slot — shown when measure has remaining capacity */}
-      {hasVirtualSlot && (() => {
-        const vPos = beatPositions[measure.beats.length]
-        if (!vPos) return null
-        const { x: vX, cx: vCX, w: vW } = vPos
-        const overlayFill = isVirtualCursor && !isPlaying ? 'rgba(60,120,240,0.45)' : 'none'
+      {/* Fill rest slots — computed from remaining measure capacity, largest first */}
+      {fillRests.map((restDuration, fillIdx) => {
+        const pos = beatPositions[measure.beats.length + fillIdx]
+        if (!pos) return null
+        const { x: vX, cx: vCX, w: vW } = pos
+        const isFirstSlot = fillIdx === 0
+        const showCursor = isFirstSlot && isVirtualCursor && !isPlaying
 
         return (
-          <g>
-            {overlayFill !== 'none' && (
-              <rect x={vCX - 9} y={MEASURE_NUMBER_H} width={18} height={svgH - MEASURE_NUMBER_H} fill={overlayFill} />
+          <g key={`fill-${fillIdx}`}>
+            {showCursor && (
+              <rect x={vCX - 9} y={MEASURE_NUMBER_H} width={18} height={svgH - MEASURE_NUMBER_H} fill="rgba(60,120,240,0.45)" />
             )}
 
-            {/* Rest glyph */}
-            <text
-              x={vCX}
-              y={strAreaMid}
-              fontSize={22}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fill="#333"
-              style={{ pointerEvents: 'none' }}
-            >
-              {restSymbol(activeDuration)}
-            </text>
+            <RestSymbol
+              duration={restDuration}
+              dot={{ dotted: false, doubleDotted: false, triplet: false }}
+              cx={vCX}
+              cy={strAreaMid}
+              fill="#444"
+            />
 
-            {/* Cursor highlight for active string in virtual slot */}
-            {isVirtualCursor && !isPlaying && (() => {
+            {/* Cursor highlight for active string in first fill rest */}
+            {showCursor && (() => {
               const sy = stringY(cursor.stringIndex, stringCount)
               return (
                 <rect
@@ -472,7 +567,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               )
             })()}
 
-            {/* Click/hover target for virtual slot */}
+            {/* Click/hover target — all fill rests map to the virtual slot (bi = beats.length) */}
             <rect
               x={vX}
               y={TOP_MARGIN}
@@ -487,7 +582,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             />
           </g>
         )
-      })()}
+      })}
 
       {/* Right barline */}
       <line

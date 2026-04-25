@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import type { RefObject } from 'react'
-import type { Measure, TabEditorState } from '../../tabEditorTypes'
+import type { DurationValue, Measure, TabEditorState } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
-import { BEAT_WIDTHS, BEAT_WIDTH, measureCapacityBeats, measureUsedBeats, effectiveBpmAt, beatDurationSeconds } from '../../tabEditorState'
+import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats, computeFillRests, effectiveBpmAt, beatDurationSeconds } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
 import { StaffViewSvg } from './StaffViewSvg'
 import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, formatFretLabel } from './tabSvgConstants'
@@ -16,13 +16,14 @@ interface TabSvgCanvasProps {
   onBeatMouseEnter: (mi: number, bi: number) => void
 }
 
-function getVirtualSlots(
+function getFillRests(
   measure: Measure,
   timeSig: { numerator: number; denominator: number },
-): number {
+): DurationValue[] {
   const capacity = measureCapacityBeats(timeSig)
   const used = measureUsedBeats(measure.beats)
-  return used < capacity - 1e-9 ? 1 : 0
+  const remaining = capacity - used
+  return remaining > 1e-9 ? computeFillRests(remaining) : []
 }
 
 function computeRows(
@@ -40,8 +41,8 @@ function computeRows(
     const m = measures[i]
     const showTs = showTimeSigMap[i] ?? false
     const showBpm = showBpmMap[i] ?? false
-    const vSlots = getVirtualSlots(m, timeSigs[i]!)
-    const mw = measureWidth(m, showTs, vSlots, showBpm)
+    const fillRests = getFillRests(m, timeSigs[i]!)
+    const mw = measureWidth(m, showTs, fillRests, showBpm)
     if (rowW + mw > usable && row.length > 0) {
       rows.push(row)
       row = []
@@ -66,8 +67,8 @@ function rowSvgWidth(
     STRING_LABEL_W +
     rowMeasures.reduce((s, m, i) => {
       const globalI = rowStart + i
-      const vSlots = getVirtualSlots(m, timeSigs[globalI]!)
-      return s + measureWidth(m, showTimeSigMap[globalI] ?? false, vSlots, showBpmMap[globalI] ?? false, beatWidthScale)
+      const fillRests = getFillRests(m, timeSigs[globalI]!)
+      return s + measureWidth(m, showTimeSigMap[globalI] ?? false, fillRests, showBpmMap[globalI] ?? false, beatWidthScale)
     }, 0)
   )
 }
@@ -79,8 +80,8 @@ function rowScalableWidth(
 ): number {
   return rowMeasures.reduce((s, m, i) => {
     const globalI = rowStart + i
-    const vSlots = getVirtualSlots(m, timeSigs[globalI]!)
-    return s + m.beats.reduce((acc, b) => acc + BEAT_WIDTHS[b.duration], 0) + vSlots * BEAT_WIDTH
+    const fillRests = getFillRests(m, timeSigs[globalI]!)
+    return s + m.beats.reduce((acc, b) => acc + BEAT_WIDTHS[b.duration], 0) + fillRests.reduce((acc, d) => acc + BEAT_WIDTHS[d], 0)
   }, 0)
 }
 
@@ -92,7 +93,7 @@ export function TabSvgCanvas({
   onBeatMouseDown,
   onBeatMouseEnter,
 }: TabSvgCanvasProps) {
-  const { track, cursor, selection, noteSelection, isPlaying, playheadMeasure, playheadBeat, viewMode, activeDuration } = state
+  const { track, cursor, selection, noteSelection, isPlaying, playheadMeasure, playheadBeat, viewMode } = state
 
   const showTimeSigMap = useMemo<boolean[]>(() => track.measures.map((m, i) => {
     if (i === 0) return true
@@ -160,8 +161,8 @@ export function TabSvgCanvas({
       for (let mIdx = 0; mIdx < rowMeasures.length; mIdx++) {
         measureOffsets.push(xAcc)
         const globalI = currentRowStart + mIdx
-        const vSlots = getVirtualSlots(rowMeasures[mIdx]!, timeSigs[globalI]!)
-        xAcc += measureWidth(rowMeasures[mIdx]!, showTimeSigMap[globalI] ?? false, vSlots, showBpmMap[globalI] ?? false, beatWidthScale)
+        const fillRests = getFillRests(rowMeasures[mIdx]!, timeSigs[globalI]!)
+        xAcc += measureWidth(rowMeasures[mIdx]!, showTimeSigMap[globalI] ?? false, fillRests, showBpmMap[globalI] ?? false, beatWidthScale)
       }
       return { beatWidthScale, displayW, measureOffsets, rowStart: currentRowStart }
     })
@@ -174,8 +175,8 @@ export function TabSvgCanvas({
       if (!layout) return
       rowMeasures.forEach((measure, mIdx) => {
         const globalMI = layout.rowStart + mIdx
-        const vSlots = getVirtualSlots(measure, timeSigs[globalMI]!)
-        const positions = computeBeatPositions(measure, showTimeSigMap[globalMI] ?? false, vSlots, showBpmMap[globalMI] ?? false, layout.beatWidthScale)
+        const fillRests = getFillRests(measure, timeSigs[globalMI]!)
+        const positions = computeBeatPositions(measure, showTimeSigMap[globalMI] ?? false, fillRests, showBpmMap[globalMI] ?? false, layout.beatWidthScale)
         positions.forEach((pos, bi) => {
           map.set(`${globalMI}:${bi}`, { x: (layout.measureOffsets[mIdx] ?? 0) + pos.cx, rowIdx })
         })
@@ -379,6 +380,7 @@ export function TabSvgCanvas({
               const mi = globalMeasureMap.get(measure.id) ?? 0
               const showTs = showTimeSigMap[mi] ?? false
               const sig = measure.timeSignature ?? track.globalTimeSig
+              const fillRests = getFillRests(measure, sig)
               return (
                 <TabMeasureSvg
                   key={measure.id}
@@ -393,7 +395,7 @@ export function TabSvgCanvas({
                   showTimeSig={showTs}
                   showStringLabels={mIdx === 0}
                   timeSig={sig}
-                  activeDuration={activeDuration}
+                  fillRests={fillRests}
                   showBpm={showBpmMap[mi] ?? false}
                   bpm={effectiveBpms[mi] ?? track.globalBpm}
                   beatWidthScale={beatWidthScale}

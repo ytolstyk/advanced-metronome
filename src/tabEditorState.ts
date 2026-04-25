@@ -65,7 +65,7 @@ export const BEAT_WIDTHS: Record<DurationValue, number> = {
   sixtyfourth:  10,
 }
 
-const DURATION_BEATS: Record<DurationValue, number> = {
+export const DURATION_BEATS: Record<DurationValue, number> = {
   whole: 4,
   half: 2,
   quarter: 1,
@@ -73,6 +73,23 @@ const DURATION_BEATS: Record<DurationValue, number> = {
   sixteenth: 0.25,
   thirtysecond: 0.125,
   sixtyfourth: 0.0625,
+}
+
+const DURATION_VALUES_ORDERED: DurationValue[] = [
+  'whole', 'half', 'quarter', 'eighth', 'sixteenth', 'thirtysecond', 'sixtyfourth',
+]
+
+export function computeFillRests(remainingBeats: number): DurationValue[] {
+  const rests: DurationValue[] = []
+  let rem = remainingBeats
+  for (const d of DURATION_VALUES_ORDERED) {
+    const b = DURATION_BEATS[d]
+    while (rem >= b - 1e-9) {
+      rests.push(d)
+      rem -= b
+    }
+  }
+  return rests
 }
 
 function durationBeats(duration: DurationValue, dot: DotModifier): number {

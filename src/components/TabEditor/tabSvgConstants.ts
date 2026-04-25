@@ -1,5 +1,5 @@
-import type { Beat, Measure, TabNote } from '../../tabEditorTypes'
-import { BEAT_WIDTH, BEAT_WIDTHS } from '../../tabEditorState'
+import type { Beat, DurationValue, Measure, TabNote } from '../../tabEditorTypes'
+import { BEAT_WIDTHS } from '../../tabEditorState'
 
 export const STRING_SPACING = 20
 export const STRING_LABEL_W = 28
@@ -40,11 +40,12 @@ export function stringY(si: number, stringCount: number): number {
   return TOP_MARGIN + (stringCount - 1 - si) * STRING_SPACING
 }
 
-// virtualSlots: 0 or 1 — whether to include width for the pending virtual beat slot
+// fillRests: list of rest durations to show after existing beats (fill remaining measure capacity)
 // beatWidthScale: multiplier applied only to BEAT_WIDTHS (the post-note spacing), not to any padding or structural widths
-export function measureWidth(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false, beatWidthScale = 1.0): number {
+export function measureWidth(m: Measure, showTimeSig = false, fillRests: DurationValue[] = [], showBpm = false, beatWidthScale = 1.0): number {
   const beatsW = m.beats.reduce((acc, b) => acc + BEAT_LEFT_PAD + BEAT_WIDTHS[b.duration] * beatWidthScale + (beatHasBend(b) ? BEND_EXTRA_W : 0), 0)
-  return MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + beatsW + virtualSlots * (BEAT_LEFT_PAD + BEAT_WIDTH * beatWidthScale) + BARLINE_W
+  const fillW = fillRests.reduce((acc, d) => acc + BEAT_LEFT_PAD + BEAT_WIDTHS[d] * beatWidthScale, 0)
+  return MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + beatsW + fillW + BARLINE_W
 }
 
 export interface BeatPosition {
@@ -68,14 +69,18 @@ export function formatFretLabel(note: TabNote, isTied: boolean): FretLabelData {
   return { label: String(note.fret), fill: '#e8e8e8', fontStyle: 'normal' }
 }
 
-export function computeBeatPositions(m: Measure, showTimeSig = false, virtualSlots = 0, showBpm = false, beatWidthScale = 1.0): BeatPosition[] {
+export function computeBeatPositions(m: Measure, showTimeSig = false, fillRests: DurationValue[] = [], showBpm = false, beatWidthScale = 1.0): BeatPosition[] {
   const positions: BeatPosition[] = []
   let x = MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0)
-  const totalSlots = m.beats.length + virtualSlots
-  for (let i = 0; i < totalSlots; i++) {
-    const beat = m.beats[i]
-    const rightW = (beat ? BEAT_WIDTHS[beat.duration] : BEAT_WIDTH) * beatWidthScale
-    const w = BEAT_LEFT_PAD + rightW + (beat && beatHasBend(beat) ? BEND_EXTRA_W : 0)
+  for (let i = 0; i < m.beats.length; i++) {
+    const beat = m.beats[i]!
+    const rightW = BEAT_WIDTHS[beat.duration] * beatWidthScale
+    const w = BEAT_LEFT_PAD + rightW + (beatHasBend(beat) ? BEND_EXTRA_W : 0)
+    positions.push({ x, cx: x + BEAT_LEFT_PAD, w })
+    x += w
+  }
+  for (const d of fillRests) {
+    const w = BEAT_LEFT_PAD + BEAT_WIDTHS[d] * beatWidthScale
     positions.push({ x, cx: x + BEAT_LEFT_PAD, w })
     x += w
   }
