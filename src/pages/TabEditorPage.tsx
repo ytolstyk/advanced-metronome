@@ -33,6 +33,8 @@ export function TabEditorPage() {
   const prevCursorRef = useRef<TabCursor | null>(null)
   const dragRef = useRef<{ measureIndex: number; beatIndex: number } | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [isNavigating, setIsNavigating] = useState(false)
+  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (saveTimerRef.current !== null) clearTimeout(saveTimerRef.current)
@@ -158,33 +160,27 @@ export function TabEditorPage() {
 
       switch (e.key) {
         case 'ArrowLeft':
-          e.preventDefault()
-          flushDigitBuf()
-          if (e.shiftKey) {
-            dispatch({ type: 'SHIFT_MOVE_CURSOR', direction: 'left' })
-          } else {
-            dispatch({ type: 'MOVE_CURSOR', direction: 'left' })
-          }
-          return
         case 'ArrowRight':
+        case 'ArrowUp':
+        case 'ArrowDown': {
           e.preventDefault()
           flushDigitBuf()
-          if (e.shiftKey) {
-            dispatch({ type: 'SHIFT_MOVE_CURSOR', direction: 'right' })
+          setIsNavigating(true)
+          if (navTimerRef.current !== null) clearTimeout(navTimerRef.current)
+          navTimerRef.current = setTimeout(() => setIsNavigating(false), 150)
+          if (e.key === 'ArrowLeft') {
+            if (e.shiftKey) dispatch({ type: 'SHIFT_MOVE_CURSOR', direction: 'left' })
+            else dispatch({ type: 'MOVE_CURSOR', direction: 'left' })
+          } else if (e.key === 'ArrowRight') {
+            if (e.shiftKey) dispatch({ type: 'SHIFT_MOVE_CURSOR', direction: 'right' })
+            else dispatch({ type: 'MOVE_CURSOR', direction: 'right' })
+          } else if (e.key === 'ArrowUp') {
+            dispatch({ type: 'MOVE_CURSOR', direction: 'up' })
           } else {
-            dispatch({ type: 'MOVE_CURSOR', direction: 'right' })
+            dispatch({ type: 'MOVE_CURSOR', direction: 'down' })
           }
           return
-        case 'ArrowUp':
-          e.preventDefault()
-          flushDigitBuf()
-          dispatch({ type: 'MOVE_CURSOR', direction: 'up' })
-          return
-        case 'ArrowDown':
-          e.preventDefault()
-          flushDigitBuf()
-          dispatch({ type: 'MOVE_CURSOR', direction: 'down' })
-          return
+        }
         case ' ':
           e.preventDefault()
           dispatch({
@@ -358,7 +354,7 @@ export function TabEditorPage() {
         {menuOpen && (
           <>
             <TabEditorHeader track={state.track} dispatch={dispatch} />
-            <TabEditorToolbar state={state} dispatch={dispatch} />
+            <TabEditorToolbar state={state} dispatch={dispatch} isNavigating={isNavigating} />
           </>
         )}
         <TabEditorPlayback

@@ -72,6 +72,7 @@ const PALM_MUTE_ENTRY = MODIFIERS_BASE.find((m) => m.key === 'palmMute')!
 interface TabEditorToolbarProps {
   state: TabEditorState
   dispatch: React.Dispatch<TabEditorAction>
+  isNavigating: boolean
 }
 
 function ToolBtn({
@@ -108,17 +109,18 @@ function ToolBtn({
   )
 }
 
-export function TabEditorToolbar({ state, dispatch }: TabEditorToolbarProps) {
+export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToolbarProps) {
   const { activeDuration, activeDot, activeModifiers, cursor, noteSelection } = state
   const mi = cursor.measureIndex
   const bi = cursor.beatIndex
 
   // Toolbar mirrors the beat under the cursor so changing duration acts on that beat.
-  const currentBeat = state.track.measures[mi]?.beats[bi]
+  // While navigating, freeze the display to avoid flashing as cursor passes beats.
+  const currentBeat = isNavigating ? undefined : state.track.measures[mi]?.beats[bi]
   const displayedDuration: DurationValue = currentBeat?.duration ?? activeDuration
   const displayedDot: DotModifier = currentBeat?.dot ?? activeDot
 
-  const currentNote = currentBeat?.notes[cursor.stringIndex]
+  const currentNote = isNavigating ? undefined : currentBeat?.notes[cursor.stringIndex]
   const isOnNote = !!currentNote && currentNote.fret >= 0
 
   const activeSet = isOnNote ? currentNote.modifiers : activeModifiers

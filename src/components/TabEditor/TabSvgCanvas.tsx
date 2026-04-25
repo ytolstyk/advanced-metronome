@@ -268,7 +268,6 @@ export function TabSvgCanvas({
             className="tab-svg-row"
             width={displayW}
             height={svgH}
-            style={{ marginBottom: 24 }}
           >
             {rowMeasures.map((measure, mIdx) => {
               const mi = globalMeasureMap.get(measure.id) ?? 0
