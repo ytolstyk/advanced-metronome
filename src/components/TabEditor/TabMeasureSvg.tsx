@@ -5,6 +5,7 @@ import { TUNINGS } from '../../data/tunings'
 import { TechniqueOverlay } from './TabTechniquePaths'
 import {
   TOP_MARGIN,
+  STRING_SPACING,
   BARLINE_W,
   MEASURE_NUMBER_H,
   MEASURE_NUMBER_FONT_SIZE,
@@ -50,108 +51,95 @@ interface RestSymbolProps {
   fill?: string
 }
 
-function RestSymbol({ duration, dot, cx, cy, fill = '#666' }: RestSymbolProps) {
+function RestSymbol({ duration, dot, cx, cy, fill = '#bbb' }: RestSymbolProps) {
   const isDotted = dot.dotted
   const isDoubleDotted = dot.doubleDotted
 
-  let dotX = 11
-  let dotY = 0
+  // Whole/half rests are anchored to specific string lines regardless of the passed-in cy
+  const effectiveCy =
+    duration === 'whole' ? TOP_MARGIN + 2 * STRING_SPACING + 3 :
+    duration === 'half'  ? TOP_MARGIN + 3 * STRING_SPACING - 3 :
+    cy
+
+  let dotX = 8
+  let dotY = -5
   let symbol: React.ReactNode
 
   switch (duration) {
     case 'whole':
-      // Thick rect hanging below a horizontal line
-      dotY = 2
+      dotX = 8; dotY = -5
       symbol = (
-        <>
-          <line x1={-10} y1={-3} x2={10} y2={-3} stroke={fill} strokeWidth={1.5} />
-          <rect x={-8} y={-3} width={16} height={7} fill={fill} />
-        </>
+        <path
+          d="M 247.5 24.5 H 235.5 v 6 h 12 v -6 Z"
+          fill={fill}
+          transform="translate(-241.5, -27.5)"
+        />
       )
       break
     case 'half':
-      // Thick rect sitting on a horizontal line
-      dotY = -5
+      dotX = 8; dotY = -5
       symbol = (
-        <>
-          <rect x={-8} y={-7} width={16} height={7} fill={fill} />
-          <line x1={-10} y1={0} x2={10} y2={0} stroke={fill} strokeWidth={1.5} />
-        </>
+        <path
+          d="M 247.5 24.5 H 235.5 v 6 h 12 v -6 Z"
+          fill={fill}
+          transform="translate(-241.5, -27.5)"
+        />
       )
       break
     case 'quarter':
-      // Classic zigzag quarter rest
-      dotX = 10
+      dotX = 8; dotY = -14
       symbol = (
         <path
-          d="M 3.5,-9 C 5.5,-6 -2,-5 2,-1.5 C -2,-1 -4,4 -2,7 C -3.5,7 -4,9 -2.5,10"
-          fill="none"
-          stroke={fill}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          d="M 297 24 C 294.75 26.5 293.75 28.5 293.75 29.75 s 1.25 3 3.25 5.5 l -0.75 1 C 295.5 35.75 293.5 34.75 292.5 35.75 S 292 39 293.75 40.5 l -0.75 1 c -2.95 -2.03 -5.25 -5.25 -3.75 -7.5 s 4.25 -0.75 4.5 -0.5 l -4.5 -6.25 c 2 -1.75 3 -3.5 3 -5 s -0.5 -2.75 -2 -4.5 H 292 Z"
+          fill={fill}
+          transform="translate(-292, -30)"
         />
       )
       break
     case 'eighth':
-      // Diagonal stem with one filled circle and one flag curve
-      dotX = 11
+      dotX = 7; dotY = -10
       symbol = (
-        <>
-          <line x1={-3} y1={9} x2={4} y2={-7} stroke={fill} strokeWidth={1.8} strokeLinecap="round" />
-          <circle cx={4} cy={-7} r={3} fill={fill} />
-          <path d="M 4,-7 C 9,-4 8,2 4,4" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
-        </>
+        <path
+          d="M 292 36.5 h -1.5 l 3 -10.25 c -2 0.75 -4 1.5 -5.77 -0.6 a 2.38 2.38 0 1 1 4 -0.4 a 0.25 0.25 0 0 0 0.25 0.25 c 1.25 -0.25 2.75 -2.25 3 -2.75 h 1 Z"
+          fill={fill}
+          transform="translate(-292, -31)"
+        />
       )
       break
     case 'sixteenth':
-      // Diagonal stem with two flags
-      dotX = 11
+      dotX = 7; dotY = -13
       symbol = (
-        <>
-          <line x1={-3} y1={9} x2={4} y2={-11} stroke={fill} strokeWidth={1.8} strokeLinecap="round" />
-          <circle cx={4} cy={-11} r={3} fill={fill} />
-          <path d="M 4,-11 C 9,-8 8,-2 4,0" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
-          <circle cx={4} cy={0} r={3} fill={fill} />
-          <path d="M 4,0 C 9,3 8,9 4,11" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
-        </>
+        <path
+          d="M 292 36.5 h -1.5 l 3 -10.25 c -2 0.75 -4 1.5 -5.77 -0.6 a 2.38 2.38 0 1 1 4 -0.4 a 0.25 0.25 0 0 0 0.25 0.25 c 0.7 -0.25 1.25 -0.5 2 -1.5 l 1.5 -5.25 c -2 0.75 -4 1.5 -5.77 -0.6 a 2.38 2.38 0 1 1 4 -0.4 a 0.25 0.25 0 0 0 0.25 0.25 c 1.25 -0.25 2.75 -2.25 3 -2.75 h 1 Z"
+          fill={fill}
+          transform="translate(-292, -29)"
+        />
       )
       break
     case 'thirtysecond':
-      // Diagonal stem with three flags
-      dotX = 11
+      dotX = 7; dotY = -15
       symbol = (
-        <>
-          <line x1={-4} y1={10} x2={4} y2={-16} stroke={fill} strokeWidth={1.8} strokeLinecap="round" />
-          <circle cx={4} cy={-16} r={2.5} fill={fill} />
-          <path d="M 4,-16 C 8,-13 7,-8 4,-6" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
-          <circle cx={4} cy={-6} r={2.5} fill={fill} />
-          <path d="M 4,-6 C 8,-3 7,2 4,4" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
-          <circle cx={4} cy={4} r={2.5} fill={fill} />
-          <path d="M 4,4 C 8,7 7,12 4,14" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
-        </>
+        <path
+          d="M 292 36.5 h -1.5 l 3 -10.25 c -2 0.75 -4 1.5 -5.77 -0.6 a 2.38 2.38 0 1 1 4 -0.4 a 0.25 0.25 0 0 0 0.25 0.25 c 0.7 -0.25 1.25 -0.5 2 -1.5 l 1.5 -5.25 c -2 0.75 -4 1.5 -5.77 -0.6 a 2.38 2.38 0 1 1 4 -0.4 a 0.25 0.25 0 0 0 0.25 0.25 c 0.7 -0.25 1.25 -0.5 2 -1.5 l 1.5 -5.25 c -2 0.75 -4 1.5 -5.77 -0.6 a 2.38 2.38 0 1 1 4 -0.4 a 0.25 0.25 0 0 0 0.25 0.25 c 1.25 -0.25 2.75 -2.25 3 -2.75 h 1 Z"
+          fill={fill}
+          transform="translate(-292, -26)"
+        />
       )
       break
     default:
-      // 64th: four flags
-      dotX = 11
+      // sixtyfourth
+      dotX = 7; dotY = -18
       symbol = (
-        <>
-          <line x1={-4} y1={10} x2={4} y2={-20} stroke={fill} strokeWidth={1.8} strokeLinecap="round" />
-          <circle cx={4} cy={-20} r={2.5} fill={fill} />
-          <path d="M 4,-20 C 8,-17 7,-12 4,-10" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
-          <circle cx={4} cy={-10} r={2.5} fill={fill} />
-          <path d="M 4,-10 C 8,-7 7,-2 4,0" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
-          <circle cx={4} cy={0} r={2.5} fill={fill} />
-          <path d="M 4,0 C 8,3 7,8 4,10" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
-          <circle cx={4} cy={10} r={2.5} fill={fill} />
-          <path d="M 4,10 C 8,13 7,18 4,20" fill="none" stroke={fill} strokeWidth={1.5} strokeLinecap="round" />
-        </>
+        <path
+          d="M 292 36.5 h -1.5 l 3 -10.25 c -2 0.75 -4 1.5 -5.77 -0.6 a 2.38 2.38 0 1 1 4 -0.4 a 0.25 0.25 0 0 0 0.25 0.25 c 0.7 -0.25 1.25 -0.5 2 -1.5 l 1.5 -5.25 c -2 0.75 -4 1.5 -5.77 -0.6 a 2.38 2.38 0 1 1 4 -0.4 a 0.25 0.25 0 0 0 0.25 0.25 c 0.7 -0.25 1.25 -0.5 2 -1.5 l 1.5 -5.25 c -2 0.75 -4 1.5 -5.77 -0.6 a 2.38 2.38 0 1 1 4 -0.4 a 0.25 0.25 0 0 0 0.25 0.25 c 0.7 -0.25 1.25 -0.5 2 -1.5 l 1.5 -5.25 c -2 0.75 -4 1.5 -5.77 -0.6 a 2.38 2.38 0 1 1 4 -0.4 a 0.25 0.25 0 0 0 0.25 0.25 c 1.25 -0.25 2.75 -2.25 3 -2.75 h 1 Z"
+          fill={fill}
+          transform="translate(-292, -23)"
+        />
       )
   }
 
   return (
-    <g transform={`translate(${cx}, ${cy})`} style={{ pointerEvents: 'none' }}>
+    <g transform={`translate(${cx}, ${effectiveCy}) scale(1.5)`} style={{ pointerEvents: 'none' }}>
       {symbol}
       {(isDotted || isDoubleDotted) && <circle cx={dotX} cy={dotY} r={2} fill={fill} />}
       {isDoubleDotted && <circle cx={dotX + 6} cy={dotY} r={2} fill={fill} />}
@@ -402,7 +390,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                 dot={beat.dot}
                 cx={beatCX}
                 cy={strAreaMid}
-                fill="#666"
+                fill="#bbb"
               />
             )}
 
@@ -549,7 +537,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               dot={{ dotted: false, doubleDotted: false, triplet: false }}
               cx={vCX}
               cy={strAreaMid}
-              fill="#444"
+              fill="#999"
             />
 
             {/* Cursor highlight for active string in first fill rest */}
