@@ -188,7 +188,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   const preset = tuning.find((p) => p.name === track.tuningName) ?? tuning[0]
 
   const isCursorOnThisMeasure = cursor.measureIndex === measureIndex
-  const isVirtualCursor = isCursorOnThisMeasure && cursor.beatIndex === measure.beats.length
+
 
   // Stable event handlers — one closure per measure, not per string × beat
   const handleStringMouseDown = useCallback(
@@ -229,11 +229,11 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
       {/* Measure fill warning — shown when cursor is not on this measure */}
       {!isCursorOnThisMeasure && measure.beats.length > 0 && (() => {
         const delta = used - capacity
-        if (Math.abs(delta) < 1e-9) return null
-        const sign = delta > 0 ? '+' : '−'
-        const abs = Math.abs(delta)
+        if (delta < 1e-9) return null  // hide when at-capacity or underfull (fill rests cover the gap)
+        const sign = '+'
+        const abs = delta
         const label = `⚠ ${sign}${abs % 1 === 0 ? abs : abs.toFixed(2)}b`
-        const fill = delta > 0 ? '#ff5555' : '#ffaa44'
+        const fill = '#ff5555'
         return (
           <text
             x={mw - BARLINE_W - 2}
@@ -523,8 +523,8 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         const pos = beatPositions[measure.beats.length + fillIdx]
         if (!pos) return null
         const { x: vX, cx: vCX, w: vW } = pos
-        const isFirstSlot = fillIdx === 0
-        const showCursor = isFirstSlot && isVirtualCursor && !isPlaying
+        const slotBi = measure.beats.length + fillIdx
+        const showCursor = isCursorOnThisMeasure && cursor.beatIndex === slotBi && !isPlaying
 
         return (
           <g key={`fill-${fillIdx}`}>
@@ -540,7 +540,6 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               fill="#999"
             />
 
-            {/* Cursor highlight for active string in first fill rest */}
             {showCursor && (() => {
               const sy = stringY(cursor.stringIndex, stringCount)
               return (
@@ -555,7 +554,6 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               )
             })()}
 
-            {/* Click/hover target — all fill rests map to the virtual slot (bi = beats.length) */}
             <rect
               x={vX}
               y={TOP_MARGIN}
@@ -563,7 +561,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               height={svgH - TOP_MARGIN}
               fill="transparent"
               style={{ cursor: 'pointer' }}
-              data-bi={measure.beats.length}
+              data-bi={slotBi}
               data-si={cursor.stringIndex}
               onMouseDown={handleStringMouseDown}
               onMouseEnter={handleBeatMouseEnter}

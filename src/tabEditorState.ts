@@ -239,7 +239,24 @@ function cloneBeats(beats: Beat[]): Beat[] {
   }))
 }
 
-// Advance cursor right, allowing the virtual pending slot (beatIndex = beats.length)
+// Returns the activeDuration/activeDot sync for a cursor position.
+// For real beats, mirrors the beat's own duration; for fill-rest slots, uses the computed fill rest duration.
+function durationSyncForCursor(cursor: TabCursor, track: TabTrack): Partial<TabEditorState> {
+  const measure = track.measures[cursor.measureIndex]
+  if (!measure) return {}
+  const beat = measure.beats[cursor.beatIndex]
+  if (beat) return { activeDuration: beat.duration, activeDot: { ...beat.dot } }
+  if (cursor.beatIndex >= measure.beats.length) {
+    const timeSig = measure.timeSignature ?? track.globalTimeSig
+    const remaining = measureCapacityBeats(timeSig) - measureUsedBeats(measure.beats)
+    const fillRests = remaining > 1e-9 ? computeFillRests(remaining) : []
+    const fillDur = fillRests[cursor.beatIndex - measure.beats.length]
+    if (fillDur) return { activeDuration: fillDur, activeDot: { dotted: false, doubleDotted: false, triplet: false } }
+  }
+  return {}
+}
+
+// Advance cursor right through real beats then each fill-rest slot
 function advanceCursorRight(cursor: TabCursor, track: TabTrack): TabCursor {
   const measure = track.measures[cursor.measureIndex]
   if (!measure) return cursor
@@ -247,16 +264,12 @@ function advanceCursorRight(cursor: TabCursor, track: TabTrack): TabCursor {
   const timeSig = measure.timeSignature ?? track.globalTimeSig
   const capacity = measureCapacityBeats(timeSig)
   const used = measureUsedBeats(measure.beats)
-  const hasVirtualSlot = used < capacity - 1e-9
-  const isAtVirtualSlot = cursor.beatIndex === measure.beats.length
+  const remaining = capacity - used
+  const fillRestCount = remaining > 1e-9 ? computeFillRests(remaining).length : 0
+  const totalSlots = measure.beats.length + fillRestCount
 
-  if (!isAtVirtualSlot) {
-    if (cursor.beatIndex < measure.beats.length - 1) {
-      return { ...cursor, beatIndex: cursor.beatIndex + 1 }
-    }
-    if (hasVirtualSlot) {
-      return { ...cursor, beatIndex: measure.beats.length }
-    }
+  if (cursor.beatIndex < totalSlots - 1) {
+    return { ...cursor, beatIndex: cursor.beatIndex + 1 }
   }
 
   if (cursor.measureIndex < track.measures.length - 1) {
@@ -271,11 +284,16 @@ function advanceCursorLeft(cursor: TabCursor, track: TabTrack): TabCursor {
   }
   if (cursor.measureIndex > 0) {
     const prevMeasure = track.measures[cursor.measureIndex - 1]
-    const prevBeatIdx = Math.max(0, prevMeasure.beats.length - 1)
+    const prevTimeSig = prevMeasure.timeSignature ?? track.globalTimeSig
+    const prevCapacity = measureCapacityBeats(prevTimeSig)
+    const prevUsed = measureUsedBeats(prevMeasure.beats)
+    const prevRemaining = prevCapacity - prevUsed
+    const prevFillRestCount = prevRemaining > 1e-9 ? computeFillRests(prevRemaining).length : 0
+    const lastIdx = Math.max(0, prevMeasure.beats.length + prevFillRestCount - 1)
     return {
       ...cursor,
       measureIndex: cursor.measureIndex - 1,
-      beatIndex: prevBeatIdx,
+      beatIndex: lastIdx,
     }
   }
   return cursor
@@ -340,8 +358,8 @@ function placeNoteInMeasure(
   const capacity = measureCapacityBeats(timeSig)
   const newBeatBeats = durationBeats(duration, dot)
 
-  if (beatIndex === measure.beats.length) {
-    // Virtual slot: append new beat
+  if (beatIndex >= measure.beats.length) {
+    // Virtual slot (any fill-rest position): append new beat
     const used = measureUsedBeats(measure.beats)
     if (used + newBeatBeats > capacity + 1e-9) {
       return {
@@ -719,8 +737,7 @@ export function tabEditorReducer(
       const { cursor, track } = state
 
       function withBeatSync(newCursor: TabCursor, extraState?: Partial<TabEditorState>): TabEditorState {
-        const beat = track.measures[newCursor.measureIndex]?.beats[newCursor.beatIndex]
-        const durationSync = beat ? { activeDuration: beat.duration, activeDot: { ...beat.dot } } : {}
+        const durationSync = durationSyncForCursor(newCursor, track)
         return { ...state, ...durationSync, ...extraState, cursor: newCursor, selection: null, selectionAnchor: null }
       }
 
@@ -749,10 +766,8 @@ export function tabEditorReducer(
     }
 
     case 'SET_CURSOR': {
-      const beatAtCursor = state.track.measures[action.cursor.measureIndex]?.beats[action.cursor.beatIndex]
-      return beatAtCursor
-        ? { ...state, cursor: action.cursor, activeDuration: beatAtCursor.duration, activeDot: { ...beatAtCursor.dot } }
-        : { ...state, cursor: action.cursor }
+      const durationSync = durationSyncForCursor(action.cursor, state.track)
+      return { ...state, ...durationSync, cursor: action.cursor }
     }
 
     case 'SET_SELECTION':
@@ -765,8 +780,7 @@ export function tabEditorReducer(
         ? advanceCursorRight(cursor, track)
         : advanceCursorLeft(cursor, track)
       if (newCursor === cursor) return state
-      const beat = track.measures[newCursor.measureIndex]?.beats[newCursor.beatIndex]
-      const durationSync = beat ? { activeDuration: beat.duration, activeDot: { ...beat.dot } } : {}
+      const durationSync = durationSyncForCursor(newCursor, track)
       const selection: TabSelection = {
         startMeasure: anchor.measureIndex,
         startBeat: anchor.beatIndex,
@@ -1154,7 +1168,7 @@ export function tabEditorReducer(
       const capacity = measureCapacityBeats(timeSig)
 
       let usedWithoutThis: number
-      if (beatIndex === measure.beats.length) {
+      if (beatIndex >= measure.beats.length) {
         usedWithoutThis = measureUsedBeats(measure.beats)
       } else {
         const beat = measure.beats[beatIndex]
@@ -1167,7 +1181,7 @@ export function tabEditorReducer(
 
       const measures = s.track.measures.map((m, mi) => {
         if (mi !== measureIndex) return m
-        if (beatIndex === m.beats.length) {
+        if (beatIndex >= m.beats.length) {
           const newBeat = makeBeat(trimDur, s.track.stringCount)
           newBeat.dot = { ...trimDot }
           newBeat.notes[stringIndex] = { fret, modifiers: { ...state.activeModifiers } }
@@ -1196,7 +1210,7 @@ export function tabEditorReducer(
       // Place note at full declared duration in current measure
       let measures = s.track.measures.map((m, mi) => {
         if (mi !== measureIndex) return m
-        if (beatIndex === m.beats.length) {
+        if (beatIndex >= m.beats.length) {
           const newBeat = makeBeat(newDuration, s.track.stringCount)
           newBeat.dot = { ...newDot }
           newBeat.notes[stringIndex] = { fret, modifiers: { ...state.activeModifiers } }
