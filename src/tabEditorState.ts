@@ -299,6 +299,19 @@ function advanceCursorLeft(cursor: TabCursor, track: TabTrack): TabCursor {
   return cursor
 }
 
+function getUniqueBeatPositions(noteSelection: TabCursor[]): Array<{ mi: number; bi: number }> {
+  const seen = new Set<string>()
+  const result: Array<{ mi: number; bi: number }> = []
+  for (const c of noteSelection) {
+    const key = `${c.measureIndex}:${c.beatIndex}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      result.push({ mi: c.measureIndex, bi: c.beatIndex })
+    }
+  }
+  return result.sort((a, b) => a.mi !== b.mi ? a.mi - b.mi : a.bi - b.bi)
+}
+
 function getSelectedBeats(track: TabTrack, sel: TabSelection): Beat[] {
   const result: Beat[] = []
   const { startMeasure, startBeat, endMeasure, endBeat } = normalizeSelection(sel)
@@ -975,6 +988,11 @@ export function tabEditorReducer(
     case 'COPY': {
       const sel = state.selection
       if (!sel) {
+        if (state.noteSelection.length > 0) {
+          const positions = getUniqueBeatPositions(state.noteSelection)
+          const beats = positions.map(({ mi, bi }) => state.track.measures[mi]?.beats[bi]).filter((b): b is Beat => !!b)
+          if (beats.length > 0) return { ...state, clipboard: cloneBeats(beats) }
+        }
         const m = state.track.measures[state.cursor.measureIndex]
         const b = m?.beats[state.cursor.beatIndex]
         if (!b) return state
@@ -991,6 +1009,18 @@ export function tabEditorReducer(
       let measures: Measure[]
 
       if (!sel) {
+        if (s.noteSelection.length > 0) {
+          const positions = getUniqueBeatPositions(s.noteSelection)
+          clipboard = cloneBeats(
+            positions.map(({ mi, bi }) => s.track.measures[mi]?.beats[bi]).filter((b): b is Beat => !!b),
+          )
+          measures = s.track.measures.map((m, mi) => {
+            const toClear = new Set(positions.filter((p) => p.mi === mi).map((p) => p.bi))
+            if (toClear.size === 0) return m
+            return { ...m, beats: m.beats.map((b, bi) => toClear.has(bi) ? { ...b, notes: b.notes.map(() => makeEmptyNote()) } : b) }
+          })
+          return { ...s, track: { ...s.track, measures }, clipboard, selection: null }
+        }
         const m = s.track.measures[s.cursor.measureIndex]
         const b = m?.beats[s.cursor.beatIndex]
         if (!b) return state
@@ -1045,7 +1075,11 @@ export function tabEditorReducer(
           measures[mi].beats.push(newBeat)
         }
         bi++
-        if (bi >= measures[mi].beats.length) {
+        const pastedMeasure = measures[mi]!
+        const pastedTimeSig = pastedMeasure.timeSignature ?? s.track.globalTimeSig
+        const pastedCapacity = measureCapacityBeats(pastedTimeSig)
+        const pastedUsed = measureUsedBeats(pastedMeasure.beats)
+        if (bi >= pastedMeasure.beats.length && pastedUsed >= pastedCapacity - 1e-9) {
           bi = 0
           mi++
         }
