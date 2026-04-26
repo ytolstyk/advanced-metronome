@@ -95,6 +95,8 @@ export function TabSvgCanvas({
 }: TabSvgCanvasProps) {
   const { track, cursor, selection, noteSelection, isPlaying, playheadMeasure, playheadBeat, viewMode } = state
 
+  const svgH = rowSvgHeight(track.stringCount)
+
   const showTimeSigMap = useMemo<boolean[]>(() => track.measures.map((m, i) => {
     if (i === 0) return true
     const prev = track.measures[i - 1]
@@ -184,6 +186,33 @@ export function TabSvgCanvas({
     })
     return map
   }, [rows, rowLayouts, timeSigs, showTimeSigMap, showBpmMap])
+
+  const prevPlayheadRowRef = useRef<number>(-1)
+
+  useEffect(() => {
+    if (!isPlaying) {
+      prevPlayheadRowRef.current = -1
+      return
+    }
+    const pos = beatAbsolutePositions.get(`${playheadMeasure}:${playheadBeat}`)
+    if (!pos) return
+    const rowIdx = pos.rowIdx
+    if (rowIdx === prevPlayheadRowRef.current) return
+    prevPlayheadRowRef.current = rowIdx
+
+    const canvasEl = canvasRef.current
+    if (!canvasEl) return
+
+    const canvasHeight = canvasEl.clientHeight
+
+    let target: number
+    if (canvasHeight >= 2 * svgH) {
+      target = (rowIdx - 1) * svgH
+    } else {
+      target = rowIdx * svgH
+    }
+    canvasEl.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
+  }, [isPlaying, playheadMeasure, playheadBeat, beatAbsolutePositions, canvasRef, svgH])
 
   const playheadRectRefs = useRef(new Map<number, SVGRectElement>())
   const animStateRef = useRef<{
@@ -360,8 +389,6 @@ export function TabSvgCanvas({
       </div>
     )
   }
-
-  const svgH = rowSvgHeight(track.stringCount)
 
   return (
     <div className="tab-canvas" ref={canvasRef} tabIndex={0}>

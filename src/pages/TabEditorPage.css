@@ -1,7 +1,7 @@
 .tab-editor-page {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 56px);
+  height: calc(100vh - 56px);
   background: #0e0e0e;
   color: #e0e0e0;
 }
