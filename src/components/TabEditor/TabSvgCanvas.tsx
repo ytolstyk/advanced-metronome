@@ -223,6 +223,7 @@ export function TabSvgCanvas({
     toX: number
     toRow: number
     colW: number
+    rowEndX: number
   } | null>(null)
   const rafRef = useRef<number | null>(null)
 
@@ -251,16 +252,23 @@ export function TabSvgCanvas({
         }, 18)
       : 20
 
+    const fromRow = fromPos.rowIdx
+    const toRow = toPos?.rowIdx ?? fromPos.rowIdx
+    const rowEndX = fromRow !== toRow
+      ? (rowLayouts[fromRow]?.displayW ?? fromPos.x)
+      : fromPos.x
+
     animStateRef.current = {
       startTime: performance.now(),
       durationMs,
       fromX: fromPos.x,
-      fromRow: fromPos.rowIdx,
+      fromRow,
       toX: toPos?.x ?? fromPos.x,
-      toRow: toPos?.rowIdx ?? fromPos.rowIdx,
+      toRow,
       colW,
+      rowEndX,
     }
-  }, [isPlaying, playheadMeasure, playheadBeat, beatAbsolutePositions, track])
+  }, [isPlaying, playheadMeasure, playheadBeat, beatAbsolutePositions, track, rowLayouts])
 
   useEffect(() => {
     if (!isPlaying) {
@@ -275,7 +283,9 @@ export function TabSvgCanvas({
         const elapsed = performance.now() - anim.startTime
         const t = Math.min(1, elapsed / anim.durationMs)
         const sameRow = anim.fromRow === anim.toRow
-        const x = sameRow ? anim.fromX + (anim.toX - anim.fromX) * t : anim.fromX
+        const x = sameRow
+          ? anim.fromX + (anim.toX - anim.fromX) * t
+          : anim.fromX + (anim.rowEndX - anim.fromX) * t
         for (const [ri, rect] of playheadRectRefs.current) {
           if (ri === anim.fromRow) {
             rect.setAttribute('x', String(x - anim.colW / 2))
