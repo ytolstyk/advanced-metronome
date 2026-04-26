@@ -489,6 +489,7 @@ export type TabEditorAction =
   | { type: 'RESOLVE_OVERFLOW_BLEED' }
   | { type: 'DISMISS_OVERFLOW' }
   | { type: 'SET_BEND_AMOUNT'; measureIndex: number; beatIndex: number; stringIndex: number; amount: number }
+  | { type: 'CLEAR_NOTES' }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -1296,6 +1297,55 @@ export function tabEditorReducer(
 
     case 'DISMISS_OVERFLOW':
       return { ...state, pendingOverflow: null }
+
+    case 'CLEAR_NOTES': {
+      const s = pushUndo(state)
+      const { cursor, selection, noteSelection, track } = s
+
+      // Beat-range selection takes priority
+      if (selection) {
+        const norm = normalizeSelection(selection)
+        const measures = track.measures.map((m, mi) => {
+          if (mi < norm.startMeasure || mi > norm.endMeasure) return m
+          const bStart = mi === norm.startMeasure ? norm.startBeat : 0
+          const bEnd = mi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+          return {
+            ...m,
+            beats: m.beats.map((b, bi) => {
+              if (bi < bStart || bi > bEnd) return b
+              return { ...b, notes: b.notes.map(() => makeEmptyNote()) }
+            }),
+          }
+        })
+        return { ...s, track: { ...track, measures } }
+      }
+
+      // Multi-note selection: clear all notes in each affected beat
+      if (noteSelection.length >= 2) {
+        const beatSet = new Set(noteSelection.map((c) => `${c.measureIndex}:${c.beatIndex}`))
+        const measures = track.measures.map((m, mi) => ({
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (!beatSet.has(`${mi}:${bi}`)) return b
+            return { ...b, notes: b.notes.map(() => makeEmptyNote()) }
+          }),
+        }))
+        return { ...s, track: { ...track, measures } }
+      }
+
+      // Single cursor: clear all notes at current beat
+      const measures = track.measures.map((m, mi) => {
+        if (mi !== cursor.measureIndex) return m
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== cursor.beatIndex) return b
+            return { ...b, notes: b.notes.map(() => makeEmptyNote()) }
+          }),
+        }
+      })
+      return { ...s, track: { ...track, measures } }
+    }
 
     case 'SET_BEND_AMOUNT': {
       const s = pushUndo(state)

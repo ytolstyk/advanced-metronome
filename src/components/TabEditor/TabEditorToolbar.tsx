@@ -369,6 +369,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         <ToolBtn title="Copy (Cmd+C)" onClick={() => dispatch({ type: 'COPY' })}>⧉</ToolBtn>
         <ToolBtn title="Cut (Cmd+X)" onClick={() => dispatch({ type: 'CUT' })}>✂</ToolBtn>
         <ToolBtn title="Paste (Cmd+V)" onClick={() => dispatch({ type: 'PASTE', measureIndex: mi, beatIndex: bi })}>⧫</ToolBtn>
+        <ToolBtn title="Delete notes (replace with rests)" onClick={() => dispatch({ type: 'CLEAR_NOTES' })}>𝄻</ToolBtn>
       </div>
 
       {/* Move group */}
