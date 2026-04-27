@@ -372,16 +372,6 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               <rect x={beatCX - colW / 2} y={MEASURE_NUMBER_H} width={colW} height={svgH - MEASURE_NUMBER_H} fill={overlayFill} />
             )}
 
-            {/* Tie arc entering from left barline for tied-from beats */}
-            {isTied && (
-              <path
-                d={`M 0,${strAreaMid} Q ${beatCX},${strAreaMid + 14} ${beatCX},${strAreaMid}`}
-                fill="none"
-                stroke="#888"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-              />
-            )}
 
             {/* Rest glyph — only when every string is empty */}
             {beat.notes.every((n) => n.fret < 0) && (

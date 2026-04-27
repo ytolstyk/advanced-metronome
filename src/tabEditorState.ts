@@ -1239,15 +1239,32 @@ export function tabEditorReducer(
 
     case 'RESOLVE_OVERFLOW_BLEED': {
       if (!state.pendingOverflow) return state
-      const { fret, measureIndex, beatIndex, stringIndex, newDuration, newDot, overshootBeats } = state.pendingOverflow
+      const { fret, measureIndex, beatIndex, stringIndex, overshootBeats } = state.pendingOverflow
       const s = pushUndo(state)
 
-      // Place note at full declared duration in current measure
+      // Compute trimmed duration that fills exactly the remaining space (same logic as TRIM)
+      const bleedMeasure = s.track.measures[measureIndex]
+      if (!bleedMeasure) return state
+      const bleedTimeSig = bleedMeasure.timeSignature ?? s.track.globalTimeSig
+      const bleedCapacity = measureCapacityBeats(bleedTimeSig)
+      let bleedUsedWithoutThis: number
+      if (beatIndex >= bleedMeasure.beats.length) {
+        bleedUsedWithoutThis = measureUsedBeats(bleedMeasure.beats)
+      } else {
+        const existBeat = bleedMeasure.beats[beatIndex]
+        if (!existBeat) return state
+        bleedUsedWithoutThis = measureUsedBeats(bleedMeasure.beats) - durationBeats(existBeat.duration, existBeat.dot)
+      }
+      const bleedRemaining = bleedCapacity - bleedUsedWithoutThis
+      const { duration: trimDur, dot: trimDot } = quarterBeatsToNearestDuration(Math.max(0, bleedRemaining))
+
+      // Place trimmed note in current measure, marked as tying into the next measure
       let measures = s.track.measures.map((m, mi) => {
         if (mi !== measureIndex) return m
         if (beatIndex >= m.beats.length) {
-          const newBeat = makeBeat(newDuration, s.track.stringCount)
-          newBeat.dot = { ...newDot }
+          const newBeat = makeBeat(trimDur, s.track.stringCount)
+          newBeat.dot = { ...trimDot }
+          newBeat.tiedTo = true
           newBeat.notes[stringIndex] = { fret, modifiers: { ...state.activeModifiers } }
           return { ...m, beats: [...m.beats, newBeat] }
         }
@@ -1259,7 +1276,7 @@ export function tabEditorReducer(
               if (si !== stringIndex) return n
               return { fret, modifiers: { ...state.activeModifiers } }
             })
-            return { ...b, duration: newDuration, dot: { ...newDot }, notes }
+            return { ...b, duration: trimDur, dot: { ...trimDot }, tiedTo: true as const, notes }
           }),
         }
       })

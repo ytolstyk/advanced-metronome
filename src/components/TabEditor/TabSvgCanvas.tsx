@@ -5,7 +5,7 @@ import type { TabEditorAction } from '../../tabEditorState'
 import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats, computeFillRests, effectiveBpmAt, beatDurationSeconds } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
 import { StaffViewSvg } from './StaffViewSvg'
-import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, formatFretLabel } from './tabSvgConstants'
+import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, formatFretLabel, stringY } from './tabSvgConstants'
 
 interface TabSvgCanvasProps {
   state: TabEditorState
@@ -445,6 +445,121 @@ export function TabSvgCanvas({
                 />
               )
             })}
+            {/* Tie arcs — drawn after all measures so positions from both sides are known */}
+            {(() => {
+              const arcs: React.ReactNode[] = []
+              const TIE_Y_OFFSET = 9   // px below note center to start arc
+              const TIE_DIP = 12       // px the arc curves below the start y
+
+              rowMeasures.forEach((measure, mIdx) => {
+                const globalMI = layout.rowStart + mIdx
+
+                measure.beats.forEach((beat, bi) => {
+                  if (!beat.tiedTo) return
+
+                  const nextGlobalMI = globalMI + 1
+                  const nextMeasure = track.measures[nextGlobalMI]
+                  if (!nextMeasure || !nextMeasure.beats[0]?.tiedFrom) return
+
+                  // Find which string carries the tie (first non-empty string in the tiedFrom beat)
+                  const tieBeat = nextMeasure.beats[0]!
+                  const si = tieBeat.notes.findIndex((n) => n.fret >= 0)
+                  if (si < 0) return
+
+                  const noteY = stringY(si, track.stringCount)
+                  const y0 = noteY + TIE_Y_OFFSET
+                  const y1 = y0 + TIE_DIP
+
+                  const srcTimeSig = measure.timeSignature ?? track.globalTimeSig
+                  const srcFill = getFillRests(measure, srcTimeSig)
+                  const srcPositions = computeBeatPositions(measure, showTimeSigMap[globalMI] ?? false, srcFill, showBpmMap[globalMI] ?? false, beatWidthScale)
+                  const srcPos = srcPositions[bi]
+                  if (!srcPos) return
+
+                  const x1 = (measureOffsets[mIdx] ?? STRING_LABEL_W) + srcPos.cx
+
+                  const nextMIdx = mIdx + 1
+                  const nextInRow = nextMIdx < rowMeasures.length
+
+                  if (nextInRow) {
+                    // Same row — single smooth cubic bezier
+                    const dstTimeSig = nextMeasure.timeSignature ?? track.globalTimeSig
+                    const dstFill = getFillRests(nextMeasure, dstTimeSig)
+                    const dstPositions = computeBeatPositions(nextMeasure, showTimeSigMap[nextGlobalMI] ?? false, dstFill, showBpmMap[nextGlobalMI] ?? false, beatWidthScale)
+                    const dstPos = dstPositions[0]
+                    if (!dstPos) return
+                    const x2 = (measureOffsets[nextMIdx] ?? STRING_LABEL_W) + dstPos.cx
+                    const dx = (x2 - x1) * 0.35
+                    arcs.push(
+                      <path
+                        key={`tie-${globalMI}-${bi}`}
+                        d={`M ${x1},${y0} C ${x1 + dx},${y1} ${x2 - dx},${y1} ${x2},${y0}`}
+                        fill="none"
+                        stroke="#888"
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
+                        style={{ pointerEvents: 'none' }}
+                      />,
+                    )
+                  } else {
+                    // Cross-row — exit half-arc ending tangent to the right edge
+                    const rightEdge = displayW
+                    const dx = (rightEdge - x1) * 0.6
+                    arcs.push(
+                      <path
+                        key={`tie-exit-${globalMI}-${bi}`}
+                        d={`M ${x1},${y0} C ${x1 + dx},${y1} ${rightEdge},${y1} ${rightEdge},${y0}`}
+                        fill="none"
+                        stroke="#888"
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
+                        style={{ pointerEvents: 'none' }}
+                      />,
+                    )
+                  }
+                })
+
+                // Entry half-arc: first beat of first measure in this row has tiedFrom → previous row exited
+                if (mIdx === 0) {
+                  const beat0 = measure.beats[0]
+                  if (beat0?.tiedFrom) {
+                    const prevGlobalMI = globalMI - 1
+                    const prevMeasure = track.measures[prevGlobalMI]
+                    const lastBeat = prevMeasure?.beats[prevMeasure.beats.length - 1]
+                    if (lastBeat?.tiedTo) {
+                      const si = beat0.notes.findIndex((n) => n.fret >= 0)
+                      if (si >= 0) {
+                        const noteY = stringY(si, track.stringCount)
+                        const y0 = noteY + TIE_Y_OFFSET
+                        const y1 = y0 + TIE_DIP
+
+                        const dstTimeSig = measure.timeSignature ?? track.globalTimeSig
+                        const dstFill = getFillRests(measure, dstTimeSig)
+                        const dstPositions = computeBeatPositions(measure, showTimeSigMap[globalMI] ?? false, dstFill, showBpmMap[globalMI] ?? false, beatWidthScale)
+                        const dstPos = dstPositions[0]
+                        if (dstPos) {
+                          const x2 = (measureOffsets[0] ?? STRING_LABEL_W) + dstPos.cx
+                          const dx = (x2 - STRING_LABEL_W) * 0.6
+                          arcs.push(
+                            <path
+                              key={`tie-entry-${globalMI}`}
+                              d={`M ${STRING_LABEL_W},${y0} C ${STRING_LABEL_W},${y1} ${x2 - dx},${y1} ${x2},${y0}`}
+                              fill="none"
+                              stroke="#888"
+                              strokeWidth={1.5}
+                              strokeLinecap="round"
+                              style={{ pointerEvents: 'none' }}
+                            />,
+                          )
+                        }
+                      }
+                    }
+                  }
+                }
+              })
+
+              return arcs
+            })()}
             {/* Animated playback highlight — driven by RAF, replaces per-measure static highlight */}
             <rect
               ref={(el) => {

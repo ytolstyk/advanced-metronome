@@ -48,6 +48,7 @@ export interface Beat {
   dot: DotModifier
   notes: TabNote[] // index 0 = lowest string
   tiedFrom?: true  // this beat is a tied continuation from the previous measure
+  tiedTo?: true    // this beat ties into the first beat of the next measure
   dynamics?: 'ppp' | 'pp' | 'p' | 'mp' | 'mf' | 'f' | 'ff' | 'fff'
   repeatStart?: true
   repeatEnd?: true
