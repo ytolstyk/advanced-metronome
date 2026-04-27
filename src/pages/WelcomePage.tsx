@@ -61,6 +61,13 @@ const FEATURES = [
     route: "/fret-memorizer",
     color: "#06b6d4",
   },
+  {
+    icon: "🎸",
+    title: "Tab Editor",
+    desc: "Write and play back guitar tabs with full notation",
+    route: "/tab-editor",
+    color: "#84cc16",
+  },
 ] as const;
 
 export function WelcomePage() {
