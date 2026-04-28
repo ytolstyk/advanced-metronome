@@ -148,10 +148,11 @@ export function TabSvgCanvas({
 
   const rowLayouts = useMemo(() => {
     return rows.map((rowMeasures, rowIdx) => {
+      const isLastRow = rowIdx === rows.length - 1
       const currentRowStart = rowStartIndices[rowIdx] ?? 0
       const naturalW = rowSvgWidth(rowMeasures, currentRowStart, showTimeSigMap, timeSigs, showBpmMap)
       const fullW = containerWidth - 32
-      const needsScale = naturalW <= fullW * 0.5 || naturalW > fullW
+      const needsScale = isLastRow ? naturalW > fullW : naturalW !== fullW
       const scalableW = needsScale ? rowScalableWidth(rowMeasures, currentRowStart, timeSigs) : 0
       const beatWidthScale = needsScale && scalableW > 0
         ? (fullW - (naturalW - scalableW)) / scalableW
