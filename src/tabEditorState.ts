@@ -493,6 +493,7 @@ export type TabEditorAction =
   | { type: 'RESOLVE_MEASURE_ERROR_REMOVE_NOTES'; measureIndex: number }
   | { type: 'RESOLVE_MEASURE_ERROR_SHIFT_NOTES'; measureIndex: number }
   | { type: 'RESOLVE_MEASURE_ERROR_ADJUST_RESTS'; measureIndex: number }
+  | { type: 'INSERT_REST' }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -1490,6 +1491,30 @@ export function tabEditorReducer(
         mi === action.measureIndex ? { ...m, beats: [...noteBeats, ...restBeats] } : m,
       )
       return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'INSERT_REST': {
+      const { cursor, activeDuration, activeDot, track } = state
+      const measure = track.measures[cursor.measureIndex]
+      if (!measure) return state
+      // Only insert at virtual fill-rest slots, not on top of existing beats
+      if (cursor.beatIndex < measure.beats.length) return state
+
+      const timeSig = measure.timeSignature ?? track.globalTimeSig
+      const capacity = measureCapacityBeats(timeSig)
+      const used = measureUsedBeats(measure.beats)
+      const newBeatBeats = durationBeats(activeDuration, activeDot)
+      if (used + newBeatBeats > capacity + 1e-9) return state
+
+      const s = pushUndo(state)
+      const newBeat = makeBeat(activeDuration, track.stringCount)
+      newBeat.dot = { ...activeDot }
+      const measures = s.track.measures.map((m, mi) =>
+        mi === cursor.measureIndex ? { ...m, beats: [...m.beats, newBeat] } : m,
+      )
+      const newTrack = { ...s.track, measures }
+      const advancedCursor = advanceCursorRight(cursor, newTrack)
+      return { ...s, track: newTrack, cursor: advancedCursor }
     }
 
     default:

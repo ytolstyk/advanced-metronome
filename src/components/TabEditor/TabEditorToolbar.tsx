@@ -279,6 +279,14 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         >
           3
         </ToolBtn>
+        <ToolBtn
+          title="Insert rest of selected duration"
+          onClick={() => dispatch({ type: 'INSERT_REST' })}
+        >
+          <svg viewBox="-4 -14 12 27" width="10" height="20" fill="currentColor">
+            <path d="M 297 24 C 294.75 26.5 293.75 28.5 293.75 29.75 s 1.25 3 3.25 5.5 l -0.75 1 C 295.5 35.75 293.5 34.75 292.5 35.75 S 292 39 293.75 40.5 l -0.75 1 c -2.95 -2.03 -5.25 -5.25 -3.75 -7.5 s 4.25 -0.75 4.5 -0.5 l -4.5 -6.25 c 2 -1.75 3 -3.5 3 -5 s -0.5 -2.75 -2 -4.5 H 292 Z" transform="translate(-292, -30)" />
+          </svg>
+        </ToolBtn>
       </div>
 
       {/* Effects group */}
@@ -369,7 +377,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         <ToolBtn title="Copy (Cmd+C)" onClick={() => dispatch({ type: 'COPY' })}>⧉</ToolBtn>
         <ToolBtn title="Cut (Cmd+X)" onClick={() => dispatch({ type: 'CUT' })}>✂</ToolBtn>
         <ToolBtn title="Paste (Cmd+V)" onClick={() => dispatch({ type: 'PASTE', measureIndex: mi, beatIndex: bi })}>⧫</ToolBtn>
-        <ToolBtn title="Delete notes (replace with rests)" onClick={() => dispatch({ type: 'CLEAR_NOTES' })}>𝄻</ToolBtn>
+        <ToolBtn title="Delete notes (replace with rests)" onClick={() => dispatch({ type: 'CLEAR_NOTES' })}>✕</ToolBtn>
       </div>
 
       {/* Move group */}
