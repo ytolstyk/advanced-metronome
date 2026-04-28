@@ -1105,6 +1105,32 @@ export function TabSvgCanvas({
                   Shift overflow notes to next measure
                 </button>
 
+                {/* Option 4: Adjust rests — only available when note beats alone fit */}
+                {(() => {
+                  const noteBeatsUsed = measureUsedBeats(m.beats.filter((b) => b.notes.some((n) => n.fret >= 0)))
+                  if (noteBeatsUsed > capacity + 1e-9) return null
+                  return (
+                    <button
+                      onClick={() => {
+                        dispatch({ type: 'RESOLVE_MEASURE_ERROR_ADJUST_RESTS', measureIndex: measureErrorModal.mi })
+                        setMeasureErrorModal(null)
+                      }}
+                      style={{
+                        padding: '8px 14px',
+                        background: '#1a2a2a',
+                        border: '1px solid #2a5c5c',
+                        borderRadius: 6,
+                        color: '#7adbd8',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      Adjust rests to fit measure
+                    </button>
+                  )
+                })()}
+
                 <button
                   onClick={() => setMeasureErrorModal(null)}
                   style={{

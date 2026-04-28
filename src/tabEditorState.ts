@@ -492,6 +492,7 @@ export type TabEditorAction =
   | { type: 'CLEAR_NOTES' }
   | { type: 'RESOLVE_MEASURE_ERROR_REMOVE_NOTES'; measureIndex: number }
   | { type: 'RESOLVE_MEASURE_ERROR_SHIFT_NOTES'; measureIndex: number }
+  | { type: 'RESOLVE_MEASURE_ERROR_ADJUST_RESTS'; measureIndex: number }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -1466,6 +1467,28 @@ export function tabEditorReducer(
         }
       }
 
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'RESOLVE_MEASURE_ERROR_ADJUST_RESTS': {
+      const s = pushUndo(state)
+      const measure = s.track.measures[action.measureIndex]
+      if (!measure) return state
+      const timeSig = measure.timeSignature ?? s.track.globalTimeSig
+      const capacity = measureCapacityBeats(timeSig)
+
+      // Keep only beats that have at least one fret-bearing note
+      const noteBeats = measure.beats.filter((b) => b.notes.some((n) => n.fret >= 0))
+      const noteBeatsUsed = measureUsedBeats(noteBeats)
+      if (noteBeatsUsed > capacity + 1e-9) return state
+
+      const remaining = capacity - noteBeatsUsed
+      const restDurations = remaining > 1e-9 ? computeFillRests(remaining) : []
+      const restBeats = restDurations.map((d) => makeBeat(d, s.track.stringCount))
+
+      const measures = s.track.measures.map((m, mi) =>
+        mi === action.measureIndex ? { ...m, beats: [...noteBeats, ...restBeats] } : m,
+      )
       return { ...s, track: { ...s.track, measures } }
     }
 
