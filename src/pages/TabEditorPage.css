@@ -81,6 +81,16 @@
   max-width: 72px;
 }
 
+.tab-metadata-version {
+  display: flex;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #666;
+  white-space: nowrap;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
 .tab-header-cloud {
   display: flex;
   gap: 6px;

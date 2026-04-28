@@ -23,6 +23,7 @@ import { useAuthenticator } from '@aws-amplify/ui-react'
 import {
   loadCloudTabTracks,
   saveCloudTabTrack,
+  updateCloudTabTrack,
   deleteCloudTabTrack,
   type CloudTabTrack,
 } from '../api/tabEditorApi'
@@ -38,6 +39,150 @@ import { Label } from '@/components/ui/label'
 import { Trash2 } from 'lucide-react'
 
 const playbackEngine = new TabPlaybackEngine()
+
+interface SaveMetadataDialogProps {
+  open: boolean
+  initialValues: { title: string; artist: string; tabAuthor: string; year: string }
+  onClose: () => void
+  onSave: (values: { title: string; artist: string; tabAuthor: string; year: string }) => Promise<void>
+}
+
+function SaveMetadataDialog({ open, initialValues, onClose, onSave }: SaveMetadataDialogProps) {
+  const [title, setTitle] = useState(initialValues.title)
+  const [artist, setArtist] = useState(initialValues.artist)
+  const [tabAuthor, setTabAuthor] = useState(initialValues.tabAuthor)
+  const [year, setYear] = useState(initialValues.year)
+  const [status, setStatus] = useState<'idle' | 'saving' | 'ok' | 'error'>('idle')
+  const [validated, setValidated] = useState(false)
+
+  async function handleSave() {
+    setValidated(true)
+    if (!title.trim() || !artist.trim() || !tabAuthor.trim() || !year.trim()) return
+    setStatus('saving')
+    try {
+      await onSave({ title: title.trim(), artist: artist.trim(), tabAuthor: tabAuthor.trim(), year: year.trim() })
+      setStatus('ok')
+      setTimeout(() => setStatus('idle'), 1500)
+    } catch {
+      setStatus('error')
+      setTimeout(() => setStatus('idle'), 1500)
+    }
+  }
+
+  const fields = [
+    { id: 'dlg-title', label: 'Song title', value: title, set: setTitle },
+    { id: 'dlg-artist', label: 'Artist / band', value: artist, set: setArtist },
+    { id: 'dlg-tabauthor', label: 'Tab author', value: tabAuthor, set: setTabAuthor },
+    { id: 'dlg-year', label: 'Year', value: year, set: setYear },
+  ] as const
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="max-w-sm" aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>Complete tab info to save</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-[#888] -mt-1">Fill in the missing fields below, then save.</p>
+        <div className="flex flex-col gap-3 pt-1">
+          {fields.map(({ id, label, value, set }) => {
+            const isMissing = validated && !value.trim()
+            return (
+              <div key={id} className="flex flex-col gap-1">
+                <Label htmlFor={id} className={isMissing ? 'text-red-400' : ''}>{label}</Label>
+                <Input
+                  id={id}
+                  value={value}
+                  onChange={(e) => set(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void handleSave() }}
+                  className={isMissing ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                  autoFocus={id === 'dlg-title'}
+                />
+                {isMissing && <span className="text-xs text-red-400">Required</span>}
+              </div>
+            )
+          })}
+          <Button onClick={() => void handleSave()} disabled={status === 'saving'} className="mt-1">
+            {status === 'saving' ? 'Saving…' : status === 'ok' ? 'Saved!' : status === 'error' ? 'Error — try again' : 'Save'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+interface SaveCopyDialogProps {
+  open: boolean
+  initialValues: { title: string; artist: string; tabAuthor: string; year: string }
+  nextVersion: number
+  onClose: () => void
+  onSave: (values: { title: string; artist: string; tabAuthor: string; year: string }) => Promise<void>
+}
+
+function SaveCopyDialog({ open, initialValues, nextVersion, onClose, onSave }: SaveCopyDialogProps) {
+  const [title, setTitle] = useState(initialValues.title)
+  const [artist, setArtist] = useState(initialValues.artist)
+  const [tabAuthor, setTabAuthor] = useState(initialValues.tabAuthor)
+  const [year, setYear] = useState(initialValues.year)
+  const [status, setStatus] = useState<'idle' | 'saving' | 'ok' | 'error'>('idle')
+  const [validated, setValidated] = useState(false)
+
+  async function handleSave() {
+    setValidated(true)
+    if (!title.trim() || !artist.trim() || !tabAuthor.trim() || !year.trim()) return
+    setStatus('saving')
+    try {
+      await onSave({ title: title.trim(), artist: artist.trim(), tabAuthor: tabAuthor.trim(), year: year.trim() })
+      setStatus('ok')
+      setTimeout(() => setStatus('idle'), 1500)
+    } catch {
+      setStatus('error')
+      setTimeout(() => setStatus('idle'), 1500)
+    }
+  }
+
+  const fields = [
+    { id: 'cp-title', label: 'Song title', value: title, set: setTitle },
+    { id: 'cp-artist', label: 'Artist / band', value: artist, set: setArtist },
+    { id: 'cp-tabauthor', label: 'Tab author', value: tabAuthor, set: setTabAuthor },
+    { id: 'cp-year', label: 'Year', value: year, set: setYear },
+  ] as const
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="max-w-sm" aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>Save as New Copy</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3 pt-1">
+          {fields.map(({ id, label, value, set }) => {
+            const isMissing = validated && !value.trim()
+            return (
+              <div key={id} className="flex flex-col gap-1">
+                <Label htmlFor={id} className={isMissing ? 'text-red-400' : ''}>{label}</Label>
+                <Input
+                  id={id}
+                  value={value}
+                  onChange={(e) => set(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void handleSave() }}
+                  className={isMissing ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                  autoFocus={id === 'cp-title'}
+                />
+                {isMissing && <span className="text-xs text-red-400">Required</span>}
+              </div>
+            )
+          })}
+          <div className="flex flex-col gap-1">
+            <Label className="text-[#888]">Version</Label>
+            <Input value={`v${nextVersion}`} readOnly className="opacity-50 cursor-default" tabIndex={-1} />
+          </div>
+          <Button onClick={() => void handleSave()} disabled={status === 'saving'} className="mt-1">
+            {status === 'saving' ? 'Saving…' : status === 'ok' ? 'Saved!' : status === 'error' ? 'Error — try again' : 'Save Copy'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 export function TabEditorPage() {
   const [state, dispatch] = useReducer(tabEditorReducer, undefined, createInitialTabState)
@@ -56,9 +201,14 @@ export function TabEditorPage() {
 
   const { authStatus } = useAuthenticator(ctx => [ctx.authStatus])
 
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
-  const [saveName, setSaveName] = useState('')
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'ok' | 'error'>('idle')
+  const [loadedCloudId, setLoadedCloudId] = useState<string | null>(null)
+
+  const [metadataDialogOpen, setMetadataDialogOpen] = useState(false)
+  const [metadataDialogKey, setMetadataDialogKey] = useState(0)
+  const [metadataDialogInitial, setMetadataDialogInitial] = useState({ title: '', artist: '', tabAuthor: '', year: '' })
+
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false)
+  const [copyDialogKey, setCopyDialogKey] = useState(0)
 
   const [loadDialogOpen, setLoadDialogOpen] = useState(false)
   const [savedTabs, setSavedTabs] = useState<CloudTabTrack[]>([])
@@ -288,12 +438,68 @@ export function TabEditorPage() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [state, flushDigitBuf, handleDigit])
 
-  async function saveCloud() {
-    setSaveStatus('saving')
-    const result = await saveCloudTabTrack(saveName.trim() || state.track.title || 'Tab', state.track)
-    setSaveStatus(result ? 'ok' : 'error')
-    if (result) setCleanSnapshot(currentTrackString)
-    setTimeout(() => { setSaveStatus('idle'); if (result) setSaveDialogOpen(false) }, 1500)
+  function getMissingMetadataFields() {
+    const missing: { key: 'title' | 'artist' | 'tabAuthor' | 'year'; label: string }[] = []
+    if (!state.track.title?.trim()) missing.push({ key: 'title', label: 'Song title' })
+    if (!state.track.artist?.trim()) missing.push({ key: 'artist', label: 'Artist / band' })
+    if (!state.track.tabAuthor?.trim()) missing.push({ key: 'tabAuthor', label: 'Tab author' })
+    if (!state.track.year?.trim()) missing.push({ key: 'year', label: 'Year' })
+    return missing
+  }
+
+  async function saveCloud(trackOverride?: typeof state.track) {
+    const track = trackOverride ?? state.track
+    const name = track.title || 'Tab'
+    let result: CloudTabTrack | null
+    if (loadedCloudId) {
+      result = await updateCloudTabTrack(loadedCloudId, name, track)
+    } else {
+      result = await saveCloudTabTrack(name, track)
+    }
+    if (result) {
+      setLoadedCloudId(result.id)
+      setCleanSnapshot(JSON.stringify(track))
+      setMetadataDialogOpen(false)
+    } else {
+      throw new Error('save failed')
+    }
+  }
+
+  function handleSaveClick() {
+    const missing = getMissingMetadataFields()
+    if (missing.length === 0) {
+      void saveCloud()
+      return
+    }
+    setMetadataDialogInitial({
+      title: state.track.title,
+      artist: state.track.artist ?? '',
+      tabAuthor: state.track.tabAuthor ?? '',
+      year: state.track.year ?? '',
+    })
+    setMetadataDialogKey((k) => k + 1)
+    setMetadataDialogOpen(true)
+  }
+
+  async function saveFromDialog(values: { title: string; artist: string; tabAuthor: string; year: string }) {
+    dispatch({ type: 'SET_METADATA', patch: values })
+    await saveCloud({ ...state.track, ...values })
+  }
+
+  function handleSaveCopyClick() {
+    setCopyDialogKey((k) => k + 1)
+    setCopyDialogOpen(true)
+  }
+
+  async function saveCopy(values: { title: string; artist: string; tabAuthor: string; year: string }) {
+    const nextVersion = (state.track.version ?? 1) + 1
+    const newTrack = { ...state.track, ...values, version: nextVersion }
+    const result = await saveCloudTabTrack(newTrack.title || 'Tab', newTrack)
+    if (!result) throw new Error('save failed')
+    dispatch({ type: 'SET_METADATA', patch: { ...values, version: nextVersion } })
+    setLoadedCloudId(result.id)
+    setCleanSnapshot(JSON.stringify(newTrack))
+    setCopyDialogOpen(false)
   }
 
   async function openLoadDialog() {
@@ -305,6 +511,7 @@ export function TabEditorPage() {
 
   function loadTab(saved: CloudTabTrack) {
     setCleanSnapshot(JSON.stringify(saved.track))
+    setLoadedCloudId(saved.id)
     dispatch({ type: 'LOAD_TRACK', track: saved.track })
     setLoadDialogOpen(false)
   }
@@ -411,7 +618,8 @@ export function TabEditorPage() {
               track={state.track}
               dispatch={dispatch}
               isDirty={isDirty}
-              onSave={authStatus === 'authenticated' ? () => { setSaveName(''); setSaveStatus('idle'); setSaveDialogOpen(true) } : undefined}
+              onSave={authStatus === 'authenticated' ? handleSaveClick : undefined}
+              onSaveCopy={authStatus === 'authenticated' ? handleSaveCopyClick : undefined}
               onLoad={authStatus === 'authenticated' ? () => void openLoadDialog() : undefined}
             />
             <TabEditorToolbar state={state} dispatch={dispatch} isNavigating={isNavigating} />
@@ -438,32 +646,33 @@ export function TabEditorPage() {
         />
       </TabEditorErrorBoundary>
 
-      {/* Save dialog */}
-      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Save Tab</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 pt-2">
-            <Label htmlFor="tab-save-name">Name</Label>
-            <Input
-              id="tab-save-name"
-              value={saveName}
-              placeholder={state.track.title || 'Tab'}
-              onChange={(e) => setSaveName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') void saveCloud() }}
-              autoFocus
-            />
-            <Button onClick={() => void saveCloud()} disabled={saveStatus === 'saving'}>
-              {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'ok' ? 'Saved!' : saveStatus === 'error' ? 'Error — try again' : 'Save'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Missing metadata dialog */}
+      <SaveMetadataDialog
+        key={`meta-${metadataDialogKey}`}
+        open={metadataDialogOpen}
+        initialValues={metadataDialogInitial}
+        onClose={() => setMetadataDialogOpen(false)}
+        onSave={saveFromDialog}
+      />
+
+      {/* Save copy dialog */}
+      <SaveCopyDialog
+        key={`copy-${copyDialogKey}`}
+        open={copyDialogOpen}
+        initialValues={{
+          title: state.track.title,
+          artist: state.track.artist ?? '',
+          tabAuthor: state.track.tabAuthor ?? '',
+          year: state.track.year ?? '',
+        }}
+        nextVersion={(state.track.version ?? 1) + 1}
+        onClose={() => setCopyDialogOpen(false)}
+        onSave={saveCopy}
+      />
 
       {/* Load dialog */}
       <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Load Saved Tab</DialogTitle>
           </DialogHeader>

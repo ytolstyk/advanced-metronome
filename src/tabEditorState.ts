@@ -470,7 +470,7 @@ export type TabEditorAction =
   | { type: 'SET_MEASURE_BPM_ONLY'; measureIndex: number; bpm: number }
   | { type: 'SET_MEASURE_BPM_FROM'; fromIndex: number; bpm: number }
   | { type: 'SET_TITLE'; title: string }
-  | { type: 'SET_METADATA'; patch: { title?: string; artist?: string; tabAuthor?: string; year?: string } }
+  | { type: 'SET_METADATA'; patch: { title?: string; artist?: string; tabAuthor?: string; year?: string; version?: number } }
   | {
       type: 'SET_TUNING'
       tuningName: string

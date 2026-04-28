@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { TabTrack } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
 import { Input } from '@/components/ui/input'
@@ -9,11 +10,32 @@ interface TabEditorHeaderProps {
   dispatch: React.Dispatch<TabEditorAction>
   isDirty?: boolean
   onSave?: () => void
+  onSaveCopy?: () => void
   onLoad?: () => void
 }
 
-export function TabEditorHeader({ track, dispatch, isDirty, onSave, onLoad }: TabEditorHeaderProps) {
-  function patch(fields: { title?: string; artist?: string; tabAuthor?: string; year?: string }) {
+export function TabEditorHeader({ track, dispatch, isDirty, onSave, onSaveCopy, onLoad }: TabEditorHeaderProps) {
+  const [prevTrack, setPrevTrack] = useState(track)
+  const [meta, setMeta] = useState({
+    title: track.title,
+    artist: track.artist ?? '',
+    tabAuthor: track.tabAuthor ?? '',
+    year: track.year ?? '',
+  })
+
+  // Sync from props when the track object changes externally (e.g. load).
+  // This is the React-recommended "derived state during render" pattern.
+  if (prevTrack !== track) {
+    setPrevTrack(track)
+    setMeta({
+      title: track.title,
+      artist: track.artist ?? '',
+      tabAuthor: track.tabAuthor ?? '',
+      year: track.year ?? '',
+    })
+  }
+
+  function flush(fields: { title?: string; artist?: string; tabAuthor?: string; year?: string }) {
     dispatch({ type: 'SET_METADATA', patch: fields })
   }
 
@@ -22,29 +44,36 @@ export function TabEditorHeader({ track, dispatch, isDirty, onSave, onLoad }: Ta
       <div className="tab-metadata">
         <Input
           className="tab-metadata-title"
-          value={track.title}
-          onChange={(e) => patch({ title: e.target.value })}
+          value={meta.title}
+          onChange={(e) => setMeta((m) => ({ ...m, title: e.target.value }))}
+          onBlur={(e) => flush({ title: e.target.value })}
           placeholder="Song title"
         />
         <div className="tab-metadata-row">
           <Input
             className="tab-metadata-field"
-            value={track.artist ?? ''}
-            onChange={(e) => patch({ artist: e.target.value })}
+            value={meta.artist}
+            onChange={(e) => setMeta((m) => ({ ...m, artist: e.target.value }))}
+            onBlur={(e) => flush({ artist: e.target.value })}
             placeholder="Artist / band"
           />
           <Input
             className="tab-metadata-field"
-            value={track.tabAuthor ?? ''}
-            onChange={(e) => patch({ tabAuthor: e.target.value })}
+            value={meta.tabAuthor}
+            onChange={(e) => setMeta((m) => ({ ...m, tabAuthor: e.target.value }))}
+            onBlur={(e) => flush({ tabAuthor: e.target.value })}
             placeholder="Tab author"
           />
           <Input
             className="tab-metadata-field tab-metadata-year"
-            value={track.year ?? ''}
-            onChange={(e) => patch({ year: e.target.value })}
+            value={meta.year}
+            onChange={(e) => setMeta((m) => ({ ...m, year: e.target.value }))}
+            onBlur={(e) => flush({ year: e.target.value })}
             placeholder="Year"
           />
+          {track.version != null && (
+            <span className="tab-metadata-version">v{track.version}</span>
+          )}
         </div>
       </div>
       {(onLoad || onSave) && (
@@ -52,6 +81,11 @@ export function TabEditorHeader({ track, dispatch, isDirty, onSave, onLoad }: Ta
           {onLoad && (
             <Button variant="outline" size="sm" onClick={onLoad}>
               <FolderOpen size={13} /> Load
+            </Button>
+          )}
+          {onSaveCopy && (
+            <Button variant="outline" size="sm" onClick={onSaveCopy}>
+              <Cloud size={13} /> Save Copy
             </Button>
           )}
           {onSave && (

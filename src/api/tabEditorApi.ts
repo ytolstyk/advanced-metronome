@@ -56,6 +56,25 @@ export async function saveCloudTabTrack(
   }
 }
 
+export async function updateCloudTabTrack(
+  id: string,
+  name: string,
+  track: TabTrack,
+): Promise<CloudTabTrack | null> {
+  if (!(await isAuthenticated())) return null;
+  try {
+    const { data: updated } = await client.models.TabEditorTrack.update({
+      id,
+      name,
+      trackJson: JSON.stringify(track),
+    });
+    if (!updated) return null;
+    return { id: updated.id, name: updated.name, track };
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteCloudTabTrack(id: string): Promise<void> {
   if (!(await isAuthenticated())) return;
   try { await client.models.TabEditorTrack.delete({ id }); } catch { /* silent */ }
