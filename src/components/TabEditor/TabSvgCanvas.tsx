@@ -308,6 +308,31 @@ export function TabSvgCanvas({
 
   const [measureMenu, setMeasureMenu] = useState<{ mi: number; x: number; y: number } | null>(null)
 
+  const [measureErrorModal, setMeasureErrorModal] = useState<{
+    mi: number
+    showTimeSig: boolean
+    timeSigNum: string
+    timeSigDen: string
+  } | null>(null)
+
+  function suggestTimeSigForBeats(used: number): { numerator: number; denominator: number } {
+    for (const d of [4, 8, 2, 16, 1, 32]) {
+      const n = used * d / 4
+      if (Math.abs(n - Math.round(n)) < 1e-9 && Math.round(n) > 0 && Math.round(n) <= 64) {
+        return { numerator: Math.round(n), denominator: d }
+      }
+    }
+    return { numerator: Math.ceil(used), denominator: 4 }
+  }
+
+  function openMeasureErrorModal(mi: number) {
+    const m = track.measures[mi]
+    if (!m) return
+    const used = measureUsedBeats(m.beats)
+    const suggested = suggestTimeSigForBeats(used)
+    setMeasureErrorModal({ mi, showTimeSig: false, timeSigNum: String(suggested.numerator), timeSigDen: String(suggested.denominator) })
+  }
+
   const [bendEdit, setBendEdit] = useState<{ mi: number; bi: number; si: number } | null>(null)
 
   const [bpmEdit, setBpmEdit] = useState<{ mi: number; val: string } | null>(null)
@@ -443,6 +468,7 @@ export function TabSvgCanvas({
                   onBeatMouseDown={onBeatMouseDown}
                   onBeatMouseEnter={onBeatMouseEnter}
                   onBendAmountClick={handleBendAmountClick}
+                  onMeasureErrorClick={openMeasureErrorModal}
                 />
               )
             })}
@@ -898,6 +924,206 @@ export function TabSvgCanvas({
           </div>
         </div>
       )}
+
+      {/* Measure error (overflow) resolution dialog */}
+      {measureErrorModal !== null && (() => {
+        const m = track.measures[measureErrorModal.mi]
+        if (!m) return null
+        const sig = m.timeSignature ?? track.globalTimeSig
+        const capacity = measureCapacityBeats(sig)
+        const used = measureUsedBeats(m.beats)
+        const delta = used - capacity
+        const deltaStr = delta % 1 === 0 ? String(delta) : delta.toFixed(2)
+
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 200,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0,0,0,0.6)',
+            }}
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setMeasureErrorModal(null) }}
+          >
+            <div
+              style={{
+                background: '#1c1c1c',
+                border: '1px solid #444',
+                borderRadius: 10,
+                padding: '20px 24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+                minWidth: 320,
+                maxWidth: 420,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '1.2rem' }}>⚠</span>
+                <span style={{ color: '#e0a040', fontWeight: 600, fontSize: '0.95rem' }}>
+                  Measure {measureErrorModal.mi + 1} has too many beats
+                </span>
+              </div>
+              <div style={{ color: '#999', fontSize: '0.82rem', lineHeight: 1.5 }}>
+                The measure contains <strong style={{ color: '#ccc' }}>{deltaStr} beat{delta !== 1 ? 's' : ''}</strong> more
+                than the <strong style={{ color: '#ccc' }}>{sig.numerator}/{sig.denominator}</strong> time signature allows.
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* Option 1: Change time signature */}
+                <button
+                  onClick={() => setMeasureErrorModal(prev => prev ? { ...prev, showTimeSig: !prev.showTimeSig } : null)}
+                  style={{
+                    padding: '8px 14px',
+                    background: measureErrorModal.showTimeSig ? '#2a2a1a' : 'transparent',
+                    border: `1px solid ${measureErrorModal.showTimeSig ? '#6a6a2a' : '#444'}`,
+                    borderRadius: 6,
+                    color: '#e8d87a',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  Change time signature — suggested{' '}
+                  <strong>{measureErrorModal.timeSigNum}/{measureErrorModal.timeSigDen}</strong>
+                  {' '}(this measure only)
+                </button>
+
+                {measureErrorModal.showTimeSig && (
+                  <div
+                    style={{
+                      marginLeft: 8,
+                      padding: '10px 12px',
+                      background: '#181818',
+                      border: '1px solid #333',
+                      borderRadius: 6,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input
+                        type="number"
+                        min={1}
+                        max={32}
+                        value={measureErrorModal.timeSigNum}
+                        onChange={(e) => setMeasureErrorModal(prev => prev ? { ...prev, timeSigNum: e.target.value } : null)}
+                        style={{
+                          width: 56,
+                          background: '#111',
+                          color: '#e0e0e0',
+                          border: '1px solid #444',
+                          borderRadius: 4,
+                          padding: '4px 8px',
+                          fontSize: '1.1rem',
+                          textAlign: 'center',
+                        }}
+                      />
+                      <span style={{ color: '#888', fontSize: '1.3rem' }}>/</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={32}
+                        value={measureErrorModal.timeSigDen}
+                        onChange={(e) => setMeasureErrorModal(prev => prev ? { ...prev, timeSigDen: e.target.value } : null)}
+                        style={{
+                          width: 56,
+                          background: '#111',
+                          color: '#e0e0e0',
+                          border: '1px solid #444',
+                          borderRadius: 4,
+                          padding: '4px 8px',
+                          fontSize: '1.1rem',
+                          textAlign: 'center',
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          const n = parseInt(measureErrorModal.timeSigNum, 10)
+                          const d = parseInt(measureErrorModal.timeSigDen, 10)
+                          if (!n || !d || n <= 0 || d <= 0) return
+                          dispatch({ type: 'SET_MEASURE_TIME_SIG', measureIndex: measureErrorModal.mi, numerator: n, denominator: d })
+                          setMeasureErrorModal(null)
+                        }}
+                        style={{
+                          padding: '6px 14px',
+                          background: '#1a3a5c',
+                          border: '1px solid #2a5a8c',
+                          borderRadius: 4,
+                          color: '#7ac0ff',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                        }}
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Option 2: Remove notes from end */}
+                <button
+                  onClick={() => {
+                    dispatch({ type: 'RESOLVE_MEASURE_ERROR_REMOVE_NOTES', measureIndex: measureErrorModal.mi })
+                    setMeasureErrorModal(null)
+                  }}
+                  style={{
+                    padding: '8px 14px',
+                    background: '#1a1a2a',
+                    border: '1px solid #2a2a5c',
+                    borderRadius: 6,
+                    color: '#9a9aff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  Remove notes from end of measure
+                </button>
+
+                {/* Option 3: Shift notes to next measure */}
+                <button
+                  onClick={() => {
+                    dispatch({ type: 'RESOLVE_MEASURE_ERROR_SHIFT_NOTES', measureIndex: measureErrorModal.mi })
+                    setMeasureErrorModal(null)
+                  }}
+                  style={{
+                    padding: '8px 14px',
+                    background: '#1a2a1c',
+                    border: '1px solid #2a5c2e',
+                    borderRadius: 6,
+                    color: '#7adb8c',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  Shift overflow notes to next measure
+                </button>
+
+                <button
+                  onClick={() => setMeasureErrorModal(null)}
+                  style={{
+                    padding: '6px 14px',
+                    background: 'transparent',
+                    border: '1px solid #333',
+                    borderRadius: 6,
+                    color: '#666',
+                    cursor: 'pointer',
+                    fontSize: '0.82rem',
+                  }}
+                >
+                  Cancel (Esc)
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Timing change confirmation dialog */}
       {timingChangeConfirm !== null && (

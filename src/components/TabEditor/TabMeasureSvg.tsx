@@ -45,6 +45,7 @@ interface TabMeasureSvgProps {
   onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
   onBendAmountClick?: (mi: number, bi: number, si: number) => void
+  onMeasureErrorClick?: (measureIndex: number) => void
 }
 
 interface RestSymbolProps {
@@ -173,6 +174,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   onBeatMouseDown,
   onBeatMouseEnter,
   onBendAmountClick,
+  onMeasureErrorClick,
 }: TabMeasureSvgProps) {
   const { stringCount } = track
   const svgH = rowSvgHeight(stringCount)
@@ -234,10 +236,8 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
       {!isCursorOnThisMeasure && measure.beats.length > 0 && (() => {
         const delta = used - capacity
         if (delta < 1e-9) return null  // hide when at-capacity or underfull (fill rests cover the gap)
-        const sign = '+'
         const abs = delta
-        const label = `⚠ ${sign}${abs % 1 === 0 ? abs : abs.toFixed(2)}b`
-        const fill = '#ff5555'
+        const label = `⚠ +${abs % 1 === 0 ? abs : abs.toFixed(2)}b`
         return (
           <text
             x={mw - BARLINE_W - 2}
@@ -245,8 +245,9 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             fontSize={MEASURE_OVERFLOW_FONT_SIZE}
             textAnchor="end"
             dominantBaseline="auto"
-            fill={fill}
-            style={{ pointerEvents: 'none' }}
+            fill="#ff5555"
+            style={{ cursor: onMeasureErrorClick ? 'pointer' : 'default' }}
+            onClick={onMeasureErrorClick ? (e) => { e.stopPropagation(); onMeasureErrorClick(measureIndex) } : undefined}
           >
             {label}
           </text>

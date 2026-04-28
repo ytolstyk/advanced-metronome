@@ -490,6 +490,8 @@ export type TabEditorAction =
   | { type: 'DISMISS_OVERFLOW' }
   | { type: 'SET_BEND_AMOUNT'; measureIndex: number; beatIndex: number; stringIndex: number; amount: number }
   | { type: 'CLEAR_NOTES' }
+  | { type: 'RESOLVE_MEASURE_ERROR_REMOVE_NOTES'; measureIndex: number }
+  | { type: 'RESOLVE_MEASURE_ERROR_SHIFT_NOTES'; measureIndex: number }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -1380,6 +1382,90 @@ export function tabEditorReducer(
           }),
         }
       })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'RESOLVE_MEASURE_ERROR_REMOVE_NOTES': {
+      const s = pushUndo(state)
+      const measure = s.track.measures[action.measureIndex]
+      if (!measure) return state
+      const timeSig = measure.timeSignature ?? s.track.globalTimeSig
+      const capacity = measureCapacityBeats(timeSig)
+
+      // Keep only beats that fit within capacity; drop the first beat that would overflow and all after
+      let usedSoFar = 0
+      const keptBeats: Beat[] = []
+      for (const beat of measure.beats) {
+        const beatDur = durationBeats(beat.duration, beat.dot)
+        if (usedSoFar + beatDur <= capacity + 1e-9) {
+          keptBeats.push(beat)
+          usedSoFar += beatDur
+        } else {
+          break
+        }
+      }
+
+      const measures = s.track.measures.map((m, mi) =>
+        mi === action.measureIndex ? { ...m, beats: keptBeats } : m,
+      )
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'RESOLVE_MEASURE_ERROR_SHIFT_NOTES': {
+      const s = pushUndo(state)
+      const measure = s.track.measures[action.measureIndex]
+      if (!measure) return state
+      const timeSig = measure.timeSignature ?? s.track.globalTimeSig
+      const capacity = measureCapacityBeats(timeSig)
+
+      let usedSoFar = 0
+      const keptBeats: Beat[] = []
+      const overflowBeats: Beat[] = []
+
+      for (let i = 0; i < measure.beats.length; i++) {
+        const beat = measure.beats[i]!
+        const beatDur = durationBeats(beat.duration, beat.dot)
+
+        if (usedSoFar + beatDur <= capacity + 1e-9) {
+          keptBeats.push(beat)
+          usedSoFar += beatDur
+        } else {
+          const remaining = capacity - usedSoFar
+          if (remaining > 1e-9) {
+            // Beat partially fits — split using bleed logic
+            const { duration: trimDur, dot: trimDot } = quarterBeatsToNearestDuration(remaining)
+            const overshoot = beatDur - remaining
+            const { duration: bleedDur, dot: bleedDot } = quarterBeatsToNearestDuration(Math.max(0.0625, overshoot))
+            const trimmedBeat: Beat = { ...beat, duration: trimDur, dot: trimDot, tiedTo: true }
+            const bleedBeat: Beat = { ...beat, id: crypto.randomUUID(), duration: bleedDur, dot: bleedDot, tiedFrom: true }
+            delete bleedBeat.tiedTo
+            keptBeats.push(trimmedBeat)
+            overflowBeats.push(bleedBeat)
+          } else {
+            overflowBeats.push(beat)
+          }
+          overflowBeats.push(...measure.beats.slice(i + 1))
+          break
+        }
+      }
+
+      const nextMi = action.measureIndex + 1
+      let measures = s.track.measures.map((m, mi) =>
+        mi === action.measureIndex ? { ...m, beats: keptBeats } : m,
+      )
+
+      if (overflowBeats.length > 0) {
+        if (nextMi < measures.length) {
+          measures = measures.map((m, mi) =>
+            mi === nextMi ? { ...m, beats: [...overflowBeats, ...m.beats] } : m,
+          )
+        } else {
+          const newMeasure = makeMeasure()
+          newMeasure.beats = overflowBeats
+          measures = [...measures, newMeasure]
+        }
+      }
+
       return { ...s, track: { ...s.track, measures } }
     }
 
