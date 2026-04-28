@@ -599,9 +599,9 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
           {labelHovered && (
             <rect
               x={-(STRING_LABEL_W - 2)}
-              y={TOP_MARGIN - 4}
+              y={TOP_MARGIN - 8}
               width={STRING_LABEL_W - 2}
-              height={stringCount * STRING_SPACING + 8}
+              height={(stringCount - 1) * STRING_SPACING + 16}
               rx={4}
               fill="rgba(255,255,255,0.07)"
             />
@@ -619,7 +619,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                 fontWeight={600}
                 textAnchor="end"
                 dominantBaseline="middle"
-                fill={labelHovered ? '#e0e0ff' : '#a0a0b8'}
+                fill={labelHovered ? '#ffffff' : '#c8c8de'}
               >
                 {label}
               </text>
