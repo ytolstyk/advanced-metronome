@@ -17,8 +17,20 @@ export const PALM_MUTE_ELEVATED_Y = MEASURE_NUMBER_H + 6 // palm mute shifted up
 export const LET_RING_ZONE_Y = MEASURE_NUMBER_H + 24 // same row as palm mute (mutually exclusive)
 export const LET_RING_ELEVATED_Y = MEASURE_NUMBER_H + 6
 export const STACCATO_ZONE_Y = MEASURE_NUMBER_H + 24 // dot above strings
-export const MEASURE_NUMBER_FONT_SIZE = 12
-export const NOTE_FONT_SIZE = 15
+export const MEASURE_NUMBER_FONT_SIZE = 12  // small measure index shown top-left of each measure
+export const NOTE_FONT_SIZE = 15             // fret numbers on the strings
+
+// Technique zone labels
+export const TAPPING_LABEL_FONT_SIZE = 10    // "T" marker above tapping beats
+export const BEND_LABEL_FONT_SIZE = 9        // bend amount text (e.g. "full", "½")
+export const PICK_DIR_FONT_SIZE = 9          // pick direction arrows (⬇ ⬆)
+export const TECHNIQUE_LABEL_FONT_SIZE = 11  // "ring" and "P.M." bracket labels
+
+// Measure header elements
+export const TIME_SIG_FONT_SIZE = 30         // stacked time signature numerals
+export const BPM_DISPLAY_FONT_SIZE = 13      // ♩=120 label shown at start of BPM segment
+export const STRING_LABEL_FONT_SIZE = 11     // tuning note names left of first measure (e.g. "E", "A")
+export const MEASURE_OVERFLOW_FONT_SIZE = 12 // ⚠ overflow error shown on overfull measures
 export const BOTTOM_PADDING = 8
 export const BARLINE_W = 2
 export const TIME_SIG_W = 40 // horizontal space reserved for a stacked time signature

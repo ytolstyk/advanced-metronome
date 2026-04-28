@@ -12,6 +12,10 @@ import {
   NOTE_FONT_SIZE,
   TIME_SIG_W,
   BPM_LABEL_W,
+  TIME_SIG_FONT_SIZE,
+  BPM_DISPLAY_FONT_SIZE,
+  STRING_LABEL_FONT_SIZE,
+  MEASURE_OVERFLOW_FONT_SIZE,
   stringY,
   rowSvgHeight,
   measureWidth,
@@ -238,7 +242,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
           <text
             x={mw - BARLINE_W - 2}
             y={topStringY - 4}
-            fontSize={9}
+            fontSize={MEASURE_OVERFLOW_FONT_SIZE}
             textAnchor="end"
             dominantBaseline="auto"
             fill={fill}
@@ -279,7 +283,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
           <text
             x={BARLINE_W + TIME_SIG_W / 2}
             y={strAreaMid - 8}
-            fontSize={30}
+            fontSize={TIME_SIG_FONT_SIZE}
             fontWeight="bold"
             fontFamily="sans-serif"
             textAnchor="middle"
@@ -291,7 +295,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
           <text
             x={BARLINE_W + TIME_SIG_W / 2}
             y={strAreaMid + 8}
-            fontSize={30}
+            fontSize={TIME_SIG_FONT_SIZE}
             fontWeight="bold"
             fontFamily="sans-serif"
             textAnchor="middle"
@@ -308,7 +312,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         <text
           x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + BPM_LABEL_W / 2}
           y={MEASURE_NUMBER_H + 14}
-          fontSize={13}
+          fontSize={BPM_DISPLAY_FONT_SIZE}
           textAnchor="middle"
           dominantBaseline="middle"
           fill="#aac4e8"
@@ -590,7 +594,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               key={si}
               x={-4}
               y={sy}
-              fontSize={11}
+              fontSize={STRING_LABEL_FONT_SIZE}
               fontWeight={600}
               textAnchor="end"
               dominantBaseline="middle"

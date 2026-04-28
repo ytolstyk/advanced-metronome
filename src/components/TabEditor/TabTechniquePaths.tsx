@@ -10,6 +10,10 @@ import {
   LET_RING_ZONE_Y,
   LET_RING_ELEVATED_Y,
   STACCATO_ZONE_Y,
+  TAPPING_LABEL_FONT_SIZE,
+  BEND_LABEL_FONT_SIZE,
+  PICK_DIR_FONT_SIZE,
+  TECHNIQUE_LABEL_FONT_SIZE,
   stringY,
 } from './tabSvgConstants'
 
@@ -61,7 +65,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
           key={`tap-${bi}`}
           x={cx}
           y={techY}
-          fontSize={10}
+          fontSize={TAPPING_LABEL_FONT_SIZE}
           fontWeight="bold"
           textAnchor="middle"
           dominantBaseline="middle"
@@ -230,7 +234,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
             <text
               x={endX + 4}
               y={BEND_TOP_Y - 1}
-              fontSize={9}
+              fontSize={BEND_LABEL_FONT_SIZE}
               fontWeight="bold"
               textAnchor="start"
               dominantBaseline="auto"
@@ -251,7 +255,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
             key={`pd-${key}`}
             x={cx}
             y={techY}
-            fontSize={9}
+            fontSize={PICK_DIR_FONT_SIZE}
             textAnchor="middle"
             dominantBaseline="middle"
             fill="#cccccc"
@@ -266,7 +270,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
             key={`pu-${key}`}
             x={cx}
             y={techY}
-            fontSize={9}
+            fontSize={PICK_DIR_FONT_SIZE}
             textAnchor="middle"
             dominantBaseline="middle"
             fill="#cccccc"
@@ -390,7 +394,7 @@ function renderPalmMuteRuns(
           strokeWidth={1.5}
           strokeDasharray="4 2"
         />
-        <text x={x1} y={topY - 2} fontSize={8} fill="#ffaa44" dominantBaseline="auto">
+        <text x={x1} y={topY - 2} fontSize={TECHNIQUE_LABEL_FONT_SIZE} fill="#ffaa44" dominantBaseline="auto">
           P.M.
         </text>
       </g>,
@@ -441,7 +445,7 @@ function renderLetRingRuns(
           strokeWidth={1.5}
           strokeDasharray="4 2"
         />
-        <text x={x1} y={topY - 2} fontSize={8} fill="#88ddff" dominantBaseline="auto">
+        <text x={x1} y={topY - 2} fontSize={TECHNIQUE_LABEL_FONT_SIZE} fill="#88ddff" dominantBaseline="auto">
           ring
         </text>
       </g>,
