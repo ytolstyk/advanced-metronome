@@ -1,76 +1,69 @@
 import type { TabTrack } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
-import { buildOpenMidi } from '../../tabEditorState'
-import { TUNINGS } from '../../data/tunings'
-import type { StringCount } from '../../data/tunings'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
+import { FolderOpen, Cloud } from 'lucide-react'
 
 interface TabEditorHeaderProps {
   track: TabTrack
   dispatch: React.Dispatch<TabEditorAction>
+  isDirty?: boolean
+  onSave?: () => void
+  onLoad?: () => void
 }
 
-export function TabEditorHeader({ track, dispatch }: TabEditorHeaderProps) {
+export function TabEditorHeader({ track, dispatch, isDirty, onSave, onLoad }: TabEditorHeaderProps) {
+  function patch(fields: { title?: string; artist?: string; tabAuthor?: string; year?: string }) {
+    dispatch({ type: 'SET_METADATA', patch: fields })
+  }
+
   return (
     <div className="tab-editor-header">
-      <Input
-        className="tab-editor-title-input"
-        value={track.title}
-        onChange={(e) => dispatch({ type: 'SET_TITLE', title: e.target.value })}
-        placeholder="Track title"
-      />
-      <div className="tab-header-sep" />
-      <TuningSelector track={track} dispatch={dispatch} />
+      <div className="tab-metadata">
+        <Input
+          className="tab-metadata-title"
+          value={track.title}
+          onChange={(e) => patch({ title: e.target.value })}
+          placeholder="Song title"
+        />
+        <div className="tab-metadata-row">
+          <Input
+            className="tab-metadata-field"
+            value={track.artist ?? ''}
+            onChange={(e) => patch({ artist: e.target.value })}
+            placeholder="Artist / band"
+          />
+          <Input
+            className="tab-metadata-field"
+            value={track.tabAuthor ?? ''}
+            onChange={(e) => patch({ tabAuthor: e.target.value })}
+            placeholder="Tab author"
+          />
+          <Input
+            className="tab-metadata-field tab-metadata-year"
+            value={track.year ?? ''}
+            onChange={(e) => patch({ year: e.target.value })}
+            placeholder="Year"
+          />
+        </div>
+      </div>
+      {(onLoad || onSave) && (
+        <div className="tab-header-cloud">
+          {onLoad && (
+            <Button variant="outline" size="sm" onClick={onLoad}>
+              <FolderOpen size={13} /> Load
+            </Button>
+          )}
+          {onSave && (
+            <div className="tab-save-wrapper">
+              {isDirty && <span className="tab-dirty-dot" aria-hidden />}
+              <Button variant="outline" size="sm" onClick={onSave}>
+                <Cloud size={13} /> Save
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
-
-function TuningSelector({
-  track,
-  dispatch,
-}: {
-  track: TabTrack
-  dispatch: React.Dispatch<TabEditorAction>
-}) {
-  const counts: StringCount[] = [6, 7, 8]
-  return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      <Select
-        value={String(track.stringCount)}
-        onValueChange={(val) => {
-          const sc = parseInt(val, 10) as StringCount
-          const name = TUNINGS[sc][0].name
-          const openMidi = buildOpenMidi(name, sc)
-          dispatch({ type: 'SET_TUNING', tuningName: name, stringCount: sc, openMidi })
-        }}
-      >
-        <SelectTrigger className="tab-header-select h-8 text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {counts.map((c) => (
-            <SelectItem key={c} value={String(c)}>{c} strings</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select
-        value={track.tuningName}
-        onValueChange={(name) => {
-          const openMidi = buildOpenMidi(name, track.stringCount)
-          dispatch({ type: 'SET_TUNING', tuningName: name, stringCount: track.stringCount, openMidi })
-        }}
-      >
-        <SelectTrigger className="tab-header-select h-8 text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {TUNINGS[track.stringCount].map((p) => (
-            <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )
-}
-

@@ -64,6 +64,9 @@ export interface Measure {
 
 export interface TabTrack {
   title: string
+  artist?: string
+  tabAuthor?: string
+  year?: string
   globalBpm: number
   globalTimeSig: { numerator: number; denominator: number }
   stringCount: 6 | 7 | 8

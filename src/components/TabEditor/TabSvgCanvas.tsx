@@ -2,10 +2,14 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import type { RefObject } from 'react'
 import type { DurationValue, Measure, TabEditorState } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
-import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats, computeFillRests, effectiveBpmAt, beatDurationSeconds } from '../../tabEditorState'
+import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats, computeFillRests, effectiveBpmAt, beatDurationSeconds, buildOpenMidi } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
 import { StaffViewSvg } from './StaffViewSvg'
 import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, formatFretLabel, stringY } from './tabSvgConstants'
+import { TUNINGS } from '../../data/tunings'
+import type { StringCount } from '../../data/tunings'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface TabSvgCanvasProps {
   state: TabEditorState
@@ -306,6 +310,9 @@ export function TabSvgCanvas({
     }
   }, [isPlaying])
 
+  const [tuningModalOpen, setTuningModalOpen] = useState(false)
+  const openTuningModal = useCallback(() => setTuningModalOpen(true), [])
+
   const [measureMenu, setMeasureMenu] = useState<{ mi: number; x: number; y: number } | null>(null)
 
   const [measureErrorModal, setMeasureErrorModal] = useState<{
@@ -469,6 +476,7 @@ export function TabSvgCanvas({
                   onBeatMouseEnter={onBeatMouseEnter}
                   onBendAmountClick={handleBendAmountClick}
                   onMeasureErrorClick={openMeasureErrorModal}
+                  onStringLabelClick={mIdx === 0 ? openTuningModal : undefined}
                 />
               )
             })}
@@ -603,6 +611,57 @@ export function TabSvgCanvas({
           </svg>
         )
       })}
+
+      {/* Tuning modal */}
+      <Dialog open={tuningModalOpen} onOpenChange={setTuningModalOpen}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Strings &amp; Tuning</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 pt-2">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-[#888]">Strings</span>
+              <Select
+                value={String(track.stringCount)}
+                onValueChange={(val) => {
+                  const sc = parseInt(val, 10) as StringCount
+                  const name = TUNINGS[sc][0].name
+                  const openMidi = buildOpenMidi(name, sc)
+                  dispatch({ type: 'SET_TUNING', tuningName: name, stringCount: sc, openMidi })
+                }}
+              >
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {([6, 7, 8] as StringCount[]).map((c) => (
+                    <SelectItem key={c} value={String(c)}>{c} strings</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-[#888]">Tuning</span>
+              <Select
+                value={track.tuningName}
+                onValueChange={(name) => {
+                  const openMidi = buildOpenMidi(name, track.stringCount)
+                  dispatch({ type: 'SET_TUNING', tuningName: name, stringCount: track.stringCount, openMidi })
+                }}
+              >
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TUNINGS[track.stringCount].map((p) => (
+                    <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Measure context menu */}
       {measureMenu !== null && (

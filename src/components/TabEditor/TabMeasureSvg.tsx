@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useState } from 'react'
 import type { DotModifier, DurationValue, Measure, TabCursor, TabSelection, TabTrack } from '../../tabEditorTypes'
 import { isInSelection, measureCapacityBeats, measureUsedBeats } from '../../tabEditorState'
 import { TUNINGS } from '../../data/tunings'
@@ -6,6 +6,7 @@ import { TechniqueOverlay } from './TabTechniquePaths'
 import {
   TOP_MARGIN,
   STRING_SPACING,
+  STRING_LABEL_W,
   BARLINE_W,
   MEASURE_NUMBER_H,
   MEASURE_NUMBER_FONT_SIZE,
@@ -46,6 +47,7 @@ interface TabMeasureSvgProps {
   onBeatMouseEnter: (mi: number, bi: number) => void
   onBendAmountClick?: (mi: number, bi: number, si: number) => void
   onMeasureErrorClick?: (measureIndex: number) => void
+  onStringLabelClick?: () => void
 }
 
 interface RestSymbolProps {
@@ -175,7 +177,9 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   onBeatMouseEnter,
   onBendAmountClick,
   onMeasureErrorClick,
+  onStringLabelClick,
 }: TabMeasureSvgProps) {
+  const [labelHovered, setLabelHovered] = useState(false)
   const { stringCount } = track
   const svgH = rowSvgHeight(stringCount)
 
@@ -585,26 +589,44 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
       />
 
       {/* String labels */}
-      {showStringLabels &&
-        Array.from({ length: stringCount }, (_, rawSi) => {
-          const si = stringCount - 1 - rawSi
-          const sy = stringY(si, stringCount)
-          const label = preset.strings[si]?.note ?? ''
-          return (
-            <text
-              key={si}
-              x={-4}
-              y={sy}
-              fontSize={STRING_LABEL_FONT_SIZE}
-              fontWeight={600}
-              textAnchor="end"
-              dominantBaseline="middle"
-              fill="#a0a0b8"
-            >
-              {label}
-            </text>
-          )
-        })}
+      {showStringLabels && (
+        <g
+          style={{ cursor: onStringLabelClick ? 'pointer' : 'default' }}
+          onMouseEnter={() => { if (onStringLabelClick) setLabelHovered(true) }}
+          onMouseLeave={() => setLabelHovered(false)}
+          onClick={onStringLabelClick}
+        >
+          {labelHovered && (
+            <rect
+              x={-(STRING_LABEL_W - 2)}
+              y={TOP_MARGIN - 4}
+              width={STRING_LABEL_W - 2}
+              height={stringCount * STRING_SPACING + 8}
+              rx={4}
+              fill="rgba(255,255,255,0.07)"
+            />
+          )}
+          {Array.from({ length: stringCount }, (_, rawSi) => {
+            const si = stringCount - 1 - rawSi
+            const sy = stringY(si, stringCount)
+            const label = preset.strings[si]?.note ?? ''
+            return (
+              <text
+                key={si}
+                x={-4}
+                y={sy}
+                fontSize={STRING_LABEL_FONT_SIZE}
+                fontWeight={600}
+                textAnchor="end"
+                dominantBaseline="middle"
+                fill={labelHovered ? '#e0e0ff' : '#a0a0b8'}
+              >
+                {label}
+              </text>
+            )
+          })}
+        </g>
+      )}
     </g>
   )
 })

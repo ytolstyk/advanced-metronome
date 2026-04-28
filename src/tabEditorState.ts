@@ -470,6 +470,7 @@ export type TabEditorAction =
   | { type: 'SET_MEASURE_BPM_ONLY'; measureIndex: number; bpm: number }
   | { type: 'SET_MEASURE_BPM_FROM'; fromIndex: number; bpm: number }
   | { type: 'SET_TITLE'; title: string }
+  | { type: 'SET_METADATA'; patch: { title?: string; artist?: string; tabAuthor?: string; year?: string } }
   | {
       type: 'SET_TUNING'
       tuningName: string
@@ -1118,6 +1119,9 @@ export function tabEditorReducer(
     case 'SET_TITLE':
       return { ...state, track: { ...state.track, title: action.title } }
 
+    case 'SET_METADATA':
+      return { ...state, track: { ...state.track, ...action.patch } }
+
     case 'SET_TUNING': {
       const s = pushUndo(state)
       const { stringCount, openMidi, tuningName } = action
@@ -1168,6 +1172,10 @@ export function tabEditorReducer(
         ...state,
         track: action.track,
         cursor: { measureIndex: 0, beatIndex: 0, stringIndex: 0 },
+        selection: null,
+        selectionAnchor: null,
+        noteSelection: [],
+        clipboard: null,
         undoStack: [],
         redoStack: [],
         pendingOverflow: null,

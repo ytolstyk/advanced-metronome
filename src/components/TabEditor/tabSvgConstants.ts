@@ -1,7 +1,7 @@
 import type { Beat, DurationValue, Measure, TabNote } from '../../tabEditorTypes'
 import { BEAT_WIDTHS } from '../../tabEditorState'
 
-export const STRING_SPACING = 20
+export const STRING_SPACING = 16
 export const STRING_LABEL_W = 28
 export const MEASURE_NUMBER_H = 16
 export const TECHNIQUE_ZONE_H = 42

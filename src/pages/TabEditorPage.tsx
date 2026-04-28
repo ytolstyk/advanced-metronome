@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useRef, useCallback, useState } from 'react'
+import { useReducer, useEffect, useRef, useCallback, useState, useMemo } from 'react'
 import './TabEditorPage.css'
 import type { TabCursor } from '../tabEditorTypes'
 import {
@@ -19,6 +19,23 @@ import {
   TabEditorPlayback,
   TabSvgCanvas,
 } from '../components/TabEditor'
+import { useAuthenticator } from '@aws-amplify/ui-react'
+import {
+  loadCloudTabTracks,
+  saveCloudTabTrack,
+  deleteCloudTabTrack,
+  type CloudTabTrack,
+} from '../api/tabEditorApi'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Trash2 } from 'lucide-react'
 
 const playbackEngine = new TabPlaybackEngine()
 
@@ -36,6 +53,20 @@ export function TabEditorPage() {
   const [isNavigating, setIsNavigating] = useState(false)
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handlePlayRef = useRef<() => void>(() => {})
+
+  const { authStatus } = useAuthenticator(ctx => [ctx.authStatus])
+
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const [saveName, setSaveName] = useState('')
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'ok' | 'error'>('idle')
+
+  const [loadDialogOpen, setLoadDialogOpen] = useState(false)
+  const [savedTabs, setSavedTabs] = useState<CloudTabTrack[]>([])
+  const [loadingTabs, setLoadingTabs] = useState(false)
+
+  const [cleanSnapshot, setCleanSnapshot] = useState(() => JSON.stringify(state.track))
+  const currentTrackString = useMemo(() => JSON.stringify(state.track), [state.track])
+  const isDirty = currentTrackString !== cleanSnapshot
 
   useEffect(() => {
     if (saveTimerRef.current !== null) clearTimeout(saveTimerRef.current)
@@ -257,6 +288,32 @@ export function TabEditorPage() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [state, flushDigitBuf, handleDigit])
 
+  async function saveCloud() {
+    setSaveStatus('saving')
+    const result = await saveCloudTabTrack(saveName.trim() || state.track.title || 'Tab', state.track)
+    setSaveStatus(result ? 'ok' : 'error')
+    if (result) setCleanSnapshot(currentTrackString)
+    setTimeout(() => { setSaveStatus('idle'); if (result) setSaveDialogOpen(false) }, 1500)
+  }
+
+  async function openLoadDialog() {
+    setLoadDialogOpen(true)
+    setLoadingTabs(true)
+    setSavedTabs(await loadCloudTabTracks())
+    setLoadingTabs(false)
+  }
+
+  function loadTab(saved: CloudTabTrack) {
+    setCleanSnapshot(JSON.stringify(saved.track))
+    dispatch({ type: 'LOAD_TRACK', track: saved.track })
+    setLoadDialogOpen(false)
+  }
+
+  async function deleteTab(id: string) {
+    await deleteCloudTabTrack(id)
+    setSavedTabs((prev) => prev.filter((t) => t.id !== id))
+  }
+
   function handlePlay() {
     const ctx = ensureCtx()
     if (state.isPlaying) {
@@ -350,7 +407,13 @@ export function TabEditorPage() {
       <div className="tab-sticky-top">
         {menuOpen && (
           <>
-            <TabEditorHeader track={state.track} dispatch={dispatch} />
+            <TabEditorHeader
+              track={state.track}
+              dispatch={dispatch}
+              isDirty={isDirty}
+              onSave={authStatus === 'authenticated' ? () => { setSaveName(''); setSaveStatus('idle'); setSaveDialogOpen(true) } : undefined}
+              onLoad={authStatus === 'authenticated' ? () => void openLoadDialog() : undefined}
+            />
             <TabEditorToolbar state={state} dispatch={dispatch} isNavigating={isNavigating} />
           </>
         )}
@@ -374,6 +437,65 @@ export function TabEditorPage() {
           onBeatMouseEnter={onBeatMouseEnter}
         />
       </TabEditorErrorBoundary>
+
+      {/* Save dialog */}
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Save Tab</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-2">
+            <Label htmlFor="tab-save-name">Name</Label>
+            <Input
+              id="tab-save-name"
+              value={saveName}
+              placeholder={state.track.title || 'Tab'}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') void saveCloud() }}
+              autoFocus
+            />
+            <Button onClick={() => void saveCloud()} disabled={saveStatus === 'saving'}>
+              {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'ok' ? 'Saved!' : saveStatus === 'error' ? 'Error — try again' : 'Save'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Load dialog */}
+      <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Load Saved Tab</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-1 pt-2 max-h-[480px] overflow-y-auto">
+            {loadingTabs && <p className="text-xs text-[#888]">Loading…</p>}
+            {!loadingTabs && savedTabs.length === 0 && (
+              <p className="text-xs text-[#888]">No saved tabs yet.</p>
+            )}
+            {savedTabs.map((saved) => (
+              <div key={saved.id} className="flex items-center gap-2">
+                <button
+                  className="flex-1 text-left text-sm px-3 py-2 rounded hover:bg-white/[0.06] transition-colors"
+                  onClick={() => loadTab(saved)}
+                >
+                  <span className="font-medium">{saved.name}</span>
+                  <span className="text-xs text-[#888] ml-2">{saved.track.stringCount}-string · {saved.track.tuningName}</span>
+                  {saved.track.artist && <span className="text-xs text-[#666] ml-1">· {saved.track.artist}</span>}
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0"
+                  title="Delete"
+                  onClick={() => void deleteTab(saved.id)}
+                >
+                  <Trash2 size={13} />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Overflow dialog */}
       {overflow && (
