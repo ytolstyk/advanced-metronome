@@ -18,7 +18,7 @@ interface TabSvgCanvasProps {
   dispatch: React.Dispatch<TabEditorAction>
   onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
-  onRegisterBeatHandler?: (handler: (mi: number, bi: number) => void) => void
+  onRegisterBeatHandler?: (handler: (mi: number, bi: number, intendedTime: number) => void) => void
 }
 
 function getFillRests(
@@ -204,31 +204,6 @@ export function TabSvgCanvas({
 
   const prevPlayheadRowRef = useRef<number>(-1)
 
-  useEffect(() => {
-    if (!isPlaying) {
-      prevPlayheadRowRef.current = -1
-      return
-    }
-    const pos = beatAbsolutePositions.get(`${playheadMeasure}:${playheadBeat}`)
-    if (!pos) return
-    const rowIdx = pos.rowIdx
-    if (rowIdx === prevPlayheadRowRef.current) return
-    prevPlayheadRowRef.current = rowIdx
-
-    const canvasEl = canvasRef.current
-    if (!canvasEl) return
-
-    const canvasHeight = canvasEl.clientHeight
-
-    let target: number
-    if (canvasHeight >= 2 * svgH) {
-      target = (rowIdx - 1) * svgH
-    } else {
-      target = rowIdx * svgH
-    }
-    canvasEl.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
-  }, [isPlaying, playheadMeasure, playheadBeat, beatAbsolutePositions, canvasRef, svgH])
-
   const playheadDivRef = useRef<HTMLDivElement | null>(null)
   const animStateRef = useRef<{
     startTime: number
@@ -246,7 +221,7 @@ export function TabSvgCanvas({
   // render cycle, eliminating the 1-2 frame delay that caused the jerky cursor transition.
   useEffect(() => {
     if (!onRegisterBeatHandler) return
-    onRegisterBeatHandler((mi: number, bi: number) => {
+    onRegisterBeatHandler((mi: number, bi: number, intendedTime: number) => {
       const positions = beatAbsolutePositionsRef.current
       const currentTrack = trackRef.current
       const currentLayouts = rowLayoutsRef.current
@@ -281,7 +256,7 @@ export function TabSvgCanvas({
         : fromPos.x
 
       animStateRef.current = {
-        startTime: performance.now(),
+        startTime: intendedTime,
         durationMs,
         fromX: fromPos.x,
         fromRow,
@@ -293,6 +268,19 @@ export function TabSvgCanvas({
       if (playheadDivRef.current) {
         playheadDivRef.current.style.width = `${colW}px`
       }
+
+      // Scroll to keep the cursor row visible (bypasses React state to avoid re-renders)
+      if (fromRow !== prevPlayheadRowRef.current) {
+        prevPlayheadRowRef.current = fromRow
+        const canvasEl = canvasRef.current
+        if (canvasEl) {
+          const currentSvgH = rowSvgHeight(trackRef.current.stringCount)
+          const target = canvasEl.clientHeight >= 2 * currentSvgH
+            ? (fromRow - 1) * currentSvgH
+            : fromRow * currentSvgH
+          canvasEl.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
+        }
+      }
     })
   }, [onRegisterBeatHandler])
 
@@ -300,21 +288,22 @@ export function TabSvgCanvas({
     if (!isPlaying) {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
+      prevPlayheadRowRef.current = -1
       if (playheadDivRef.current) playheadDivRef.current.style.display = 'none'
       return
     }
-    function tick() {
+    function tick(now: number) {
       const anim = animStateRef.current
       const div = playheadDivRef.current
       if (anim && div) {
-        const elapsed = performance.now() - anim.startTime
-        const t = Math.min(1, elapsed / anim.durationMs)
+        const elapsed = now - anim.startTime
+        const t = elapsed / anim.durationMs
         const sameRow = anim.fromRow === anim.toRow
         const x = sameRow
           ? anim.fromX + (anim.toX - anim.fromX) * t
           : anim.fromX + (anim.rowEndX - anim.fromX) * t
         const rowY = anim.fromRow * svgH + MEASURE_NUMBER_H
-        div.style.transform = `translateX(${x - anim.colW / 2}px) translateY(${rowY}px)`
+        div.style.transform = `translate3d(${x - anim.colW / 2}px, ${rowY}px, 0)`
         div.style.display = ''
       }
       rafRef.current = requestAnimationFrame(tick)

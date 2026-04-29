@@ -14,7 +14,7 @@ export class TabPlaybackEngine {
   private nextBeatTime = 0
   private isRunning = false
   private isPaused = false
-  private onBeat: ((mi: number, bi: number) => void) | null = null
+  private onBeat: ((mi: number, bi: number, intendedTime: number) => void) | null = null
   private onStop: (() => void) | null = null
   private prevNoteKill: (GainNode | null)[] = []
   private prevLetRing: boolean[] = []
@@ -28,7 +28,7 @@ export class TabPlaybackEngine {
     track: TabTrack,
     fromMeasure: number,
     fromBeat: number,
-    onBeat: (mi: number, bi: number) => void,
+    onBeat: (mi: number, bi: number, intendedTime: number) => void,
     onStop: () => void,
   ): void {
     this.stop()
@@ -180,7 +180,8 @@ export class TabPlaybackEngine {
     const mi = this.measureIndex
     const bi = this.beatIndex
     const delay = (t - ctx.currentTime) * 1000
-    setTimeout(() => this.onBeat?.(mi, bi), Math.max(0, delay))
+    const intendedTime = performance.now() + Math.max(0, delay)
+    setTimeout(() => this.onBeat?.(mi, bi, intendedTime), Math.max(0, delay))
 
     // Advance
     this.nextBeatTime += dur
