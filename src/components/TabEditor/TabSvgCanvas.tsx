@@ -229,7 +229,7 @@ export function TabSvgCanvas({
     canvasEl.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
   }, [isPlaying, playheadMeasure, playheadBeat, beatAbsolutePositions, canvasRef, svgH])
 
-  const playheadRectRefs = useRef(new Map<number, SVGRectElement>())
+  const playheadDivRef = useRef<HTMLDivElement | null>(null)
   const animStateRef = useRef<{
     startTime: number
     durationMs: number
@@ -290,6 +290,9 @@ export function TabSvgCanvas({
         colW,
         rowEndX,
       }
+      if (playheadDivRef.current) {
+        playheadDivRef.current.style.width = `${colW}px`
+      }
     })
   }, [onRegisterBeatHandler])
 
@@ -297,27 +300,22 @@ export function TabSvgCanvas({
     if (!isPlaying) {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
-      for (const rect of playheadRectRefs.current.values()) rect.style.display = 'none'
+      if (playheadDivRef.current) playheadDivRef.current.style.display = 'none'
       return
     }
     function tick() {
       const anim = animStateRef.current
-      if (anim) {
+      const div = playheadDivRef.current
+      if (anim && div) {
         const elapsed = performance.now() - anim.startTime
         const t = Math.min(1, elapsed / anim.durationMs)
         const sameRow = anim.fromRow === anim.toRow
         const x = sameRow
           ? anim.fromX + (anim.toX - anim.fromX) * t
           : anim.fromX + (anim.rowEndX - anim.fromX) * t
-        for (const [ri, rect] of playheadRectRefs.current) {
-          if (ri === anim.fromRow) {
-            rect.style.transform = `translateX(${x - anim.colW / 2}px)`
-            rect.style.width = `${anim.colW}px`
-            rect.style.display = ''
-          } else {
-            rect.style.display = 'none'
-          }
-        }
+        const rowY = anim.fromRow * svgH + MEASURE_NUMBER_H
+        div.style.transform = `translateX(${x - anim.colW / 2}px) translateY(${rowY}px)`
+        div.style.display = ''
       }
       rafRef.current = requestAnimationFrame(tick)
     }
@@ -326,7 +324,7 @@ export function TabSvgCanvas({
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
     }
-  }, [isPlaying])
+  }, [isPlaying, svgH])
 
   const [tuningModalOpen, setTuningModalOpen] = useState(false)
   const openTuningModal = useCallback(() => setTuningModalOpen(true), [])
@@ -453,6 +451,7 @@ export function TabSvgCanvas({
 
   return (
     <div className="tab-canvas" ref={canvasRef} tabIndex={0}>
+      <div style={{ position: 'relative' }}>
       {rows.map((rowMeasures, rowIdx) => {
         const layout = rowLayouts[rowIdx]!
         const { beatWidthScale, displayW, measureOffsets } = layout
@@ -613,22 +612,25 @@ export function TabSvgCanvas({
 
               return arcs
             })()}
-            {/* Animated playback highlight — driven by RAF via CSS transform for GPU compositing */}
-            <rect
-              ref={(el) => {
-                if (el) playheadRectRefs.current.set(rowIdx, el)
-                else playheadRectRefs.current.delete(rowIdx)
-              }}
-              x={0}
-              y={MEASURE_NUMBER_H}
-              width={20}
-              height={svgH - MEASURE_NUMBER_H}
-              fill="rgba(0,200,100,0.35)"
-              style={{ display: 'none', pointerEvents: 'none', willChange: 'transform' }}
-            />
           </svg>
         )
       })}
+      {/* Single overlay div — positioned via translateX + translateY per row */}
+      <div
+        ref={playheadDivRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: 20,
+          height: svgH - MEASURE_NUMBER_H,
+          background: 'rgba(0,200,100,0.35)',
+          pointerEvents: 'none',
+          willChange: 'transform',
+          display: 'none',
+        }}
+      />
+      </div>
 
       {/* Tuning modal */}
       <Dialog open={tuningModalOpen} onOpenChange={setTuningModalOpen}>
