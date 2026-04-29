@@ -18,6 +18,7 @@ interface TabSvgCanvasProps {
   dispatch: React.Dispatch<TabEditorAction>
   onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
+  onRegisterBeatHandler?: (handler: (mi: number, bi: number) => void) => void
 }
 
 function getFillRests(
@@ -96,6 +97,7 @@ export function TabSvgCanvas({
   dispatch,
   onBeatMouseDown,
   onBeatMouseEnter,
+  onRegisterBeatHandler,
 }: TabSvgCanvasProps) {
   const { track, cursor, selection, noteSelection, isPlaying, playheadMeasure, playheadBeat, viewMode } = state
 
@@ -192,6 +194,14 @@ export function TabSvgCanvas({
     return map
   }, [rows, rowLayouts, timeSigs, showTimeSigMap, showBpmMap])
 
+  // Stable refs for direct beat handler (bypasses React render cycle for smooth animation)
+  const beatAbsolutePositionsRef = useRef(beatAbsolutePositions)
+  const trackRef = useRef(track)
+  const rowLayoutsRef = useRef(rowLayouts)
+  useEffect(() => { beatAbsolutePositionsRef.current = beatAbsolutePositions }, [beatAbsolutePositions])
+  useEffect(() => { trackRef.current = track }, [track])
+  useEffect(() => { rowLayoutsRef.current = rowLayouts }, [rowLayouts])
+
   const prevPlayheadRowRef = useRef<number>(-1)
 
   useEffect(() => {
@@ -232,48 +242,56 @@ export function TabSvgCanvas({
   } | null>(null)
   const rafRef = useRef<number | null>(null)
 
+  // Register a direct beat handler that updates animStateRef without going through React's
+  // render cycle, eliminating the 1-2 frame delay that caused the jerky cursor transition.
   useEffect(() => {
-    if (!isPlaying) return
-    const fromPos = beatAbsolutePositions.get(`${playheadMeasure}:${playheadBeat}`)
-    if (!fromPos) return
+    if (!onRegisterBeatHandler) return
+    onRegisterBeatHandler((mi: number, bi: number) => {
+      const positions = beatAbsolutePositionsRef.current
+      const currentTrack = trackRef.current
+      const currentLayouts = rowLayoutsRef.current
 
-    const measure = track.measures[playheadMeasure]
-    let nextMi = playheadMeasure
-    let nextBi = playheadBeat + 1
-    if (!measure || nextBi >= measure.beats.length) {
-      nextMi = playheadMeasure + 1
-      nextBi = 0
-    }
-    const toPos = beatAbsolutePositions.get(`${nextMi}:${nextBi}`)
+      const fromPos = positions.get(`${mi}:${bi}`)
+      if (!fromPos) return
 
-    const beat = measure?.beats[playheadBeat]
-    const bpm = beat?.tempoChange ?? effectiveBpmAt(track, playheadMeasure)
-    const durationMs = beat ? beatDurationSeconds(beat.duration, beat.dot, bpm) * 1000 : 500
-    const isTied = beat?.tiedFrom === true
-    const colW = beat
-      ? beat.notes.reduce((max, n) => {
-          const { label } = formatFretLabel(n, isTied)
-          return Math.max(max, Math.max(label.length * 8 + 4, 18))
-        }, 18)
-      : 20
+      const measure = currentTrack.measures[mi]
+      let nextMi = mi
+      let nextBi = bi + 1
+      if (!measure || nextBi >= measure.beats.length) {
+        nextMi = mi + 1
+        nextBi = 0
+      }
+      const toPos = positions.get(`${nextMi}:${nextBi}`)
 
-    const fromRow = fromPos.rowIdx
-    const toRow = toPos?.rowIdx ?? fromPos.rowIdx
-    const rowEndX = fromRow !== toRow
-      ? (rowLayouts[fromRow]?.displayW ?? fromPos.x)
-      : fromPos.x
+      const beat = measure?.beats[bi]
+      const bpm = beat?.tempoChange ?? effectiveBpmAt(currentTrack, mi)
+      const durationMs = beat ? beatDurationSeconds(beat.duration, beat.dot, bpm) * 1000 : 500
+      const isTied = beat?.tiedFrom === true
+      const colW = beat
+        ? beat.notes.reduce((max, n) => {
+            const { label } = formatFretLabel(n, isTied)
+            return Math.max(max, Math.max(label.length * 8 + 4, 18))
+          }, 18)
+        : 20
 
-    animStateRef.current = {
-      startTime: performance.now(),
-      durationMs,
-      fromX: fromPos.x,
-      fromRow,
-      toX: toPos?.x ?? fromPos.x,
-      toRow,
-      colW,
-      rowEndX,
-    }
-  }, [isPlaying, playheadMeasure, playheadBeat, beatAbsolutePositions, track, rowLayouts])
+      const fromRow = fromPos.rowIdx
+      const toRow = toPos?.rowIdx ?? fromPos.rowIdx
+      const rowEndX = fromRow !== toRow
+        ? (currentLayouts[fromRow]?.displayW ?? fromPos.x)
+        : fromPos.x
+
+      animStateRef.current = {
+        startTime: performance.now(),
+        durationMs,
+        fromX: fromPos.x,
+        fromRow,
+        toX: toPos?.x ?? fromPos.x,
+        toRow,
+        colW,
+        rowEndX,
+      }
+    })
+  }, [onRegisterBeatHandler])
 
   useEffect(() => {
     if (!isPlaying) {
@@ -293,8 +311,8 @@ export function TabSvgCanvas({
           : anim.fromX + (anim.rowEndX - anim.fromX) * t
         for (const [ri, rect] of playheadRectRefs.current) {
           if (ri === anim.fromRow) {
-            rect.setAttribute('x', String(x - anim.colW / 2))
-            rect.setAttribute('width', String(anim.colW))
+            rect.style.transform = `translateX(${x - anim.colW / 2}px)`
+            rect.style.width = `${anim.colW}px`
             rect.style.display = ''
           } else {
             rect.style.display = 'none'
@@ -595,7 +613,7 @@ export function TabSvgCanvas({
 
               return arcs
             })()}
-            {/* Animated playback highlight — driven by RAF, replaces per-measure static highlight */}
+            {/* Animated playback highlight — driven by RAF via CSS transform for GPU compositing */}
             <rect
               ref={(el) => {
                 if (el) playheadRectRefs.current.set(rowIdx, el)
@@ -606,7 +624,7 @@ export function TabSvgCanvas({
               width={20}
               height={svgH - MEASURE_NUMBER_H}
               fill="rgba(0,200,100,0.35)"
-              style={{ display: 'none', pointerEvents: 'none' }}
+              style={{ display: 'none', pointerEvents: 'none', willChange: 'transform' }}
             />
           </svg>
         )

@@ -214,6 +214,11 @@ export function TabEditorPage() {
   const [savedTabs, setSavedTabs] = useState<CloudTabTrack[]>([])
   const [loadingTabs, setLoadingTabs] = useState(false)
 
+  const directBeatHandlerRef = useRef<((mi: number, bi: number) => void) | null>(null)
+  const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number) => void) => {
+    directBeatHandlerRef.current = handler
+  }, [])
+
   const [cleanSnapshot, setCleanSnapshot] = useState(() => JSON.stringify(state.track))
   const currentTrackString = useMemo(() => JSON.stringify(state.track), [state.track])
   const isDirty = currentTrackString !== cleanSnapshot
@@ -531,7 +536,10 @@ export function TabEditorPage() {
         state.track,
         state.cursor.measureIndex,
         state.cursor.beatIndex,
-        (mi, bi) => dispatch({ type: 'SET_PLAYHEAD', measureIndex: mi, beatIndex: bi }),
+        (mi, bi) => {
+          dispatch({ type: 'SET_PLAYHEAD', measureIndex: mi, beatIndex: bi })
+          directBeatHandlerRef.current?.(mi, bi)
+        },
         () => {
           dispatch({ type: 'SET_PLAYING', isPlaying: false })
           dispatch({ type: 'SET_PLAYHEAD', measureIndex: 0, beatIndex: 0 })
@@ -643,6 +651,7 @@ export function TabEditorPage() {
           dispatch={dispatch}
           onBeatMouseDown={onBeatMouseDown}
           onBeatMouseEnter={onBeatMouseEnter}
+          onRegisterBeatHandler={onRegisterBeatHandler}
         />
       </TabEditorErrorBoundary>
 

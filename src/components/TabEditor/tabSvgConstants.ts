@@ -33,6 +33,7 @@ export const STRING_LABEL_FONT_SIZE = 11     // tuning note names left of first 
 export const MEASURE_OVERFLOW_FONT_SIZE = 12 // ⚠ overflow error shown on overfull measures
 export const BOTTOM_PADDING = 8
 export const BARLINE_W = 2
+export const MEASURE_END_PAD = 8   // fixed gap after last note slot, before right barline
 export const TIME_SIG_W = 40 // horizontal space reserved for a stacked time signature
 export const BPM_LABEL_W = 52 // horizontal space reserved for a BPM display
 
@@ -57,7 +58,7 @@ export function stringY(si: number, stringCount: number): number {
 export function measureWidth(m: Measure, showTimeSig = false, fillRests: DurationValue[] = [], showBpm = false, beatWidthScale = 1.0): number {
   const beatsW = m.beats.reduce((acc, b) => acc + BEAT_LEFT_PAD + BEAT_WIDTHS[b.duration] * beatWidthScale + (beatHasBend(b) ? BEND_EXTRA_W : 0), 0)
   const fillW = fillRests.reduce((acc, d) => acc + BEAT_LEFT_PAD + BEAT_WIDTHS[d] * beatWidthScale, 0)
-  return MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + beatsW + fillW + BARLINE_W
+  return MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + beatsW + fillW + MEASURE_END_PAD + BARLINE_W
 }
 
 export interface BeatPosition {

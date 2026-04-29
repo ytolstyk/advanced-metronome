@@ -53,16 +53,18 @@ function applyBeatSpreadConflicts(mods: NoteModifiers, modifier: NoteModifierKey
   }
 }
 
-// Quarter note reference width; longer durations get more space, shorter get less.
-export const BEAT_WIDTH = 40
+// Strictly proportional to duration (each step doubles), so the playback cursor travels at
+// a constant pixel/second rate within a row. beatWidthScale stretches/compresses all values
+// uniformly when a row is fitted to 100% container width.
+export const BEAT_WIDTH = 20
 export const BEAT_WIDTHS: Record<DurationValue, number> = {
-  whole:        50,
-  half:         42,
-  quarter:      34,
-  eighth:       26,
-  sixteenth:    20,
-  thirtysecond: 14,
-  sixtyfourth:  10,
+  whole:        80,
+  half:         40,
+  quarter:      20,
+  eighth:       10,
+  sixteenth:     5,
+  thirtysecond:  2.5,
+  sixtyfourth:   1.25,
 }
 
 export const DURATION_BEATS: Record<DurationValue, number> = {
