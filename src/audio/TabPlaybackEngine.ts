@@ -1,6 +1,6 @@
 import { playTabNote } from './tabGuitarSynths'
 import type { TabTrack } from '../tabEditorTypes'
-import { beatDurationSeconds, fretToFreq, effectiveBpmAt } from '../tabEditorState'
+import { beatDurationSeconds, fretToFreq, effectiveBpmAt, computeFillRests, measureCapacityBeats, measureUsedBeats, DURATION_BEATS } from '../tabEditorState'
 
 const SCHEDULE_AHEAD_TIME = 0.1
 const SCHEDULER_INTERVAL = 25
@@ -132,9 +132,32 @@ export class TabPlaybackEngine {
     }
 
     const measure = track.measures[this.measureIndex]
-    if (!measure || this.beatIndex >= measure.beats.length) {
-      this.measureIndex++
-      this.beatIndex = 0
+    if (!measure) { this.measureIndex++; this.beatIndex = 0; return }
+
+    if (this.beatIndex >= measure.beats.length) {
+      const timeSig = measure.timeSignature ?? track.globalTimeSig
+      const remaining = measureCapacityBeats(timeSig) - measureUsedBeats(measure.beats)
+      const fillRests = remaining > 1e-9 ? computeFillRests(remaining) : []
+      const fillIdx = this.beatIndex - measure.beats.length
+
+      if (fillIdx < fillRests.length) {
+        const restDuration = fillRests[fillIdx]!
+        const t = this.nextBeatTime
+        const bpm = effectiveBpmAt(track, this.measureIndex)
+        const dur = (60 / bpm) * DURATION_BEATS[restDuration]
+
+        const mi = this.measureIndex
+        const bi = this.beatIndex
+        const delay = (t - ctx.currentTime) * 1000
+        const intendedTime = performance.now() + Math.max(0, delay)
+        setTimeout(() => this.onBeat?.(mi, bi, intendedTime), Math.max(0, delay))
+
+        this.nextBeatTime += dur
+        this.beatIndex++
+      } else {
+        this.measureIndex++
+        this.beatIndex = 0
+      }
       return
     }
 

@@ -164,6 +164,18 @@ function makeBeat(duration: DurationValue = 'quarter', stringCount = 6): Beat {
   }
 }
 
+function normalizeMeasuresInTrack(track: TabTrack): TabTrack {
+  const measures = track.measures.map((m) => {
+    const timeSig = m.timeSignature ?? track.globalTimeSig
+    const remaining = measureCapacityBeats(timeSig) - measureUsedBeats(m.beats)
+    if (remaining <= 1e-9) return m
+    const fillRests = computeFillRests(remaining)
+    const newBeats = fillRests.map((d) => makeBeat(d, track.stringCount))
+    return { ...m, beats: [...m.beats, ...newBeats] }
+  })
+  return { ...track, measures }
+}
+
 // Measures start empty — beats are only created when notes are explicitly placed
 function makeMeasure(): Measure {
   return {
@@ -197,7 +209,7 @@ export function createInitialTabState(): TabEditorState {
   let track: TabTrack
   try {
     const saved = localStorage.getItem(TAB_STORAGE_KEY)
-    track = saved ? (JSON.parse(saved) as TabTrack) : createDefaultTrack()
+    track = saved ? normalizeMeasuresInTrack(JSON.parse(saved) as TabTrack) : createDefaultTrack()
   } catch {
     track = createDefaultTrack()
   }
@@ -500,7 +512,7 @@ export type TabEditorAction =
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
-export function tabEditorReducer(
+function tabEditorReducerInner(
   state: TabEditorState,
   action: TabEditorAction,
 ): TabEditorState {
@@ -1530,5 +1542,14 @@ export function tabEditorReducer(
     default:
       return state
   }
+}
+
+export function tabEditorReducer(
+  state: TabEditorState,
+  action: TabEditorAction,
+): TabEditorState {
+  const next = tabEditorReducerInner(state, action)
+  if (next.track === state.track) return next
+  return { ...next, track: normalizeMeasuresInTrack(next.track) }
 }
 

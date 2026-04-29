@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import type { RefObject } from 'react'
 import type { DurationValue, Measure, TabEditorState } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
-import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats, computeFillRests, effectiveBpmAt, beatDurationSeconds, buildOpenMidi } from '../../tabEditorState'
+import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats, computeFillRests, effectiveBpmAt, beatDurationSeconds, buildOpenMidi, DURATION_BEATS } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
 import { StaffViewSvg } from './StaffViewSvg'
 import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, formatFretLabel, stringY } from './tabSvgConstants'
@@ -230,9 +230,13 @@ export function TabSvgCanvas({
       if (!fromPos) return
 
       const measure = currentTrack.measures[mi]
+      const timeSig = measure?.timeSignature ?? currentTrack.globalTimeSig
+      const fillRests = measure ? getFillRests(measure, timeSig) : []
+      const totalVisualBeats = (measure?.beats.length ?? 0) + fillRests.length
+
       let nextMi = mi
       let nextBi = bi + 1
-      if (!measure || nextBi >= measure.beats.length) {
+      if (!measure || nextBi >= totalVisualBeats) {
         nextMi = mi + 1
         nextBi = 0
       }
@@ -240,7 +244,14 @@ export function TabSvgCanvas({
 
       const beat = measure?.beats[bi]
       const bpm = beat?.tempoChange ?? effectiveBpmAt(currentTrack, mi)
-      const durationMs = beat ? beatDurationSeconds(beat.duration, beat.dot, bpm) * 1000 : 500
+      let durationMs: number
+      if (beat) {
+        durationMs = beatDurationSeconds(beat.duration, beat.dot, bpm) * 1000
+      } else {
+        const fillIdx = bi - (measure?.beats.length ?? 0)
+        const restDur = fillRests[fillIdx]
+        durationMs = restDur ? (60 / bpm) * DURATION_BEATS[restDur] * 1000 : 500
+      }
       const isTied = beat?.tiedFrom === true
       const colW = beat
         ? beat.notes.reduce((max, n) => {
