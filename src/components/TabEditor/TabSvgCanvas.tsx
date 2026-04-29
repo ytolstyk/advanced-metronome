@@ -282,7 +282,7 @@ export function TabSvgCanvas({
         }
       }
     })
-  }, [onRegisterBeatHandler])
+  }, [onRegisterBeatHandler, canvasRef])
 
   useEffect(() => {
     if (!isPlaying) {
