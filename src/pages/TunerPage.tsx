@@ -2,9 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './TunerPage.css';
 import type { StringCount } from '../data/tunings';
 import { TUNINGS } from '../data/tunings';
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+import { NOTE_NAMES } from '../data/noteColors';
 
 function noteToFreq(note: string, octave: number): number {
   const midi = (octave + 1) * 12 + NOTE_NAMES.indexOf(note);

@@ -1,19 +1,10 @@
 import { generateClient } from 'aws-amplify/data';
-import { getCurrentUser } from 'aws-amplify/auth';
 import type { Schema } from '../../amplify/data/resource';
+import { isAuthenticated } from './authUtils';
 
 const client = generateClient<Schema>();
 
 const LS_KEY = 'noteColors';
-
-async function isAuthenticated(): Promise<boolean> {
-  try {
-    await getCurrentUser();
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 let cachedId: string | null = null;
 

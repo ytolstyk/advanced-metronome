@@ -1,18 +1,17 @@
 import { accentClick, beatClick, subClick, countdownClick } from './clickSynth';
+import { subsPerBeat } from './clickMath';
+import type { SubdivisionLabel } from './clickMath';
+export type { SubdivisionLabel } from './clickMath';
 
-export type SubdivisionLabel =
-  | 'whole' | 'half' | 'quarter'
-  | 'eighth' | 'sixteenth'
-  | 'quarter-triplet' | 'eighth-triplet';
-
-export interface TimeSignature { numerator: number; denominator: number }
+/** Click-track time signature: classical numerator/denominator (e.g. 4/4, 6/8). */
+export interface ClickTimeSignature { numerator: number; denominator: number }
 
 export interface TrackPiece {
   id: string;
   label: string;
   color: string;
   groupId: string | null;
-  timeSignature: TimeSignature;
+  timeSignature: ClickTimeSignature;
   subdivision: SubdivisionLabel;
   bpm: number;
   repeats: number;
@@ -20,19 +19,6 @@ export interface TrackPiece {
 
 const SCHEDULE_AHEAD_TIME = 0.1;
 const SCHEDULER_INTERVAL = 25;
-
-// How many sub-clicks per beat (quarter note) for each subdivision label
-function subsPerBeat(sub: SubdivisionLabel, numerator: number): number {
-  switch (sub) {
-    case 'whole': return 1 / numerator;   // one click per measure
-    case 'half': return 0.5;
-    case 'quarter': return 1;
-    case 'eighth': return 2;
-    case 'sixteenth': return 4;
-    case 'quarter-triplet': return 3;
-    case 'eighth-triplet': return 6;
-  }
-}
 
 export class ClickTrackEngine {
   private ctx: AudioContext | null = null;
@@ -89,7 +75,7 @@ export class ClickTrackEngine {
     this.stop();
     const ctx = this.ensureCtx();
     if (ctx.state === 'suspended') {
-      void ctx.resume();
+      ctx.resume().catch(err => console.warn('AudioContext resume failed:', err));
     }
 
     this.pieces = pieces;
@@ -124,7 +110,7 @@ export class ClickTrackEngine {
   resume(): void {
     if (!this.isRunning || !this.isPaused) return;
     const ctx = this.ensureCtx();
-    if (ctx.state === 'suspended') { void ctx.resume(); }
+    if (ctx.state === 'suspended') { ctx.resume().catch(err => console.warn('AudioContext resume failed:', err)); }
     // Re-anchor nextBeatTime to now (skip the gap)
     this.nextBeatTime = ctx.currentTime + 0.05;
     this.isPaused = false;

@@ -1,30 +1,18 @@
 import { generateClient } from 'aws-amplify/data';
-import { getCurrentUser } from 'aws-amplify/auth';
 import type { Schema } from '../../amplify/data/resource';
+import { isAuthenticated } from './authUtils';
+import { loadFromStorage, saveToStorage } from './storageUtils';
 
 const client = generateClient<Schema>();
-
-async function isAuthenticated(): Promise<boolean> {
-  try {
-    await getCurrentUser();
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 const LS_KEY = 'chords-favorites';
 
 function loadLocalFavoriteKeys(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY) ?? '[]') as string[];
-  } catch {
-    return [];
-  }
+  return loadFromStorage<string[]>(LS_KEY, []);
 }
 
 function saveLocalFavoriteKeys(keys: string[]): void {
-  localStorage.setItem(LS_KEY, JSON.stringify(keys));
+  saveToStorage(LS_KEY, keys);
 }
 
 export function toFavoriteKey(root: string, type: string): string {

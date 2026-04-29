@@ -213,7 +213,7 @@ export class AudioEngine {
   ) {
     const ctx = this.getAudioContext();
     if (ctx.state === 'suspended') {
-      ctx.resume();
+      ctx.resume().catch(err => console.warn('AudioContext resume failed:', err));
     }
 
     this.pattern = pattern;
@@ -265,7 +265,7 @@ export class AudioEngine {
 
     const ctx = this.getAudioContext();
     if (ctx.state === 'suspended') {
-      ctx.resume();
+      ctx.resume().catch(err => console.warn('AudioContext resume failed:', err));
     }
 
     this.pattern = pattern;
@@ -283,7 +283,7 @@ export class AudioEngine {
   previewDrum(instrumentId: string) {
     const ctx = this.getAudioContext();
     if (ctx.state === 'suspended') {
-      ctx.resume();
+      ctx.resume().catch(err => console.warn('AudioContext resume failed:', err));
     }
     const dest = this.masterGain ?? ctx.destination;
     drumSynths[instrumentId]?.(ctx, dest, ctx.currentTime);

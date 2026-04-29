@@ -1,19 +1,10 @@
 import { generateClient } from 'aws-amplify/data';
-import { getCurrentUser } from 'aws-amplify/auth';
 import type { Schema } from '../../amplify/data/resource';
 import type { RootNote } from '../data/chords';
 import type { ScaleMode } from '../data/scales';
+import { isAuthenticated } from './authUtils';
 
 const client = generateClient<Schema>();
-
-async function isAuthenticated(): Promise<boolean> {
-  try {
-    await getCurrentUser();
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export interface PracticeNote {
   id: number;

@@ -4,6 +4,7 @@ import { playChordSynth } from '../audio/chordSynths';
 import type { AppState, ChordInstrumentType } from '../types';
 import type { RootNote, ChordType } from '../data/chords';
 import type { Action } from '../state';
+import { CHORD_PREVIEW_DECAY_MS } from '../constants';
 
 export function useAudioEngine(
   state: AppState,
@@ -13,6 +14,7 @@ export function useAudioEngine(
   chordVolume: number,
 ) {
   const engineRef = useRef<AudioEngine | null>(null);
+  const previewTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const getEngine = useCallback(() => {
     if (!engineRef.current) {
@@ -22,7 +24,9 @@ export function useAudioEngine(
   }, []);
 
   useEffect(() => {
+    const timers = previewTimersRef.current;
     return () => {
+      timers.forEach(clearTimeout);
       engineRef.current?.dispose();
     };
   }, []);
@@ -128,7 +132,8 @@ export function useAudioEngine(
     gain.gain.value = 0.6;
     gain.connect(ctx.destination);
     playChordSynth(ctx, gain, { root, type }, instrument, ctx.currentTime);
-    setTimeout(() => gain.disconnect(), 5000);
+    const id = setTimeout(() => gain.disconnect(), CHORD_PREVIEW_DECAY_MS);
+    previewTimersRef.current.push(id);
   }, [getEngine]);
 
   return {

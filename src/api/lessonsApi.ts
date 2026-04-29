@@ -1,17 +1,9 @@
 import { generateClient } from 'aws-amplify/data';
-import { getCurrentUser } from 'aws-amplify/auth';
 import type { Schema } from '../../amplify/data/resource';
+import { isAuthenticated } from './authUtils';
+import { loadFromStorage, saveToStorage } from './storageUtils';
 
 const client = generateClient<Schema>();
-
-async function isAuthenticated(): Promise<boolean> {
-  try {
-    await getCurrentUser();
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 // ── Progress ────────────────────────────────────────────────────────────────
 
@@ -25,15 +17,11 @@ interface ProgressEntry {
 }
 
 function loadLocalProgress(): ProgressEntry[] {
-  try {
-    return JSON.parse(localStorage.getItem(LS_PROGRESS_KEY) ?? '[]') as ProgressEntry[];
-  } catch {
-    return [];
-  }
+  return loadFromStorage<ProgressEntry[]>(LS_PROGRESS_KEY, []);
 }
 
 function saveLocalProgress(entries: ProgressEntry[]): void {
-  localStorage.setItem(LS_PROGRESS_KEY, JSON.stringify(entries));
+  saveToStorage(LS_PROGRESS_KEY, entries);
 }
 
 export async function loadProgress(): Promise<{
@@ -102,15 +90,11 @@ export async function saveProgress(
 const LS_FAV_KEY = 'lessons-favorites';
 
 function loadLocalFavorites(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(LS_FAV_KEY) ?? '[]') as string[];
-  } catch {
-    return [];
-  }
+  return loadFromStorage<string[]>(LS_FAV_KEY, []);
 }
 
 function saveLocalFavorites(ids: string[]): void {
-  localStorage.setItem(LS_FAV_KEY, JSON.stringify(ids));
+  saveToStorage(LS_FAV_KEY, ids);
 }
 
 export async function loadLessonFavorites(): Promise<{

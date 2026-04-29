@@ -38,6 +38,10 @@ export const MAX_MEASURES = 8;
 export const DEFAULT_HUMANIZE = 0;
 export const DEFAULT_VOLUME = 80;
 
+export const CHORD_DISCONNECT_DELAY_MS = 4000;
+export const CHORD_PREVIEW_DECAY_MS = 5000;
+export const AUTOSAVE_DEBOUNCE_MS = 2000;
+
 export const DONATION_LINKS = {
   paypal:
     "https://www.paypal.com/donate/?business=GBLCRWQ5EDX92&no_recurring=0&item_name=If+you+like+what+I+do%2C+support+my+work.&currency_code=USD",

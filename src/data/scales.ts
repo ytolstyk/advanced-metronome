@@ -58,5 +58,4 @@ export const SCALE_INTERVALS: Record<ScaleMode, number[]> = {
   blues:            [0, 3, 5, 6, 7, 10],
 };
 
-// Note names indexed 0–11 (C = 0)
-export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+export { NOTE_NAMES } from './noteColors';

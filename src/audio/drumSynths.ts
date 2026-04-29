@@ -1,6 +1,21 @@
 // vel: volume multiplier (1 = normal), pitch: frequency multiplier (1 = normal)
 type DrumSynth = (ctx: AudioContext, dest: AudioNode, time: number, vel?: number, pitch?: number) => void;
 
+// Lazily pre-allocated noise buffer shared across all noise-based synths.
+// Keyed by sampleRate so WAV export (which may use a different OfflineAudioContext rate) stays correct.
+let _noiseBuffer: AudioBuffer | null = null;
+let _noiseBufferRate = 0;
+
+function getNoiseBuffer(ctx: AudioContext): AudioBuffer {
+  if (!_noiseBuffer || _noiseBufferRate !== ctx.sampleRate) {
+    _noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    _noiseBufferRate = ctx.sampleRate;
+    const data = _noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  return _noiseBuffer;
+}
+
 export const drumSynths: Record<string, DrumSynth> = {
   kick(ctx, dest, time, vel = 1, pitch = 1) {
     const osc = ctx.createOscillator();
@@ -30,14 +45,8 @@ export const drumSynths: Record<string, DrumSynth> = {
     osc.stop(time + 0.15);
 
     // Noise component
-    const bufferSize = ctx.sampleRate * 0.15;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
     const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
+    noise.buffer = getNoiseBuffer(ctx);
     const noiseFilter = ctx.createBiquadFilter();
     noiseFilter.type = 'highpass';
     noiseFilter.frequency.setValueAtTime(1000, time);
@@ -52,14 +61,8 @@ export const drumSynths: Record<string, DrumSynth> = {
   },
 
   hihat(ctx, dest, time, vel = 1) {
-    const bufferSize = ctx.sampleRate * 0.05;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
     const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
+    noise.buffer = getNoiseBuffer(ctx);
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.setValueAtTime(8000, time);
@@ -75,14 +78,8 @@ export const drumSynths: Record<string, DrumSynth> = {
   },
 
   openhat(ctx, dest, time, vel = 1) {
-    const bufferSize = ctx.sampleRate * 0.3;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
     const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
+    noise.buffer = getNoiseBuffer(ctx);
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.setValueAtTime(8000, time);
@@ -98,14 +95,8 @@ export const drumSynths: Record<string, DrumSynth> = {
   },
 
   clap(ctx, dest, time, vel = 1) {
-    const bufferSize = ctx.sampleRate * 0.15;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
     const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
+    noise.buffer = getNoiseBuffer(ctx);
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.setValueAtTime(2000, time);

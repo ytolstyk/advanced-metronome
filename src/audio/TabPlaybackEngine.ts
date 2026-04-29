@@ -33,7 +33,7 @@ export class TabPlaybackEngine {
   ): void {
     this.stop()
     const ctx = this.ensureCtx()
-    if (ctx.state === 'suspended') void ctx.resume()
+    if (ctx.state === 'suspended') ctx.resume().catch(err => console.warn('AudioContext resume failed:', err))
 
     this.track = track
     this.measureIndex = fromMeasure
@@ -62,7 +62,7 @@ export class TabPlaybackEngine {
   resume(): void {
     if (!this.isRunning || !this.isPaused) return
     const ctx = this.ensureCtx()
-    if (ctx.state === 'suspended') void ctx.resume()
+    if (ctx.state === 'suspended') ctx.resume().catch(err => console.warn('AudioContext resume failed:', err))
     this.nextBeatTime = ctx.currentTime + 0.05
     this.isPaused = false
     this.timer = setInterval(() => this.scheduler(), SCHEDULER_INTERVAL)
