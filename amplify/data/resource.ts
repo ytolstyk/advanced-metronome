@@ -65,6 +65,21 @@ const schema = a.schema({
     colorsJson: a.string().required(),
   }).authorization(allow => [allow.owner()]),
 
+  // Publicly published guitar tabs — readable by all authenticated users, writable only by owner
+  PublishedTab: a.model({
+    name: a.string().required(),
+    nameLower: a.string().required(),
+    artist: a.string(),
+    artistLower: a.string(),
+    tabAuthor: a.string(),
+    year: a.string(),
+    trackJson: a.string().required(),
+    publishedAt: a.datetime().required(),
+  }).authorization(allow => [
+    allow.owner(),
+    allow.authenticated().to(['read']),
+  ]),
+
   // Fret memorizer game scores — one record per completed session
   FretMemorizerScore: a.model({
     score: a.integer().required(),

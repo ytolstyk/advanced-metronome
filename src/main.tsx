@@ -24,6 +24,8 @@ import { BuildLessonPage } from './pages/BuildLessonPage.tsx'
 import { ClickTrackPage } from './pages/ClickTrackPage.tsx'
 import { FretMemorizerPage } from './pages/FretMemorizerPage.tsx'
 import { TabEditorPage } from './pages/TabEditorPage.tsx'
+import { TabLibraryPage } from './pages/TabLibraryPage.tsx'
+import { PublishedTabViewPage } from './pages/PublishedTabViewPage.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -48,6 +50,8 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/click-track" element={<ClickTrackPage />} />
           <Route path="/fret-memorizer" element={<FretMemorizerPage />} />
           <Route path="/tab-editor" element={<TabEditorPage />} />
+          <Route path="/tabs" element={<TabLibraryPage />} />
+          <Route path="/tabs/:id" element={<PublishedTabViewPage />} />
         </Routes>
         <footer style={{ textAlign: 'center', padding: '1rem', color: '#666', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
           <span>&copy; Yuriy Tolstykh</span>

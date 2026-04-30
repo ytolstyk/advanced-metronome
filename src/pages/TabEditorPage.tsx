@@ -1,6 +1,7 @@
 import { useReducer, useEffect, useRef, useCallback, useState, useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import './TabEditorPage.css'
-import type { TabCursor } from '../tabEditorTypes'
+import type { TabCursor, TabTrack } from '../tabEditorTypes'
 import {
   tabEditorReducer,
   createInitialTabState,
@@ -27,6 +28,12 @@ import {
   deleteCloudTabTrack,
   type CloudTabTrack,
 } from '../api/tabEditorApi'
+import {
+  publishTab,
+  updatePublishedTab,
+  deletePublishedTab,
+} from '../api/publishedTabApi'
+import { PublishTabDialog } from '../components/TabEditor/PublishTabDialog'
 import {
   Dialog,
   DialogContent,
@@ -200,8 +207,23 @@ export function TabEditorPage() {
   const handlePlayRef = useRef<() => void>(() => {})
 
   const { authStatus } = useAuthenticator(ctx => [ctx.authStatus])
+  const location = useLocation()
+
+  // Handle tab imported from the public library (navigate('/tab-editor', { state: { importedTrack, ... } }))
+  useEffect(() => {
+    const ls = location.state as { importedTrack?: TabTrack; sourcePublishedTabId?: string; isOwner?: boolean } | null
+    if (!ls?.importedTrack) return
+    dispatch({ type: 'LOAD_TRACK', track: ls.importedTrack })
+    setLoadedCloudId(null)
+    setPublishedTabId(ls.isOwner && ls.sourcePublishedTabId ? ls.sourcePublishedTabId : null)
+    setCleanSnapshot(JSON.stringify(ls.importedTrack))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [loadedCloudId, setLoadedCloudId] = useState<string | null>(null)
+  const [publishedTabId, setPublishedTabId] = useState<string | null>(null)
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false)
+  const [publishDialogKey, setPublishDialogKey] = useState(0)
 
   const [metadataDialogOpen, setMetadataDialogOpen] = useState(false)
   const [metadataDialogKey, setMetadataDialogKey] = useState(0)
@@ -589,6 +611,26 @@ export function TabEditorPage() {
     dragRef.current = null
   }
 
+  async function handlePublishConfirm(values: { title: string; artist: string; tabAuthor: string; year: string }) {
+    const track = { ...state.track, ...values }
+    const params = { name: values.title, artist: values.artist, tabAuthor: values.tabAuthor, year: values.year, track }
+    const result = publishedTabId
+      ? await updatePublishedTab(publishedTabId, params)
+      : await publishTab(params)
+    if (!publishedTabId) setPublishedTabId(result.id)
+  }
+
+  function handlePublishClick() {
+    setPublishDialogKey((k) => k + 1)
+    setPublishDialogOpen(true)
+  }
+
+  async function handleUnpublish() {
+    if (!publishedTabId) return
+    await deletePublishedTab(publishedTabId)
+    setPublishedTabId(null)
+  }
+
   // Overflow dialog helpers
   const overflow = state.pendingOverflow
   let trimLabel = ''
@@ -628,6 +670,10 @@ export function TabEditorPage() {
               onSave={authStatus === 'authenticated' ? handleSaveClick : undefined}
               onSaveCopy={authStatus === 'authenticated' ? handleSaveCopyClick : undefined}
               onLoad={authStatus === 'authenticated' ? () => void openLoadDialog() : undefined}
+              onPublish={authStatus === 'authenticated' ? handlePublishClick : undefined}
+              onUpdatePublished={authStatus === 'authenticated' && publishedTabId ? handlePublishClick : undefined}
+              onUnpublish={authStatus === 'authenticated' && publishedTabId ? () => void handleUnpublish() : undefined}
+              publishedTabId={publishedTabId}
             />
             <TabEditorToolbar state={state} dispatch={dispatch} isNavigating={isNavigating} />
           </>
@@ -713,6 +759,21 @@ export function TabEditorPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Publish dialog */}
+      <PublishTabDialog
+        key={`pub-${publishDialogKey}`}
+        open={publishDialogOpen}
+        isUpdate={publishedTabId !== null}
+        initialValues={{
+          title: state.track.title,
+          artist: state.track.artist ?? '',
+          tabAuthor: state.track.tabAuthor ?? '',
+          year: state.track.year ?? '',
+        }}
+        onClose={() => setPublishDialogOpen(false)}
+        onConfirm={handlePublishConfirm}
+      />
 
       {/* Overflow dialog */}
       {overflow && (

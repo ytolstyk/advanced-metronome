@@ -48,6 +48,7 @@ interface TabMeasureSvgProps {
   onBendAmountClick?: (mi: number, bi: number, si: number) => void
   onMeasureErrorClick?: (measureIndex: number) => void
   onStringLabelClick?: () => void
+  highlightBeatColumn?: number
 }
 
 interface RestSymbolProps {
@@ -178,6 +179,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   onBendAmountClick,
   onMeasureErrorClick,
   onStringLabelClick,
+  highlightBeatColumn,
 }: TabMeasureSvgProps) {
   const [labelHovered, setLabelHovered] = useState(false)
   const { stringCount } = track
@@ -353,6 +355,23 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             width={lastPos.x + lastPos.w - firstPos.x}
             height={svgH - MEASURE_NUMBER_H}
             fill="rgba(90,60,20,0.35)"
+            style={{ pointerEvents: 'none' }}
+          />
+        )
+      })()}
+
+      {/* Beat-column start highlight (read-only view) */}
+      {highlightBeatColumn != null && (() => {
+        const pos = beatPositions[highlightBeatColumn]
+        if (!pos) return null
+        return (
+          <rect
+            x={pos.x}
+            y={MEASURE_NUMBER_H}
+            width={pos.w}
+            height={svgH - MEASURE_NUMBER_H}
+            fill="rgba(59,130,246,0.22)"
+            rx={2}
             style={{ pointerEvents: 'none' }}
           />
         )

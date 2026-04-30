@@ -14,6 +14,7 @@ const NAV_GROUPS = [
       { to: "/click-track", label: "Click Track" },
       { to: "/tuner", label: "Tuner" },
       { to: "/tab-editor", label: "Tab Editor" },
+      { to: "/tabs", label: "Tab Library" },
     ],
   },
   {

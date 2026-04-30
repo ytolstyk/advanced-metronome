@@ -19,6 +19,8 @@ interface TabSvgCanvasProps {
   onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
   onRegisterBeatHandler?: (handler: (mi: number, bi: number, intendedTime: number) => void) => void
+  readOnly?: boolean
+  highlightColumn?: { measureIndex: number; beatIndex: number } | null
 }
 
 function getFillRests(
@@ -98,6 +100,8 @@ export function TabSvgCanvas({
   onBeatMouseDown,
   onBeatMouseEnter,
   onRegisterBeatHandler,
+  readOnly = false,
+  highlightColumn,
 }: TabSvgCanvasProps) {
   const { track, cursor, selection, noteSelection, isPlaying, playheadMeasure, playheadBeat, viewMode } = state
 
@@ -486,14 +490,15 @@ export function TabSvgCanvas({
                   showBpm={showBpmMap[mi] ?? false}
                   bpm={effectiveBpms[mi] ?? track.globalBpm}
                   beatWidthScale={beatWidthScale}
-                  onTimeSigClick={openTimeSigEditor}
-                  onBpmClick={openBpmEditor}
-                  onMeasureContextMenu={openMeasureMenu}
+                  onTimeSigClick={readOnly ? undefined : openTimeSigEditor}
+                  onBpmClick={readOnly ? undefined : openBpmEditor}
+                  onMeasureContextMenu={readOnly ? undefined : openMeasureMenu}
                   onBeatMouseDown={onBeatMouseDown}
                   onBeatMouseEnter={onBeatMouseEnter}
-                  onBendAmountClick={handleBendAmountClick}
-                  onMeasureErrorClick={openMeasureErrorModal}
-                  onStringLabelClick={mIdx === 0 ? openTuningModal : undefined}
+                  onBendAmountClick={readOnly ? undefined : handleBendAmountClick}
+                  onMeasureErrorClick={readOnly ? undefined : openMeasureErrorModal}
+                  onStringLabelClick={readOnly ? undefined : (mIdx === 0 ? openTuningModal : undefined)}
+                  highlightBeatColumn={highlightColumn?.measureIndex === mi ? highlightColumn.beatIndex : undefined}
                 />
               )
             })}

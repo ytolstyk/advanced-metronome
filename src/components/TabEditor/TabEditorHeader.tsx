@@ -3,7 +3,7 @@ import type { TabTrack } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { FolderOpen, Cloud } from 'lucide-react'
+import { FolderOpen, Cloud, Globe, Link } from 'lucide-react'
 
 interface TabEditorHeaderProps {
   track: TabTrack
@@ -12,9 +12,13 @@ interface TabEditorHeaderProps {
   onSave?: () => void
   onSaveCopy?: () => void
   onLoad?: () => void
+  onPublish?: () => void
+  onUpdatePublished?: () => void
+  onUnpublish?: () => void
+  publishedTabId?: string | null
 }
 
-export function TabEditorHeader({ track, dispatch, isDirty, onSave, onSaveCopy, onLoad }: TabEditorHeaderProps) {
+export function TabEditorHeader({ track, dispatch, isDirty, onSave, onSaveCopy, onLoad, onPublish, onUpdatePublished, onUnpublish, publishedTabId }: TabEditorHeaderProps) {
   const [prevTrack, setPrevTrack] = useState(track)
   const [meta, setMeta] = useState({
     title: track.title,
@@ -76,7 +80,7 @@ export function TabEditorHeader({ track, dispatch, isDirty, onSave, onSaveCopy, 
           )}
         </div>
       </div>
-      {(onLoad || onSave) && (
+      {(onLoad || onSave || onPublish || onUpdatePublished) && (
         <div className="tab-header-cloud">
           {onLoad && (
             <Button variant="outline" size="sm" onClick={onLoad}>
@@ -95,6 +99,34 @@ export function TabEditorHeader({ track, dispatch, isDirty, onSave, onSaveCopy, 
                 <Cloud size={13} /> Save
               </Button>
             </div>
+          )}
+          {publishedTabId ? (
+            <>
+              {onUpdatePublished && (
+                <Button variant="outline" size="sm" onClick={onUpdatePublished}>
+                  <Globe size={13} /> Update Published
+                </Button>
+              )}
+              {onUnpublish && (
+                <Button variant="outline" size="sm" onClick={onUnpublish} className="text-red-400 hover:text-red-300">
+                  Unpublish
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Copy share link"
+                onClick={() => { void navigator.clipboard.writeText(`${window.location.origin}/tabs/${publishedTabId}`) }}
+              >
+                <Link size={13} />
+              </Button>
+            </>
+          ) : (
+            onPublish && (
+              <Button variant="outline" size="sm" onClick={onPublish}>
+                <Globe size={13} /> Publish
+              </Button>
+            )
           )}
         </div>
       )}

@@ -68,6 +68,13 @@ const FEATURES = [
     route: "/tab-editor",
     color: "#84cc16",
   },
+  {
+    icon: "📖",
+    title: "Tab Library",
+    desc: "Browse and play guitar tabs shared by the community",
+    route: "/tabs",
+    color: "#f59e0b",
+  },
 ] as const;
 
 export function WelcomePage() {
