@@ -129,6 +129,88 @@ Strict mode enabled. Notable settings in `tsconfig.app.json`:
 - **DrumSynth dest param:** all synths route through a master GainNode — always pass `dest` not `ctx.destination`
 - **WAV export:** uses `OfflineAudioContext` in `exportAudio.ts`, bypasses the master GainNode
 
+## Reusable UI components (`src/components/ui/`)
+
+shadcn/ui primitives — use these before writing custom elements:
+
+- `Button` — variants: `default`, `destructive`, `outline`, `secondary`, `ghost`, `link`; sizes: `default`, `sm`, `lg`, `icon`
+- `Dialog` / `DialogContent` / `DialogHeader` / `DialogTitle` / `DialogDescription` / `DialogFooter` — Radix Dialog wrappers
+- `Input` — styled form input
+- `Label` — form label
+- `Slider` — range slider
+- `Select` / `SelectTrigger` / `SelectContent` / `SelectItem` — dropdown select
+- `Toggle` / `ToggleGroup` / `ToggleGroupItem` — toggle buttons
+- `DropdownMenu` / `DropdownMenuTrigger` / `DropdownMenuContent` / `DropdownMenuItem` — dropdown menu
+- `Tooltip` / `TooltipTrigger` / `TooltipContent` — tooltip
+
+All use `cn()` from `src/lib/utils.ts` (clsx + tailwind-merge) for class merging. Always use `cn()` for conditional classes.
+
+## Reusable feature components
+
+- `BeatCell` (`src/components/BeatCell/`) — drum grid cell; props: active, current, subdivision state
+- `DrumGrid` (`src/components/DrumGrid/`) — scrollable beat grid with RAF-based scroll-follow (60px cell width, 4px gap)
+- `InstrumentRow` (`src/components/InstrumentRow/`) — single instrument row in the drum grid
+- `PianoKeyboard` (`src/components/PianoKeyboard/`) — visual piano keyboard for scales/note display
+- `Fretboard` (`src/components/Fretboard/`) — guitar fretboard SVG visualization
+- `TransportControls` (`src/components/TransportControls/`) — play/pause/stop/undo + BPM/humanize/volume sliders
+- `StorageErrorBanner` (`src/components/StorageErrorBanner/`) — error notification banner
+- `SettingsModal` (`src/components/SettingsModal/`) — per-note color picker with reset
+- `AuthModal` (`src/components/AuthModal/`) — AWS Amplify auth modal
+- `MeasureHeaders` (`src/components/MeasureHeaders/`) — time signature headers above drum grid
+
+## Custom hooks
+
+- `useAudioEngine(humanize, volume)` (`src/hooks/useAudioEngine.ts`) — manages `AudioEngine` lifecycle; returns `{ play, pause, stop, resume, togglePlayback, getEngine, previewChord, previewDrum }`
+- `useTapTempo()` (`src/hooks/useTapTempo.ts`) — BPM detection from taps; returns `[tap, flashing]`
+- `usePlaybackCursor` (`src/hooks/usePlaybackCursor.ts`) — tracks current beat position
+- `useFavorites` (`src/hooks/useFavorites.ts`) — favorites list management
+- `useLessonAudio` (`src/hooks/useLessonAudio.ts`) — audio playback for lesson examples
+- `useLessonsProgress` (`src/hooks/useLessonsProgress.ts`) — lesson completion tracking
+
+## Context providers
+
+Split into definition + provider pairs so consumers can import just the context type:
+
+- `FavoritesContext` / `FavoritesProvider` (`src/context/FavoritesContext.tsx`) — favorited chords with cloud + localStorage sync
+- `NoteColorsContext` / `NoteColorsProvider` (`src/context/NoteColorsContext.tsx`) — note fill colors; debounced cloud save (500ms); `lightenHex` auto-derives stroke
+- `LessonsProgressContext` / `LessonsProgressProvider` (`src/context/LessonsProgressContext.tsx`) — completed/favorite lessons, localStorage-persisted
+
+## Audio synthesis patterns
+
+All drum synths in `src/audio/drumSynths.ts` follow: `(ctx, dest, time, vel?, pitch?)` where `dest` is always the engine's `masterGain`, never `ctx.destination`. Same rule applies to `chordSynths.ts` and `tabGuitarSynths.ts`.
+
+For WAV export, `exportAudio.ts` passes `offlineCtx.destination` directly — the master GainNode is intentionally bypassed so export is always at full volume.
+
+Chord synthesis (`src/audio/chordSynths.ts`):
+- `playGuitarChord()` — uses `CHORD_DATABASE` voicings + `pluckString`
+- `playPianoChord()` — harmonic series, 4-second sustain
+- `playPadChord()` — sawtooth + sine, lowpass filter, 6-second sustain
+
+## Data persistence pattern
+
+Cloud-first with localStorage fallback. All API modules in `src/api/` follow this shape:
+
+1. Call `isAuthenticated()` from `src/api/authUtils.ts`
+2. If authenticated → read/write via AWS Amplify `generateClient()` with `amplify/data/resource` schema
+3. If not → fall back to localStorage via `src/api/storageUtils.ts`
+4. Debounce cloud saves (500ms) to avoid thrashing
+
+## Common patterns
+
+**Modal pattern** — use Radix `Dialog` with `DialogTrigger` + `DialogContent` + `DialogHeader` + `DialogTitle`. Never build custom overlay/modal from scratch.
+
+**Class merging** — always `cn(baseClasses, conditionalClasses)` from `src/lib/utils.ts`.
+
+**State + dispatch** — reducer state and `dispatch` are passed as props; no Context or external library for feature state. Only cross-cutting concerns (auth, note colors, lessons progress) use Context.
+
+**Undo** — ref-based stack in the page component (not inside the reducer). Drum machine: `App.tsx`. Tab editor: `tabEditorState.ts` includes undo/redo stacks directly.
+
+**URL sharing** — `src/shareUtils.ts` encodes `AppState` as base64url (`encodeShareState` / `decodeShareState`). Scale sharing uses `encodeScaleShare` / `buildScaleShareUrl`.
+
+**Constants** — BPM range 40–300 (default 120), max 8 measures, chord disconnect 4000ms, preview decay 5000ms, autosave debounce 2000ms. All in `src/constants.ts`.
+
+**Presets** — 8 built-in drum patterns in `src/presets.ts` (Basic Rock, Four on the Floor, Hip-Hop, Funk, Reggae, Bossa Nova, Waltz, Shuffle). User presets in `src/userPresets.ts`.
+
 ## Validations
 
 Make sure all these checks pass before accepting changes:
