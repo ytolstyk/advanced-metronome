@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthenticator } from '@aws-amplify/ui-react'
 import { Play, Pause, Square, Link, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { TabSvgCanvas, TabEditorErrorBoundary } from '../components/TabEditor'
 import { TabPlaybackEngine } from '../audio/TabPlaybackEngine'
 import { loadPublishedTab, getCurrentUsername, type PublishedTabRecord } from '../api/publishedTabApi'
@@ -27,7 +26,6 @@ export function PublishedTabViewPage() {
   const [isOwner, setIsOwner] = useState(false)
 
   const [isPlaying, setIsPlaying] = useState(false)
-  const [viewMode, setViewMode] = useState<'tab' | 'staff'>('tab')
   const [playheadMeasure, setPlayheadMeasure] = useState(0)
   const [playheadBeat, setPlayheadBeat] = useState(0)
   const [highlightColumn, setHighlightColumn] = useState<{ measureIndex: number; beatIndex: number } | null>(null)
@@ -38,10 +36,7 @@ export function PublishedTabViewPage() {
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const directBeatHandlerRef = useRef<((mi: number, bi: number, intendedTime: number) => void) | null>(null)
-  const viewModeRef = useRef(viewMode)
-  useEffect(() => { viewModeRef.current = viewMode }, [viewMode])
-
-  const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, intendedTime: number) => void) => {
+const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, intendedTime: number) => void) => {
     directBeatHandlerRef.current = handler
   }, [])
 
@@ -50,7 +45,7 @@ export function PublishedTabViewPage() {
     let cancelled = false
     async function load() {
       setIsLoading(true)
-      const result = await loadPublishedTab(id)
+      const result = await loadPublishedTab(id!)
       if (cancelled) return
       if (!result) { setNotFound(true); setIsLoading(false); return }
       try {
@@ -72,7 +67,7 @@ export function PublishedTabViewPage() {
     void getCurrentUsername().then((username) => {
       if (cancelled) return
       if (!username) return
-      setIsOwner(tab.owner === username || tab.owner?.startsWith(username + '::'))
+      setIsOwner(!!(tab.owner === username || tab.owner?.startsWith(username + '::')))
     })
     return () => { cancelled = true }
   }, [tab, authStatus])
@@ -91,10 +86,8 @@ export function PublishedTabViewPage() {
 
   const handleBeat = useCallback((mi: number, bi: number, intendedTime: number) => {
     directBeatHandlerRef.current?.(mi, bi, intendedTime)
-    if (viewModeRef.current === 'staff') {
-      setPlayheadMeasure(mi)
-      setPlayheadBeat(bi)
-    }
+    setPlayheadMeasure(mi)
+    setPlayheadBeat(bi)
   }, [])
 
   const handleStop = useCallback(() => {
@@ -166,11 +159,10 @@ export function PublishedTabViewPage() {
     isPlaying,
     playheadMeasure,
     playheadBeat,
-    viewMode,
     pendingOverflow: null,
     undoStack: [],
     redoStack: [],
-  }), [track, isPlaying, playheadMeasure, playheadBeat, viewMode])
+  }), [track, isPlaying, playheadMeasure, playheadBeat])
 
   if (!isLoading && authStatus !== 'authenticated') {
     return (
@@ -226,24 +218,6 @@ export function PublishedTabViewPage() {
           <Square size={16} />
         </Button>
         <span className="pub-tab-hint">Click a beat to set playback start</span>
-        <div className="pub-tab-view-toggle">
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn('tab-view-btn', viewMode === 'tab' && 'active')}
-            onClick={() => setViewMode('tab')}
-          >
-            Tab
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn('tab-view-btn', viewMode === 'staff' && 'active')}
-            onClick={() => setViewMode('staff')}
-          >
-            Staff
-          </Button>
-        </div>
       </div>
 
       <div className="pub-tab-canvas" ref={canvasRef}>

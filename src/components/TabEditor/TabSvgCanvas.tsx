@@ -4,7 +4,6 @@ import type { DurationValue, Measure, TabEditorState } from '../../tabEditorType
 import type { TabEditorAction } from '../../tabEditorState'
 import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats, computeFillRests, effectiveBpmAt, beatDurationSeconds, buildOpenMidi, DURATION_BEATS } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
-import { StaffViewSvg } from './StaffViewSvg'
 import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, formatFretLabel, stringY } from './tabSvgConstants'
 import { TUNINGS } from '../../data/tunings'
 import type { StringCount } from '../../data/tunings'
@@ -103,7 +102,7 @@ export function TabSvgCanvas({
   readOnly = false,
   highlightColumn,
 }: TabSvgCanvasProps) {
-  const { track, cursor, selection, noteSelection, isPlaying, playheadMeasure, playheadBeat, viewMode } = state
+  const { track, cursor, selection, noteSelection, isPlaying } = state
 
   const svgH = rowSvgHeight(track.stringCount)
 
@@ -436,21 +435,6 @@ export function TabSvgCanvas({
     } else {
       dispatch({ type: 'SET_MEASURE_TIME_SIG_RANGE', fromIndex: mi, toIndex: rangeEnd - 1, numerator: n, denominator: d })
     }
-  }
-
-  if (viewMode === 'staff') {
-    return (
-      <div className="tab-canvas" ref={canvasRef} tabIndex={0}>
-        <StaffViewSvg
-          rows={rows}
-          globalMeasureMap={globalMeasureMap}
-          track={track}
-          cursor={cursor}
-          playheadMeasure={playheadMeasure}
-          playheadBeat={playheadBeat}
-        />
-      </div>
-    )
   }
 
   return (

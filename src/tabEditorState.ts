@@ -226,7 +226,6 @@ export function createInitialTabState(): TabEditorState {
     isPlaying: false,
     playheadMeasure: 0,
     playheadBeat: 0,
-    viewMode: 'tab',
     pendingOverflow: null,
     undoStack: [],
     redoStack: [],
@@ -491,7 +490,6 @@ export type TabEditorAction =
       stringCount: 6 | 7 | 8
       openMidi: number[]
     }
-  | { type: 'SET_VIEW_MODE'; mode: 'tab' | 'staff' }
   | { type: 'SET_PLAYING'; isPlaying: boolean }
   | { type: 'SET_PLAYHEAD'; measureIndex: number; beatIndex: number }
   | { type: 'UNDO' }
@@ -1155,9 +1153,6 @@ function tabEditorReducerInner(
         },
       }
     }
-
-    case 'SET_VIEW_MODE':
-      return { ...state, viewMode: action.mode }
 
     case 'SET_PLAYING':
       return { ...state, isPlaying: action.isPlaying }

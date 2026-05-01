@@ -114,7 +114,6 @@ export interface TabEditorState {
   isPlaying: boolean
   playheadMeasure: number
   playheadBeat: number
-  viewMode: 'tab' | 'staff'
   pendingOverflow: OverflowPending | null
   undoStack: TabTrack[]
   redoStack: TabTrack[]

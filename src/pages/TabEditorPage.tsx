@@ -680,7 +680,6 @@ export function TabEditorPage() {
         )}
         <TabEditorPlayback
           isPlaying={state.isPlaying}
-          viewMode={state.viewMode}
           onPlay={handlePlay}
           onStop={handleStop}
           dispatch={dispatch}
