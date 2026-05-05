@@ -50,6 +50,7 @@ interface TabMeasureSvgProps {
   onMeasureErrorClick?: (measureIndex: number) => void
   onStringLabelClick?: () => void
   highlightBeatColumn?: number
+  forPrint?: boolean
 }
 
 interface RestSymbolProps {
@@ -181,6 +182,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   onMeasureErrorClick,
   onStringLabelClick,
   highlightBeatColumn,
+  forPrint = false,
 }: TabMeasureSvgProps) {
   const [labelHovered, setLabelHovered] = useState(false)
   const { stringCount } = track
@@ -230,7 +232,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         y={topStringY - 4}
         fontSize={MEASURE_NUMBER_FONT_SIZE}
         fontWeight={600}
-        fill="#a0a0b8"
+        fill={forPrint ? '#777777' : '#a0a0b8'}
         dominantBaseline="auto"
         style={{ cursor: onMeasureContextMenu ? 'pointer' : 'default' }}
         onContextMenu={onMeasureContextMenu ? (e) => { e.preventDefault(); onMeasureContextMenu(measureIndex, e) } : undefined}
@@ -252,7 +254,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             fontSize={MEASURE_OVERFLOW_FONT_SIZE}
             textAnchor="end"
             dominantBaseline="auto"
-            fill="#ff5555"
+            fill={forPrint ? '#cc0000' : '#ff5555'}
             style={{ cursor: onMeasureErrorClick ? 'pointer' : 'default' }}
             onClick={onMeasureErrorClick ? (e) => { e.stopPropagation(); onMeasureErrorClick(measureIndex) } : undefined}
           >
@@ -270,7 +272,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
           y1={stringY(si, stringCount)}
           x2={mw}
           y2={stringY(si, stringCount)}
-          stroke="#555"
+          stroke={forPrint ? '#000000' : '#555'}
           strokeWidth={1}
         />
       ))}
@@ -296,7 +298,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             fontFamily="sans-serif"
             textAnchor="middle"
             dominantBaseline="auto"
-            fill="#ddd"
+            fill={forPrint ? '#000000' : '#ddd'}
           >
             {timeSig.numerator}
           </text>
@@ -308,7 +310,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             fontFamily="sans-serif"
             textAnchor="middle"
             dominantBaseline="hanging"
-            fill="#ddd"
+            fill={forPrint ? '#000000' : '#ddd'}
           >
             {timeSig.denominator}
           </text>
@@ -323,7 +325,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
           fontSize={BPM_DISPLAY_FONT_SIZE}
           textAnchor="middle"
           dominantBaseline="middle"
-          fill="#aac4e8"
+          fill={forPrint ? '#333333' : '#aac4e8'}
           fontFamily="sans-serif"
           style={{ cursor: onBpmClick ? 'pointer' : 'default' }}
           onClick={onBpmClick ? () => onBpmClick(measureIndex) : undefined}
@@ -338,7 +340,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         y1={topStringY}
         x2={0}
         y2={bottomStringY}
-        stroke="#777"
+        stroke={forPrint ? '#000000' : '#777'}
         strokeWidth={BARLINE_W}
       />
 
@@ -403,7 +405,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                 dot={beat.dot}
                 cx={beatCX}
                 cy={strAreaMid}
-                fill="#bbb"
+                fill={forPrint ? '#333333' : '#bbb'}
               />
             )}
 
@@ -441,8 +443,8 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                   (isCursorNote && !!note && note.fret >= 0)
 
                 const { label: fretLabel, fill: fretFill, fontStyle } = note
-                  ? formatFretLabel(note, isTied)
-                  : { label: '', fill: '#e8e8e8', fontStyle: 'normal' as const }
+                  ? formatFretLabel(note, isTied, forPrint)
+                  : { label: '', fill: forPrint ? '#000000' : '#e8e8e8', fontStyle: 'normal' as const }
 
                 const hasNote = fretLabel !== ''
                 const labelW = Math.max(fretLabel.length * 8 + 4, 18)
@@ -471,7 +473,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                           y={sy - 10}
                           width={labelW}
                           height={20}
-                          fill="#111"
+                          fill={forPrint ? 'white' : '#111'}
                           rx={2}
                         />
                       )}
@@ -550,7 +552,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               dot={{ dotted: false, doubleDotted: false, triplet: false }}
               cx={vCX}
               cy={strAreaMid}
-              fill="#999"
+              fill={forPrint ? '#333333' : '#999'}
             />
 
             {showCursor && (() => {
@@ -589,7 +591,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         y1={topStringY}
         x2={mw}
         y2={bottomStringY}
-        stroke="#777"
+        stroke={forPrint ? '#000000' : '#777'}
         strokeWidth={BARLINE_W}
       />
 
@@ -600,6 +602,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         track={track}
         beatPositions={beatPositions}
         onBendAmountClick={onBendAmountClick}
+        forPrint={forPrint}
       />
 
       {/* String labels */}
@@ -633,7 +636,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                 fontWeight={600}
                 textAnchor="end"
                 dominantBaseline="middle"
-                fill={labelHovered ? '#ffffff' : '#c8c8de'}
+                fill={forPrint ? '#333333' : labelHovered ? '#ffffff' : '#c8c8de'}
               >
                 {label}
               </text>

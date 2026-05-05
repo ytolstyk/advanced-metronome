@@ -21,6 +21,7 @@ interface TabSvgCanvasProps {
   onBeatPositionsChange?: (positions: Map<string, { x: number; rowIdx: number }>) => void
   readOnly?: boolean
   highlightColumn?: { measureIndex: number; beatIndex: number } | null
+  forPrint?: boolean
 }
 
 function getFillRests(
@@ -104,6 +105,7 @@ export function TabSvgCanvas({
   onBeatPositionsChange,
   readOnly = false,
   highlightColumn,
+  forPrint = false,
 }: TabSvgCanvasProps) {
   const { track, cursor, selection, noteSelection, isPlaying } = state
 
@@ -442,6 +444,7 @@ export function TabSvgCanvas({
             className="tab-svg-row"
             width={displayW}
             height={svgH}
+            style={forPrint ? { background: 'white', display: 'block' } : undefined}
           >
             {rowMeasures.map((measure, mIdx) => {
               const mi = globalMeasureMap.get(measure.id) ?? 0
@@ -475,6 +478,7 @@ export function TabSvgCanvas({
                   onMeasureErrorClick={readOnly ? undefined : openMeasureErrorModal}
                   onStringLabelClick={readOnly ? undefined : (mIdx === 0 ? openTuningModal : undefined)}
                   highlightBeatColumn={highlightColumn?.measureIndex === mi ? highlightColumn.beatIndex : undefined}
+                  forPrint={forPrint}
                 />
               )
             })}
@@ -528,7 +532,7 @@ export function TabSvgCanvas({
                         key={`tie-${globalMI}-${bi}`}
                         d={`M ${x1},${y0} C ${x1 + dx},${y1} ${x2 - dx},${y1} ${x2},${y0}`}
                         fill="none"
-                        stroke="#888"
+                        stroke={forPrint ? '#000000' : '#888'}
                         strokeWidth={1.5}
                         strokeLinecap="round"
                         style={{ pointerEvents: 'none' }}
@@ -543,7 +547,7 @@ export function TabSvgCanvas({
                         key={`tie-exit-${globalMI}-${bi}`}
                         d={`M ${x1},${y0} C ${x1 + dx},${y1} ${rightEdge},${y1} ${rightEdge},${y0}`}
                         fill="none"
-                        stroke="#888"
+                        stroke={forPrint ? '#000000' : '#888'}
                         strokeWidth={1.5}
                         strokeLinecap="round"
                         style={{ pointerEvents: 'none' }}
@@ -578,7 +582,7 @@ export function TabSvgCanvas({
                               key={`tie-entry-${globalMI}`}
                               d={`M ${STRING_LABEL_W},${y0} C ${STRING_LABEL_W},${y1} ${x2 - dx},${y1} ${x2},${y0}`}
                               fill="none"
-                              stroke="#888"
+                              stroke={forPrint ? '#000000' : '#888'}
                               strokeWidth={1.5}
                               strokeLinecap="round"
                               style={{ pointerEvents: 'none' }}
@@ -597,20 +601,22 @@ export function TabSvgCanvas({
         )
       })}
       {/* Single overlay div — positioned via translateX + translateY per row */}
-      <div
-        ref={playheadDivRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: NOTE_CURSOR_W,
-          height: svgH - MEASURE_NUMBER_H,
-          background: 'rgba(0,200,100,0.35)',
-          pointerEvents: 'none',
-          willChange: 'transform',
-          display: 'none',
-        }}
-      />
+      {!forPrint && (
+        <div
+          ref={playheadDivRef}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: NOTE_CURSOR_W,
+            height: svgH - MEASURE_NUMBER_H,
+            background: 'rgba(0,200,100,0.35)',
+            pointerEvents: 'none',
+            willChange: 'transform',
+            display: 'none',
+          }}
+        />
+      )}
       </div>
 
       {/* Tuning modal */}

@@ -36,9 +36,10 @@ interface TechniqueOverlayProps {
   track: TabTrack
   beatPositions: BeatPosition[]
   onBendAmountClick?: (measureIndex: number, beatIndex: number, stringIndex: number) => void
+  forPrint?: boolean
 }
 
-export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, onBendAmountClick }: TechniqueOverlayProps) {
+export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, onBendAmountClick, forPrint = false }: TechniqueOverlayProps) {
   const { stringCount } = track
   const elements: React.ReactNode[] = []
   const measureContentW = beatPositions.length > 0
@@ -69,7 +70,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
           fontWeight="bold"
           textAnchor="middle"
           dominantBaseline="middle"
-          fill="#ffdd88"
+          fill={forPrint ? '#000000' : '#ffdd88'}
         >
           T
         </text>,
@@ -85,7 +86,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
           cx={cx}
           cy={STACCATO_ZONE_Y}
           r={3}
-          fill="#e8e8e8"
+          fill={forPrint ? '#000000' : '#e8e8e8'}
         />,
       )
     }
@@ -108,7 +109,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
           <path
             key={`h-${key}`}
             d={`M ${cx},${sy - 10} Q ${mx},${sy - 24} ${dx},${sy - 10}`}
-            stroke="#88ffaa"
+            stroke={forPrint ? '#000000' : '#88ffaa'}
             strokeWidth={1.5}
             fill="none"
           />,
@@ -124,7 +125,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
           <path
             key={`p-${key}`}
             d={`M ${cx},${sy - 10} Q ${mx},${sy - 24} ${dx},${sy - 10}`}
-            stroke="#88ffaa"
+            stroke={forPrint ? '#000000' : '#88ffaa'}
             strokeWidth={1.5}
             fill="none"
           />,
@@ -146,7 +147,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
               y1={newSy}
               x2={dx}
               y2={dy}
-              stroke="#aaddff"
+              stroke={forPrint ? '#000000' : '#aaddff'}
               strokeWidth={1.5}
             />,
           )
@@ -162,7 +163,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
             y1={sy + 4}
             x2={cx - 6}
             y2={sy - 4}
-            stroke="#aaddff"
+            stroke={forPrint ? '#000000' : '#aaddff'}
             strokeWidth={1.5}
           />,
         )
@@ -177,7 +178,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
             y1={sy - 4}
             x2={cx - 6}
             y2={sy + 4}
-            stroke="#aaddff"
+            stroke={forPrint ? '#000000' : '#aaddff'}
             strokeWidth={1.5}
           />,
         )
@@ -192,7 +193,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
             y1={sy - 4}
             x2={cx + 18}
             y2={sy + 4}
-            stroke="#aaddff"
+            stroke={forPrint ? '#000000' : '#aaddff'}
             strokeWidth={1.5}
           />,
         )
@@ -207,7 +208,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
             y1={sy + 4}
             x2={cx + 18}
             y2={sy - 4}
-            stroke="#aaddff"
+            stroke={forPrint ? '#000000' : '#aaddff'}
             strokeWidth={1.5}
           />,
         )
@@ -219,17 +220,18 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
         const label = formatBendAmount(amount)
         const startX = cx + 6
         const endX = cx + 24
+        const bendColor = forPrint ? '#000000' : '#ffaadd'
         elements.push(
           <g key={`bend-${key}`}>
             <path
               d={`M ${startX},${sy - 6} Q ${endX},${sy - 6} ${endX},${BEND_TOP_Y}`}
-              stroke="#ffaadd"
+              stroke={bendColor}
               strokeWidth={1.5}
               fill="none"
             />
             <polygon
               points={`${endX - 3},${BEND_TOP_Y + 5} ${endX},${BEND_TOP_Y} ${endX + 3},${BEND_TOP_Y + 5}`}
-              fill="#ffaadd"
+              fill={bendColor}
             />
             <text
               x={endX + 4}
@@ -238,7 +240,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
               fontWeight="bold"
               textAnchor="start"
               dominantBaseline="auto"
-              fill="#ffaadd"
+              fill={bendColor}
               style={{ cursor: 'pointer' }}
               onClick={onBendAmountClick ? () => onBendAmountClick(measureIndex, bi, si) : undefined}
             >
@@ -258,7 +260,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
             fontSize={PICK_DIR_FONT_SIZE}
             textAnchor="middle"
             dominantBaseline="middle"
-            fill="#cccccc"
+            fill={forPrint ? '#000000' : '#cccccc'}
           >
             ⬇
           </text>,
@@ -273,7 +275,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
             fontSize={PICK_DIR_FONT_SIZE}
             textAnchor="middle"
             dominantBaseline="middle"
-            fill="#cccccc"
+            fill={forPrint ? '#000000' : '#cccccc'}
           >
             ⬆
           </text>,
@@ -283,9 +285,9 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
   }
 
   // Vibrato and palm mute: rendered as runs so the whole connected segment shares one Y level
-  renderVibratoRuns(measure, beatPositions, elements)
-  renderPalmMuteRuns(measure, beatPositions, elements)
-  renderLetRingRuns(measure, beatPositions, elements)
+  renderVibratoRuns(measure, beatPositions, elements, forPrint)
+  renderPalmMuteRuns(measure, beatPositions, elements, forPrint)
+  renderLetRingRuns(measure, beatPositions, elements, forPrint)
 
   return <g>{elements}</g>
 }
@@ -307,6 +309,7 @@ function renderVibratoRuns(
   measure: Measure,
   beatPositions: BeatPosition[],
   elements: React.ReactNode[],
+  forPrint = false,
 ) {
   const PAD = 4
   let runStart: number | null = null
@@ -334,7 +337,7 @@ function renderVibratoRuns(
         <path
           key={`vib-${bi}`}
           d={`M ${x0},${vy} Q ${x0 + step / 2},${vy - 5} ${x0 + step},${vy} Q ${x0 + step * 1.5},${vy + 5} ${x0 + step * 2},${vy} Q ${x0 + step * 2.5},${vy - 5} ${x0 + step * 3},${vy} Q ${x0 + step * 3.5},${vy + 5} ${x0 + step * 4},${vy}`}
-          stroke="#ddaaff"
+          stroke={forPrint ? '#000000' : '#ddaaff'}
           strokeWidth={1.5}
           fill="none"
         />,
@@ -367,6 +370,7 @@ function renderPalmMuteRuns(
   measure: Measure,
   beatPositions: BeatPosition[],
   elements: React.ReactNode[],
+  forPrint = false,
 ) {
   const PAD = 4
   let runStart: number | null = null
@@ -390,11 +394,11 @@ function renderPalmMuteRuns(
           y1={topY}
           x2={x2}
           y2={topY}
-          stroke="#ffaa44"
+          stroke={forPrint ? '#000000' : '#ffaa44'}
           strokeWidth={1.5}
           strokeDasharray="4 2"
         />
-        <text x={x1} y={topY - 2} fontSize={TECHNIQUE_LABEL_FONT_SIZE} fill="#ffaa44" dominantBaseline="auto">
+        <text x={x1} y={topY - 2} fontSize={TECHNIQUE_LABEL_FONT_SIZE} fill={forPrint ? '#000000' : '#ffaa44'} dominantBaseline="auto">
           P.M.
         </text>
       </g>,
@@ -418,6 +422,7 @@ function renderLetRingRuns(
   measure: Measure,
   beatPositions: BeatPosition[],
   elements: React.ReactNode[],
+  forPrint = false,
 ) {
   const PAD = 4
   let runStart: number | null = null
@@ -441,11 +446,11 @@ function renderLetRingRuns(
           y1={topY}
           x2={x2}
           y2={topY}
-          stroke="#88ddff"
+          stroke={forPrint ? '#000000' : '#88ddff'}
           strokeWidth={1.5}
           strokeDasharray="4 2"
         />
-        <text x={x1} y={topY - 2} fontSize={TECHNIQUE_LABEL_FONT_SIZE} fill="#88ddff" dominantBaseline="auto">
+        <text x={x1} y={topY - 2} fontSize={TECHNIQUE_LABEL_FONT_SIZE} fill={forPrint ? '#000000' : '#88ddff'} dominantBaseline="auto">
           ring
         </text>
       </g>,

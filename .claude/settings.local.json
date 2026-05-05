@@ -68,7 +68,8 @@
       "Bash(node_modules/.bin/eslint *)",
       "Bash(./node_modules/.bin/eslint src/pages/PublishedTabViewPage.tsx --no-ignore)",
       "Bash(grep -v \"^$\")",
-      "Bash(./node_modules/.bin/eslint src/pages/TabLibraryPage.tsx --no-ignore)"
+      "Bash(./node_modules/.bin/eslint src/pages/TabLibraryPage.tsx --no-ignore)",
+      "Bash(npm ls *)"
     ]
   },
   "enableAllProjectMcpServers": true,

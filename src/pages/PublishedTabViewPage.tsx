@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthenticator } from '@aws-amplify/ui-react'
-import { Play, Pause, Square, Link, ExternalLink } from 'lucide-react'
+import { Play, Pause, Square, Link, ExternalLink, Printer, FileDown } from 'lucide-react'
+import { jsPDF } from 'jspdf'
 import { Button } from '@/components/ui/button'
 import { TabSvgCanvas, TabEditorErrorBoundary } from '../components/TabEditor'
 import { TabPlaybackEngine } from '../audio/TabPlaybackEngine'
@@ -33,6 +34,7 @@ export function PublishedTabViewPage() {
   const [copySuccess, setCopySuccess] = useState(false)
 
   const canvasRef = useRef<HTMLDivElement>(null)
+  const printCanvasRef = useRef<HTMLDivElement>(null)
   const directBeatHandlerRef = useRef<((mi: number, bi: number, intendedTime: number) => void) | null>(null)
   const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, intendedTime: number) => void) => {
     directBeatHandlerRef.current = handler
@@ -177,6 +179,80 @@ export function PublishedTabViewPage() {
     }
   }, [isPlaying, track, handleBeat, handleStop])
 
+  const handleDownloadPdf = useCallback(async () => {
+    if (!track) return
+    const svgRows = printCanvasRef.current?.querySelectorAll<SVGSVGElement>('.tab-svg-row')
+    if (!svgRows || svgRows.length === 0) return
+
+    const PAGE_W = 215.9   // mm, Letter width
+    const PAGE_H = 279.4   // mm, Letter height
+    const MARGIN = 19.05   // mm, 0.75in
+    const CONTENT_W = PAGE_W - 2 * MARGIN
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
+
+    // Title block
+    const titleText = track.title || 'Untitled'
+    const subtitleText = [
+      [tab?.artist, tab?.year].filter(Boolean).join(' · '),
+      tab?.tabAuthor ? `Tab by ${tab.tabAuthor}` : '',
+    ].filter(Boolean).join(' — ')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(16)
+    doc.text(titleText, MARGIN, MARGIN + 7)
+    let yPos = MARGIN + 12
+    if (subtitleText) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.text(subtitleText, MARGIN, yPos)
+      yPos += 7
+    }
+    yPos += 4
+
+    const serializer = new XMLSerializer()
+
+    for (const svg of svgRows) {
+      const svgW = svg.width.baseVal.value
+      const svgH = svg.height.baseVal.value
+      if (svgW === 0 || svgH === 0) continue
+
+      const scale = CONTENT_W / svgW
+      const rowMm = svgH * scale
+
+      if (yPos + rowMm > PAGE_H - MARGIN) {
+        doc.addPage()
+        yPos = MARGIN
+      }
+
+      const dpr = 2
+      const canvas = document.createElement('canvas')
+      canvas.width = svgW * dpr
+      canvas.height = svgH * dpr
+      const ctx = canvas.getContext('2d')!
+      ctx.scale(dpr, dpr)
+      ctx.fillStyle = 'white'
+      ctx.fillRect(0, 0, svgW, svgH)
+
+      const svgStr = serializer.serializeToString(svg)
+      const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+
+      await new Promise<void>((resolve) => {
+        const img = new Image()
+        img.onload = () => { ctx.drawImage(img, 0, 0, svgW, svgH); URL.revokeObjectURL(url); resolve() }
+        img.onerror = () => { URL.revokeObjectURL(url); resolve() }
+        img.src = url
+      })
+
+      doc.addImage(canvas.toDataURL('image/png'), 'PNG', MARGIN, yPos, CONTENT_W, rowMm)
+      yPos += rowMm + 1.5
+    }
+
+    const filename = (track.title || 'tab').replace(/[^a-z0-9]/gi, '_').toLowerCase()
+    doc.save(`${filename}.pdf`)
+  }, [track, tab, printCanvasRef])
+
   const handleOpenInEditor = useCallback(() => {
     if (!track) return
     navigate('/tab-editor', {
@@ -243,6 +319,7 @@ export function PublishedTabViewPage() {
   const authorLine = tab?.tabAuthor ? `Tab by ${tab.tabAuthor}` : ''
 
   return (
+    <>
     <div className="pub-tab-page">
       <div className="pub-tab-meta">
         <div className="pub-tab-meta-info">
@@ -259,6 +336,12 @@ export function PublishedTabViewPage() {
           </Button>
           <Button variant="outline" size="sm" onClick={handleOpenInEditor}>
             <ExternalLink size={13} /> {isOwner ? 'Edit' : 'Open in Editor'}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => window.print()} title="Print">
+            <Printer size={13} /> Print
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => { void handleDownloadPdf() }} title="Download PDF">
+            <FileDown size={13} /> PDF
           </Button>
         </div>
       </div>
@@ -290,5 +373,29 @@ export function PublishedTabViewPage() {
         </TabEditorErrorBoundary>
       </div>
     </div>
+
+    <div className="pub-tab-print-layer">
+      <div className="pub-tab-print-header">
+        <div className="pub-tab-print-title">{track.title || 'Untitled'}</div>
+        {(subtitle || authorLine) && (
+          <div className="pub-tab-print-subtitle">
+            {[subtitle, authorLine].filter(Boolean).join(' — ')}
+          </div>
+        )}
+      </div>
+      <TabEditorErrorBoundary>
+        <TabSvgCanvas
+          state={displayState}
+          containerWidth={650}
+          canvasRef={printCanvasRef}
+          dispatch={NOOP_DISPATCH}
+          onBeatMouseDown={() => {}}
+          onBeatMouseEnter={() => {}}
+          readOnly
+          forPrint
+        />
+      </TabEditorErrorBoundary>
+    </div>
+    </>
   )
 }

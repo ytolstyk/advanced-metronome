@@ -104,3 +104,50 @@
   color: #666;
   font-size: 0.9rem;
 }
+
+.pub-tab-print-layer {
+  display: none;
+}
+
+@media print {
+  @page { margin: 0.75in; }
+
+  body {
+    background: white !important;
+    visibility: hidden;
+  }
+
+  .pub-tab-print-layer {
+    display: block;
+    visibility: visible;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: white;
+  }
+
+  .pub-tab-print-layer * {
+    visibility: visible;
+  }
+
+  .tab-svg-row {
+    display: block;
+    break-inside: avoid;
+  }
+
+  .pub-tab-print-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #000;
+    margin-bottom: 4px;
+    font-family: sans-serif;
+  }
+
+  .pub-tab-print-subtitle {
+    font-size: 0.85rem;
+    color: #444;
+    margin-bottom: 16px;
+    font-family: sans-serif;
+  }
+}
