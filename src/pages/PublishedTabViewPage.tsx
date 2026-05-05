@@ -26,8 +26,6 @@ export function PublishedTabViewPage() {
   const [isOwner, setIsOwner] = useState(false)
 
   const [isPlaying, setIsPlaying] = useState(false)
-  const [playheadMeasure, setPlayheadMeasure] = useState(0)
-  const [playheadBeat, setPlayheadBeat] = useState(0)
   const [highlightColumn, setHighlightColumn] = useState<{ measureIndex: number; beatIndex: number } | null>(null)
   const [startMeasure, setStartMeasure] = useState(0)
   const [startBeat, setStartBeat] = useState(0)
@@ -147,14 +145,10 @@ export function PublishedTabViewPage() {
 
   const handleBeat = useCallback((mi: number, bi: number, intendedTime: number) => {
     directBeatHandlerRef.current?.(mi, bi, intendedTime)
-    setPlayheadMeasure(mi)
-    setPlayheadBeat(bi)
   }, [])
 
   const handleStop = useCallback(() => {
     setIsPlaying(false)
-    setPlayheadMeasure(0)
-    setPlayheadBeat(0)
   }, [])
 
   function handlePlay() {
@@ -171,8 +165,6 @@ export function PublishedTabViewPage() {
   function handleStopClick() {
     playbackEngine.stop()
     setIsPlaying(false)
-    setPlayheadMeasure(0)
-    setPlayheadBeat(0)
   }
 
   const handleBeatMouseDown = useCallback((mi: number, bi: number) => {
@@ -218,12 +210,12 @@ export function PublishedTabViewPage() {
     activeDot: { dotted: false, doubleDotted: false, triplet: false },
     activeModifiers: {},
     isPlaying,
-    playheadMeasure,
-    playheadBeat,
+    playheadMeasure: 0,
+    playheadBeat: 0,
     pendingOverflow: null,
     undoStack: [],
     redoStack: [],
-  }), [track, isPlaying, playheadMeasure, playheadBeat])
+  }), [track, isPlaying])
 
   if (!isLoading && authStatus !== 'authenticated') {
     return (
