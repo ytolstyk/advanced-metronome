@@ -4,7 +4,7 @@ import type { DurationValue, Measure, TabEditorState } from '../../tabEditorType
 import type { TabEditorAction } from '../../tabEditorState'
 import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats, computeFillRests, effectiveBpmAt, beatDurationSeconds, buildOpenMidi, DURATION_BEATS } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
-import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, formatFretLabel, stringY } from './tabSvgConstants'
+import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, stringY, NOTE_CURSOR_W } from './tabSvgConstants'
 import { TUNINGS } from '../../data/tunings'
 import type { StringCount } from '../../data/tunings'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -18,6 +18,7 @@ interface TabSvgCanvasProps {
   onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
   onRegisterBeatHandler?: (handler: (mi: number, bi: number, intendedTime: number) => void) => void
+  onBeatPositionsChange?: (positions: Map<string, { x: number; rowIdx: number }>) => void
   readOnly?: boolean
   highlightColumn?: { measureIndex: number; beatIndex: number } | null
 }
@@ -39,6 +40,7 @@ function computeRows(
   showBpmMap: boolean[],
   containerWidth: number,
 ): Measure[][] {
+  if (containerWidth <= 0) return []
   const usable = containerWidth - STRING_LABEL_W - 32
   const rows: Measure[][] = []
   let row: Measure[] = []
@@ -99,6 +101,7 @@ export function TabSvgCanvas({
   onBeatMouseDown,
   onBeatMouseEnter,
   onRegisterBeatHandler,
+  onBeatPositionsChange,
   readOnly = false,
   highlightColumn,
 }: TabSvgCanvasProps) {
@@ -164,7 +167,7 @@ export function TabSvgCanvas({
       const needsScale = isLastRow ? naturalW > fullW : naturalW !== fullW
       const scalableW = needsScale ? rowScalableWidth(rowMeasures, currentRowStart, timeSigs) : 0
       const beatWidthScale = needsScale && scalableW > 0
-        ? (fullW - (naturalW - scalableW)) / scalableW
+        ? Math.max(0.05, (fullW - (naturalW - scalableW)) / scalableW)
         : 1.0
       const displayW = needsScale ? fullW : naturalW
 
@@ -197,6 +200,8 @@ export function TabSvgCanvas({
     return map
   }, [rows, rowLayouts, timeSigs, showTimeSigMap, showBpmMap])
 
+  useEffect(() => { onBeatPositionsChange?.(beatAbsolutePositions) }, [beatAbsolutePositions, onBeatPositionsChange])
+
   // Stable refs for direct beat handler (bypasses React render cycle for smooth animation)
   const beatAbsolutePositionsRef = useRef(beatAbsolutePositions)
   const trackRef = useRef(track)
@@ -215,7 +220,6 @@ export function TabSvgCanvas({
     fromRow: number
     toX: number
     toRow: number
-    colW: number
     rowEndX: number
   } | null>(null)
   const rafRef = useRef<number | null>(null)
@@ -255,14 +259,6 @@ export function TabSvgCanvas({
         const restDur = fillRests[fillIdx]
         durationMs = restDur ? (60 / bpm) * DURATION_BEATS[restDur] * 1000 : 500
       }
-      const isTied = beat?.tiedFrom === true
-      const colW = beat
-        ? beat.notes.reduce((max, n) => {
-            const { label } = formatFretLabel(n, isTied)
-            return Math.max(max, Math.max(label.length * 8 + 4, 18))
-          }, 18)
-        : 20
-
       const fromRow = fromPos.rowIdx
       const toRow = toPos?.rowIdx ?? fromPos.rowIdx
       const rowEndX = fromRow !== toRow
@@ -276,11 +272,7 @@ export function TabSvgCanvas({
         fromRow,
         toX: toPos?.x ?? fromPos.x,
         toRow,
-        colW,
         rowEndX,
-      }
-      if (playheadDivRef.current) {
-        playheadDivRef.current.style.width = `${colW}px`
       }
 
       // Scroll to keep the cursor row visible (bypasses React state to avoid re-renders)
@@ -317,7 +309,7 @@ export function TabSvgCanvas({
           ? anim.fromX + (anim.toX - anim.fromX) * t
           : anim.fromX + (anim.rowEndX - anim.fromX) * t
         const rowY = anim.fromRow * svgH + MEASURE_NUMBER_H
-        div.style.transform = `translate3d(${x - anim.colW / 2}px, ${rowY}px, 0)`
+        div.style.transform = `translate3d(${x - NOTE_CURSOR_W / 2}px, ${rowY}px, 0)`
         div.style.display = ''
       }
       rafRef.current = requestAnimationFrame(tick)
@@ -611,7 +603,7 @@ export function TabSvgCanvas({
           position: 'absolute',
           top: 0,
           left: 0,
-          width: 20,
+          width: NOTE_CURSOR_W,
           height: svgH - MEASURE_NUMBER_H,
           background: 'rgba(0,200,100,0.35)',
           pointerEvents: 'none',

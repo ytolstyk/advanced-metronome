@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthenticator } from '@aws-amplify/ui-react'
 import { Play, Pause, Square, Link, ExternalLink } from 'lucide-react'
@@ -31,14 +31,24 @@ export function PublishedTabViewPage() {
   const [highlightColumn, setHighlightColumn] = useState<{ measureIndex: number; beatIndex: number } | null>(null)
   const [startMeasure, setStartMeasure] = useState(0)
   const [startBeat, setStartBeat] = useState(0)
-  const [containerWidth, setContainerWidth] = useState(800)
+  const [containerWidth, setContainerWidth] = useState(0)
   const [copySuccess, setCopySuccess] = useState(false)
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const directBeatHandlerRef = useRef<((mi: number, bi: number, intendedTime: number) => void) | null>(null)
-const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, intendedTime: number) => void) => {
+  const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, intendedTime: number) => void) => {
     directBeatHandlerRef.current = handler
   }, [])
+
+  const beatPositionsRef = useRef<Map<string, { x: number; rowIdx: number }>>(new Map())
+  const handleBeatPositionsChange = useCallback((positions: Map<string, { x: number; rowIdx: number }>) => {
+    beatPositionsRef.current = positions
+  }, [])
+
+  const trackRef = useRef(track)
+  useEffect(() => { trackRef.current = track }, [track])
+  const highlightColumnRef = useRef(highlightColumn)
+  useEffect(() => { highlightColumnRef.current = highlightColumn }, [highlightColumn])
 
   useEffect(() => {
     if (!id) return
@@ -72,17 +82,68 @@ const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, int
     return () => { cancelled = true }
   }, [tab, authStatus])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = canvasRef.current
     if (!el) return
+    const style = getComputedStyle(el)
+    const pw = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+    setContainerWidth(el.getBoundingClientRect().width - pw)
     const ro = new ResizeObserver((entries) => { setContainerWidth(entries[0].contentRect.width) })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [track])
 
   useEffect(() => {
     return () => { playbackEngine.stop() }
   }, [])
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
+      const t = trackRef.current
+      if (!t) return
+      e.preventDefault()
+      const hc = highlightColumnRef.current
+      const positions = beatPositionsRef.current
+
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const flat: { mi: number; bi: number }[] = []
+        t.measures.forEach((m, mi) => m.beats.forEach((_, bi) => flat.push({ mi, bi })))
+        if (flat.length === 0) return
+        const cur = hc ? flat.findIndex((f) => f.mi === hc.measureIndex && f.bi === hc.beatIndex) : -1
+        const next = e.key === 'ArrowRight'
+          ? Math.min(flat.length - 1, cur + 1)
+          : Math.max(0, cur === -1 ? 0 : cur - 1)
+        const target = flat[next]
+        if (!target) return
+        setHighlightColumn({ measureIndex: target.mi, beatIndex: target.bi })
+        setStartMeasure(target.mi)
+        setStartBeat(target.bi)
+      } else {
+        if (!hc) return
+        const curPos = positions.get(`${hc.measureIndex}:${hc.beatIndex}`)
+        if (!curPos) return
+        const targetRow = curPos.rowIdx + (e.key === 'ArrowDown' ? 1 : -1)
+        if (targetRow < 0) return
+        let best: string | null = null
+        let bestDist = Infinity
+        for (const [key, pos] of positions) {
+          if (pos.rowIdx !== targetRow) continue
+          const d = Math.abs(pos.x - curPos.x)
+          if (d < bestDist) { bestDist = d; best = key }
+        }
+        if (!best) return
+        const parts = best.split(':')
+        const newMi = parseInt(parts[0]!, 10)
+        const newBi = parseInt(parts[1]!, 10)
+        setHighlightColumn({ measureIndex: newMi, beatIndex: newBi })
+        setStartMeasure(newMi)
+        setStartBeat(newBi)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, []) // intentional empty deps — all state accessed via refs
 
   const handleBeat = useCallback((mi: number, bi: number, intendedTime: number) => {
     directBeatHandlerRef.current?.(mi, bi, intendedTime)
@@ -220,7 +281,7 @@ const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, int
         <span className="pub-tab-hint">Click a beat to set playback start</span>
       </div>
 
-      <div className="pub-tab-canvas" ref={canvasRef}>
+      <div className="pub-tab-canvas">
         <TabEditorErrorBoundary>
           <TabSvgCanvas
             state={displayState}
@@ -230,6 +291,7 @@ const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, int
             onBeatMouseDown={handleBeatMouseDown}
             onBeatMouseEnter={() => {}}
             onRegisterBeatHandler={onRegisterBeatHandler}
+            onBeatPositionsChange={handleBeatPositionsChange}
             readOnly
             highlightColumn={highlightColumn}
           />

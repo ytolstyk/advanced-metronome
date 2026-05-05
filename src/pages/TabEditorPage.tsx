@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useRef, useCallback, useState, useMemo } from 'react'
+import { useReducer, useEffect, useLayoutEffect, useRef, useCallback, useState, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import './TabEditorPage.css'
 import type { TabCursor, TabTrack } from '../tabEditorTypes'
@@ -194,7 +194,7 @@ function SaveCopyDialog({ open, initialValues, nextVersion, onClose, onSave }: S
 export function TabEditorPage() {
   const [state, dispatch] = useReducer(tabEditorReducer, undefined, createInitialTabState)
   const canvasRef = useRef<HTMLDivElement>(null)
-  const [containerWidth, setContainerWidth] = useState(800)
+  const [containerWidth, setContainerWidth] = useState(0)
   const [menuOpen, setMenuOpen] = useState(true)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const digitBufRef = useRef<number | null>(null)
@@ -257,9 +257,12 @@ export function TabEditorPage() {
     if (state.isPlaying) playbackEngine.updateTrack(state.track)
   }, [state.track, state.isPlaying])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = canvasRef.current
     if (!el) return
+    const style = getComputedStyle(el)
+    const pw = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+    setContainerWidth(el.getBoundingClientRect().width - pw)
     const ro = new ResizeObserver((entries) => {
       setContainerWidth(entries[0].contentRect.width)
     })

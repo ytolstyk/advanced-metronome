@@ -44,6 +44,7 @@ export function beatHasBend(beat: Beat): boolean {
 export const BEAT_LEFT_PAD = 12        // fixed left space before every beat's note anchor (same for all durations)
 export const MEASURE_BEATS_OFFSET = 18 // x offset from measure left edge to first beat slot
 export const BEND_EXTRA_W = 16        // extra width added to beats that contain a bend
+export const NOTE_CURSOR_W = 18       // fixed width for blue selection cursor and green playback cursor
 
 export function rowSvgHeight(stringCount: number): number {
   return TOP_MARGIN + stringCount * STRING_SPACING + BOTTOM_PADDING

@@ -17,6 +17,7 @@ import {
   BPM_DISPLAY_FONT_SIZE,
   STRING_LABEL_FONT_SIZE,
   MEASURE_OVERFLOW_FONT_SIZE,
+  NOTE_CURSOR_W,
   stringY,
   rowSvgHeight,
   measureWidth,
@@ -366,9 +367,9 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         if (!pos) return null
         return (
           <rect
-            x={pos.x}
+            x={pos.cx - NOTE_CURSOR_W / 2}
             y={MEASURE_NUMBER_H}
-            width={pos.w}
+            width={NOTE_CURSOR_W}
             height={svgH - MEASURE_NUMBER_H}
             fill="rgba(59,130,246,0.22)"
             rx={2}
@@ -388,16 +389,10 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
 
         const isTied = beat.tiedFrom === true
 
-        // Use formatFretLabel to compute colW — same logic as per-string rendering below
-        const colW = beat.notes.reduce((max, n) => {
-          const { label } = formatFretLabel(n, isTied)
-          return Math.max(max, Math.max(label.length * 8 + 4, 18))
-        }, 18)
-
         return (
           <g key={beat.id}>
             {overlayFill !== 'none' && (
-              <rect x={beatCX - colW / 2} y={MEASURE_NUMBER_H} width={colW} height={svgH - MEASURE_NUMBER_H} fill={overlayFill} />
+              <rect x={beatCX - NOTE_CURSOR_W / 2} y={MEASURE_NUMBER_H} width={NOTE_CURSOR_W} height={svgH - MEASURE_NUMBER_H} fill={overlayFill} />
             )}
 
 
@@ -547,7 +542,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         return (
           <g key={`fill-${fillIdx}`}>
             {showCursor && (
-              <rect x={vCX - 9} y={MEASURE_NUMBER_H} width={18} height={svgH - MEASURE_NUMBER_H} fill="rgba(60,120,240,0.45)" />
+              <rect x={vCX - NOTE_CURSOR_W / 2} y={MEASURE_NUMBER_H} width={NOTE_CURSOR_W} height={svgH - MEASURE_NUMBER_H} fill="rgba(60,120,240,0.45)" />
             )}
 
             <RestSymbol
@@ -562,9 +557,9 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               const sy = stringY(cursor.stringIndex, stringCount)
               return (
                 <rect
-                  x={vCX - 10}
+                  x={vCX - NOTE_CURSOR_W / 2}
                   y={sy - 11}
-                  width={20}
+                  width={NOTE_CURSOR_W}
                   height={22}
                   fill="rgba(110,120,255,0.75)"
                   rx={2}
