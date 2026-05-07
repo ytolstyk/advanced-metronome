@@ -70,6 +70,10 @@ const CONNECTIONS_BASE: { label: string; key: NoteModifierKey; title: string }[]
 
 const PALM_MUTE_ENTRY = MODIFIERS_BASE.find((m) => m.key === 'palmMute')!
 
+const MODIFIER_SYMBOL: Record<string, string> = Object.fromEntries(
+  [...MODIFIERS_BASE, ...CONNECTIONS_BASE].map((m) => [m.key, m.label]),
+)
+
 interface TabEditorToolbarProps {
   state: TabEditorState
   dispatch: React.Dispatch<TabEditorAction>
@@ -121,7 +125,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
   const displayedDuration: DurationValue = currentBeat?.duration ?? activeDuration
   const displayedDot: DotModifier = currentBeat?.dot ?? activeDot
 
-  const currentNote = isNavigating ? undefined : currentBeat?.notes[cursor.stringIndex]
+  const currentNote = isNavigating ? undefined : currentBeat?.notes.find((n) => n.string === cursor.stringIndex)
   const isOnNote = !!currentNote && currentNote.fret >= 0
 
   const activeSet = isOnNote ? currentNote.modifiers : activeModifiers
@@ -135,7 +139,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
     const counts: Partial<Record<NoteModifierKey, number>> = {}
     if (noteSelection.length < 2) return counts
     for (const c of noteSelection) {
-      const note = state.track.measures[c.measureIndex]?.beats[c.beatIndex]?.notes[c.stringIndex]
+      const note = state.track.measures[c.measureIndex]?.beats[c.beatIndex]?.notes.find((n) => n.string === c.stringIndex)
       if (note && note.fret >= 0) {
         for (const k of Object.keys(note.modifiers) as NoteModifierKey[]) {
           if (note.modifiers[k]) counts[k] = (counts[k] ?? 0) + 1
@@ -248,8 +252,6 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
       return
     }
     if (isOnNote) {
-      if (key === 'legatoSlide') return
-      if (key === 'pullOff' || key === 'hammerOn') return
       dispatch({ type: 'APPLY_MODIFIER', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, modifier: key })
       return
     }
@@ -394,20 +396,31 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
       {/* Line break before Applied */}
       <div className="tab-toolbar-break" />
 
-      {/* Note info strip — shows applied effects on highlighted note */}
-      {(
-        <div className="tab-toolbar-group" data-group="note-info">
-          <span className="tab-tool-label">Applied</span>
-          <span className="tab-note-effects-strip">
-            {currentNote
-              ? (Object.keys(currentNote.modifiers) as (keyof typeof currentNote.modifiers)[])
-                  .filter((k) => currentNote.modifiers[k])
-                  .map((k) => MODIFIER_LABELS[k] ?? k)
-                  .join(' · ')
-              : ''}
-          </span>
-        </div>
-      )}
+      {/* Applied effects — interactive buttons for the highlighted note */}
+      <div className="tab-toolbar-group" data-group="note-info">
+        <span className="tab-tool-label">Applied</span>
+        {isOnNote &&
+          (Object.keys(currentNote.modifiers) as NoteModifierKey[])
+            .filter((k) => currentNote.modifiers[k])
+            .map((k) => (
+              <ToolBtn
+                key={k}
+                title={`Remove ${MODIFIER_LABELS[k] ?? k}`}
+                activeEffect={true}
+                onClick={() =>
+                  dispatch({
+                    type: 'APPLY_MODIFIER',
+                    measureIndex: mi,
+                    beatIndex: bi,
+                    stringIndex: cursor.stringIndex,
+                    modifier: k,
+                  })
+                }
+              >
+                {MODIFIER_SYMBOL[k] ?? k}
+              </ToolBtn>
+            ))}
+      </div>
     </div>
   )
 }
