@@ -22,6 +22,7 @@ interface TabSvgCanvasProps {
   readOnly?: boolean
   highlightColumn?: { measureIndex: number; beatIndex: number } | null
   forPrint?: boolean
+  isPlaybackPaused?: boolean
 }
 
 function getFillRests(
@@ -106,6 +107,7 @@ export function TabSvgCanvas({
   readOnly = false,
   highlightColumn,
   forPrint = false,
+  isPlaybackPaused = false,
 }: TabSvgCanvasProps) {
   const { track, cursor, selection, noteSelection, isPlaying } = state
 
@@ -295,8 +297,10 @@ export function TabSvgCanvas({
     if (!isPlaying) {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
-      prevPlayheadRowRef.current = -1
-      if (playheadDivRef.current) playheadDivRef.current.style.display = 'none'
+      if (!isPlaybackPaused) {
+        prevPlayheadRowRef.current = -1
+        if (playheadDivRef.current) playheadDivRef.current.style.display = 'none'
+      }
       return
     }
     function tick(now: number) {
@@ -320,7 +324,7 @@ export function TabSvgCanvas({
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
     }
-  }, [isPlaying, svgH])
+  }, [isPlaying, isPlaybackPaused, svgH])
 
   const [tuningModalOpen, setTuningModalOpen] = useState(false)
   const openTuningModal = useCallback(() => setTuningModalOpen(true), [])

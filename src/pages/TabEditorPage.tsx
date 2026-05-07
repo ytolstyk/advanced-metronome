@@ -207,6 +207,7 @@ export function TabEditorPage() {
   const [isNavigating, setIsNavigating] = useState(false)
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handlePlayRef = useRef<() => void>(() => {})
+  const [isPlaybackPaused, setIsPlaybackPaused] = useState(false)
 
   const { authStatus } = useAuthenticator(ctx => [ctx.authStatus])
   const location = useLocation()
@@ -557,7 +558,13 @@ export function TabEditorPage() {
     const ctx = ensureCtx()
     if (state.isPlaying) {
       playbackEngine.pause()
+      setIsPlaybackPaused(true)
       dispatch({ type: 'SET_PLAYING', isPlaying: false })
+    } else if (isPlaybackPaused) {
+      playbackEngine.resume()
+      setIsPlaybackPaused(false)
+      if (ctx.state === 'suspended') void ctx.resume()
+      dispatch({ type: 'SET_PLAYING', isPlaying: true })
     } else {
       playbackEngine.start(
         state.track,
@@ -567,6 +574,7 @@ export function TabEditorPage() {
           directBeatHandlerRef.current?.(mi, bi, intendedTime)
         },
         () => {
+          setIsPlaybackPaused(false)
           dispatch({ type: 'SET_PLAYING', isPlaying: false })
           dispatch({ type: 'SET_PLAYHEAD', measureIndex: 0, beatIndex: 0 })
         },
@@ -579,6 +587,7 @@ export function TabEditorPage() {
 
   function handleStop() {
     playbackEngine.stop()
+    setIsPlaybackPaused(false)
     dispatch({ type: 'SET_PLAYING', isPlaying: false })
     dispatch({ type: 'SET_PLAYHEAD', measureIndex: 0, beatIndex: 0 })
   }
@@ -700,6 +709,7 @@ export function TabEditorPage() {
           onBeatMouseDown={onBeatMouseDown}
           onBeatMouseEnter={onBeatMouseEnter}
           onRegisterBeatHandler={onRegisterBeatHandler}
+          isPlaybackPaused={isPlaybackPaused}
         />
       </TabEditorErrorBoundary>
 
