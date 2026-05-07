@@ -41,6 +41,17 @@ export function beatHasBend(beat: Beat): boolean {
   return beat.notes.some((n) => n.modifiers.bend)
 }
 
+export function dotMultiplier(beat: Beat): number {
+  if (beat.dot.doubleDotted) return 1.75
+  if (beat.dot.dotted) return 1.5
+  if (beat.dot.triplet) return 2 / 3
+  return 1
+}
+
+export function beatWidth(beat: Beat, scale = 1.0): number {
+  return BEAT_WIDTHS[beat.duration] * dotMultiplier(beat) * scale
+}
+
 export const BEAT_LEFT_PAD = 12        // fixed left space before every beat's note anchor (same for all durations)
 export const MEASURE_BEATS_OFFSET = 18 // x offset from measure left edge to first beat slot
 export const BEND_EXTRA_W = 16        // extra width added to beats that contain a bend
@@ -57,7 +68,7 @@ export function stringY(si: number): number {
 // fillRests: list of rest durations to show after existing beats (fill remaining measure capacity)
 // beatWidthScale: multiplier applied only to BEAT_WIDTHS (the post-note spacing), not to any padding or structural widths
 export function measureWidth(m: Measure, showTimeSig = false, fillRests: DurationValue[] = [], showBpm = false, beatWidthScale = 1.0): number {
-  const beatsW = m.beats.reduce((acc, b) => acc + BEAT_LEFT_PAD + BEAT_WIDTHS[b.duration] * beatWidthScale + (beatHasBend(b) ? BEND_EXTRA_W : 0), 0)
+  const beatsW = m.beats.reduce((acc, b) => acc + BEAT_LEFT_PAD + beatWidth(b, beatWidthScale) + (beatHasBend(b) ? BEND_EXTRA_W : 0), 0)
   const fillW = fillRests.reduce((acc, d) => acc + BEAT_LEFT_PAD + BEAT_WIDTHS[d] * beatWidthScale, 0)
   return MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0) + beatsW + fillW + MEASURE_END_PAD + BARLINE_W
 }
@@ -88,7 +99,7 @@ export function computeBeatPositions(m: Measure, showTimeSig = false, fillRests:
   let x = MEASURE_BEATS_OFFSET + (showTimeSig ? TIME_SIG_W : 0) + (showBpm ? BPM_LABEL_W : 0)
   for (let i = 0; i < m.beats.length; i++) {
     const beat = m.beats[i]!
-    const rightW = BEAT_WIDTHS[beat.duration] * beatWidthScale
+    const rightW = beatWidth(beat, beatWidthScale)
     const w = BEAT_LEFT_PAD + rightW + (beatHasBend(beat) ? BEND_EXTRA_W : 0)
     positions.push({ x, cx: x + BEAT_LEFT_PAD, w })
     x += w

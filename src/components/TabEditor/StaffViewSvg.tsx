@@ -1,6 +1,6 @@
 import type { DurationValue, Measure, TabCursor, TabTrack } from '../../tabEditorTypes'
 import { Duration } from '../../tabEditorTypes'
-import { BEAT_WIDTHS } from '../../tabEditorState'
+import { beatWidth } from './tabSvgConstants'
 
 // ── Staff notation constants ─────────────────────────────────────────────────
 
@@ -146,7 +146,7 @@ export function StaffViewSvg({
     <div className="tab-staff-view">
       {rows.map((rowMeasures, rowIdx) => {
         const totalBeatsW = rowMeasures.reduce(
-          (s, m) => s + m.beats.reduce((sb, b) => sb + BEAT_WIDTHS[b.duration], 0),
+          (s, m) => s + m.beats.reduce((sb, b) => sb + beatWidth(b), 0),
           0,
         )
         const svgW =
@@ -161,7 +161,7 @@ export function StaffViewSvg({
 
           for (let bi = 0; bi < measure.beats.length; bi++) {
             const beat = measure.beats[bi]
-            const bw = BEAT_WIDTHS[beat.duration]
+            const bw = beatWidth(beat)
             const xMid = xCursor + bw / 2
             const isBeamable = BEAMABLE_DURATIONS.includes(beat.duration)
 
@@ -268,7 +268,7 @@ export function StaffViewSvg({
                 const mi = globalMeasureMap.get(m.id) ?? 0
                 xBar += MEASURE_LABEL_W
                 const xMeasureStart = xBar
-                const mw = m.beats.reduce((s, b) => s + BEAT_WIDTHS[b.duration], 0)
+                const mw = m.beats.reduce((s, b) => s + beatWidth(b), 0)
                 xBar += mw
                 return (
                   <g key={i}>

@@ -4,7 +4,7 @@ import type { DurationValue, Measure, TabEditorState } from '../../tabEditorType
 import type { TabEditorAction } from '../../tabEditorState'
 import { BEAT_WIDTHS, measureCapacityTicks, measureUsedTicks, computeFillRests, effectiveBpmAt, beatDurationSeconds, buildOpenMidi, DURATION_TICKS } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
-import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, stringY, NOTE_CURSOR_W } from './tabSvgConstants'
+import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, stringY, NOTE_CURSOR_W, beatWidth } from './tabSvgConstants'
 import { TUNINGS } from '../../data/tunings'
 import type { StringCount } from '../../data/tunings'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -91,7 +91,7 @@ function rowScalableWidth(
   return rowMeasures.reduce((s, m, i) => {
     const globalI = rowStart + i
     const fillRests = getFillRests(m, timeSigs[globalI]!)
-    return s + m.beats.reduce((acc, b) => acc + BEAT_WIDTHS[b.duration], 0) + fillRests.reduce((acc, d) => acc + BEAT_WIDTHS[d], 0)
+    return s + m.beats.reduce((acc, b) => acc + beatWidth(b), 0) + fillRests.reduce((acc, d) => acc + BEAT_WIDTHS[d], 0)
   }, 0)
 }
 
