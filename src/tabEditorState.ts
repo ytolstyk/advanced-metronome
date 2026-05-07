@@ -122,7 +122,7 @@ export function beatDurationSeconds(duration: DurationValue, dot: DotModifier, b
 }
 
 export function measureCapacityTicks(timeSig: { numerator: number; denominator: number }): number {
-  return (timeSig.numerator * 960 * 4) / timeSig.denominator
+  return (timeSig.numerator * 960) / timeSig.denominator
 }
 
 export function measureUsedTicks(beats: Beat[]): number {
