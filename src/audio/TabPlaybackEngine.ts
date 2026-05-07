@@ -1,6 +1,6 @@
 import { playTabNote } from './tabGuitarSynths'
 import type { TabTrack } from '../tabEditorTypes'
-import { beatDurationSeconds, fretToFreq, effectiveBpmAt, computeFillRests, measureCapacityBeats, measureUsedBeats, DURATION_BEATS } from '../tabEditorState'
+import { beatDurationSeconds, fretToFreq, effectiveBpmAt, computeFillRests, measureCapacityTicks, measureUsedTicks, DURATION_TICKS } from '../tabEditorState'
 
 const SCHEDULE_AHEAD_TIME = 0.1
 const SCHEDULER_INTERVAL = 25
@@ -16,8 +16,8 @@ export class TabPlaybackEngine {
   private isPaused = false
   private onBeat: ((mi: number, bi: number, intendedTime: number) => void) | null = null
   private onStop: (() => void) | null = null
-  private prevNoteKill: (GainNode | null)[] = []
-  private prevLetRing: boolean[] = []
+  private prevNoteKill: Map<number, GainNode | null> = new Map()
+  private prevLetRing: Map<number, boolean> = new Map()
 
   private ensureCtx(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext()
@@ -43,9 +43,8 @@ export class TabPlaybackEngine {
     this.nextBeatTime = ctx.currentTime + 0.05
     this.isRunning = true
     this.isPaused = false
-    const n = track.stringCount
-    this.prevNoteKill = Array(n).fill(null) as null[]
-    this.prevLetRing = Array(n).fill(false) as boolean[]
+    this.prevNoteKill = new Map()
+    this.prevLetRing = new Map()
 
     this.timer = setInterval(() => this.scheduler(), SCHEDULER_INTERVAL)
   }
@@ -75,17 +74,12 @@ export class TabPlaybackEngine {
     }
     this.isRunning = false
     this.isPaused = false
-    this.prevNoteKill = []
-    this.prevLetRing = []
+    this.prevNoteKill = new Map()
+    this.prevLetRing = new Map()
   }
 
   updateTrack(track: TabTrack): void {
     this.track = track
-    if (track.stringCount !== this.prevNoteKill.length) {
-      const n = track.stringCount
-      this.prevNoteKill = Array(n).fill(null) as null[]
-      this.prevLetRing = Array(n).fill(false) as boolean[]
-    }
   }
 
   private findNextFreqOnString(measureIndex: number, beatIndex: number, stringIndex: number, openMidi: number): number | null {
@@ -97,8 +91,8 @@ export class TabPlaybackEngine {
       const measure = track.measures[mi]
       if (!measure) break
       while (bi < measure.beats.length) {
-        const note = measure.beats[bi]?.notes[stringIndex]
-        if (note && note.fret >= 0) return fretToFreq(openMidi, note.fret)
+        const note = measure.beats[bi]?.notes.find(n => n.string === stringIndex)
+        if (note) return fretToFreq(openMidi, note.fret)
         bi++
       }
       mi++
@@ -135,16 +129,16 @@ export class TabPlaybackEngine {
     if (!measure) { this.measureIndex++; this.beatIndex = 0; return }
 
     if (this.beatIndex >= measure.beats.length) {
-      const timeSig = measure.timeSignature ?? track.globalTimeSig
-      const remaining = measureCapacityBeats(timeSig) - measureUsedBeats(measure.beats)
-      const fillRests = remaining > 1e-9 ? computeFillRests(remaining) : []
+      const timeSig = track.masterBars[this.measureIndex]?.timeSignature ?? track.masterBars[0]!.timeSignature
+      const remainingTicks = measureCapacityTicks(timeSig) - measureUsedTicks(measure.beats)
+      const fillRests = remainingTicks > 0 ? computeFillRests(remainingTicks) : []
       const fillIdx = this.beatIndex - measure.beats.length
 
       if (fillIdx < fillRests.length) {
         const restDuration = fillRests[fillIdx]!
         const t = this.nextBeatTime
         const bpm = effectiveBpmAt(track, this.measureIndex)
-        const dur = (60 / bpm) * DURATION_BEATS[restDuration]
+        const dur = (DURATION_TICKS[restDuration] / 240) * (60 / bpm)
 
         const mi = this.measureIndex
         const bi = this.beatIndex
@@ -167,15 +161,15 @@ export class TabPlaybackEngine {
     const dur = beatDurationSeconds(beat.duration, beat.dot, bpm)
 
     // Schedule notes for all strings
-    for (let s = 0; s < beat.notes.length; s++) {
-      const note = beat.notes[s]
-      const openMidi = track.openMidi[s]
-      if (note.fret < 0 || openMidi === undefined) continue
+    for (const note of beat.notes) {
+      const s = note.string  // 1-based
+      const openMidi = track.openMidi[s - 1]  // high→low array, 0-based
+      if (openMidi === undefined) continue
 
-      if (this.prevNoteKill[s] && !this.prevLetRing[s]) {
-        const kg = this.prevNoteKill[s]!
-        kg.gain.cancelAndHoldAtTime(t)
-        kg.gain.linearRampToValueAtTime(0, t + 0.005)
+      const prevKill = this.prevNoteKill.get(s)
+      if (prevKill && !this.prevLetRing.get(s)) {
+        prevKill.gain.cancelAndHoldAtTime(t)
+        prevKill.gain.linearRampToValueAtTime(0, t + 0.005)
       }
 
       const freq = fretToFreq(openMidi, note.fret)
@@ -195,8 +189,8 @@ export class TabPlaybackEngine {
         vol: 0.65,
       })
 
-      this.prevNoteKill[s] = killNode
-      this.prevLetRing[s] = note.modifiers.letRing === true
+      this.prevNoteKill.set(s, killNode)
+      this.prevLetRing.set(s, note.modifiers.letRing === true)
     }
 
     // Fire onBeat callback at the right time

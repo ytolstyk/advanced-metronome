@@ -1,15 +1,17 @@
 import { useReducer, useEffect, useLayoutEffect, useRef, useCallback, useState, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import './TabEditorPage.css'
-import type { TabCursor, TabTrack } from '../tabEditorTypes'
+import type { TabCursor } from '../tabEditorTypes'
 import {
   tabEditorReducer,
   createInitialTabState,
   saveTabTrack,
   fretToFreq,
-  quarterBeatsToNearestDuration,
-  measureCapacityBeats,
-  measureUsedBeats,
+  ticksToNearestDuration,
+  measureCapacityTicks,
+  measureUsedTicks,
+  migrateTrackIfNeeded,
+  DURATION_LABELS,
 } from '../tabEditorState'
 import { TabPlaybackEngine } from '../audio/TabPlaybackEngine'
 import { pluckString } from '../audio/pluckString'
@@ -211,9 +213,9 @@ export function TabEditorPage() {
 
   // Handle tab imported from the public library (navigate('/tab-editor', { state: { importedTrack, ... } }))
   useEffect(() => {
-    const ls = location.state as { importedTrack?: TabTrack; sourcePublishedTabId?: string; isOwner?: boolean } | null
+    const ls = location.state as { importedTrack?: unknown; sourcePublishedTabId?: string; isOwner?: boolean } | null
     if (!ls?.importedTrack) return
-    dispatch({ type: 'LOAD_TRACK', track: ls.importedTrack })
+    dispatch({ type: 'LOAD_TRACK', track: migrateTrackIfNeeded(ls.importedTrack) })
     setLoadedCloudId(null)
     setPublishedTabId(ls.isOwner && ls.sourcePublishedTabId ? ls.sourcePublishedTabId : null)
     setCleanSnapshot(JSON.stringify(ls.importedTrack))
@@ -284,16 +286,16 @@ export function TabEditorPage() {
       const played = new Set<number>()
       if (overrideFret) {
         const { stringIndex, fret } = overrideFret
-        if (fret >= 0 && openMidi[stringIndex] !== undefined) {
-          pluckString(ctx, fretToFreq(openMidi[stringIndex]!, fret), ctx.currentTime, 0.7)
+        const open = openMidi[stringIndex - 1]  // 1-based → 0-based high→low array
+        if (fret >= 0 && open !== undefined) {
+          pluckString(ctx, fretToFreq(open, fret), ctx.currentTime, 0.7)
           played.add(stringIndex)
         }
       }
       if (beat) {
-        beat.notes.forEach((note, si) => {
-          if (played.has(si)) return
-          if (note.fret < 0) return
-          const open = openMidi[si]
+        beat.notes.forEach((note) => {
+          if (played.has(note.string)) return
+          const open = openMidi[note.string - 1]  // 1-based → 0-based
           if (open === undefined) return
           pluckString(ctx, fretToFreq(open, note.fret), ctx.currentTime, 0.7)
         })
@@ -404,8 +406,8 @@ export function TabEditorPage() {
           e.preventDefault()
           const beat = state.track.measures[cursor.measureIndex]?.beats[cursor.beatIndex]
           if (!beat) return
-          const currentNote = beat.notes[cursor.stringIndex]
-          if (currentNote && currentNote.fret >= 0) {
+          const currentNote = beat.notes.find(n => n.string === cursor.stringIndex)
+          if (currentNote) {
             dispatch({
               type: 'DELETE_NOTE',
               measureIndex: cursor.measureIndex,
@@ -416,13 +418,12 @@ export function TabEditorPage() {
           }
           // Current string is empty — delete the beat only if all notes are empty
           // or all non-empty notes are highlighted
-          const hasUnhighlightedNote = beat.notes.some((n, si) => {
-            if (n.fret < 0) return false
+          const hasUnhighlightedNote = beat.notes.some((n) => {
             return !state.noteSelection.some(
               (sel) =>
                 sel.measureIndex === cursor.measureIndex &&
                 sel.beatIndex === cursor.beatIndex &&
-                sel.stringIndex === si,
+                sel.stringIndex === n.string,
             )
           })
           if (!hasUnhighlightedNote) {
@@ -540,9 +541,10 @@ export function TabEditorPage() {
   }
 
   function loadTab(saved: CloudTabTrack) {
-    setCleanSnapshot(JSON.stringify(saved.track))
+    const track = migrateTrackIfNeeded(saved.track)
+    setCleanSnapshot(JSON.stringify(track))
     setLoadedCloudId(saved.id)
-    dispatch({ type: 'LOAD_TRACK', track: saved.track })
+    dispatch({ type: 'LOAD_TRACK', track })
     setLoadDialogOpen(false)
   }
 
@@ -641,22 +643,21 @@ export function TabEditorPage() {
   if (overflow) {
     const measure = state.track.measures[overflow.measureIndex]
     if (measure) {
-      const timeSig = measure.timeSignature ?? state.track.globalTimeSig
-      const capacity = measureCapacityBeats(timeSig)
-      const used = measureUsedBeats(
+      const timeSig = state.track.masterBars[overflow.measureIndex]?.timeSignature ?? state.track.masterBars[0]!.timeSignature
+      const capacityTicks = measureCapacityTicks(timeSig)
+      const usedTicks = measureUsedTicks(
         overflow.beatIndex === measure.beats.length
           ? measure.beats
           : measure.beats.filter((_, i) => i !== overflow.beatIndex),
       )
-      const remaining = Math.max(0, capacity - used)
-      const { duration: trimDur } = quarterBeatsToNearestDuration(remaining)
-      trimLabel = trimDur.replace('thirtysecond', '1/32').replace('sixtyfourth', '1/64')
-        .replace('sixteenth', '1/16').replace('eighth', '1/8').replace('quarter', '1/4')
-        .replace('half', '1/2').replace('whole', 'whole')
+      const remainingTicks = Math.max(0, capacityTicks - usedTicks)
+      const { duration: trimDur } = ticksToNearestDuration(remainingTicks)
+      trimLabel = DURATION_LABELS[trimDur] ?? String(trimDur)
 
-      const overshootStr = overflow.overshootBeats === Math.round(overflow.overshootBeats)
-        ? `${overflow.overshootBeats} beat${overflow.overshootBeats !== 1 ? 's' : ''}`
-        : `${overflow.overshootBeats.toFixed(2)} beats`
+      const overshootBeats = overflow.overshootTicks / 240
+      const overshootStr = overshootBeats === Math.round(overshootBeats)
+        ? `${overshootBeats} beat${overshootBeats !== 1 ? 's' : ''}`
+        : `${overshootBeats.toFixed(2)} beats`
       bleedLabel = `Bleed ${overshootStr} into next measure`
     }
   }

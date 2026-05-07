@@ -1,11 +1,15 @@
-export type DurationValue =
-  | 'whole'
-  | 'half'
-  | 'quarter'
-  | 'eighth'
-  | 'sixteenth'
-  | 'thirtysecond'
-  | 'sixtyfourth'
+// Duration values matching alphaTab's Duration enum integers
+export const Duration = {
+  Whole:        1,
+  Half:         2,
+  Quarter:      4,
+  Eighth:       8,
+  Sixteenth:    16,
+  ThirtySecond: 32,
+  SixtyFourth:  64,
+} as const
+
+export type DurationValue = (typeof Duration)[keyof typeof Duration]
 
 export interface DotModifier {
   dotted: boolean
@@ -37,7 +41,8 @@ export interface NoteModifiers {
 export type NoteModifierKey = keyof NoteModifiers
 
 export interface TabNote {
-  fret: number // 0-24; -1 = no note on this string
+  string: number  // 1-based; 1 = highest-pitched string (alphaTab convention); always >= 1
+  fret: number    // 0-24; always >= 0 (notes absent from beat.notes array = no note)
   modifiers: NoteModifiers
   bendAmount?: number // 0.5–5 in 0.5 increments; defaults to 1 when modifiers.bend is set
 }
@@ -46,40 +51,45 @@ export interface Beat {
   id: string
   duration: DurationValue
   dot: DotModifier
-  notes: TabNote[] // index 0 = lowest string
-  tiedFrom?: true  // this beat is a tied continuation from the previous measure
-  tiedTo?: true    // this beat ties into the first beat of the next measure
+  notes: TabNote[]  // sparse; each note has .string (1-based); fret always >= 0
+  tiedFrom?: true   // this beat is a tied continuation from the previous measure
+  tiedTo?: true     // this beat ties into the first beat of the next measure
   dynamics?: 'ppp' | 'pp' | 'p' | 'mp' | 'mf' | 'f' | 'ff' | 'fff'
   repeatStart?: true
   repeatEnd?: true
   tempoChange?: number
 }
 
+// Corresponds to alphaTab's MasterBar — holds time sig and optional BPM for a measure.
+// masterBars[i] corresponds to measures[i]. masterBars[0].bpm must always be set.
+export interface MasterBar {
+  timeSignature: { numerator: number; denominator: number }
+  bpm?: number  // undefined = inherit from previous MasterBar's bpm
+}
+
 export interface Measure {
   id: string
-  timeSignature?: { numerator: number; denominator: number }
-  bpm?: number
   beats: Beat[]
 }
 
 export interface TabTrack {
+  schemaVersion: 2  // v2 = alphaTab-compatible model
   title: string
   artist?: string
   tabAuthor?: string
   year?: string
   version?: number
-  globalBpm: number
-  globalTimeSig: { numerator: number; denominator: number }
+  masterBars: MasterBar[]  // masterBars[i] <-> measures[i]; always non-empty
   stringCount: 6 | 7 | 8
   tuningName: string
-  openMidi: number[] // MIDI note per open string, low→high
+  openMidi: number[]  // high→low order: openMidi[0] = string 1 (highest pitch)
   measures: Measure[]
 }
 
 export interface TabCursor {
   measureIndex: number
-  beatIndex: number // can equal measure.beats.length to point at the virtual pending slot
-  stringIndex: number // 0 = lowest string
+  beatIndex: number  // can equal measure.beats.length to point at the virtual pending slot
+  stringIndex: number  // 1-based; 1 = highest-pitched string
 }
 
 export interface TabSelection {
@@ -98,7 +108,7 @@ export interface OverflowPending {
   stringIndex: number
   newDuration: DurationValue
   newDot: DotModifier
-  overshootBeats: number // quarter-beats past measure capacity
+  overshootTicks: number  // ticks past measure capacity (replaces overshootBeats)
 }
 
 export interface TabEditorState {

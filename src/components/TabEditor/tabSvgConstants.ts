@@ -38,7 +38,7 @@ export const TIME_SIG_W = 40 // horizontal space reserved for a stacked time sig
 export const BPM_LABEL_W = 52 // horizontal space reserved for a BPM display
 
 export function beatHasBend(beat: Beat): boolean {
-  return beat.notes.some((n) => n.fret >= 0 && n.modifiers.bend)
+  return beat.notes.some((n) => n.modifiers.bend)
 }
 
 export const BEAT_LEFT_PAD = 12        // fixed left space before every beat's note anchor (same for all durations)
@@ -50,8 +50,8 @@ export function rowSvgHeight(stringCount: number): number {
   return TOP_MARGIN + stringCount * STRING_SPACING + BOTTOM_PADDING
 }
 
-export function stringY(si: number, stringCount: number): number {
-  return TOP_MARGIN + (stringCount - 1 - si) * STRING_SPACING
+export function stringY(si: number): number {
+  return TOP_MARGIN + (si - 1) * STRING_SPACING
 }
 
 // fillRests: list of rest durations to show after existing beats (fill remaining measure capacity)

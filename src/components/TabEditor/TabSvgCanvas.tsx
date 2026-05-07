@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import type { RefObject } from 'react'
 import type { DurationValue, Measure, TabEditorState } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
-import { BEAT_WIDTHS, measureCapacityBeats, measureUsedBeats, computeFillRests, effectiveBpmAt, beatDurationSeconds, buildOpenMidi, DURATION_BEATS } from '../../tabEditorState'
+import { BEAT_WIDTHS, measureCapacityTicks, measureUsedTicks, computeFillRests, effectiveBpmAt, beatDurationSeconds, buildOpenMidi, DURATION_TICKS } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
 import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, stringY, NOTE_CURSOR_W } from './tabSvgConstants'
 import { TUNINGS } from '../../data/tunings'
@@ -28,10 +28,10 @@ function getFillRests(
   measure: Measure,
   timeSig: { numerator: number; denominator: number },
 ): DurationValue[] {
-  const capacity = measureCapacityBeats(timeSig)
-  const used = measureUsedBeats(measure.beats)
+  const capacity = measureCapacityTicks(timeSig)
+  const used = measureUsedTicks(measure.beats)
   const remaining = capacity - used
-  return remaining > 1e-9 ? computeFillRests(remaining) : []
+  return remaining > 0 ? computeFillRests(remaining) : []
 }
 
 function computeRows(
@@ -111,22 +111,21 @@ export function TabSvgCanvas({
 
   const svgH = rowSvgHeight(track.stringCount)
 
-  const showTimeSigMap = useMemo<boolean[]>(() => track.measures.map((m, i) => {
+  const showTimeSigMap = useMemo<boolean[]>(() => track.measures.map((_, i) => {
     if (i === 0) return true
-    const prev = track.measures[i - 1]
-    const prevSig = prev.timeSignature ?? track.globalTimeSig
-    const curSig = m.timeSignature ?? track.globalTimeSig
+    const prevSig = track.masterBars[i - 1]?.timeSignature ?? track.masterBars[0]!.timeSignature
+    const curSig = track.masterBars[i]?.timeSignature ?? track.masterBars[0]!.timeSignature
     return prevSig.numerator !== curSig.numerator || prevSig.denominator !== curSig.denominator
-  }), [track.measures, track.globalTimeSig])
+  }), [track.measures, track.masterBars])
 
   const timeSigs = useMemo(
-    () => track.measures.map((m) => m.timeSignature ?? track.globalTimeSig),
-    [track.measures, track.globalTimeSig],
+    () => track.measures.map((_, i) => track.masterBars[i]?.timeSignature ?? track.masterBars[0]!.timeSignature),
+    [track.measures, track.masterBars],
   )
 
   const showBpmMap = useMemo<boolean[]>(
-    () => track.measures.map((m, i) => i === 0 || m.bpm !== undefined),
-    [track.measures],
+    () => track.measures.map((_, i) => i === 0 || track.masterBars[i]?.bpm !== undefined),
+    [track.measures, track.masterBars],
   )
 
   const effectiveBpms = useMemo<number[]>(
@@ -239,7 +238,7 @@ export function TabSvgCanvas({
       if (!fromPos) return
 
       const measure = currentTrack.measures[mi]
-      const timeSig = measure?.timeSignature ?? currentTrack.globalTimeSig
+      const timeSig = currentTrack.masterBars[mi]?.timeSignature ?? currentTrack.masterBars[0]!.timeSignature
       const fillRests = measure ? getFillRests(measure, timeSig) : []
       const totalVisualBeats = (measure?.beats.length ?? 0) + fillRests.length
 
@@ -259,7 +258,7 @@ export function TabSvgCanvas({
       } else {
         const fillIdx = bi - (measure?.beats.length ?? 0)
         const restDur = fillRests[fillIdx]
-        durationMs = restDur ? (60 / bpm) * DURATION_BEATS[restDur] * 1000 : 500
+        durationMs = restDur ? ((DURATION_TICKS[restDur] ?? 240) / 240) * (60 / bpm) * 1000 : 500
       }
       const fromRow = fromPos.rowIdx
       const toRow = toPos?.rowIdx ?? fromPos.rowIdx
@@ -348,8 +347,8 @@ export function TabSvgCanvas({
   function openMeasureErrorModal(mi: number) {
     const m = track.measures[mi]
     if (!m) return
-    const used = measureUsedBeats(m.beats)
-    const suggested = suggestTimeSigForBeats(used)
+    const usedBeats = measureUsedTicks(m.beats) / 240
+    const suggested = suggestTimeSigForBeats(usedBeats)
     setMeasureErrorModal({ mi, showTimeSig: false, timeSigNum: String(suggested.numerator), timeSigDen: String(suggested.denominator) })
   }
 
@@ -400,14 +399,18 @@ export function TabSvgCanvas({
   }
 
   function openTimeSigEditor(mi: number) {
-    const m = track.measures[mi]
-    const sig = m.timeSignature ?? track.globalTimeSig
+    const sig = track.masterBars[mi]?.timeSignature ?? track.masterBars[0]!.timeSignature
     setTimingChangeEdit({ mi, num: String(sig.numerator), den: String(sig.denominator) })
   }
 
   function findTimingRangeEnd(fromIndex: number): number {
-    const next = track.measures.findIndex((m, i) => i > fromIndex && m.timeSignature !== undefined)
-    return next === -1 ? track.measures.length : next
+    const fromSig = track.masterBars[fromIndex]?.timeSignature
+    if (!fromSig) return track.measures.length
+    for (let i = fromIndex + 1; i < track.masterBars.length; i++) {
+      const sig = track.masterBars[i]?.timeSignature
+      if (sig && (sig.numerator !== fromSig.numerator || sig.denominator !== fromSig.denominator)) return i
+    }
+    return track.measures.length
   }
 
   function submitTimingChange() {
@@ -449,7 +452,7 @@ export function TabSvgCanvas({
             {rowMeasures.map((measure, mIdx) => {
               const mi = globalMeasureMap.get(measure.id) ?? 0
               const showTs = showTimeSigMap[mi] ?? false
-              const sig = measure.timeSignature ?? track.globalTimeSig
+              const sig = track.masterBars[mi]?.timeSignature ?? track.masterBars[0]!.timeSignature
               const fillRests = getFillRests(measure, sig)
               return (
                 <TabMeasureSvg
@@ -467,7 +470,7 @@ export function TabSvgCanvas({
                   timeSig={sig}
                   fillRests={fillRests}
                   showBpm={showBpmMap[mi] ?? false}
-                  bpm={effectiveBpms[mi] ?? track.globalBpm}
+                  bpm={effectiveBpms[mi]}
                   beatWidthScale={beatWidthScale}
                   onTimeSigClick={readOnly ? undefined : openTimeSigEditor}
                   onBpmClick={readOnly ? undefined : openBpmEditor}
@@ -498,16 +501,17 @@ export function TabSvgCanvas({
                   const nextMeasure = track.measures[nextGlobalMI]
                   if (!nextMeasure || !nextMeasure.beats[0]?.tiedFrom) return
 
-                  // Find which string carries the tie (first non-empty string in the tiedFrom beat)
+                  // Find which string carries the tie (first note in the tiedFrom beat)
                   const tieBeat = nextMeasure.beats[0]!
-                  const si = tieBeat.notes.findIndex((n) => n.fret >= 0)
-                  if (si < 0) return
+                  const tieNote = tieBeat.notes[0]
+                  if (!tieNote) return
+                  const si = tieNote.string  // 1-based
 
-                  const noteY = stringY(si, track.stringCount)
+                  const noteY = stringY(si)
                   const y0 = noteY + TIE_Y_OFFSET
                   const y1 = y0 + TIE_DIP
 
-                  const srcTimeSig = measure.timeSignature ?? track.globalTimeSig
+                  const srcTimeSig = track.masterBars[globalMI]?.timeSignature ?? track.masterBars[0]!.timeSignature
                   const srcFill = getFillRests(measure, srcTimeSig)
                   const srcPositions = computeBeatPositions(measure, showTimeSigMap[globalMI] ?? false, srcFill, showBpmMap[globalMI] ?? false, beatWidthScale)
                   const srcPos = srcPositions[bi]
@@ -520,7 +524,7 @@ export function TabSvgCanvas({
 
                   if (nextInRow) {
                     // Same row — single smooth cubic bezier
-                    const dstTimeSig = nextMeasure.timeSignature ?? track.globalTimeSig
+                    const dstTimeSig = track.masterBars[nextGlobalMI]?.timeSignature ?? track.masterBars[0]!.timeSignature
                     const dstFill = getFillRests(nextMeasure, dstTimeSig)
                     const dstPositions = computeBeatPositions(nextMeasure, showTimeSigMap[nextGlobalMI] ?? false, dstFill, showBpmMap[nextGlobalMI] ?? false, beatWidthScale)
                     const dstPos = dstPositions[0]
@@ -564,13 +568,14 @@ export function TabSvgCanvas({
                     const prevMeasure = track.measures[prevGlobalMI]
                     const lastBeat = prevMeasure?.beats[prevMeasure.beats.length - 1]
                     if (lastBeat?.tiedTo) {
-                      const si = beat0.notes.findIndex((n) => n.fret >= 0)
-                      if (si >= 0) {
-                        const noteY = stringY(si, track.stringCount)
+                      const entryNote = beat0.notes[0]
+                      const si = entryNote?.string ?? -1
+                      if (si >= 1) {
+                        const noteY = stringY(si)
                         const y0 = noteY + TIE_Y_OFFSET
                         const y1 = y0 + TIE_DIP
 
-                        const dstTimeSig = measure.timeSignature ?? track.globalTimeSig
+                        const dstTimeSig = track.masterBars[globalMI]?.timeSignature ?? track.masterBars[0]!.timeSignature
                         const dstFill = getFillRests(measure, dstTimeSig)
                         const dstPositions = computeBeatPositions(measure, showTimeSigMap[globalMI] ?? false, dstFill, showBpmMap[globalMI] ?? false, beatWidthScale)
                         const dstPos = dstPositions[0]
@@ -700,8 +705,7 @@ export function TabSvgCanvas({
               {
                 label: 'Change timing',
                 action: () => {
-                  const m = track.measures[measureMenu.mi]!
-                  const sig = m.timeSignature ?? track.globalTimeSig
+                  const sig = track.masterBars[measureMenu.mi]?.timeSignature ?? track.masterBars[0]!.timeSignature
                   setTimingChangeEdit({ mi: measureMenu.mi, num: String(sig.numerator), den: String(sig.denominator) })
                   closeMeasureMenu()
                 },
@@ -830,7 +834,7 @@ export function TabSvgCanvas({
 
       {/* Bend amount picker */}
       {bendEdit !== null && (() => {
-        const note = track.measures[bendEdit.mi]?.beats[bendEdit.bi]?.notes[bendEdit.si]
+        const note = track.measures[bendEdit.mi]?.beats[bendEdit.bi]?.notes.find(n => n.string === bendEdit.si)
         const current = note?.bendAmount ?? 1
         const BEND_VALUES = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
         function fmt(v: number): string {
@@ -995,10 +999,11 @@ export function TabSvgCanvas({
       {measureErrorModal !== null && (() => {
         const m = track.measures[measureErrorModal.mi]
         if (!m) return null
-        const sig = m.timeSignature ?? track.globalTimeSig
-        const capacity = measureCapacityBeats(sig)
-        const used = measureUsedBeats(m.beats)
-        const delta = used - capacity
+        const sig = track.masterBars[measureErrorModal.mi]?.timeSignature ?? track.masterBars[0]!.timeSignature
+        const capacityTicks = measureCapacityTicks(sig)
+        const usedTicks = measureUsedTicks(m.beats)
+        const delta = (usedTicks - capacityTicks) / 240  // quarter beats for display
+        const capacity = capacityTicks / 240
         const deltaStr = delta % 1 === 0 ? String(delta) : delta.toFixed(2)
 
         return (
@@ -1173,7 +1178,7 @@ export function TabSvgCanvas({
 
                 {/* Option 4: Adjust rests — only available when note beats alone fit */}
                 {(() => {
-                  const noteBeatsUsed = measureUsedBeats(m.beats.filter((b) => b.notes.some((n) => n.fret >= 0)))
+                  const noteBeatsUsed = measureUsedTicks(m.beats.filter((b) => b.notes.length > 0)) / 240
                   if (noteBeatsUsed > capacity + 1e-9) return null
                   return (
                     <button

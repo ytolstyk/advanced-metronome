@@ -8,6 +8,8 @@ import { TabSvgCanvas, TabEditorErrorBoundary } from '../components/TabEditor'
 import { TabPlaybackEngine } from '../audio/TabPlaybackEngine'
 import { loadPublishedTab, getCurrentUsername, type PublishedTabRecord } from '../api/publishedTabApi'
 import type { TabTrack, TabEditorState } from '../tabEditorTypes'
+import { Duration } from '../tabEditorTypes'
+import { migrateTrackIfNeeded } from '../tabEditorState'
 import type { TabEditorAction } from '../tabEditorState'
 import './PublishedTabViewPage.css'
 
@@ -59,9 +61,9 @@ export function PublishedTabViewPage() {
       if (cancelled) return
       if (!result) { setNotFound(true); setIsLoading(false); return }
       try {
-        const parsed = JSON.parse(result.trackJson) as TabTrack
+        const parsed = JSON.parse(result.trackJson)
         setTab(result)
-        setTrack(parsed)
+        setTrack(migrateTrackIfNeeded(parsed))
       } catch {
         setNotFound(true)
       }
@@ -273,16 +275,17 @@ export function PublishedTabViewPage() {
 
   const displayState = useMemo((): TabEditorState => ({
     track: track ?? {
-      title: '', globalBpm: 120,
-      globalTimeSig: { numerator: 4, denominator: 4 },
+      schemaVersion: 2,
+      title: '',
+      masterBars: [{ timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 }],
       stringCount: 6, tuningName: 'Standard', openMidi: [], measures: [],
     },
-    cursor: { measureIndex: -1, beatIndex: -1, stringIndex: -1 },
+    cursor: { measureIndex: -1, beatIndex: -1, stringIndex: 1 },
     selection: null,
     selectionAnchor: null,
     noteSelection: [],
     clipboard: null,
-    activeDuration: 'quarter',
+    activeDuration: Duration.Quarter,
     activeDot: { dotted: false, doubleDotted: false, triplet: false },
     activeModifiers: {},
     isPlaying,

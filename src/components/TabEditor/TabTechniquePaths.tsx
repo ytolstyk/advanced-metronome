@@ -39,8 +39,7 @@ interface TechniqueOverlayProps {
   forPrint?: boolean
 }
 
-export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, onBendAmountClick, forPrint = false }: TechniqueOverlayProps) {
-  const { stringCount } = track
+export function TechniqueOverlay({ measure, measureIndex, beatPositions, onBendAmountClick, forPrint = false }: TechniqueOverlayProps) {
   const elements: React.ReactNode[] = []
   const measureContentW = beatPositions.length > 0
     ? beatPositions[beatPositions.length - 1].x + beatPositions[beatPositions.length - 1].w
@@ -55,11 +54,11 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
     const { cx } = pos
 
     // Detect if any string in this beat has a bend (affects technique zone Y positions)
-    const hasBend = beat.notes.some((n) => n.fret >= 0 && n.modifiers.bend)
+    const hasBend = beat.notes.some((n) => n.modifiers.bend)
     const techY = hasBend ? BEND_ELEVATED_Y : TAPPING_ZONE_Y
 
     // Tapping: render one "T" per beat column if any string has tapping
-    const hasTapping = beat.notes.some((n) => n.fret >= 0 && n.modifiers.tapping)
+    const hasTapping = beat.notes.some((n) => n.modifiers.tapping)
     if (hasTapping) {
       elements.push(
         <text
@@ -78,7 +77,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
     }
 
     // Staccato: one dot per beat column if any note has staccato
-    const hasStaccato = beat.notes.some((n) => n.fret >= 0 && n.modifiers.staccato)
+    const hasStaccato = beat.notes.some((n) => n.modifiers.staccato)
     if (hasStaccato) {
       elements.push(
         <circle
@@ -93,11 +92,9 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
 
     // Vibrato rendered after main loop as runs (see renderVibratoRuns below)
 
-    for (let si = 0; si < beat.notes.length; si++) {
-      const note = beat.notes[si]
-      if (!note || note.fret < 0) continue
-
-      const sy = stringY(si, stringCount)
+    for (const note of beat.notes) {
+      const si = note.string  // 1-based
+      const sy = stringY(si)
       const key = `${bi}-${si}`
 
       // Hammer-on arc (no label)
@@ -135,8 +132,8 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
       // Legato slide
       if (note.modifiers.legatoSlide) {
         const nextPos = beatPositions[bi + 1]
-        const nextNote = measure.beats[bi + 1]?.notes[si]
-        if (nextPos && nextNote && nextNote.fret >= 0) {
+        const nextNote = measure.beats[bi + 1]?.notes.find(n => n.string === note.string)
+        if (nextPos && nextNote) {
           const dx = nextPos.cx - 6
           const dy = nextNote.fret > note.fret ? sy - 4 : nextNote.fret < note.fret ? sy + 2 : sy
           const newSy = nextNote.fret > note.fret ? sy + 2 : sy - 4;
@@ -242,7 +239,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
               dominantBaseline="auto"
               fill={bendColor}
               style={{ cursor: 'pointer' }}
-              onClick={onBendAmountClick ? () => onBendAmountClick(measureIndex, bi, si) : undefined}
+              onClick={onBendAmountClick ? () => onBendAmountClick(measureIndex, bi, note.string) : undefined}
             >
               {label}
             </text>
@@ -294,7 +291,6 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
 
 function computeNoteSlotW(beat: Beat): number {
   return beat.notes.reduce((max, n) => {
-    if (!n || n.fret < 0) return max
     let label: string
     if (beat.tiedFrom) label = `(${n.fret})`
     else if (n.modifiers.dead) label = 'X'
@@ -316,7 +312,7 @@ function renderVibratoRuns(
 
   function flushRun(endBi: number) {
     if (runStart === null) return
-    const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.fret >= 0 && n.modifiers.bend))
+    const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.modifiers.bend))
     const vy = hasBendInRun ? BEND_ELEVATED_Y : VIBRATO_ZONE_Y
 
     for (let bi = runStart; bi <= endBi; bi++) {
@@ -348,7 +344,7 @@ function renderVibratoRuns(
 
   for (let bi = 0; bi < measure.beats.length; bi++) {
     const beat = measure.beats[bi]
-    const hasVibrato = beat.notes.some((n) => n.fret >= 0 && n.modifiers.vibrato)
+    const hasVibrato = beat.notes.some((n) => n.modifiers.vibrato)
     if (hasVibrato) {
       if (runStart === null) runStart = bi
     } else {
@@ -361,7 +357,7 @@ function renderVibratoRuns(
 function runHasOverlap(measure: Measure, startBi: number, endBi: number): boolean {
   for (let bi = startBi; bi <= endBi; bi++) {
     const beat = measure.beats[bi]
-    if (beat.notes.some((n) => n.fret >= 0 && (n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.pickDown || n.modifiers.pickUp || n.modifiers.bend))) return true
+    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.pickDown || n.modifiers.pickUp || n.modifiers.bend)) return true
   }
   return false
 }
@@ -380,7 +376,7 @@ function renderPalmMuteRuns(
     const startPos = beatPositions[runStart]
     const endPos = beatPositions[endBi]
     if (!startPos || !endPos) { runStart = null; return }
-    const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.fret >= 0 && n.modifiers.bend))
+    const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.modifiers.bend))
     const baseTopY = runHasOverlap(measure, runStart, endBi) ? PALM_MUTE_ELEVATED_Y : PALM_MUTE_ZONE_Y
     const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
     const startSlotW = computeNoteSlotW(measure.beats[runStart])
@@ -408,7 +404,7 @@ function renderPalmMuteRuns(
 
   for (let bi = 0; bi < measure.beats.length; bi++) {
     const beat = measure.beats[bi]
-    const hasPM = beat.notes.some((n) => n.fret >= 0 && n.modifiers.palmMute)
+    const hasPM = beat.notes.some((n) => n.modifiers.palmMute)
     if (hasPM) {
       if (runStart === null) runStart = bi
     } else {
@@ -432,7 +428,7 @@ function renderLetRingRuns(
     const startPos = beatPositions[runStart]
     const endPos = beatPositions[endBi]
     if (!startPos || !endPos) { runStart = null; return }
-    const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.fret >= 0 && n.modifiers.bend))
+    const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.modifiers.bend))
     const baseTopY = runHasOverlap(measure, runStart, endBi) ? LET_RING_ELEVATED_Y : LET_RING_ZONE_Y
     const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
     const startSlotW = computeNoteSlotW(measure.beats[runStart])
@@ -460,7 +456,7 @@ function renderLetRingRuns(
 
   for (let bi = 0; bi < measure.beats.length; bi++) {
     const beat = measure.beats[bi]
-    const hasLR = beat.notes.some((n) => n.fret >= 0 && n.modifiers.letRing)
+    const hasLR = beat.notes.some((n) => n.modifiers.letRing)
     if (hasLR) {
       if (runStart === null) runStart = bi
     } else {

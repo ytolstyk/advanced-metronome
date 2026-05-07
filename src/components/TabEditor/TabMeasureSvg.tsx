@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from 'react'
 import type { DotModifier, DurationValue, Measure, TabCursor, TabSelection, TabTrack } from '../../tabEditorTypes'
-import { isInSelection, measureCapacityBeats, measureUsedBeats } from '../../tabEditorState'
+import { Duration } from '../../tabEditorTypes'
+import { isInSelection, measureCapacityTicks, measureUsedTicks } from '../../tabEditorState'
 import { TUNINGS } from '../../data/tunings'
 import { TechniqueOverlay } from './TabTechniquePaths'
 import {
@@ -67,8 +68,8 @@ function RestSymbol({ duration, dot, cx, cy, fill = '#bbb' }: RestSymbolProps) {
 
   // Whole/half rests are anchored to specific string lines regardless of the passed-in cy
   const effectiveCy =
-    duration === 'whole' ? TOP_MARGIN + 2 * STRING_SPACING + 3 :
-    duration === 'half'  ? TOP_MARGIN + 3 * STRING_SPACING - 3 :
+    duration === Duration.Whole ? TOP_MARGIN + 2 * STRING_SPACING + 3 :
+    duration === Duration.Half  ? TOP_MARGIN + 3 * STRING_SPACING - 3 :
     cy
 
   let dotX = 8
@@ -76,7 +77,7 @@ function RestSymbol({ duration, dot, cx, cy, fill = '#bbb' }: RestSymbolProps) {
   let symbol: React.ReactNode
 
   switch (duration) {
-    case 'whole':
+    case Duration.Whole:
       dotX = 8; dotY = -5
       symbol = (
         <path
@@ -86,7 +87,7 @@ function RestSymbol({ duration, dot, cx, cy, fill = '#bbb' }: RestSymbolProps) {
         />
       )
       break
-    case 'half':
+    case Duration.Half:
       dotX = 8; dotY = -5
       symbol = (
         <path
@@ -96,7 +97,7 @@ function RestSymbol({ duration, dot, cx, cy, fill = '#bbb' }: RestSymbolProps) {
         />
       )
       break
-    case 'quarter':
+    case Duration.Quarter:
       dotX = 8; dotY = -14
       symbol = (
         <path
@@ -106,7 +107,7 @@ function RestSymbol({ duration, dot, cx, cy, fill = '#bbb' }: RestSymbolProps) {
         />
       )
       break
-    case 'eighth':
+    case Duration.Eighth:
       dotX = 7; dotY = -10
       symbol = (
         <path
@@ -116,7 +117,7 @@ function RestSymbol({ duration, dot, cx, cy, fill = '#bbb' }: RestSymbolProps) {
         />
       )
       break
-    case 'sixteenth':
+    case Duration.Sixteenth:
       dotX = 7; dotY = -13
       symbol = (
         <path
@@ -126,7 +127,7 @@ function RestSymbol({ duration, dot, cx, cy, fill = '#bbb' }: RestSymbolProps) {
         />
       )
       break
-    case 'thirtysecond':
+    case Duration.ThirtySecond:
       dotX = 7; dotY = -15
       symbol = (
         <path
@@ -137,7 +138,7 @@ function RestSymbol({ duration, dot, cx, cy, fill = '#bbb' }: RestSymbolProps) {
       )
       break
     default:
-      // sixtyfourth
+      // SixtyFourth
       dotX = 7; dotY = -18
       symbol = (
         <path
@@ -188,15 +189,15 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   const { stringCount } = track
   const svgH = rowSvgHeight(stringCount)
 
-  const sig = timeSig ?? track.globalTimeSig
-  const capacity = measureCapacityBeats(sig)
-  const used = measureUsedBeats(measure.beats)
+  const sig = timeSig ?? track.masterBars[measureIndex]?.timeSignature ?? track.masterBars[0]!.timeSignature
+  const capacity = measureCapacityTicks(sig)
+  const used = measureUsedTicks(measure.beats)
 
   const mw = measureWidth(measure, showTimeSig, fillRests, showBpm, beatWidthScale)
   const beatPositions = computeBeatPositions(measure, showTimeSig, fillRests, showBpm, beatWidthScale)
 
-  const topStringY = stringY(stringCount - 1, stringCount)
-  const bottomStringY = stringY(0, stringCount)
+  const topStringY = stringY(1)
+  const bottomStringY = stringY(stringCount)
   const strAreaMid = (topStringY + bottomStringY) / 2
 
   const tuning = TUNINGS[track.stringCount]
@@ -244,9 +245,9 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
       {/* Measure fill warning — shown when cursor is not on this measure */}
       {!isCursorOnThisMeasure && measure.beats.length > 0 && (() => {
         const delta = used - capacity
-        if (delta < 1e-9) return null  // hide when at-capacity or underfull (fill rests cover the gap)
-        const abs = delta
-        const label = `⚠ +${abs % 1 === 0 ? abs : abs.toFixed(2)}b`
+        if (delta < 1) return null  // hide when at-capacity or underfull
+        const beats = delta / 240  // ticks → quarter beats for display
+        const label = `⚠ +${beats % 1 === 0 ? beats : beats.toFixed(2)}b`
         return (
           <text
             x={mw - BARLINE_W - 2}
@@ -264,18 +265,21 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
       })()}
 
 
-      {/* String lines */}
-      {Array.from({ length: stringCount }, (_, si) => (
-        <line
-          key={si}
-          x1={0}
-          y1={stringY(si, stringCount)}
-          x2={mw}
-          y2={stringY(si, stringCount)}
-          stroke={forPrint ? '#000000' : '#555'}
-          strokeWidth={1}
-        />
-      ))}
+      {/* String lines — si is 1-based, 1=top */}
+      {Array.from({ length: stringCount }, (_, rawSi) => {
+        const si = rawSi + 1
+        return (
+          <line
+            key={si}
+            x1={0}
+            y1={stringY(si)}
+            x2={mw}
+            y2={stringY(si)}
+            stroke={forPrint ? '#000000' : '#555'}
+            strokeWidth={1}
+          />
+        )
+      })}
 
       {/* Stacked time signature — rendered after strings so it sits on top */}
       {showTimeSig && timeSig && (
@@ -398,8 +402,8 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             )}
 
 
-            {/* Rest glyph — only when every string is empty */}
-            {beat.notes.every((n) => n.fret < 0) && (
+            {/* Rest glyph — only when no notes present */}
+            {beat.notes.length === 0 && (
               <RestSymbol
                 duration={beat.duration}
                 dot={beat.dot}
@@ -433,14 +437,15 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                 fontStyle: 'normal' | 'italic'
                 labelW: number
               }
+              // si is 1-based; 1=highest string (top of display)
               const strings: StringData[] = Array.from({ length: stringCount }, (_, rawSi) => {
-                const si = stringCount - 1 - rawSi
-                const note = beat.notes[si]
-                const sy = stringY(si, stringCount)
+                const si = rawSi + 1
+                const note = beat.notes.find(n => n.string === si)
+                const sy = stringY(si)
                 const isCursorNote = isCursorCol && cursor.stringIndex === si
                 const isNoteSelected =
                   noteSelectionSet.has(`${measureIndex}:${bi}:${si}`) ||
-                  (isCursorNote && !!note && note.fret >= 0)
+                  (isCursorNote && !!note)
 
                 const { label: fretLabel, fill: fretFill, fontStyle } = note
                   ? formatFretLabel(note, isTied, forPrint)
@@ -556,7 +561,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             />
 
             {showCursor && (() => {
-              const sy = stringY(cursor.stringIndex, stringCount)
+              const sy = stringY(cursor.stringIndex)
               return (
                 <rect
                   x={vCX - NOTE_CURSOR_W / 2}
@@ -624,9 +629,10 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             />
           )}
           {Array.from({ length: stringCount }, (_, rawSi) => {
-            const si = stringCount - 1 - rawSi
-            const sy = stringY(si, stringCount)
-            const label = preset.strings[si]?.note ?? ''
+            const si = rawSi + 1  // 1-based, 1=top of display=highest pitch
+            const sy = stringY(si)
+            // preset.strings is low→high, so highest pitch = stringCount-1 index
+            const label = preset!.strings[stringCount - si]?.note ?? ''
             return (
               <text
                 key={si}

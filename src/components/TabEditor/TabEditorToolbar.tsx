@@ -8,6 +8,7 @@ import type {
   NoteModifierKey,
   TabEditorState,
 } from '../../tabEditorTypes'
+import { Duration } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
 import { normalizeSelection } from '../../tabEditorState'
 
@@ -34,13 +35,13 @@ const MODIFIER_LABELS: Record<string, string> = {
 }
 
 const DURATIONS: { label: string; value: DurationValue }[] = [
-  { label: '1/1', value: 'whole' },
-  { label: '1/2', value: 'half' },
-  { label: '1/4', value: 'quarter' },
-  { label: '1/8', value: 'eighth' },
-  { label: '1/16', value: 'sixteenth' },
-  { label: '1/32', value: 'thirtysecond' },
-  { label: '1/64', value: 'sixtyfourth' },
+  { label: '1/1', value: Duration.Whole },
+  { label: '1/2', value: Duration.Half },
+  { label: '1/4', value: Duration.Quarter },
+  { label: '1/8', value: Duration.Eighth },
+  { label: '1/16', value: Duration.Sixteenth },
+  { label: '1/32', value: Duration.ThirtySecond },
+  { label: '1/64', value: Duration.SixtyFourth },
 ]
 
 const MODIFIERS_BASE: { label: string; key: NoteModifierKey; title: string }[] = [

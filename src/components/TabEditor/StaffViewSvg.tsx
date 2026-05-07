@@ -1,4 +1,5 @@
 import type { DurationValue, Measure, TabCursor, TabTrack } from '../../tabEditorTypes'
+import { Duration } from '../../tabEditorTypes'
 import { BEAT_WIDTHS } from '../../tabEditorState'
 
 // ── Staff notation constants ─────────────────────────────────────────────────
@@ -14,6 +15,8 @@ const MEASURE_LABEL_W = 24
 const CLEF_W = 30
 const TIME_SIG_W = 20
 const SVG_H = 200
+
+const BEAMABLE_DURATIONS: DurationValue[] = [Duration.Eighth, Duration.Sixteenth, Duration.ThirtySecond, Duration.SixtyFourth]
 
 type StemDir = 'up' | 'down'
 
@@ -84,11 +87,11 @@ function isInBeamGroup(nr: NoteRender, groups: NoteRender[][]): boolean {
 function RestSymbol({ x, duration }: { x: number; duration: DurationValue }) {
   const midY = E4Y - 4 * STEP // B4
   switch (duration) {
-    case 'whole':
+    case Duration.Whole:
       return <rect x={x - 8} y={midY - 10} width={16} height={5} fill="#888" />
-    case 'half':
+    case Duration.Half:
       return <rect x={x - 8} y={midY - 5} width={16} height={5} fill="#888" />
-    case 'quarter':
+    case Duration.Quarter:
       return (
         <path
           d={`M ${x} ${midY - 14} L ${x + 5} ${midY - 8} L ${x - 3} ${midY - 4} L ${x + 4} ${midY + 2} L ${x} ${midY + 8}`}
@@ -97,7 +100,7 @@ function RestSymbol({ x, duration }: { x: number; duration: DurationValue }) {
           fill="none"
         />
       )
-    case 'eighth':
+    case Duration.Eighth:
       return (
         <g>
           <circle cx={x} cy={midY + 4} r={3} fill="#888" />
@@ -138,6 +141,7 @@ export function StaffViewSvg({
   playheadMeasure,
   playheadBeat,
 }: StaffViewSvgProps) {
+  const globalTimeSig = track.masterBars[0]!.timeSignature
   return (
     <div className="tab-staff-view">
       {rows.map((rowMeasures, rowIdx) => {
@@ -159,15 +163,11 @@ export function StaffViewSvg({
             const beat = measure.beats[bi]
             const bw = BEAT_WIDTHS[beat.duration]
             const xMid = xCursor + bw / 2
-            const isBeamable = ['eighth', 'sixteenth', 'thirtysecond', 'sixtyfourth'].includes(
-              beat.duration,
-            )
+            const isBeamable = BEAMABLE_DURATIONS.includes(beat.duration)
 
             const noteRenders: NoteRender[] = []
-            for (let si = 0; si < beat.notes.length; si++) {
-              const note = beat.notes[si]
-              if (note.fret < 0) continue
-              const openMidi = track.openMidi[si]
+            for (const note of beat.notes) {
+              const openMidi = track.openMidi[note.string - 1]  // 1-based → 0-based high→low
               if (openMidi === undefined) continue
               const midi = openMidi + note.fret
               const y = midiToStaffY(midi)
@@ -180,7 +180,7 @@ export function StaffViewSvg({
                 tipY: stemTipY(y, dir),
                 beatIndex: bi,
                 measureIndex: mi,
-                stringIndex: si,
+                stringIndex: note.string,
                 isBeamable,
               })
             }
@@ -248,7 +248,7 @@ export function StaffViewSvg({
               textAnchor="middle"
               dominantBaseline="middle"
             >
-              {track.globalTimeSig.numerator}
+              {globalTimeSig.numerator}
             </text>
             <text
               x={CLEF_W + 2}
@@ -258,7 +258,7 @@ export function StaffViewSvg({
               textAnchor="middle"
               dominantBaseline="middle"
             >
-              {track.globalTimeSig.denominator}
+              {globalTimeSig.denominator}
             </text>
 
             {/* Measure barlines */}
@@ -320,8 +320,8 @@ export function StaffViewSvg({
                   {bi.notes.map((nr, ni) => {
                     const ledgers = needsLedgerLines(nr.y)
                     const acc = getAccidental(nr.midi)
-                    const isWhole = bi.duration === 'whole'
-                    const isHalf = bi.duration === 'half'
+                    const isWhole = bi.duration === Duration.Whole
+                    const isHalf = bi.duration === Duration.Half
                     return (
                       <g key={ni}>
                         {ledgers.map((ly, li) => (
@@ -381,7 +381,7 @@ export function StaffViewSvg({
                             strokeWidth={1.5}
                           />
                         )}
-                        {bi.duration === 'eighth' && !isInBeamGroup(nr, beamGroups) && (
+                        {bi.duration === Duration.Eighth && !isInBeamGroup(nr, beamGroups) && (
                           <path
                             d={
                               nr.dir === 'up'
@@ -393,7 +393,7 @@ export function StaffViewSvg({
                             fill="none"
                           />
                         )}
-                        {bi.duration === 'sixteenth' && !isInBeamGroup(nr, beamGroups) && (
+                        {bi.duration === Duration.Sixteenth && !isInBeamGroup(nr, beamGroups) && (
                           <>
                             <path
                               d={
@@ -445,7 +445,7 @@ export function StaffViewSvg({
                     beatInfos.find(
                       (bi) =>
                         bi.notes.includes(nr) &&
-                        ['sixteenth', 'thirtysecond', 'sixtyfourth'].includes(bi.duration),
+                        (bi.duration === Duration.Sixteenth || bi.duration === Duration.ThirtySecond || bi.duration === Duration.SixtyFourth),
                     ),
                   ) && (
                     <line
