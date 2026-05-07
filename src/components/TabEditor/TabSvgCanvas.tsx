@@ -300,6 +300,27 @@ export function TabSvgCanvas({
       if (!isPlaybackPaused) {
         prevPlayheadRowRef.current = -1
         if (playheadDivRef.current) playheadDivRef.current.style.display = 'none'
+      } else {
+        // Freeze animStateRef at the cursor's current visual position so that
+        // when the RAF restarts on resume, it starts from the right spot.
+        const anim = animStateRef.current
+        if (anim) {
+          const elapsed = performance.now() - anim.startTime
+          const t = Math.min(1, Math.max(0, elapsed / anim.durationMs))
+          const sameRow = anim.fromRow === anim.toRow
+          const frozenX = sameRow
+            ? anim.fromX + (anim.toX - anim.fromX) * t
+            : anim.fromX + (anim.rowEndX - anim.fromX) * t
+          animStateRef.current = {
+            startTime: performance.now() + 1e9,
+            durationMs: 1,
+            fromX: frozenX,
+            toX: frozenX,
+            rowEndX: frozenX,
+            fromRow: anim.fromRow,
+            toRow: anim.fromRow,
+          }
+        }
       }
       return
     }
