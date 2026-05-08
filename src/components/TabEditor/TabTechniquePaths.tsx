@@ -39,7 +39,7 @@ interface TechniqueOverlayProps {
   forPrint?: boolean
 }
 
-export function TechniqueOverlay({ measure, measureIndex, beatPositions, onBendAmountClick, forPrint = false }: TechniqueOverlayProps) {
+export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, onBendAmountClick, forPrint = false }: TechniqueOverlayProps) {
   const elements: React.ReactNode[] = []
   const measureContentW = beatPositions.length > 0
     ? beatPositions[beatPositions.length - 1].x + beatPositions[beatPositions.length - 1].w
@@ -94,7 +94,7 @@ export function TechniqueOverlay({ measure, measureIndex, beatPositions, onBendA
 
     for (const note of beat.notes) {
       const si = note.string  // 1-based
-      const sy = stringY(si)
+      const sy = stringY(si, track.stringCount)
       const key = `${bi}-${si}`
 
       // Hammer-on arc (no label)

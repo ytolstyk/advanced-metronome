@@ -61,8 +61,8 @@ export function rowSvgHeight(stringCount: number): number {
   return TOP_MARGIN + stringCount * STRING_SPACING + BOTTOM_PADDING
 }
 
-export function stringY(si: number): number {
-  return TOP_MARGIN + (si - 1) * STRING_SPACING
+export function stringY(si: number, stringCount: number): number {
+  return TOP_MARGIN + (stringCount - si) * STRING_SPACING
 }
 
 // fillRests: list of rest durations to show after existing beats (fill remaining measure capacity)

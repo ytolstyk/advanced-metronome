@@ -163,7 +163,7 @@ export class TabPlaybackEngine {
     // Schedule notes for all strings
     for (const note of beat.notes) {
       const s = note.string  // 1-based
-      const openMidi = track.openMidi[s - 1]  // high→low array, 0-based
+      const openMidi = track.openMidi[s - 1]  // low→high array; string 1=lowest → index 0
       if (openMidi === undefined) continue
 
       const prevKill = this.prevNoteKill.get(s)

@@ -45,8 +45,8 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
   atTrack.name = track.title
 
   const staff = new at.model.Staff()
-  // openMidi is high→low, same order as alphaTab's stringTuning (top string first)
-  staff.stringTuning = new at.model.Tuning(track.tuningName, track.openMidi.slice(), false)
+  // openMidi is low→high; AlphaTab's Tuning expects high→low (index 0 = highest string)
+  staff.stringTuning = new at.model.Tuning(track.tuningName, track.openMidi.slice().reverse(), false)
   atTrack.addStaff(staff)
 
   // Collect all beats flat across all measures for tie/pulloff linking

@@ -167,7 +167,7 @@ export function StaffViewSvg({
 
             const noteRenders: NoteRender[] = []
             for (const note of beat.notes) {
-              const openMidi = track.openMidi[note.string - 1]  // 1-based → 0-based high→low
+              const openMidi = track.openMidi[note.string - 1]  // 1-based, 1=lowest → index 0 low→high
               if (openMidi === undefined) continue
               const midi = openMidi + note.fret
               const y = midiToStaffY(midi)

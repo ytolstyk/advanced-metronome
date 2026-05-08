@@ -41,7 +41,7 @@ export interface NoteModifiers {
 export type NoteModifierKey = keyof NoteModifiers
 
 export interface TabNote {
-  string: number  // 1-based; 1 = highest-pitched string (alphaTab convention); always >= 1
+  string: number  // 1-based; 1 = lowest-pitched string (AlphaTab convention); always >= 1
   fret: number    // 0-24; always >= 0 (notes absent from beat.notes array = no note)
   modifiers: NoteModifiers
   bendAmount?: number // 0.5–5 in 0.5 increments; defaults to 1 when modifiers.bend is set
@@ -51,7 +51,7 @@ export interface Beat {
   id: string
   duration: DurationValue
   dot: DotModifier
-  notes: TabNote[]  // sparse; each note has .string (1-based); fret always >= 0
+  notes: TabNote[]  // sparse; each note has .string (1-based, 1=lowest); fret always >= 0
   tiedFrom?: true   // this beat is a tied continuation from the previous measure
   tiedTo?: true     // this beat ties into the first beat of the next measure
   dynamics?: 'ppp' | 'pp' | 'p' | 'mp' | 'mf' | 'f' | 'ff' | 'fff'
@@ -73,7 +73,7 @@ export interface Measure {
 }
 
 export interface TabTrack {
-  schemaVersion: 2  // v2 = alphaTab-compatible model
+  schemaVersion: 3  // v3 = string 1 = lowest-pitched (AlphaTab convention); openMidi low→high
   title: string
   artist?: string
   tabAuthor?: string
@@ -82,14 +82,14 @@ export interface TabTrack {
   masterBars: MasterBar[]  // masterBars[i] <-> measures[i]; always non-empty
   stringCount: 6 | 7 | 8
   tuningName: string
-  openMidi: number[]  // high→low order: openMidi[0] = string 1 (highest pitch)
+  openMidi: number[]  // low→high order: openMidi[0] = string 1 (lowest pitch)
   measures: Measure[]
 }
 
 export interface TabCursor {
   measureIndex: number
   beatIndex: number  // can equal measure.beats.length to point at the virtual pending slot
-  stringIndex: number  // 1-based; 1 = highest-pitched string
+  stringIndex: number  // 1-based; 1 = lowest-pitched string (bottom of tab)
 }
 
 export interface TabSelection {

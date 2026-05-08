@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import * as at from '@coderline/alphatab'
 import type { TabTrack } from '../../tabEditorTypes'
 import { toAlphaTabScore } from '../../tabEditor/toAlphaTabScore'
-import { Button } from '@/components/ui/button'
 import './AlphaTabPreview.css'
 
 type NotationMode = 'tab' | 'staff' | 'both'
@@ -15,12 +14,12 @@ function staveProfileFor(mode: NotationMode): at.StaveProfile {
 
 interface AlphaTabPreviewProps {
   track: TabTrack
+  mode: NotationMode
 }
 
-export function AlphaTabPreview({ track }: AlphaTabPreviewProps) {
+export function AlphaTabPreview({ track, mode }: AlphaTabPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<at.AlphaTabApi | null>(null)
-  const [mode, setMode] = useState<NotationMode>('both')
   const mountedRef = useRef(false)
 
   useEffect(() => {
@@ -57,32 +56,6 @@ export function AlphaTabPreview({ track }: AlphaTabPreviewProps) {
 
   return (
     <div className="alphatab-preview">
-      <div className="alphatab-preview-toolbar">
-        <Button
-          variant="ghost"
-          size="sm"
-          className={mode === 'tab' ? 'alphatab-mode-active' : ''}
-          onClick={() => setMode('tab')}
-        >
-          Tab
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={mode === 'staff' ? 'alphatab-mode-active' : ''}
-          onClick={() => setMode('staff')}
-        >
-          Staff
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={mode === 'both' ? 'alphatab-mode-active' : ''}
-          onClick={() => setMode('both')}
-        >
-          Both
-        </Button>
-      </div>
       <div className="alphatab-preview-canvas" ref={containerRef} />
     </div>
   )

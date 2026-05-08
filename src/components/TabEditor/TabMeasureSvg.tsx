@@ -196,8 +196,8 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   const mw = measureWidth(measure, showTimeSig, fillRests, showBpm, beatWidthScale)
   const beatPositions = computeBeatPositions(measure, showTimeSig, fillRests, showBpm, beatWidthScale)
 
-  const topStringY = stringY(1)
-  const bottomStringY = stringY(stringCount)
+  const topStringY = stringY(stringCount, stringCount)
+  const bottomStringY = stringY(1, stringCount)
   const strAreaMid = (topStringY + bottomStringY) / 2
 
   const tuning = TUNINGS[track.stringCount]
@@ -265,16 +265,16 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
       })()}
 
 
-      {/* String lines — si is 1-based, 1=top */}
+      {/* String lines — si is 1-based, 1=bottom (lowest pitch), stringCount=top */}
       {Array.from({ length: stringCount }, (_, rawSi) => {
         const si = rawSi + 1
         return (
           <line
             key={si}
             x1={0}
-            y1={stringY(si)}
+            y1={stringY(si, stringCount)}
             x2={mw}
-            y2={stringY(si)}
+            y2={stringY(si, stringCount)}
             stroke={forPrint ? '#000000' : '#555'}
             strokeWidth={1}
           />
@@ -437,11 +437,11 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                 fontStyle: 'normal' | 'italic'
                 labelW: number
               }
-              // si is 1-based; 1=highest string (top of display)
+              // si is 1-based; stringCount=top (highest pitch), 1=bottom (lowest pitch)
               const strings: StringData[] = Array.from({ length: stringCount }, (_, rawSi) => {
                 const si = rawSi + 1
                 const note = beat.notes.find(n => n.string === si)
-                const sy = stringY(si)
+                const sy = stringY(si, stringCount)
                 const isCursorNote = isCursorCol && cursor.stringIndex === si
                 const isNoteSelected =
                   noteSelectionSet.has(`${measureIndex}:${bi}:${si}`) ||
@@ -561,7 +561,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             />
 
             {showCursor && (() => {
-              const sy = stringY(cursor.stringIndex)
+              const sy = stringY(cursor.stringIndex, stringCount)
               return (
                 <rect
                   x={vCX - NOTE_CURSOR_W / 2}
@@ -629,10 +629,10 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             />
           )}
           {Array.from({ length: stringCount }, (_, rawSi) => {
-            const si = rawSi + 1  // 1-based, 1=top of display=highest pitch
-            const sy = stringY(si)
-            // preset.strings is low→high, so highest pitch = stringCount-1 index
-            const label = preset!.strings[stringCount - si]?.note ?? ''
+            const si = rawSi + 1  // 1-based, 1=bottom (lowest pitch), stringCount=top (highest)
+            const sy = stringY(si, stringCount)
+            // preset.strings is low→high; si=1=lowest → index 0, si=N=highest → index N-1
+            const label = preset!.strings[si - 1]?.note ?? ''
             return (
               <text
                 key={si}

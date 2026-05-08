@@ -2,6 +2,8 @@ import { Play, Pause, Square, ChevronUp, ChevronDown, Eye, EyeOff } from 'lucide
 import { Button } from '@/components/ui/button'
 import type { TabEditorAction } from '../../tabEditorState'
 
+type NotationMode = 'tab' | 'staff' | 'both'
+
 interface TabEditorPlaybackProps {
   isPlaying: boolean
   onPlay: () => void
@@ -11,6 +13,8 @@ interface TabEditorPlaybackProps {
   onToggleMenu: () => void
   showPreview: boolean
   onTogglePreview: () => void
+  previewMode: NotationMode
+  onPreviewModeChange: (mode: NotationMode) => void
 }
 
 export function TabEditorPlayback({
@@ -21,6 +25,8 @@ export function TabEditorPlayback({
   onToggleMenu,
   showPreview,
   onTogglePreview,
+  previewMode,
+  onPreviewModeChange,
 }: TabEditorPlaybackProps) {
   return (
     <div className="tab-playback-bar">
@@ -33,7 +39,22 @@ export function TabEditorPlayback({
       <Button variant="ghost" size="icon" onClick={onStop} title="Stop">
         <Square size={16} />
       </Button>
-      <div style={{ marginLeft: 'auto' }}>
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
+        {showPreview && (
+          <>
+            {(['tab', 'staff', 'both'] as NotationMode[]).map((m) => (
+              <Button
+                key={m}
+                variant="ghost"
+                size="sm"
+                className={previewMode === m ? 'alphatab-mode-active' : ''}
+                onClick={() => onPreviewModeChange(m)}
+              >
+                {m.charAt(0).toUpperCase() + m.slice(1)}
+              </Button>
+            ))}
+          </>
+        )}
         <Button
           variant="ghost"
           size="icon"

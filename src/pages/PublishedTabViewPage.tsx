@@ -275,12 +275,12 @@ export function PublishedTabViewPage() {
 
   const displayState = useMemo((): TabEditorState => ({
     track: track ?? {
-      schemaVersion: 2,
+      schemaVersion: 3,
       title: '',
       masterBars: [{ timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 }],
       stringCount: 6, tuningName: 'Standard', openMidi: [], measures: [],
     },
-    cursor: { measureIndex: -1, beatIndex: -1, stringIndex: 1 },
+    cursor: { measureIndex: -1, beatIndex: -1, stringIndex: 6 },
     selection: null,
     selectionAnchor: null,
     noteSelection: [],

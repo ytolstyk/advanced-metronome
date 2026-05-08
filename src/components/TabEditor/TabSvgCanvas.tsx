@@ -532,7 +532,7 @@ export function TabSvgCanvas({
                   if (!tieNote) return
                   const si = tieNote.string  // 1-based
 
-                  const noteY = stringY(si)
+                  const noteY = stringY(si, track.stringCount)
                   const y0 = noteY + TIE_Y_OFFSET
                   const y1 = y0 + TIE_DIP
 
@@ -596,7 +596,7 @@ export function TabSvgCanvas({
                       const entryNote = beat0.notes[0]
                       const si = entryNote?.string ?? -1
                       if (si >= 1) {
-                        const noteY = stringY(si)
+                        const noteY = stringY(si, track.stringCount)
                         const y0 = noteY + TIE_Y_OFFSET
                         const y1 = y0 + TIE_DIP
 

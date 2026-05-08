@@ -210,6 +210,7 @@ export function TabEditorPage() {
   const handlePlayRef = useRef<() => void>(() => {})
   const [isPlaybackPaused, setIsPlaybackPaused] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [previewMode, setPreviewMode] = useState<'tab' | 'staff' | 'both'>('both')
 
   const { authStatus } = useAuthenticator(ctx => [ctx.authStatus])
   const location = useLocation()
@@ -290,7 +291,7 @@ export function TabEditorPage() {
       const played = new Set<number>()
       if (overrideFret) {
         const { stringIndex, fret } = overrideFret
-        const open = openMidi[stringIndex - 1]  // 1-based → 0-based high→low array
+        const open = openMidi[stringIndex - 1]  // 1-based, 1=lowest → index 0 low→high
         if (fret >= 0 && open !== undefined) {
           pluckString(ctx, fretToFreq(open, fret), ctx.currentTime, 0.7)
           played.add(stringIndex)
@@ -299,7 +300,7 @@ export function TabEditorPage() {
       if (beat) {
         beat.notes.forEach((note) => {
           if (played.has(note.string)) return
-          const open = openMidi[note.string - 1]  // 1-based → 0-based
+          const open = openMidi[note.string - 1]  // 1-based, 1=lowest → index 0 low→high
           if (open === undefined) return
           pluckString(ctx, fretToFreq(open, note.fret), ctx.currentTime, 0.7)
         })
@@ -706,10 +707,12 @@ export function TabEditorPage() {
             if (!showPreview) handleStop()
             setShowPreview((v) => !v)
           }}
+          previewMode={previewMode}
+          onPreviewModeChange={setPreviewMode}
         />
       </div>
       {showPreview ? (
-        <AlphaTabPreview track={state.track} />
+        <AlphaTabPreview track={state.track} mode={previewMode} />
       ) : (
         <TabEditorErrorBoundary>
           <TabSvgCanvas

@@ -203,8 +203,8 @@ function makeMeasure(): Measure {
 export function buildOpenMidi(tuningName: string, stringCount: 6 | 7 | 8): number[] {
   const presets = TUNINGS[stringCount]
   const preset = presets.find((p) => p.name === tuningName) ?? presets[0]!
-  // high→low: index 0 = string 1 (highest pitch), index stringCount-1 = lowest pitch
-  return preset.strings.map((s) => tuningNoteToMidi(s.note, s.octave)).reverse()
+  // low→high: index 0 = string 1 (lowest pitch), index stringCount-1 = highest pitch
+  return preset.strings.map((s) => tuningNoteToMidi(s.note, s.octave))
 }
 
 function createDefaultTrack(): TabTrack {
@@ -212,7 +212,7 @@ function createDefaultTrack(): TabTrack {
   const tuningName = 'Standard'
   const openMidi = buildOpenMidi(tuningName, stringCount)
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     title: 'Untitled',
     masterBars: [{ timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 }],
     stringCount,
@@ -237,8 +237,22 @@ const STRING_DURATION_TO_INT: Record<string, DurationValue> = {
 export function migrateTrackIfNeeded(raw: unknown): TabTrack {
   const data = raw as Record<string, unknown>
 
-  // Already v2 format
-  if (data.schemaVersion === 2) return data as unknown as TabTrack
+  // Already v3 format
+  if (data.schemaVersion === 3) return data as unknown as TabTrack
+
+  // v2 → v3: flip string indices (1=highest → 1=lowest) and reverse openMidi (high→low → low→high)
+  if (data.schemaVersion === 2) {
+    const sc = (data.stringCount as number) ?? 6
+    const v2 = data as unknown as TabTrack
+    const measures = v2.measures.map((m) => ({
+      ...m,
+      beats: m.beats.map((b) => ({
+        ...b,
+        notes: b.notes.map((n) => ({ ...n, string: sc + 1 - n.string })),
+      })),
+    }))
+    return { ...v2, schemaVersion: 3, openMidi: v2.openMidi.slice().reverse(), measures }
+  }
 
   // Legacy format: has globalBpm / globalTimeSig and fixed-array notes
   const stringCount = (data.stringCount as 6 | 7 | 8) ?? 6
@@ -274,17 +288,16 @@ export function migrateTrackIfNeeded(raw: unknown): TabTrack {
     beats: m.beats.map((b) => ({
       ...b,
       duration: STRING_DURATION_TO_INT[b.duration] ?? Duration.Quarter,
-      // Old notes[i] (0-based, i=0=lowest) → new note.string = stringCount - i (1-based, 1=highest)
+      // Old notes[i] (0-based, i=0=lowest) → new note.string = oldIdx + 1 (1-based, 1=lowest)
       notes: b.notes
-        .map((n, oldIdx) => ({ ...n, string: stringCount - oldIdx }))
+        .map((n, oldIdx) => ({ ...n, string: oldIdx + 1 }))
         .filter((n) => n.fret >= 0),
     })),
   }))
 
-  const oldOpenMidi = (data.openMidi as number[]) ??
-    buildOpenMidi((data.tuningName as string) ?? 'Standard', stringCount).reverse()
-  // Old openMidi was low→high; new is high→low
-  const openMidi = oldOpenMidi.slice().reverse()
+  // Old openMidi was low→high; v3 openMidi is also low→high — no reversal needed
+  const openMidi = (data.openMidi as number[]) ??
+    buildOpenMidi((data.tuningName as string) ?? 'Standard', stringCount)
 
   const { globalBpm: _gb, globalTimeSig: _gt, ...rest } = data as Record<string, unknown> & {
     globalBpm: number; globalTimeSig: unknown
@@ -293,7 +306,7 @@ export function migrateTrackIfNeeded(raw: unknown): TabTrack {
 
   return {
     ...(rest as Omit<TabTrack, 'masterBars' | 'measures' | 'openMidi' | 'schemaVersion'>),
-    schemaVersion: 2,
+    schemaVersion: 3,
     masterBars,
     measures,
     openMidi,
@@ -316,7 +329,7 @@ export function createInitialTabState(): TabEditorState {
   }
   return {
     track,
-    cursor: { measureIndex: 0, beatIndex: 0, stringIndex: 1 },
+    cursor: { measureIndex: 0, beatIndex: 0, stringIndex: track.stringCount },
     selection: null,
     selectionAnchor: null,
     noteSelection: [],
@@ -866,7 +879,7 @@ function tabEditorReducerInner(
       return {
         ...s,
         track: { ...s.track, measures, masterBars: finalMasterBars },
-        cursor: { measureIndex: newMeasureIdx, beatIndex: 0, stringIndex: 1 },
+        cursor: { measureIndex: newMeasureIdx, beatIndex: 0, stringIndex: s.track.stringCount },
       }
     }
 
@@ -894,12 +907,12 @@ function tabEditorReducerInner(
         return withBeatSync(advanceCursorLeft(cursor, track))
       }
       if (action.direction === 'up') {
-        // 1-based: 1=highest string (top of tab). "up" arrow → lower number → higher pitch
-        const si = Math.max(1, cursor.stringIndex - 1)
+        // 1-based: 1=lowest string (bottom of tab). "up" arrow → higher number → higher pitch
+        const si = Math.min(track.stringCount, cursor.stringIndex + 1)
         return withBeatSync({ ...cursor, stringIndex: si })
       }
       if (action.direction === 'down') {
-        const si = Math.min(track.stringCount, cursor.stringIndex + 1)
+        const si = Math.max(1, cursor.stringIndex - 1)
         return withBeatSync({ ...cursor, stringIndex: si })
       }
       return state
@@ -1294,7 +1307,7 @@ function tabEditorReducerInner(
       return {
         ...state,
         track: action.track,
-        cursor: { measureIndex: 0, beatIndex: 0, stringIndex: 1 },
+        cursor: { measureIndex: 0, beatIndex: 0, stringIndex: action.track.stringCount },
         selection: null,
         selectionAnchor: null,
         noteSelection: [],
