@@ -22,6 +22,7 @@ import {
   TabEditorPlayback,
   TabSvgCanvas,
   AlphaTabPreview,
+  type AlphaTabPreviewHandle,
 } from '../components/TabEditor'
 import { useAuthenticator } from '@aws-amplify/ui-react'
 import {
@@ -211,6 +212,8 @@ export function TabEditorPage() {
   const [isPlaybackPaused, setIsPlaybackPaused] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [previewMode, setPreviewMode] = useState<'tab' | 'staff' | 'both'>('both')
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false)
+  const alphaTabPreviewRef = useRef<AlphaTabPreviewHandle>(null)
 
   const { authStatus } = useAuthenticator(ctx => [ctx.authStatus])
   const location = useLocation()
@@ -559,6 +562,14 @@ export function TabEditorPage() {
   }
 
   function handlePlay() {
+    if (showPreview) {
+      if (isPreviewPlaying) {
+        alphaTabPreviewRef.current?.pause()
+      } else {
+        alphaTabPreviewRef.current?.play()
+      }
+      return
+    }
     const ctx = ensureCtx()
     if (state.isPlaying) {
       playbackEngine.pause()
@@ -590,6 +601,10 @@ export function TabEditorPage() {
   useEffect(() => { handlePlayRef.current = handlePlay })
 
   function handleStop() {
+    if (showPreview) {
+      alphaTabPreviewRef.current?.stop()
+      return
+    }
     playbackEngine.stop()
     setIsPlaybackPaused(false)
     dispatch({ type: 'SET_PLAYING', isPlaying: false })
@@ -696,7 +711,7 @@ export function TabEditorPage() {
           </>
         )}
         <TabEditorPlayback
-          isPlaying={state.isPlaying}
+          isPlaying={showPreview ? isPreviewPlaying : state.isPlaying}
           onPlay={handlePlay}
           onStop={handleStop}
           dispatch={dispatch}
@@ -705,6 +720,10 @@ export function TabEditorPage() {
           showPreview={showPreview}
           onTogglePreview={() => {
             if (!showPreview) handleStop()
+            else {
+              alphaTabPreviewRef.current?.stop()
+              setIsPreviewPlaying(false)
+            }
             setShowPreview((v) => !v)
           }}
           previewMode={previewMode}
@@ -712,7 +731,12 @@ export function TabEditorPage() {
         />
       </div>
       {showPreview ? (
-        <AlphaTabPreview track={state.track} mode={previewMode} />
+        <AlphaTabPreview
+          ref={alphaTabPreviewRef}
+          track={state.track}
+          mode={previewMode}
+          onPlayerStateChange={setIsPreviewPlaying}
+        />
       ) : (
         <TabEditorErrorBoundary>
           <TabSvgCanvas
