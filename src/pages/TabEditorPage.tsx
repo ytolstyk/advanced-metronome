@@ -21,6 +21,7 @@ import {
   TabEditorToolbar,
   TabEditorPlayback,
   TabSvgCanvas,
+  AlphaTabPreview,
 } from '../components/TabEditor'
 import { useAuthenticator } from '@aws-amplify/ui-react'
 import {
@@ -208,6 +209,7 @@ export function TabEditorPage() {
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handlePlayRef = useRef<() => void>(() => {})
   const [isPlaybackPaused, setIsPlaybackPaused] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
 
   const { authStatus } = useAuthenticator(ctx => [ctx.authStatus])
   const location = useLocation()
@@ -261,6 +263,7 @@ export function TabEditorPage() {
   }, [state.track, state.isPlaying])
 
   useLayoutEffect(() => {
+    if (showPreview) return
     const el = canvasRef.current
     if (!el) return
     const style = getComputedStyle(el)
@@ -271,7 +274,7 @@ export function TabEditorPage() {
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [showPreview])
 
   function ensureCtx(): AudioContext {
     if (!audioCtxRef.current) audioCtxRef.current = new AudioContext()
@@ -698,20 +701,29 @@ export function TabEditorPage() {
           dispatch={dispatch}
           menuOpen={menuOpen}
           onToggleMenu={() => setMenuOpen((m) => !m)}
+          showPreview={showPreview}
+          onTogglePreview={() => {
+            if (!showPreview) handleStop()
+            setShowPreview((v) => !v)
+          }}
         />
       </div>
-      <TabEditorErrorBoundary>
-        <TabSvgCanvas
-          state={state}
-          containerWidth={containerWidth}
-          canvasRef={canvasRef}
-          dispatch={dispatch}
-          onBeatMouseDown={onBeatMouseDown}
-          onBeatMouseEnter={onBeatMouseEnter}
-          onRegisterBeatHandler={onRegisterBeatHandler}
-          isPlaybackPaused={isPlaybackPaused}
-        />
-      </TabEditorErrorBoundary>
+      {showPreview ? (
+        <AlphaTabPreview track={state.track} />
+      ) : (
+        <TabEditorErrorBoundary>
+          <TabSvgCanvas
+            state={state}
+            containerWidth={containerWidth}
+            canvasRef={canvasRef}
+            dispatch={dispatch}
+            onBeatMouseDown={onBeatMouseDown}
+            onBeatMouseEnter={onBeatMouseEnter}
+            onRegisterBeatHandler={onRegisterBeatHandler}
+            isPlaybackPaused={isPlaybackPaused}
+          />
+        </TabEditorErrorBoundary>
+      )}
 
       {/* Missing metadata dialog */}
       <SaveMetadataDialog

@@ -1,4 +1,4 @@
-import { Play, Pause, Square, ChevronUp, ChevronDown } from 'lucide-react'
+import { Play, Pause, Square, ChevronUp, ChevronDown, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { TabEditorAction } from '../../tabEditorState'
 
@@ -9,6 +9,8 @@ interface TabEditorPlaybackProps {
   dispatch: React.Dispatch<TabEditorAction>
   menuOpen: boolean
   onToggleMenu: () => void
+  showPreview: boolean
+  onTogglePreview: () => void
 }
 
 export function TabEditorPlayback({
@@ -17,6 +19,8 @@ export function TabEditorPlayback({
   onStop,
   menuOpen,
   onToggleMenu,
+  showPreview,
+  onTogglePreview,
 }: TabEditorPlaybackProps) {
   return (
     <div className="tab-playback-bar">
@@ -29,6 +33,17 @@ export function TabEditorPlayback({
       <Button variant="ghost" size="icon" onClick={onStop} title="Stop">
         <Square size={16} />
       </Button>
+      <div style={{ marginLeft: 'auto' }}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onTogglePreview}
+          title={showPreview ? 'Back to editor' : 'Preview with AlphaTab'}
+          data-active={showPreview}
+        >
+          {showPreview ? <EyeOff size={16} /> : <Eye size={16} />}
+        </Button>
+      </div>
     </div>
   )
 }
