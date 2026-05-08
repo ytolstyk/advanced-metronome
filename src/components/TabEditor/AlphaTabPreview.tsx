@@ -26,6 +26,7 @@ interface AlphaTabPreviewProps {
 
 export const AlphaTabPreview = forwardRef<AlphaTabPreviewHandle, AlphaTabPreviewProps>(
   function AlphaTabPreview({ track, mode, onPlayerStateChange }, ref) {
+    const scrollRef = useRef<HTMLDivElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const apiRef = useRef<at.AlphaTabApi | null>(null)
     const mountedRef = useRef(false)
@@ -45,13 +46,14 @@ export const AlphaTabPreview = forwardRef<AlphaTabPreviewHandle, AlphaTabPreview
     }))
 
     useEffect(() => {
-      if (!containerRef.current) return
+      if (!containerRef.current || !scrollRef.current) return
       const settings = new at.Settings()
       settings.core.fontDirectory = '/font/'
       settings.display.staveProfile = staveProfileFor(mode)
       settings.player.enablePlayer = true
       settings.player.soundFont = '/soundfont/sonivox.sf2'
       settings.player.scrollMode = at.ScrollMode.Continuous
+      settings.player.scrollElement = scrollRef.current
 
       const api = new at.AlphaTabApi(containerRef.current, settings)
       apiRef.current = api
@@ -88,7 +90,9 @@ export const AlphaTabPreview = forwardRef<AlphaTabPreviewHandle, AlphaTabPreview
 
     return (
       <div className="alphatab-preview">
-        <div className="alphatab-preview-canvas" ref={containerRef} />
+        <div className="alphatab-preview-canvas" ref={scrollRef}>
+          <div ref={containerRef} />
+        </div>
       </div>
     )
   }
