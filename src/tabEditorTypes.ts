@@ -1,3 +1,15 @@
+// Harmonic types matching alphaTab's HarmonicType enum
+export const HarmonicType = {
+  Natural: 1,
+  Artificial: 2,
+  Pinch: 3,
+  Tap: 4,
+  Semi: 5,
+  Feedback: 6,
+} as const
+
+export type HarmonicTypeValue = (typeof HarmonicType)[keyof typeof HarmonicType]
+
 // Duration values matching alphaTab's Duration enum integers
 export const Duration = {
   Whole:        1,
@@ -23,7 +35,7 @@ export interface NoteModifiers {
   letRing?: true
   palmMute?: true
   dead?: true
-  naturalHarmonic?: true
+  harmonicType?: HarmonicTypeValue
   hammerOn?: true
   pullOff?: true
   legatoSlide?: true
@@ -45,6 +57,7 @@ export interface TabNote {
   fret: number    // 0-24; always >= 0 (notes absent from beat.notes array = no note)
   modifiers: NoteModifiers
   bendAmount?: number // 0.5–5 in 0.5 increments; defaults to 1 when modifiers.bend is set
+  harmonicValue?: number // fret for artificial harmonic node point; only relevant when modifiers.harmonicType === 2
 }
 
 export interface Beat {
@@ -121,6 +134,7 @@ export interface TabEditorState {
   activeDuration: DurationValue
   activeDot: DotModifier
   activeModifiers: NoteModifiers
+  activeHarmonicValue?: number
   isPlaying: boolean
   playheadMeasure: number
   playheadBeat: number

@@ -3,6 +3,7 @@ import type {
   ConnectionModifierKey,
   DotModifier,
   DurationValue,
+  HarmonicTypeValue,
   MasterBar,
   Measure,
   NoteModifierKey,
@@ -35,6 +36,8 @@ const MODIFIER_CONFLICTS: Partial<Record<NoteModifierKey, NoteModifierKey[]>> = 
   vibrato: ['palmMute', 'staccato'],
   palmMute: ['vibrato', 'letRing', 'staccato'],
   letRing: ['palmMute', 'staccato'],
+  harmonicType: ['dead', 'palmMute'],
+  dead: ['harmonicType'],
 }
 
 function applyModifierConflicts(mods: NoteModifiers, modifier: NoteModifierKey): void {
@@ -234,11 +237,36 @@ const STRING_DURATION_TO_INT: Record<string, DurationValue> = {
   sixtyfourth:  Duration.SixtyFourth,
 }
 
+function cleanNoteModifiers(track: TabTrack): TabTrack {
+  return {
+    ...track,
+    measures: track.measures.map((m) => ({
+      ...m,
+      beats: m.beats.map((b) => ({
+        ...b,
+        notes: b.notes.map((n) => {
+          const mods = { ...n.modifiers } as Record<string, unknown>
+          // vibrato: true is pre-VibratoType legacy data → default to Slight (1)
+          if (mods.vibrato === true) mods.vibrato = 1
+          // naturalHarmonic: true is pre-HarmonicType legacy data → Natural (1)
+          if (mods.naturalHarmonic === true) {
+            mods.harmonicType = 1
+            delete mods.naturalHarmonic
+          }
+          // harmonicType: true is invalid (was never valid but guard anyway)
+          if (mods.harmonicType === true) mods.harmonicType = 1
+          return { ...n, modifiers: mods as NoteModifiers }
+        }),
+      })),
+    })),
+  }
+}
+
 export function migrateTrackIfNeeded(raw: unknown): TabTrack {
   const data = raw as Record<string, unknown>
 
-  // Already v3 format
-  if (data.schemaVersion === 3) return data as unknown as TabTrack
+  // Already v3 format — still run modifier cleanup to fix legacy boolean values
+  if (data.schemaVersion === 3) return cleanNoteModifiers(data as unknown as TabTrack)
 
   // v2 → v3: flip string indices (1=highest → 1=lowest) and reverse openMidi (high→low → low→high)
   if (data.schemaVersion === 2) {
@@ -488,12 +516,19 @@ function placeNoteInMeasure(
   dot: DotModifier,
   activeModifiers: NoteModifiers,
   timeSig: { numerator: number; denominator: number },
+  harmonicValue?: number,
 ): { measure: Measure; overflow: Omit<OverflowPending, 'measureIndex'> | null } {
   const capacity = measureCapacityTicks(timeSig)
   const newBeatTicks = durationTicks(duration, dot)
 
-  function upsertNote(notes: TabNote[]): TabNote[] {
-    const newNote: TabNote = { string: stringIndex, fret, modifiers: { ...activeModifiers } }
+  function upsertNote(notes: TabNote[], harmonicValue?: number): TabNote[] {
+    const existingNote = notes.find((n) => n.string === stringIndex)
+    const newNote: TabNote = {
+      string: stringIndex,
+      fret,
+      modifiers: { ...activeModifiers },
+      ...(activeModifiers.harmonicType === 2 && { harmonicValue: harmonicValue ?? existingNote?.harmonicValue ?? 12 }),
+    }
     const idx = notes.findIndex((n) => n.string === stringIndex)
     if (idx >= 0) {
       return notes.map((n, i) => (i === idx ? newNote : n))
@@ -512,7 +547,7 @@ function placeNoteInMeasure(
     }
     const newBeat = makeBeat(duration)
     newBeat.dot = { ...dot }
-    newBeat.notes = upsertNote([])
+    newBeat.notes = upsertNote([], harmonicValue)
     return { measure: { ...measure, beats: [...measure.beats, newBeat] }, overflow: null }
   }
 
@@ -531,7 +566,7 @@ function placeNoteInMeasure(
 
   const beats = measure.beats.map((b, bi) => {
     if (bi !== beatIndex) return b
-    const notes = upsertNote(b.notes)
+    const notes = upsertNote(b.notes, harmonicValue)
     return { ...b, duration, dot: { ...dot }, notes }
   })
   return { measure: { ...measure, beats }, overflow: null }
@@ -567,19 +602,19 @@ export type TabEditorAction =
     }
   | { type: 'SET_ACTIVE_DURATION'; duration: DurationValue }
   | { type: 'SET_ACTIVE_DOT'; dot: DotModifier }
-  | { type: 'TOGGLE_MODIFIER'; modifier: NoteModifierKey; value?: true | 1 | 2 }
+  | { type: 'TOGGLE_MODIFIER'; modifier: NoteModifierKey; value?: true | 1 | 2 | 3 | 4 | 5 | 6 }
   | { type: 'TOGGLE_NOTE_IN_SELECTION'; cursor: TabCursor }
   | { type: 'ENSURE_NOTE_IN_SELECTION'; cursor: TabCursor }
   | { type: 'CLEAR_NOTE_SELECTION' }
   | { type: 'APPLY_CONNECTION_TO_SELECTION'; modifier: ConnectionModifierKey }
-  | { type: 'APPLY_MODIFIER_TO_SELECTION'; modifier: NoteModifierKey; value?: true | 1 | 2 }
+  | { type: 'APPLY_MODIFIER_TO_SELECTION'; modifier: NoteModifierKey; value?: true | 1 | 2 | 3 | 4 | 5 | 6 }
   | {
       type: 'APPLY_MODIFIER'
       measureIndex: number
       beatIndex: number
       stringIndex: number
       modifier: NoteModifierKey
-      value?: true | 1 | 2
+      value?: true | 1 | 2 | 3 | 4 | 5 | 6
     }
   | { type: 'INSERT_BEAT_BEFORE'; measureIndex: number; beatIndex: number }
   | { type: 'INSERT_BEAT_AFTER'; measureIndex: number; beatIndex: number }
@@ -589,7 +624,11 @@ export type TabEditorAction =
   | { type: 'DELETE_MEASURE'; measureIndex: number }
   | { type: 'MOVE_CURSOR'; direction: 'left' | 'right' | 'up' | 'down' }
   | { type: 'SHIFT_MOVE_CURSOR'; direction: 'left' | 'right' }
-  | { type: 'APPLY_MODIFIER_TO_BEAT_SELECTION'; modifier: NoteModifierKey; value?: true | 1 | 2 }
+  | { type: 'APPLY_MODIFIER_TO_BEAT_SELECTION'; modifier: NoteModifierKey; value?: true | 1 | 2 | 3 | 4 | 5 | 6 }
+  | { type: 'APPLY_HARMONIC'; measureIndex: number; beatIndex: number; stringIndex: number; harmonicType?: HarmonicTypeValue; harmonicValue?: number }
+  | { type: 'APPLY_HARMONIC_TO_SELECTION'; harmonicType?: HarmonicTypeValue; harmonicValue?: number }
+  | { type: 'APPLY_HARMONIC_TO_BEAT_SELECTION'; harmonicType?: HarmonicTypeValue; harmonicValue?: number }
+  | { type: 'SET_ACTIVE_HARMONIC'; harmonicType?: HarmonicTypeValue; harmonicValue?: number }
   | { type: 'SET_CURSOR'; cursor: TabCursor }
   | { type: 'SET_SELECTION'; selection: TabSelection | null }
   | { type: 'COPY' }
@@ -644,6 +683,9 @@ function tabEditorReducerInner(
       const existingNote = existingBeat?.notes.find((n) => n.string === action.stringIndex)
       const baseModifiers = existingNote ? existingNote.modifiers : {}
       const mergedModifiers = { ...baseModifiers, ...s.activeModifiers }
+      const newHarmonicValue = mergedModifiers.harmonicType === 2
+        ? (s.activeHarmonicValue ?? existingNote?.harmonicValue ?? 12)
+        : undefined
       const { measure: placedMeasure, overflow } = placeNoteInMeasure(
         measure,
         action.beatIndex,
@@ -653,6 +695,7 @@ function tabEditorReducerInner(
         dot,
         mergedModifiers,
         timeSig,
+        newHarmonicValue,
       )
 
       if (overflow) {
@@ -1375,7 +1418,8 @@ function tabEditorReducerInner(
         if (beatIndex >= m.beats.length) {
           const newBeat = makeBeat(trimDur)
           newBeat.dot = { ...trimDot }
-          newBeat.notes = [{ string: stringIndex, fret, modifiers: { ...state.activeModifiers } }]
+          const harmonicVal = state.activeModifiers.harmonicType === 2 ? (state.activeHarmonicValue ?? 12) : undefined
+          newBeat.notes = [{ string: stringIndex, fret, modifiers: { ...state.activeModifiers }, ...(harmonicVal !== undefined && { harmonicValue: harmonicVal }) }]
           return { ...m, beats: [...m.beats, newBeat] }
         }
         return {
@@ -1383,7 +1427,8 @@ function tabEditorReducerInner(
           beats: m.beats.map((b, bi) => {
             if (bi !== beatIndex) return b
             const existing = b.notes.findIndex((n) => n.string === stringIndex)
-            const newNote = { string: stringIndex, fret, modifiers: { ...state.activeModifiers } }
+            const harmonicVal = state.activeModifiers.harmonicType === 2 ? (state.activeHarmonicValue ?? 12) : undefined
+            const newNote = { string: stringIndex, fret, modifiers: { ...state.activeModifiers }, ...(harmonicVal !== undefined && { harmonicValue: harmonicVal }) }
             const notes = existing >= 0
               ? b.notes.map((n, i) => (i === existing ? newNote : n))
               : [...b.notes, newNote].sort((a, n) => a.string - n.string)
@@ -1420,7 +1465,8 @@ function tabEditorReducerInner(
           const newBeat = makeBeat(trimDur)
           newBeat.dot = { ...trimDot }
           newBeat.tiedTo = true
-          newBeat.notes = [{ string: stringIndex, fret, modifiers: { ...state.activeModifiers } }]
+          const harmonicValB = state.activeModifiers.harmonicType === 2 ? (state.activeHarmonicValue ?? 12) : undefined
+          newBeat.notes = [{ string: stringIndex, fret, modifiers: { ...state.activeModifiers }, ...(harmonicValB !== undefined && { harmonicValue: harmonicValB }) }]
           return { ...m, beats: [...m.beats, newBeat] }
         }
         return {
@@ -1428,7 +1474,8 @@ function tabEditorReducerInner(
           beats: m.beats.map((b, bi) => {
             if (bi !== beatIndex) return b
             const existing = b.notes.findIndex((n) => n.string === stringIndex)
-            const newNote = { string: stringIndex, fret, modifiers: { ...state.activeModifiers } }
+            const harmonicValB = state.activeModifiers.harmonicType === 2 ? (state.activeHarmonicValue ?? 12) : undefined
+            const newNote = { string: stringIndex, fret, modifiers: { ...state.activeModifiers }, ...(harmonicValB !== undefined && { harmonicValue: harmonicValB }) }
             const notes = existing >= 0
               ? b.notes.map((n, i) => (i === existing ? newNote : n))
               : [...b.notes, newNote].sort((a, n) => a.string - n.string)
@@ -1664,6 +1711,102 @@ function tabEditorReducerInner(
       const newTrack = { ...s.track, measures }
       const advancedCursor = advanceCursorRight(cursor, newTrack)
       return { ...s, track: newTrack, cursor: advancedCursor }
+    }
+
+    case 'SET_ACTIVE_HARMONIC': {
+      const next = { ...state.activeModifiers }
+      if (action.harmonicType === undefined) {
+        delete next.harmonicType
+      } else {
+        next.harmonicType = action.harmonicType
+        applyModifierConflicts(next, 'harmonicType')
+      }
+      return { ...state, activeModifiers: next, activeHarmonicValue: action.harmonicValue }
+    }
+
+    case 'APPLY_HARMONIC': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== action.beatIndex) return b
+            const notes = b.notes.map((n) => {
+              if (n.string !== action.stringIndex) return n
+              if (action.harmonicType === undefined) {
+                const mods = { ...n.modifiers }
+                delete mods.harmonicType
+                return { ...n, modifiers: mods, harmonicValue: undefined }
+              }
+              const mods = { ...n.modifiers, harmonicType: action.harmonicType }
+              applyModifierConflicts(mods, 'harmonicType')
+              return { ...n, modifiers: mods, harmonicValue: action.harmonicValue }
+            })
+            return { ...b, notes }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'APPLY_HARMONIC_TO_SELECTION': {
+      if (state.noteSelection.length < 1) return state
+      const s = pushUndo(state)
+      const selSet = new Set(state.noteSelection.map((c) => `${c.measureIndex}:${c.beatIndex}:${c.stringIndex}`))
+      const measures = s.track.measures.map((m, mi) => ({
+        ...m,
+        beats: m.beats.map((b, bi) => ({
+          ...b,
+          notes: b.notes.map((n) => {
+            if (!selSet.has(`${mi}:${bi}:${n.string}`)) return n
+            if (action.harmonicType === undefined) {
+              const mods = { ...n.modifiers }
+              delete mods.harmonicType
+              return { ...n, modifiers: mods, harmonicValue: undefined }
+            }
+            const mods = { ...n.modifiers, harmonicType: action.harmonicType }
+            applyModifierConflicts(mods, 'harmonicType')
+            return { ...n, modifiers: mods, harmonicValue: action.harmonicValue }
+          }),
+        })),
+      }))
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'APPLY_HARMONIC_TO_BEAT_SELECTION': {
+      const sel = state.selection
+      if (!sel) return state
+      const s = pushUndo(state)
+      const norm = normalizeSelection(sel)
+      const selBeatSet = new Set<string>()
+      for (let mi = norm.startMeasure; mi <= norm.endMeasure; mi++) {
+        const m = state.track.measures[mi]
+        if (!m) continue
+        const bStart = mi === norm.startMeasure ? norm.startBeat : 0
+        const bEnd = mi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+        for (let bi = bStart; bi <= bEnd; bi++) selBeatSet.add(`${mi}:${bi}`)
+      }
+      const measures = s.track.measures.map((m, mi) => ({
+        ...m,
+        beats: m.beats.map((b, bi) => {
+          if (!selBeatSet.has(`${mi}:${bi}`)) return b
+          return {
+            ...b,
+            notes: b.notes.map((n) => {
+              if (action.harmonicType === undefined) {
+                const mods = { ...n.modifiers }
+                delete mods.harmonicType
+                return { ...n, modifiers: mods, harmonicValue: undefined }
+              }
+              const mods = { ...n.modifiers, harmonicType: action.harmonicType }
+              applyModifierConflicts(mods, 'harmonicType')
+              return { ...n, modifiers: mods, harmonicValue: action.harmonicValue }
+            }),
+          }
+        }),
+      }))
+      return { ...s, track: { ...s.track, measures } }
     }
 
     default:

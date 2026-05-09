@@ -89,7 +89,7 @@ export function formatFretLabel(note: TabNote, isTied: boolean, forPrint = false
   if (note.fret < 0) return { label: '', fill: forPrint ? '#000000' : '#e8e8e8', fontStyle: 'normal' }
   if (isTied) return { label: `(${note.fret})`, fill: forPrint ? '#555555' : '#666', fontStyle: 'normal' }
   if (note.modifiers.dead) return { label: 'X', fill: forPrint ? '#000000' : '#cc4444', fontStyle: 'normal' }
-  if (note.modifiers.naturalHarmonic) return { label: `<${note.fret}>`, fill: forPrint ? '#000000' : '#88ccff', fontStyle: 'italic' }
+  if (note.modifiers.harmonicType) return { label: `<${note.fret}>`, fill: forPrint ? '#000000' : '#88ccff', fontStyle: 'italic' }
   if (note.modifiers.ghost) return { label: `(${note.fret})`, fill: forPrint ? '#555555' : '#888888', fontStyle: 'normal' }
   return { label: String(note.fret), fill: forPrint ? '#000000' : '#e8e8e8', fontStyle: 'normal' }
 }

@@ -97,11 +97,24 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
         else if (note.modifiers.pickUp) atBeat.pickStroke = at.model.PickStroke.Up
 
         if (note.modifiers.hammerOn) atNote.isHammerPullOrigin = true
-        if (note.modifiers.vibrato) atNote.vibrato = note.modifiers.vibrato
+        if (note.modifiers.vibrato === 1 || note.modifiers.vibrato === 2) atNote.vibrato = note.modifiers.vibrato
         if (note.modifiers.palmMute) atNote.isPalmMute = true
         if (note.modifiers.letRing) atNote.isLetRing = true
         if (note.modifiers.dead) atNote.isDead = true
-        if (note.modifiers.naturalHarmonic) atNote.harmonicType = at.model.HarmonicType.Natural
+        if (note.modifiers.harmonicType) {
+          const htMap: Record<number, at.model.HarmonicType> = {
+            1: at.model.HarmonicType.Natural,
+            2: at.model.HarmonicType.Artificial,
+            3: at.model.HarmonicType.Pinch,
+            4: at.model.HarmonicType.Tap,
+            5: at.model.HarmonicType.Semi,
+            6: at.model.HarmonicType.Feedback,
+          }
+          atNote.harmonicType = htMap[note.modifiers.harmonicType] ?? at.model.HarmonicType.Natural
+          if (note.modifiers.harmonicType === 2 && note.harmonicValue !== undefined) {
+            atNote.harmonicValue = note.harmonicValue
+          }
+        }
         if (note.modifiers.ghost) atNote.isGhost = true
         if (note.modifiers.staccato) atNote.isStaccato = true
         if (note.modifiers.tapping) atNote.isLeftHandTapped = true

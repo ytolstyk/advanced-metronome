@@ -5,6 +5,7 @@ import type {
   ConnectionModifierKey,
   DotModifier,
   DurationValue,
+  HarmonicTypeValue,
   NoteModifierKey,
   TabEditorState,
 } from '../../tabEditorTypes'
@@ -13,6 +14,7 @@ import type { TabEditorAction } from '../../tabEditorState'
 import { normalizeSelection } from '../../tabEditorState'
 import { VibratoDialog } from './VibratoDialog'
 import type { VibratoType } from './VibratoDialog'
+import { HarmonicsDialog, HARMONIC_LABELS, HARMONIC_SYMBOLS } from './HarmonicsDialog'
 
 const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide']
 
@@ -22,7 +24,7 @@ const MODIFIER_LABELS: Record<string, string> = {
   letRing: 'Let ring',
   palmMute: 'Palm mute',
   dead: 'Dead',
-  naturalHarmonic: 'Harmonic',
+  harmonicType: 'Harmonic',
   hammerOn: 'Hammer-on',
   pullOff: 'Pull-off',
   legatoSlide: 'Legato slide',
@@ -52,7 +54,6 @@ const MODIFIERS_BASE: { label: string; key: NoteModifierKey; title: string }[] =
   { label: '∞', key: 'letRing', title: 'Let ring' },
   { label: 'PM', key: 'palmMute', title: 'Palm mute' },
   { label: 'X', key: 'dead', title: 'Dead note' },
-  { label: '◇', key: 'naturalHarmonic', title: 'Natural harmonic' },
 ]
 
 const CONNECTIONS_BASE: { label: string; key: NoteModifierKey; title: string }[] = [
@@ -118,6 +119,7 @@ function ToolBtn({
 
 export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToolbarProps) {
   const [vibratoDialogOpen, setVibratoDialogOpen] = useState(false)
+  const [harmonicsDialogOpen, setHarmonicsDialogOpen] = useState(false)
   const { activeDuration, activeDot, activeModifiers, cursor, noteSelection } = state
   const mi = cursor.measureIndex
   const bi = cursor.beatIndex
@@ -265,6 +267,32 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
     setVibratoDialogOpen(false)
   }
 
+  function applyHarmonic(harmonicType: HarmonicTypeValue, harmonicValue?: number) {
+    if (noteSelection.length >= 2) {
+      dispatch({ type: 'APPLY_HARMONIC_TO_SELECTION', harmonicType, harmonicValue })
+    } else if (hasBeatSelection) {
+      dispatch({ type: 'APPLY_HARMONIC_TO_BEAT_SELECTION', harmonicType, harmonicValue })
+    } else if (isOnNote) {
+      dispatch({ type: 'APPLY_HARMONIC', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, harmonicType, harmonicValue })
+    } else {
+      dispatch({ type: 'SET_ACTIVE_HARMONIC', harmonicType, harmonicValue })
+    }
+    setHarmonicsDialogOpen(false)
+  }
+
+  function removeHarmonic() {
+    if (noteSelection.length >= 2) {
+      dispatch({ type: 'APPLY_HARMONIC_TO_SELECTION' })
+    } else if (hasBeatSelection) {
+      dispatch({ type: 'APPLY_HARMONIC_TO_BEAT_SELECTION' })
+    } else if (isOnNote) {
+      dispatch({ type: 'APPLY_HARMONIC', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex })
+    } else {
+      dispatch({ type: 'SET_ACTIVE_HARMONIC' })
+    }
+    setHarmonicsDialogOpen(false)
+  }
+
   function onConnectionClick(key: NoteModifierKey) {
     if (key === 'vibrato') {
       setVibratoDialogOpen(true)
@@ -362,6 +390,21 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
             {mod.label}
           </ToolBtn>
         ))}
+        <ToolBtn
+          title="Harmonic"
+          activeEffect={
+            noteSelection.length >= 2
+              ? selectionEffectState('harmonicType')
+              : hasBeatSelection
+                ? beatSelectionEffectState('harmonicType')
+                : isOnNote
+                  ? !!currentNote.modifiers.harmonicType
+                  : !!activeModifiers.harmonicType
+          }
+          onClick={() => setHarmonicsDialogOpen(true)}
+        >
+          ◇
+        </ToolBtn>
       </div>
 
       {/* Connections group */}
@@ -438,11 +481,21 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
             .map((k) => (
               <ToolBtn
                 key={k}
-                title={k === 'vibrato' ? 'Change vibrato type' : `Remove ${MODIFIER_LABELS[k] ?? k}`}
+                title={
+                  k === 'vibrato'
+                    ? 'Change vibrato type'
+                    : k === 'harmonicType'
+                      ? `Change harmonic type (${HARMONIC_LABELS[currentNote.modifiers.harmonicType!]})`
+                      : `Remove ${MODIFIER_LABELS[k] ?? k}`
+                }
                 activeEffect={true}
                 onClick={() => {
                   if (k === 'vibrato') {
                     setVibratoDialogOpen(true)
+                    return
+                  }
+                  if (k === 'harmonicType') {
+                    setHarmonicsDialogOpen(true)
                     return
                   }
                   dispatch({
@@ -454,7 +507,9 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
                   })
                 }}
               >
-                {MODIFIER_SYMBOL[k] ?? k}
+                {k === 'harmonicType'
+                  ? HARMONIC_SYMBOLS[currentNote.modifiers.harmonicType!]
+                  : (MODIFIER_SYMBOL[k] ?? k)}
               </ToolBtn>
             ))}
       </div>
@@ -464,6 +519,14 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         onSelect={applyVibrato}
         onRemove={removeVibrato}
         onClose={() => setVibratoDialogOpen(false)}
+      />
+      <HarmonicsDialog
+        open={harmonicsDialogOpen}
+        current={isOnNote ? currentNote.modifiers.harmonicType : activeModifiers.harmonicType}
+        harmonicValue={isOnNote ? currentNote.harmonicValue : state.activeHarmonicValue}
+        onSelect={applyHarmonic}
+        onRemove={removeHarmonic}
+        onClose={() => setHarmonicsDialogOpen(false)}
       />
     </div>
   )

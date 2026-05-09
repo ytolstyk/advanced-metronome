@@ -294,7 +294,7 @@ function computeNoteSlotW(beat: Beat): number {
     let label: string
     if (beat.tiedFrom) label = `(${n.fret})`
     else if (n.modifiers.dead) label = 'X'
-    else if (n.modifiers.naturalHarmonic) label = `<${n.fret}>`
+    else if (n.modifiers.harmonicType) label = `<${n.fret}>`
     else if (n.modifiers.ghost) label = `(${n.fret})`
     else label = String(n.fret)
     return Math.max(max, Math.max(label.length * 8 + 4, 18))

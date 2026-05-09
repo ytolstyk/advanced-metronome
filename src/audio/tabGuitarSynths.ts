@@ -109,7 +109,7 @@ export function playTabNote(opts: PlayTabNoteOptions): GainNode {
     return env
   }
 
-  if (modifiers.naturalHarmonic) {
+  if (modifiers.harmonicType) {
     const mult = HARMONIC_MULTIPLIER[fret] ?? null
     const openFreq = fretToFreq(openMidi, 0)
     const harmonicFreq = mult !== null ? Math.min(openFreq * mult, 18000) : freq
