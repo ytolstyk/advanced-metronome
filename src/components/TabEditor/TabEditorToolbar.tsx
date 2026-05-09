@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type {
@@ -11,6 +11,8 @@ import type {
 import { Duration } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
 import { normalizeSelection } from '../../tabEditorState'
+import { VibratoDialog } from './VibratoDialog'
+import type { VibratoType } from './VibratoDialog'
 
 const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide']
 
@@ -115,6 +117,7 @@ function ToolBtn({
 }
 
 export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToolbarProps) {
+  const [vibratoDialogOpen, setVibratoDialogOpen] = useState(false)
   const { activeDuration, activeDot, activeModifiers, cursor, noteSelection } = state
   const mi = cursor.measureIndex
   const bi = cursor.beatIndex
@@ -236,7 +239,37 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
 
   const CONNECTION_KEYS_SET = new Set<NoteModifierKey>(CONNECTION_KEYS)
 
+  function applyVibrato(vibratoType: VibratoType) {
+    if (noteSelection.length >= 2) {
+      dispatch({ type: 'APPLY_MODIFIER_TO_SELECTION', modifier: 'vibrato', value: vibratoType })
+    } else if (hasBeatSelection) {
+      dispatch({ type: 'APPLY_MODIFIER_TO_BEAT_SELECTION', modifier: 'vibrato', value: vibratoType })
+    } else if (isOnNote) {
+      dispatch({ type: 'APPLY_MODIFIER', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, modifier: 'vibrato', value: vibratoType })
+    } else {
+      dispatch({ type: 'TOGGLE_MODIFIER', modifier: 'vibrato', value: vibratoType })
+    }
+    setVibratoDialogOpen(false)
+  }
+
+  function removeVibrato() {
+    if (noteSelection.length >= 2) {
+      dispatch({ type: 'APPLY_MODIFIER_TO_SELECTION', modifier: 'vibrato' })
+    } else if (hasBeatSelection) {
+      dispatch({ type: 'APPLY_MODIFIER_TO_BEAT_SELECTION', modifier: 'vibrato' })
+    } else if (isOnNote) {
+      dispatch({ type: 'APPLY_MODIFIER', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, modifier: 'vibrato' })
+    } else {
+      dispatch({ type: 'TOGGLE_MODIFIER', modifier: 'vibrato' })
+    }
+    setVibratoDialogOpen(false)
+  }
+
   function onConnectionClick(key: NoteModifierKey) {
+    if (key === 'vibrato') {
+      setVibratoDialogOpen(true)
+      return
+    }
     if (noteSelection.length >= 2) {
       if (CONNECTION_KEYS_SET.has(key)) {
         dispatch({ type: 'APPLY_CONNECTION_TO_SELECTION', modifier: key as ConnectionModifierKey })
@@ -405,9 +438,13 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
             .map((k) => (
               <ToolBtn
                 key={k}
-                title={`Remove ${MODIFIER_LABELS[k] ?? k}`}
+                title={k === 'vibrato' ? 'Change vibrato type' : `Remove ${MODIFIER_LABELS[k] ?? k}`}
                 activeEffect={true}
-                onClick={() =>
+                onClick={() => {
+                  if (k === 'vibrato') {
+                    setVibratoDialogOpen(true)
+                    return
+                  }
                   dispatch({
                     type: 'APPLY_MODIFIER',
                     measureIndex: mi,
@@ -415,12 +452,19 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
                     stringIndex: cursor.stringIndex,
                     modifier: k,
                   })
-                }
+                }}
               >
                 {MODIFIER_SYMBOL[k] ?? k}
               </ToolBtn>
             ))}
       </div>
+      <VibratoDialog
+        open={vibratoDialogOpen}
+        current={isOnNote ? (currentNote.modifiers.vibrato as VibratoType | undefined) : (activeModifiers.vibrato as VibratoType | undefined)}
+        onSelect={applyVibrato}
+        onRemove={removeVibrato}
+        onClose={() => setVibratoDialogOpen(false)}
+      />
     </div>
   )
 }

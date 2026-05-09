@@ -567,18 +567,19 @@ export type TabEditorAction =
     }
   | { type: 'SET_ACTIVE_DURATION'; duration: DurationValue }
   | { type: 'SET_ACTIVE_DOT'; dot: DotModifier }
-  | { type: 'TOGGLE_MODIFIER'; modifier: NoteModifierKey }
+  | { type: 'TOGGLE_MODIFIER'; modifier: NoteModifierKey; value?: true | 1 | 2 }
   | { type: 'TOGGLE_NOTE_IN_SELECTION'; cursor: TabCursor }
   | { type: 'ENSURE_NOTE_IN_SELECTION'; cursor: TabCursor }
   | { type: 'CLEAR_NOTE_SELECTION' }
   | { type: 'APPLY_CONNECTION_TO_SELECTION'; modifier: ConnectionModifierKey }
-  | { type: 'APPLY_MODIFIER_TO_SELECTION'; modifier: NoteModifierKey }
+  | { type: 'APPLY_MODIFIER_TO_SELECTION'; modifier: NoteModifierKey; value?: true | 1 | 2 }
   | {
       type: 'APPLY_MODIFIER'
       measureIndex: number
       beatIndex: number
       stringIndex: number
       modifier: NoteModifierKey
+      value?: true | 1 | 2
     }
   | { type: 'INSERT_BEAT_BEFORE'; measureIndex: number; beatIndex: number }
   | { type: 'INSERT_BEAT_AFTER'; measureIndex: number; beatIndex: number }
@@ -588,7 +589,7 @@ export type TabEditorAction =
   | { type: 'DELETE_MEASURE'; measureIndex: number }
   | { type: 'MOVE_CURSOR'; direction: 'left' | 'right' | 'up' | 'down' }
   | { type: 'SHIFT_MOVE_CURSOR'; direction: 'left' | 'right' }
-  | { type: 'APPLY_MODIFIER_TO_BEAT_SELECTION'; modifier: NoteModifierKey }
+  | { type: 'APPLY_MODIFIER_TO_BEAT_SELECTION'; modifier: NoteModifierKey; value?: true | 1 | 2 }
   | { type: 'SET_CURSOR'; cursor: TabCursor }
   | { type: 'SET_SELECTION'; selection: TabSelection | null }
   | { type: 'COPY' }
@@ -763,7 +764,8 @@ function tabEditorReducerInner(
       if (cur) {
         delete next[action.modifier]
       } else {
-        next[action.modifier] = true
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        next[action.modifier] = (action.value ?? true) as any
         applyModifierConflicts(next, action.modifier)
       }
       return { ...state, activeModifiers: next }
@@ -786,7 +788,8 @@ function tabEditorReducerInner(
                 if (cur) {
                   delete mods[action.modifier]
                 } else {
-                  mods[action.modifier] = true
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  mods[action.modifier] = (action.value ?? true) as any
                   applyModifierConflicts(mods, action.modifier)
                 }
               }
@@ -976,7 +979,8 @@ function tabEditorReducerInner(
               delete mods[action.modifier]
               return { ...n, modifiers: mods }
             }
-            const mods = { ...n.modifiers, [action.modifier]: true as const }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const mods = { ...n.modifiers, [action.modifier]: (action.value ?? true) as any }
             applyModifierConflicts(mods, action.modifier)
             return { ...n, modifiers: mods }
           })
@@ -1043,7 +1047,8 @@ function tabEditorReducerInner(
               delete mods[action.modifier]
               return { ...n, modifiers: mods }
             }
-            const mods = { ...n.modifiers, [action.modifier]: true as const }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const mods = { ...n.modifiers, [action.modifier]: (action.value ?? true) as any }
             applyModifierConflicts(mods, action.modifier)
             return { ...n, modifiers: mods }
           })

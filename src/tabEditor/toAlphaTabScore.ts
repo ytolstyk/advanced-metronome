@@ -97,7 +97,7 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
         else if (note.modifiers.pickUp) atBeat.pickStroke = at.model.PickStroke.Up
 
         if (note.modifiers.hammerOn) atNote.isHammerPullOrigin = true
-        if (note.modifiers.vibrato) atNote.vibrato = at.model.VibratoType.Slight
+        if (note.modifiers.vibrato) atNote.vibrato = note.modifiers.vibrato
         if (note.modifiers.palmMute) atNote.isPalmMute = true
         if (note.modifiers.letRing) atNote.isLetRing = true
         if (note.modifiers.dead) atNote.isDead = true

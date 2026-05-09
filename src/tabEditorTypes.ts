@@ -32,7 +32,7 @@ export interface NoteModifiers {
   slideOutDown?: true
   slideOutUp?: true
   bend?: true
-  vibrato?: true
+  vibrato?: 1 | 2  // 1 = Slight, 2 = Wide (alphaTab VibratoType)
   tapping?: true
   pickDown?: true
   pickUp?: true
