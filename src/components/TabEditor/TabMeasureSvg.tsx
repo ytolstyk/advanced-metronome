@@ -505,10 +505,10 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                         </text>
                       )}
 
-                      {/* Trill auxiliary fret — small, parenthesized, in the right-side space */}
+                      {/* Trill auxiliary fret — small, parenthesized, just right of the fret label */}
                       {trillAuxFret !== undefined && (
                         <text
-                          x={beatCX + 6}
+                          x={beatCX + labelW / 2 + 3}
                           y={sy}
                           fontSize={TRILL_AUX_FONT_SIZE}
                           fontFamily="'Courier New', monospace"

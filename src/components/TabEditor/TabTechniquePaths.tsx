@@ -488,9 +488,9 @@ function renderTrillRuns(
     const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
 
     const startSlotW = computeNoteSlotW(measure.beats[runStart])
-    const endSlotW = computeNoteSlotW(measure.beats[endBi])
     const x1 = startPos.cx - startSlotW / 2 + PAD
-    const x2 = endPos.cx + endSlotW / 2 - PAD
+    // Extend right edge to cover the full beat slot (including trill aux fret space)
+    const x2 = endPos.x + endPos.w - PAD
     const dashX1 = x1 + TR_LABEL_W + 2
     const trillColor = forPrint ? '#000000' : '#aaffcc'
 
@@ -510,9 +510,9 @@ function renderTrillRuns(
         {x2 > dashX1 + 2 && (
           <line
             x1={dashX1}
-            y1={topY}
+            y1={topY - 6}
             x2={x2}
-            y2={topY}
+            y2={topY - 6}
             stroke={trillColor}
             strokeWidth={1.5}
             strokeDasharray="3 1"
