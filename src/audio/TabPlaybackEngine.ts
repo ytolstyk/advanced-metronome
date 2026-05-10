@@ -187,6 +187,8 @@ export class TabPlaybackEngine {
         beatDuration: dur,
         nextFreq,
         vol: 0.65,
+        trillFret: note.trillFret,
+        trillSpeed: note.trillSpeed,
       })
 
       this.prevNoteKill.set(s, killNode)

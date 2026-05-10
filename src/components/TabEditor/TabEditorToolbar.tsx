@@ -15,6 +15,7 @@ import { normalizeSelection } from '../../tabEditorState'
 import { VibratoDialog } from './VibratoDialog'
 import type { VibratoType } from './VibratoDialog'
 import { HarmonicsDialog, HARMONIC_LABELS, HARMONIC_SYMBOLS } from './HarmonicsDialog'
+import { TrillDialog } from './TrillDialog'
 
 const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide']
 
@@ -156,6 +157,7 @@ function ToolBtn({
 export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToolbarProps) {
   const [vibratoDialogOpen, setVibratoDialogOpen] = useState(false)
   const [harmonicsDialogOpen, setHarmonicsDialogOpen] = useState(false)
+  const [trillDialogOpen, setTrillDialogOpen] = useState(false)
   const { activeDuration, activeDot, activeModifiers, cursor, noteSelection } = state
   const mi = cursor.measureIndex
   const bi = cursor.beatIndex
@@ -329,6 +331,28 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
     setHarmonicsDialogOpen(false)
   }
 
+  function applyTrill(trillFret: number, trillSpeed: DurationValue) {
+    if (noteSelection.length >= 2) {
+      dispatch({ type: 'APPLY_TRILL_TO_SELECTION', trillFret, trillSpeed })
+    } else if (hasBeatSelection) {
+      dispatch({ type: 'APPLY_TRILL_TO_BEAT_SELECTION', trillFret, trillSpeed })
+    } else if (isOnNote) {
+      dispatch({ type: 'APPLY_TRILL', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, trillFret, trillSpeed })
+    }
+    setTrillDialogOpen(false)
+  }
+
+  function removeTrill() {
+    if (noteSelection.length >= 2) {
+      dispatch({ type: 'APPLY_TRILL_TO_SELECTION' })
+    } else if (hasBeatSelection) {
+      dispatch({ type: 'APPLY_TRILL_TO_BEAT_SELECTION' })
+    } else if (isOnNote) {
+      dispatch({ type: 'APPLY_TRILL', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex })
+    }
+    setTrillDialogOpen(false)
+  }
+
   function onConnectionClick(key: NoteModifierKey) {
     if (key === 'vibrato') {
       setVibratoDialogOpen(true)
@@ -441,6 +465,21 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         >
           ◇
         </ToolBtn>
+        <ToolBtn
+          title="Trill"
+          activeEffect={
+            noteSelection.length >= 2
+              ? selectionEffectState('trill')
+              : hasBeatSelection
+                ? beatSelectionEffectState('trill')
+                : isOnNote
+                  ? !!currentNote.modifiers.trill
+                  : !!activeModifiers.trill
+          }
+          onClick={() => setTrillDialogOpen(true)}
+        >
+          <span style={{ fontStyle: 'italic', fontWeight: 'bold' }}>tr</span>
+        </ToolBtn>
       </div>
 
       {/* Connections group */}
@@ -522,7 +561,9 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
                     ? 'Change vibrato type'
                     : k === 'harmonicType'
                       ? `Change harmonic type (${HARMONIC_LABELS[currentNote.modifiers.harmonicType!]})`
-                      : `Remove ${MODIFIER_LABELS[k] ?? k}`
+                      : k === 'trill'
+                        ? 'Edit trill'
+                        : `Remove ${MODIFIER_LABELS[k] ?? k}`
                 }
                 activeEffect={true}
                 onClick={() => {
@@ -532,6 +573,10 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
                   }
                   if (k === 'harmonicType') {
                     setHarmonicsDialogOpen(true)
+                    return
+                  }
+                  if (k === 'trill') {
+                    setTrillDialogOpen(true)
                     return
                   }
                   dispatch({
@@ -545,7 +590,9 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
               >
                 {k === 'harmonicType'
                   ? HARMONIC_SYMBOLS[currentNote.modifiers.harmonicType!]
-                  : (MODIFIER_SYMBOL[k] ?? k)}
+                  : k === 'trill'
+                    ? <span style={{ fontStyle: 'italic', fontWeight: 'bold' }}>tr</span>
+                    : (MODIFIER_SYMBOL[k] ?? k)}
               </ToolBtn>
             ))}
       </div>
@@ -563,6 +610,22 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         onSelect={applyHarmonic}
         onRemove={removeHarmonic}
         onClose={() => setHarmonicsDialogOpen(false)}
+      />
+      <TrillDialog
+        key={`trill-${mi}-${bi}-${cursor.stringIndex}`}
+        open={trillDialogOpen}
+        current={
+          isOnNote && currentNote.modifiers.trill && currentNote.trillFret !== undefined
+            ? { trillFret: currentNote.trillFret, trillSpeed: currentNote.trillSpeed ?? Duration.Sixteenth }
+            : state.activeTrillFret !== undefined
+              ? { trillFret: state.activeTrillFret, trillSpeed: state.activeTrillSpeed ?? Duration.Sixteenth }
+              : undefined
+        }
+        baseFret={isOnNote ? currentNote.fret : undefined}
+        openMidi={state.track.openMidi[cursor.stringIndex - 1]}
+        onSelect={applyTrill}
+        onRemove={removeTrill}
+        onClose={() => setTrillDialogOpen(false)}
       />
     </div>
   )

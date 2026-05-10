@@ -126,6 +126,15 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
         if (note.modifiers.slideInBelow) atNote.slideInType = at.model.SlideInType.IntoFromBelow
         if (note.modifiers.slideInAbove) atNote.slideInType = at.model.SlideInType.IntoFromAbove
 
+        // Trill: trillValue is the MIDI value of the auxiliary note
+        if (note.modifiers.trill && note.trillFret !== undefined) {
+          const stringOpenMidi = track.openMidi[note.string - 1]
+          if (stringOpenMidi !== undefined) {
+            atNote.trillValue = stringOpenMidi + note.trillFret
+            atNote.trillSpeed = (note.trillSpeed ?? 16) as at.model.Duration
+          }
+        }
+
         // Bend: bendAmount is in semitones; AlphaTab value is quarter-tones (×4)
         if (note.modifiers.bend) {
           const semitones = note.bendAmount ?? 1

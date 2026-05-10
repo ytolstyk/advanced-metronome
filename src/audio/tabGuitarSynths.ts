@@ -1,4 +1,5 @@
-import type { NoteModifiers } from '../tabEditorTypes'
+import type { DurationValue, NoteModifiers } from '../tabEditorTypes'
+import { Duration } from '../tabEditorTypes'
 import { fretToFreq } from '../tabEditorState'
 
 export interface PlayTabNoteOptions {
@@ -12,6 +13,8 @@ export interface PlayTabNoteOptions {
   beatDuration: number
   nextFreq: number | null // destination for legatoSlide (next note on same string)
   vol: number
+  trillFret?: number      // auxiliary trill fret; only used when modifiers.trill is set
+  trillSpeed?: DurationValue // trill alternation speed
 }
 
 const HARMONIC_MULTIPLIER: Partial<Record<number, number>> = {
@@ -84,7 +87,7 @@ function attachVibrato(
 }
 
 export function playTabNote(opts: PlayTabNoteOptions): GainNode {
-  const { ctx, freq, fret, openMidi, modifiers, bendAmount, startTime, beatDuration, nextFreq, vol } = opts
+  const { ctx, freq, fret, openMidi, modifiers, bendAmount, startTime, beatDuration, nextFreq, vol, trillFret, trillSpeed } = opts
   const decayTotal = 2.2
   const oscStop = startTime + 2.5
 
@@ -205,7 +208,31 @@ export function playTabNote(opts: PlayTabNoteOptions): GainNode {
 
   const effectiveVol = modifiers.ghost ? vol * 0.25 : vol
   const env = buildEnvelope(ctx, startTime, effectiveVol, 0.008, decayTotal)
-  const oscs = spawnHarmonics(ctx, env, freq, startTime, oscStop, 6, h => 0.5 / (h * h))
+
+  // For trill, spawn harmonics centered between base and trill frequency
+  const hasTrill = modifiers.trill && trillFret !== undefined
+  const trillFreq = hasTrill ? fretToFreq(openMidi, trillFret!) : null
+  const baseOscFreq = hasTrill ? (freq + trillFreq!) / 2 : freq
+  const oscs = spawnHarmonics(ctx, env, baseOscFreq, startTime, oscStop, 6, h => 0.5 / (h * h))
+
+  if (hasTrill && trillFreq !== null) {
+    // Square LFO jumps sharply between the two pitches
+    // At 120BPM: 1/16 → 4Hz, 1/32 → 8Hz
+    const lfoRate = trillSpeed === Duration.ThirtySecond ? 8 : 4
+    const freqDiff = (trillFreq - freq) / 2
+    const lfo = ctx.createOscillator()
+    lfo.type = 'square'
+    lfo.frequency.value = lfoRate
+    oscs.forEach((osc, idx) => {
+      const h = idx + 1
+      const lfoGain = ctx.createGain()
+      lfoGain.gain.value = freqDiff * h
+      lfo.connect(lfoGain)
+      lfoGain.connect(osc.frequency)
+    })
+    lfo.start(startTime)
+    lfo.stop(oscStop)
+  }
 
   if (modifiers.bend) {
     const targetFreq = freq * Math.pow(2, bendAmount / 12)

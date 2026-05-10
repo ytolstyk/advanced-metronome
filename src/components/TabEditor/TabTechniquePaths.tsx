@@ -285,6 +285,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
   renderVibratoRuns(measure, beatPositions, elements, forPrint)
   renderPalmMuteRuns(measure, beatPositions, elements, forPrint)
   renderLetRingRuns(measure, beatPositions, elements, forPrint)
+  renderTrillRuns(measure, beatPositions, elements, forPrint)
 
   return <g>{elements}</g>
 }
@@ -357,7 +358,7 @@ function renderVibratoRuns(
 function runHasOverlap(measure: Measure, startBi: number, endBi: number): boolean {
   for (let bi = startBi; bi <= endBi; bi++) {
     const beat = measure.beats[bi]
-    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.pickDown || n.modifiers.pickUp || n.modifiers.bend)) return true
+    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.pickDown || n.modifiers.pickUp || n.modifiers.bend || n.modifiers.trill)) return true
   }
   return false
 }
@@ -464,4 +465,81 @@ function renderLetRingRuns(
     }
   }
   flushRun(measure.beats.length - 1)
+}
+
+function renderTrillRuns(
+  measure: Measure,
+  beatPositions: BeatPosition[],
+  elements: React.ReactNode[],
+  forPrint = false,
+) {
+  const PAD = 4
+  const TR_LABEL_W = 13  // approximate pixel width of "tr" italic text
+  let runStart: number | null = null
+
+  function flushRun(endBi: number) {
+    if (runStart === null) return
+    const startPos = beatPositions[runStart]
+    const endPos = beatPositions[endBi]
+    if (!startPos || !endPos) { runStart = null; return }
+
+    const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.modifiers.bend))
+    const baseTopY = runHasOverlapWithoutTrill(measure, runStart, endBi) ? LET_RING_ELEVATED_Y : LET_RING_ZONE_Y
+    const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
+
+    const startSlotW = computeNoteSlotW(measure.beats[runStart])
+    const endSlotW = computeNoteSlotW(measure.beats[endBi])
+    const x1 = startPos.cx - startSlotW / 2 + PAD
+    const x2 = endPos.cx + endSlotW / 2 - PAD
+    const dashX1 = x1 + TR_LABEL_W + 2
+    const trillColor = forPrint ? '#000000' : '#aaffcc'
+
+    elements.push(
+      <g key={`trill-${runStart}-${endBi}`}>
+        <text
+          x={x1}
+          y={topY - 2}
+          fontSize={TECHNIQUE_LABEL_FONT_SIZE}
+          fontStyle="italic"
+          fontWeight="bold"
+          fill={trillColor}
+          dominantBaseline="auto"
+        >
+          tr
+        </text>
+        {x2 > dashX1 + 2 && (
+          <line
+            x1={dashX1}
+            y1={topY}
+            x2={x2}
+            y2={topY}
+            stroke={trillColor}
+            strokeWidth={1.5}
+            strokeDasharray="3 1"
+          />
+        )}
+      </g>,
+    )
+    runStart = null
+  }
+
+  for (let bi = 0; bi < measure.beats.length; bi++) {
+    const beat = measure.beats[bi]
+    const hasTrill = beat.notes.some((n) => n.modifiers.trill)
+    if (hasTrill) {
+      if (runStart === null) runStart = bi
+    } else {
+      flushRun(bi - 1)
+    }
+  }
+  flushRun(measure.beats.length - 1)
+}
+
+// Like runHasOverlap but excludes trill itself (used to decide if trill needs elevation)
+function runHasOverlapWithoutTrill(measure: Measure, startBi: number, endBi: number): boolean {
+  for (let bi = startBi; bi <= endBi; bi++) {
+    const beat = measure.beats[bi]
+    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.pickDown || n.modifiers.pickUp || n.modifiers.bend)) return true
+  }
+  return false
 }

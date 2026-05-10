@@ -436,6 +436,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                 fretFill: string
                 fontStyle: 'normal' | 'italic'
                 labelW: number
+                trillAuxFret: number | undefined
               }
               // si is 1-based; stringCount=top (highest pitch), 1=bottom (lowest pitch)
               const strings: StringData[] = Array.from({ length: stringCount }, (_, rawSi) => {
@@ -453,13 +454,18 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
 
                 const hasNote = fretLabel !== ''
                 const labelW = Math.max(fretLabel.length * 8 + 4, 18)
-                return { si, sy, isCursorNote, isNoteSelected, hasNote, fretLabel, fretFill, fontStyle, labelW }
+                const trillAuxFret = (hasNote && note?.modifiers.trill && note.trillFret !== undefined)
+                  ? note.trillFret
+                  : undefined
+                return { si, sy, isCursorNote, isNoteSelected, hasNote, fretLabel, fretFill, fontStyle, labelW, trillAuxFret }
               })
+
+              const TRILL_AUX_FONT_SIZE = 12
 
               return (
                 <>
                   {/* Pass 1: cursor highlights, note backgrounds, texts, hit targets */}
-                  {strings.map(({ si, sy, isCursorNote, hasNote, fretLabel, fretFill, fontStyle, labelW }) => (
+                  {strings.map(({ si, sy, isCursorNote, hasNote, fretLabel, fretFill, fontStyle, labelW, trillAuxFret }) => (
                     <g key={si}>
                       {isCursorNote && !isPlaying && (
                         <rect
@@ -496,6 +502,22 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                           fill={fretFill}
                         >
                           {fretLabel}
+                        </text>
+                      )}
+
+                      {/* Trill auxiliary fret — small, parenthesized, in the right-side space */}
+                      {trillAuxFret !== undefined && (
+                        <text
+                          x={beatCX + 6}
+                          y={sy}
+                          fontSize={TRILL_AUX_FONT_SIZE}
+                          fontFamily="'Courier New', monospace"
+                          textAnchor="start"
+                          dominantBaseline="middle"
+                          fill={forPrint ? '#444444' : '#b3e5b3'}
+                          style={{ pointerEvents: 'none' }}
+                        >
+                          {`(${trillAuxFret})`}
                         </text>
                       )}
 

@@ -32,12 +32,13 @@ const MODIFIER_CONFLICTS: Partial<Record<NoteModifierKey, NoteModifierKey[]>> = 
   tapping: ['pickDown', 'pickUp'],
   pickDown: ['tapping', 'pickUp'],
   pickUp: ['tapping', 'pickDown'],
-  staccato: ['vibrato', 'palmMute', 'letRing'],
-  vibrato: ['palmMute', 'staccato'],
-  palmMute: ['vibrato', 'letRing', 'staccato'],
+  staccato: ['vibrato', 'palmMute', 'letRing', 'trill'],
+  vibrato: ['palmMute', 'staccato', 'trill'],
+  palmMute: ['vibrato', 'letRing', 'staccato', 'trill'],
   letRing: ['palmMute', 'staccato'],
   harmonicType: ['dead', 'palmMute'],
-  dead: ['harmonicType'],
+  dead: ['harmonicType', 'trill'],
+  trill: ['dead', 'staccato', 'vibrato', 'palmMute'],
 }
 
 function applyModifierConflicts(mods: NoteModifiers, modifier: NoteModifierKey): void {
@@ -629,6 +630,10 @@ export type TabEditorAction =
   | { type: 'APPLY_HARMONIC_TO_SELECTION'; harmonicType?: HarmonicTypeValue; harmonicValue?: number }
   | { type: 'APPLY_HARMONIC_TO_BEAT_SELECTION'; harmonicType?: HarmonicTypeValue; harmonicValue?: number }
   | { type: 'SET_ACTIVE_HARMONIC'; harmonicType?: HarmonicTypeValue; harmonicValue?: number }
+  | { type: 'APPLY_TRILL'; measureIndex: number; beatIndex: number; stringIndex: number; trillFret?: number; trillSpeed?: DurationValue }
+  | { type: 'APPLY_TRILL_TO_SELECTION'; trillFret?: number; trillSpeed?: DurationValue }
+  | { type: 'APPLY_TRILL_TO_BEAT_SELECTION'; trillFret?: number; trillSpeed?: DurationValue }
+  | { type: 'SET_ACTIVE_TRILL'; trillFret?: number; trillSpeed?: DurationValue }
   | { type: 'SET_CURSOR'; cursor: TabCursor }
   | { type: 'SET_SELECTION'; selection: TabSelection | null }
   | { type: 'COPY' }
@@ -679,9 +684,10 @@ function tabEditorReducerInner(
       const existingBeat = measure.beats[action.beatIndex]
       const duration = existingBeat ? existingBeat.duration : s.activeDuration
       const dot = existingBeat ? { ...existingBeat.dot } : s.activeDot
-      // Preserve existing note modifiers when editing; activeModifiers can add on top
+      // Preserve existing note modifiers when editing; activeModifiers can add on top.
+      // Trill is excluded from inheritance — it must be applied explicitly via the trill dialog.
       const existingNote = existingBeat?.notes.find((n) => n.string === action.stringIndex)
-      const baseModifiers = existingNote ? existingNote.modifiers : {}
+      const { trill: _dropTrill, ...baseModifiers } = existingNote ? existingNote.modifiers : {} as NoteModifiers
       const mergedModifiers = { ...baseModifiers, ...s.activeModifiers }
       const newHarmonicValue = mergedModifiers.harmonicType === 2
         ? (s.activeHarmonicValue ?? existingNote?.harmonicValue ?? 12)
@@ -1413,13 +1419,17 @@ function tabEditorReducerInner(
 
       const { duration: trimDur, dot: trimDot } = ticksToNearestDuration(Math.max(0, remaining))
 
+      const overflowHarmonicVal = state.activeModifiers.harmonicType === 2 ? (state.activeHarmonicValue ?? 12) : undefined
+
       const measures = s.track.measures.map((m, mi) => {
         if (mi !== measureIndex) return m
         if (beatIndex >= m.beats.length) {
           const newBeat = makeBeat(trimDur)
           newBeat.dot = { ...trimDot }
-          const harmonicVal = state.activeModifiers.harmonicType === 2 ? (state.activeHarmonicValue ?? 12) : undefined
-          newBeat.notes = [{ string: stringIndex, fret, modifiers: { ...state.activeModifiers }, ...(harmonicVal !== undefined && { harmonicValue: harmonicVal }) }]
+          newBeat.notes = [{
+            string: stringIndex, fret, modifiers: { ...state.activeModifiers },
+            ...(overflowHarmonicVal !== undefined && { harmonicValue: overflowHarmonicVal }),
+          }]
           return { ...m, beats: [...m.beats, newBeat] }
         }
         return {
@@ -1427,8 +1437,10 @@ function tabEditorReducerInner(
           beats: m.beats.map((b, bi) => {
             if (bi !== beatIndex) return b
             const existing = b.notes.findIndex((n) => n.string === stringIndex)
-            const harmonicVal = state.activeModifiers.harmonicType === 2 ? (state.activeHarmonicValue ?? 12) : undefined
-            const newNote = { string: stringIndex, fret, modifiers: { ...state.activeModifiers }, ...(harmonicVal !== undefined && { harmonicValue: harmonicVal }) }
+            const newNote = {
+              string: stringIndex, fret, modifiers: { ...state.activeModifiers },
+              ...(overflowHarmonicVal !== undefined && { harmonicValue: overflowHarmonicVal }),
+            }
             const notes = existing >= 0
               ? b.notes.map((n, i) => (i === existing ? newNote : n))
               : [...b.notes, newNote].sort((a, n) => a.string - n.string)
@@ -1459,14 +1471,18 @@ function tabEditorReducerInner(
       const bleedRemaining = bleedCapacity - bleedUsedWithoutThis
       const { duration: trimDur, dot: trimDot } = ticksToNearestDuration(Math.max(0, bleedRemaining))
 
+      const bleedHarmonicVal = state.activeModifiers.harmonicType === 2 ? (state.activeHarmonicValue ?? 12) : undefined
+
       let measures = s.track.measures.map((m, mi) => {
         if (mi !== measureIndex) return m
         if (beatIndex >= m.beats.length) {
           const newBeat = makeBeat(trimDur)
           newBeat.dot = { ...trimDot }
           newBeat.tiedTo = true
-          const harmonicValB = state.activeModifiers.harmonicType === 2 ? (state.activeHarmonicValue ?? 12) : undefined
-          newBeat.notes = [{ string: stringIndex, fret, modifiers: { ...state.activeModifiers }, ...(harmonicValB !== undefined && { harmonicValue: harmonicValB }) }]
+          newBeat.notes = [{
+            string: stringIndex, fret, modifiers: { ...state.activeModifiers },
+            ...(bleedHarmonicVal !== undefined && { harmonicValue: bleedHarmonicVal }),
+          }]
           return { ...m, beats: [...m.beats, newBeat] }
         }
         return {
@@ -1474,8 +1490,10 @@ function tabEditorReducerInner(
           beats: m.beats.map((b, bi) => {
             if (bi !== beatIndex) return b
             const existing = b.notes.findIndex((n) => n.string === stringIndex)
-            const harmonicValB = state.activeModifiers.harmonicType === 2 ? (state.activeHarmonicValue ?? 12) : undefined
-            const newNote = { string: stringIndex, fret, modifiers: { ...state.activeModifiers }, ...(harmonicValB !== undefined && { harmonicValue: harmonicValB }) }
+            const newNote = {
+              string: stringIndex, fret, modifiers: { ...state.activeModifiers },
+              ...(bleedHarmonicVal !== undefined && { harmonicValue: bleedHarmonicVal }),
+            }
             const notes = existing >= 0
               ? b.notes.map((n, i) => (i === existing ? newNote : n))
               : [...b.notes, newNote].sort((a, n) => a.string - n.string)
@@ -1802,6 +1820,95 @@ function tabEditorReducerInner(
               const mods = { ...n.modifiers, harmonicType: action.harmonicType }
               applyModifierConflicts(mods, 'harmonicType')
               return { ...n, modifiers: mods, harmonicValue: action.harmonicValue }
+            }),
+          }
+        }),
+      }))
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'SET_ACTIVE_TRILL': {
+      return { ...state, activeTrillFret: action.trillFret, activeTrillSpeed: action.trillSpeed }
+    }
+
+    case 'APPLY_TRILL': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== action.beatIndex) return b
+            const notes = b.notes.map((n) => {
+              if (n.string !== action.stringIndex) return n
+              if (action.trillFret === undefined) {
+                const mods = { ...n.modifiers }
+                delete mods.trill
+                return { ...n, modifiers: mods, trillFret: undefined, trillSpeed: undefined }
+              }
+              const mods = { ...n.modifiers, trill: true as const }
+              applyModifierConflicts(mods, 'trill')
+              return { ...n, modifiers: mods, trillFret: action.trillFret, trillSpeed: action.trillSpeed }
+            })
+            return { ...b, notes }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'APPLY_TRILL_TO_SELECTION': {
+      if (state.noteSelection.length < 1) return state
+      const s = pushUndo(state)
+      const selSet = new Set(state.noteSelection.map((c) => `${c.measureIndex}:${c.beatIndex}:${c.stringIndex}`))
+      const measures = s.track.measures.map((m, mi) => ({
+        ...m,
+        beats: m.beats.map((b, bi) => ({
+          ...b,
+          notes: b.notes.map((n) => {
+            if (!selSet.has(`${mi}:${bi}:${n.string}`)) return n
+            if (action.trillFret === undefined) {
+              const mods = { ...n.modifiers }
+              delete mods.trill
+              return { ...n, modifiers: mods, trillFret: undefined, trillSpeed: undefined }
+            }
+            const mods = { ...n.modifiers, trill: true as const }
+            applyModifierConflicts(mods, 'trill')
+            return { ...n, modifiers: mods, trillFret: action.trillFret, trillSpeed: action.trillSpeed }
+          }),
+        })),
+      }))
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'APPLY_TRILL_TO_BEAT_SELECTION': {
+      const sel = state.selection
+      if (!sel) return state
+      const s = pushUndo(state)
+      const norm = normalizeSelection(sel)
+      const selBeatSet = new Set<string>()
+      for (let mi = norm.startMeasure; mi <= norm.endMeasure; mi++) {
+        const m = state.track.measures[mi]
+        if (!m) continue
+        const bStart = mi === norm.startMeasure ? norm.startBeat : 0
+        const bEnd = mi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+        for (let bi = bStart; bi <= bEnd; bi++) selBeatSet.add(`${mi}:${bi}`)
+      }
+      const measures = s.track.measures.map((m, mi) => ({
+        ...m,
+        beats: m.beats.map((b, bi) => {
+          if (!selBeatSet.has(`${mi}:${bi}`)) return b
+          return {
+            ...b,
+            notes: b.notes.map((n) => {
+              if (action.trillFret === undefined) {
+                const mods = { ...n.modifiers }
+                delete mods.trill
+                return { ...n, modifiers: mods, trillFret: undefined, trillSpeed: undefined }
+              }
+              const mods = { ...n.modifiers, trill: true as const }
+              applyModifierConflicts(mods, 'trill')
+              return { ...n, modifiers: mods, trillFret: action.trillFret, trillSpeed: action.trillSpeed }
             }),
           }
         }),

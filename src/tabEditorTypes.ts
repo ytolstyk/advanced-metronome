@@ -48,6 +48,7 @@ export interface NoteModifiers {
   tapping?: true
   pickDown?: true
   pickUp?: true
+  trill?: true      // alternates between this note and trillFret
 }
 
 export type NoteModifierKey = keyof NoteModifiers
@@ -58,6 +59,8 @@ export interface TabNote {
   modifiers: NoteModifiers
   bendAmount?: number // 0.5–5 in 0.5 increments; defaults to 1 when modifiers.bend is set
   harmonicValue?: number // fret for artificial harmonic node point; only relevant when modifiers.harmonicType === 2
+  trillFret?: number // auxiliary trill note fret (1-24); only relevant when modifiers.trill is set
+  trillSpeed?: DurationValue // trill alternation speed; defaults to Duration.Sixteenth
 }
 
 export interface Beat {
@@ -135,6 +138,8 @@ export interface TabEditorState {
   activeDot: DotModifier
   activeModifiers: NoteModifiers
   activeHarmonicValue?: number
+  activeTrillFret?: number
+  activeTrillSpeed?: DurationValue
   isPlaying: boolean
   playheadMeasure: number
   playheadBeat: number
