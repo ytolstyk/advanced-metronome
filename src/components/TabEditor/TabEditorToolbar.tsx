@@ -18,6 +18,42 @@ import { HarmonicsDialog, HARMONIC_LABELS, HARMONIC_SYMBOLS } from './HarmonicsD
 
 const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide']
 
+function SlideInBelowIcon() {
+  return (
+    <svg viewBox="0 0 20 14" width="28" height="20" fill="none">
+      <line x1="1" y1="12" x2="8" y2="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <rect x="10" y="3" width="4" height="8" fill="currentColor" rx="0.5" />
+    </svg>
+  )
+}
+
+function SlideInAboveIcon() {
+  return (
+    <svg viewBox="0 0 20 14" width="28" height="20" fill="none">
+      <line x1="1" y1="2" x2="8" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <rect x="10" y="3" width="4" height="8" fill="currentColor" rx="0.5" />
+    </svg>
+  )
+}
+
+function SlideOutDownIcon() {
+  return (
+    <svg viewBox="0 0 20 14" width="28" height="20" fill="none">
+      <rect x="6" y="3" width="4" height="8" fill="currentColor" rx="0.5" />
+      <line x1="11" y1="2" x2="19" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function SlideOutUpIcon() {
+  return (
+    <svg viewBox="0 0 20 14" width="28" height="20" fill="none">
+      <rect x="6" y="3" width="4" height="8" fill="currentColor" rx="0.5" />
+      <line x1="11" y1="12" x2="19" y2="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 const MODIFIER_LABELS: Record<string, string> = {
   ghost: 'Ghost',
   staccato: 'Staccato',
@@ -48,7 +84,7 @@ const DURATIONS: { label: string; value: DurationValue }[] = [
   { label: '1/64', value: Duration.SixtyFourth },
 ]
 
-const MODIFIERS_BASE: { label: string; key: NoteModifierKey; title: string }[] = [
+const MODIFIERS_BASE: { label: React.ReactNode; key: NoteModifierKey; title: string }[] = [
   { label: '( )', key: 'ghost', title: 'Ghost note' },
   { label: '·', key: 'staccato', title: 'Staccato' },
   { label: '∞', key: 'letRing', title: 'Let ring' },
@@ -56,14 +92,14 @@ const MODIFIERS_BASE: { label: string; key: NoteModifierKey; title: string }[] =
   { label: 'X', key: 'dead', title: 'Dead note' },
 ]
 
-const CONNECTIONS_BASE: { label: string; key: NoteModifierKey; title: string }[] = [
+const CONNECTIONS_BASE: { label: React.ReactNode; key: NoteModifierKey; title: string }[] = [
   { label: 'h', key: 'hammerOn', title: 'Hammer-on' },
   { label: 'p', key: 'pullOff', title: 'Pull-off' },
   { label: '/', key: 'legatoSlide', title: 'Legato slide' },
-  { label: '↗', key: 'slideInBelow', title: 'Slide in from below' },
-  { label: '↘', key: 'slideInAbove', title: 'Slide in from above' },
-  { label: '↙', key: 'slideOutDown', title: 'Slide out downward' },
-  { label: '↖', key: 'slideOutUp', title: 'Slide out upward' },
+  { label: <SlideInBelowIcon />, key: 'slideInBelow', title: 'Slide in from below' },
+  { label: <SlideInAboveIcon />, key: 'slideInAbove', title: 'Slide in from above' },
+  { label: <SlideOutDownIcon />, key: 'slideOutDown', title: 'Slide out downward' },
+  { label: <SlideOutUpIcon />, key: 'slideOutUp', title: 'Slide out upward' },
   { label: '⌒', key: 'bend', title: 'Bend' },
   { label: '~', key: 'vibrato', title: 'Vibrato' },
   { label: 'T', key: 'tapping', title: 'Tapping' },
@@ -73,7 +109,7 @@ const CONNECTIONS_BASE: { label: string; key: NoteModifierKey; title: string }[]
 
 const PALM_MUTE_ENTRY = MODIFIERS_BASE.find((m) => m.key === 'palmMute')!
 
-const MODIFIER_SYMBOL: Record<string, string> = Object.fromEntries(
+const MODIFIER_SYMBOL: Record<string, React.ReactNode> = Object.fromEntries(
   [...MODIFIERS_BASE, ...CONNECTIONS_BASE].map((m) => [m.key, m.label]),
 )
 
