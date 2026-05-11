@@ -52,6 +52,7 @@ interface TabMeasureSvgProps {
   onStringLabelClick?: () => void
   highlightBeatColumn?: number
   forPrint?: boolean
+  prevMeasureLastBeat?: import('../../tabEditorTypes').Beat
 }
 
 interface RestSymbolProps {
@@ -184,6 +185,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   onStringLabelClick,
   highlightBeatColumn,
   forPrint = false,
+  prevMeasureLastBeat,
 }: TabMeasureSvgProps) {
   const [labelHovered, setLabelHovered] = useState(false)
   const { stringCount } = track
@@ -630,6 +632,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         beatPositions={beatPositions}
         onBendAmountClick={onBendAmountClick}
         forPrint={forPrint}
+        prevMeasureLastBeat={prevMeasureLastBeat}
       />
 
       {/* String labels */}

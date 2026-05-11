@@ -2,6 +2,7 @@ import type { Beat, Measure, TabTrack } from '../../tabEditorTypes'
 import {
   type BeatPosition,
   BARLINE_W,
+  MEASURE_END_PAD,
   MEASURE_NUMBER_H,
   TAPPING_ZONE_Y,
   VIBRATO_ZONE_Y,
@@ -37,14 +38,17 @@ interface TechniqueOverlayProps {
   beatPositions: BeatPosition[]
   onBendAmountClick?: (measureIndex: number, beatIndex: number, stringIndex: number) => void
   forPrint?: boolean
+  prevMeasureLastBeat?: import('../../tabEditorTypes').Beat
 }
 
-export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, onBendAmountClick, forPrint = false }: TechniqueOverlayProps) {
+export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, onBendAmountClick, forPrint = false, prevMeasureLastBeat }: TechniqueOverlayProps) {
   const elements: React.ReactNode[] = []
   const measureContentW = beatPositions.length > 0
     ? beatPositions[beatPositions.length - 1].x + beatPositions[beatPositions.length - 1].w
     : 0
   const measureRightEdge = measureContentW + BARLINE_W
+  // Full measure width including end padding — used to extend runs to the barline for cross-measure ties
+  const measureTotalW = measureContentW + MEASURE_END_PAD + BARLINE_W
 
   for (let bi = 0; bi < measure.beats.length; bi++) {
     const beat = measure.beats[bi]
@@ -58,7 +62,9 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
     const techY = hasBend ? BEND_ELEVATED_Y : TAPPING_ZONE_Y
 
     // Tapping: render one "T" per beat column if any string has tapping
+    const isTiedBeat = bi === 0 && beat.tiedFrom === true
     const hasTapping = beat.notes.some((n) => n.modifiers.tapping)
+      || (isTiedBeat && prevMeasureLastBeat?.notes.some((n) => n.modifiers.tapping) === true)
     if (hasTapping) {
       elements.push(
         <text
@@ -282,10 +288,10 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
   }
 
   // Vibrato and palm mute: rendered as runs so the whole connected segment shares one Y level
-  renderVibratoRuns(measure, beatPositions, elements, forPrint)
-  renderPalmMuteRuns(measure, beatPositions, elements, forPrint)
-  renderLetRingRuns(measure, beatPositions, elements, forPrint)
-  renderTrillRuns(measure, beatPositions, elements, forPrint)
+  renderVibratoRuns(measure, beatPositions, elements, forPrint, prevMeasureLastBeat, measureTotalW)
+  renderPalmMuteRuns(measure, beatPositions, elements, forPrint, prevMeasureLastBeat, measureTotalW)
+  renderLetRingRuns(measure, beatPositions, elements, forPrint, prevMeasureLastBeat, measureTotalW)
+  renderTrillRuns(measure, beatPositions, elements, forPrint, prevMeasureLastBeat, measureTotalW)
 
   return <g>{elements}</g>
 }
@@ -307,6 +313,8 @@ function renderVibratoRuns(
   beatPositions: BeatPosition[],
   elements: React.ReactNode[],
   forPrint = false,
+  prevMeasureLastBeat?: import('../../tabEditorTypes').Beat,
+  measureTotalW = 0,
 ) {
   const PAD = 4
   const TARGET_HALF_PERIOD = 8  // px per half-wave cycle; wave count adjusts to fill space
@@ -327,8 +335,10 @@ function renderVibratoRuns(
     const amplitude = maxVibratoType >= 2 ? 6 : 3  // wide = 6px, slight = 3px
 
     const startSlotW = computeNoteSlotW(measure.beats[runStart])
-    const x0 = startPos.cx - startSlotW / 2 + PAD
-    const x1 = endPos.x + endPos.w - PAD
+    const tiedFromStart = runStart === 0 && measure.beats[0]?.tiedFrom === true && prevMeasureLastBeat !== undefined
+    const tiedToEnd = endBi === measure.beats.length - 1 && measure.beats[endBi]?.tiedTo === true
+    const x0 = tiedFromStart ? 0 : startPos.cx - startSlotW / 2 + PAD
+    const x1 = tiedToEnd ? measureTotalW : endPos.x + endPos.w - PAD
     const totalW = x1 - x0
 
     // Round to nearest integer number of half-cycles so wave fills the span uniformly
@@ -357,7 +367,9 @@ function renderVibratoRuns(
 
   for (let bi = 0; bi < measure.beats.length; bi++) {
     const beat = measure.beats[bi]
+    const isTiedBeat = bi === 0 && beat.tiedFrom === true
     const hasVibrato = beat.notes.some((n) => n.modifiers.vibrato)
+      || (isTiedBeat && prevMeasureLastBeat?.notes.some((n) => n.modifiers.vibrato) === true)
     if (hasVibrato) {
       if (runStart === null) runStart = bi
     } else {
@@ -380,6 +392,8 @@ function renderPalmMuteRuns(
   beatPositions: BeatPosition[],
   elements: React.ReactNode[],
   forPrint = false,
+  prevMeasureLastBeat?: import('../../tabEditorTypes').Beat,
+  measureTotalW = 0,
 ) {
   const PAD = 4
   let runStart: number | null = null
@@ -393,8 +407,10 @@ function renderPalmMuteRuns(
     const baseTopY = runHasOverlap(measure, runStart, endBi) ? PALM_MUTE_ELEVATED_Y : PALM_MUTE_ZONE_Y
     const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
     const startSlotW = computeNoteSlotW(measure.beats[runStart])
-    const x1 = startPos.cx - startSlotW / 2 + PAD
-    const x2 = endPos.x + endPos.w - PAD
+    const tiedFromStart = runStart === 0 && measure.beats[0]?.tiedFrom === true && prevMeasureLastBeat !== undefined
+    const tiedToEnd = endBi === measure.beats.length - 1 && measure.beats[endBi]?.tiedTo === true
+    const x1 = tiedFromStart ? 0 : startPos.cx - startSlotW / 2 + PAD
+    const x2 = tiedToEnd ? measureTotalW : endPos.x + endPos.w - PAD
     elements.push(
       <g key={`pm-${runStart}-${endBi}`}>
         <line
@@ -416,7 +432,9 @@ function renderPalmMuteRuns(
 
   for (let bi = 0; bi < measure.beats.length; bi++) {
     const beat = measure.beats[bi]
+    const isTiedBeat = bi === 0 && beat.tiedFrom === true
     const hasPM = beat.notes.some((n) => n.modifiers.palmMute)
+      || (isTiedBeat && prevMeasureLastBeat?.notes.some((n) => n.modifiers.palmMute) === true)
     if (hasPM) {
       if (runStart === null) runStart = bi
     } else {
@@ -431,6 +449,8 @@ function renderLetRingRuns(
   beatPositions: BeatPosition[],
   elements: React.ReactNode[],
   forPrint = false,
+  prevMeasureLastBeat?: import('../../tabEditorTypes').Beat,
+  measureTotalW = 0,
 ) {
   const PAD = 4
   let runStart: number | null = null
@@ -444,8 +464,10 @@ function renderLetRingRuns(
     const baseTopY = runHasOverlap(measure, runStart, endBi) ? LET_RING_ELEVATED_Y : LET_RING_ZONE_Y
     const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
     const startSlotW = computeNoteSlotW(measure.beats[runStart])
-    const x1 = startPos.cx - startSlotW / 2 + PAD
-    const x2 = endPos.x + endPos.w - PAD
+    const tiedFromStart = runStart === 0 && measure.beats[0]?.tiedFrom === true && prevMeasureLastBeat !== undefined
+    const tiedToEnd = endBi === measure.beats.length - 1 && measure.beats[endBi]?.tiedTo === true
+    const x1 = tiedFromStart ? 0 : startPos.cx - startSlotW / 2 + PAD
+    const x2 = tiedToEnd ? measureTotalW : endPos.x + endPos.w - PAD
     elements.push(
       <g key={`lr-${runStart}-${endBi}`}>
         <line
@@ -467,7 +489,9 @@ function renderLetRingRuns(
 
   for (let bi = 0; bi < measure.beats.length; bi++) {
     const beat = measure.beats[bi]
+    const isTiedBeat = bi === 0 && beat.tiedFrom === true
     const hasLR = beat.notes.some((n) => n.modifiers.letRing)
+      || (isTiedBeat && prevMeasureLastBeat?.notes.some((n) => n.modifiers.letRing) === true)
     if (hasLR) {
       if (runStart === null) runStart = bi
     } else {
@@ -482,6 +506,8 @@ function renderTrillRuns(
   beatPositions: BeatPosition[],
   elements: React.ReactNode[],
   forPrint = false,
+  prevMeasureLastBeat?: import('../../tabEditorTypes').Beat,
+  measureTotalW = 0,
 ) {
   const PAD = 4
   const TR_LABEL_W = 13  // approximate pixel width of "tr" italic text
@@ -498,9 +524,11 @@ function renderTrillRuns(
     const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
 
     const startSlotW = computeNoteSlotW(measure.beats[runStart])
-    const x1 = startPos.cx - startSlotW / 2 + PAD
+    const tiedFromStart = runStart === 0 && measure.beats[0]?.tiedFrom === true && prevMeasureLastBeat !== undefined
+    const tiedToEnd = endBi === measure.beats.length - 1 && measure.beats[endBi]?.tiedTo === true
+    const x1 = tiedFromStart ? 0 : startPos.cx - startSlotW / 2 + PAD
     // Extend right edge to cover the full beat slot (including trill aux fret space)
-    const x2 = endPos.x + endPos.w - PAD
+    const x2 = tiedToEnd ? measureTotalW : endPos.x + endPos.w - PAD
     const dashX1 = x1 + TR_LABEL_W + 2
     const trillColor = forPrint ? '#000000' : '#aaffcc'
 
@@ -535,7 +563,9 @@ function renderTrillRuns(
 
   for (let bi = 0; bi < measure.beats.length; bi++) {
     const beat = measure.beats[bi]
+    const isTiedBeat = bi === 0 && beat.tiedFrom === true
     const hasTrill = beat.notes.some((n) => n.modifiers.trill)
+      || (isTiedBeat && prevMeasureLastBeat?.notes.some((n) => n.modifiers.trill) === true)
     if (hasTrill) {
       if (runStart === null) runStart = bi
     } else {

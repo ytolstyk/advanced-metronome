@@ -479,6 +479,8 @@ export function TabSvgCanvas({
               const showTs = showTimeSigMap[mi] ?? false
               const sig = track.masterBars[mi]?.timeSignature ?? track.masterBars[0]!.timeSignature
               const fillRests = getFillRests(measure, sig)
+              const prevMeasure = mi > 0 ? track.measures[mi - 1] : undefined
+              const prevMeasureLastBeat = prevMeasure?.beats[prevMeasure.beats.length - 1]
               return (
                 <TabMeasureSvg
                   key={measure.id}
@@ -507,6 +509,7 @@ export function TabSvgCanvas({
                   onStringLabelClick={readOnly ? undefined : (mIdx === 0 ? openTuningModal : undefined)}
                   highlightBeatColumn={highlightColumn?.measureIndex === mi ? highlightColumn.beatIndex : undefined}
                   forPrint={forPrint}
+                  prevMeasureLastBeat={prevMeasureLastBeat}
                 />
               )
             })}
