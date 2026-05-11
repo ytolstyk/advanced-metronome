@@ -261,37 +261,23 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
         )
       }
 
-      // Pick direction
-      if (note.modifiers.pickDown) {
-        elements.push(
-          <text
-            key={`pd-${key}`}
-            x={cx}
-            y={techY}
-            fontSize={PICK_DIR_FONT_SIZE}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fill={forPrint ? '#000000' : '#cccccc'}
-          >
-            ⬇
-          </text>,
-        )
-      }
-      if (note.modifiers.pickUp) {
-        elements.push(
-          <text
-            key={`pu-${key}`}
-            x={cx}
-            y={techY}
-            fontSize={PICK_DIR_FONT_SIZE}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fill={forPrint ? '#000000' : '#cccccc'}
-          >
-            ⬆
-          </text>,
-        )
-      }
+    }
+
+    // Pick stroke: one arrow per beat column (beat-level, not per-string)
+    if (beat.pickStroke) {
+      elements.push(
+        <text
+          key={`pick-${bi}`}
+          x={cx}
+          y={techY}
+          fontSize={PICK_DIR_FONT_SIZE}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill={forPrint ? '#000000' : '#cccccc'}
+        >
+          {beat.pickStroke === 'down' ? '⬇' : '⬆'}
+        </text>,
+      )
     }
   }
 
@@ -390,7 +376,7 @@ function renderVibratoRuns(
 function runHasOverlap(measure: Measure, startBi: number, endBi: number): boolean {
   for (let bi = startBi; bi <= endBi; bi++) {
     const beat = measure.beats[bi]
-    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.pickDown || n.modifiers.pickUp || n.modifiers.bend || n.modifiers.trill)) return true
+    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.bend || n.modifiers.trill) || beat.pickStroke) return true
   }
   return false
 }
@@ -587,7 +573,7 @@ function renderTrillRuns(
 function runHasOverlapWithoutTrill(measure: Measure, startBi: number, endBi: number): boolean {
   for (let bi = startBi; bi <= endBi; bi++) {
     const beat = measure.beats[bi]
-    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.pickDown || n.modifiers.pickUp || n.modifiers.bend)) return true
+    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.bend) || beat.pickStroke) return true
   }
   return false
 }

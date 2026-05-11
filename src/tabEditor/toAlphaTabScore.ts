@@ -87,14 +87,14 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
         atBeat.automations.push(tempo)
       }
 
+      // Pick stroke is beat-level
+      if (beat.pickStroke === 'down') atBeat.pickStroke = at.model.PickStroke.Down
+      else if (beat.pickStroke === 'up') atBeat.pickStroke = at.model.PickStroke.Up
+
       for (const note of beat.notes) {
         const atNote = new at.model.Note()
         atNote.string = note.string
         atNote.fret = note.fret
-
-        // Pick stroke (beat-level; last note with pick modifier wins)
-        if (note.modifiers.pickDown) atBeat.pickStroke = at.model.PickStroke.Down
-        else if (note.modifiers.pickUp) atBeat.pickStroke = at.model.PickStroke.Up
 
         if (note.modifiers.hammerOn) atNote.isHammerPullOrigin = true
         if (note.modifiers.vibrato === 1 || note.modifiers.vibrato === 2) atNote.vibrato = note.modifiers.vibrato
@@ -155,27 +155,38 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
     staff.addBar(bar)
   }
 
-  // Second pass: link pull-off destinations and tied notes
+  // Second pass: link pull-off destinations and tied notes.
+  // Walk backwards past fill rests (beats with no notes) to find the real preceding note,
+  // so cross-measure ties aren't broken by normalization fill rests.
+  function findPrecedingNote(fromIndex: number, string: number): at.model.Note | undefined {
+    for (let j = fromIndex - 1; j >= 0; j--) {
+      const candidate = allBeatRefs[j]!.beat.notes.find(n => n.string === string)
+      if (candidate) return candidate
+      // Stop once we've passed a real (non-empty) beat — don't skip across multiple real beats
+      if (allBeatRefs[j]!.srcBeat.notes.length > 0) break
+    }
+    return undefined
+  }
+
   for (let i = 1; i < allBeatRefs.length; i++) {
     const { beat: atBeat, srcBeat } = allBeatRefs[i]!
-    const { beat: prevAtBeat } = allBeatRefs[i - 1]!
 
     for (const atNote of atBeat.notes) {
       const srcNote = srcBeat.notes.find(n => n.string === atNote.string)
       if (!srcNote) continue
 
-      // Pull-off: find origin on same string in previous beat
+      // Pull-off: find origin on same string in nearest preceding real beat
       if (srcNote.modifiers.pullOff) {
-        const originNote = prevAtBeat.notes.find(n => n.string === atNote.string)
+        const originNote = findPrecedingNote(i, atNote.string)
         if (originNote) {
           originNote.isHammerPullOrigin = true
           atNote.hammerPullOrigin = originNote
         }
       }
 
-      // Tied note: link to same-string note in previous beat
+      // Tied note: link to same-string note in nearest preceding real beat
       if (srcBeat.tiedFrom) {
-        const originNote = prevAtBeat.notes.find(n => n.string === atNote.string)
+        const originNote = findPrecedingNote(i, atNote.string)
         if (originNote) {
           originNote.tieDestination = atNote
           atNote.tieOrigin = originNote

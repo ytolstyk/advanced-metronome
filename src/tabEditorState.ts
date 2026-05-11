@@ -29,9 +29,6 @@ const MODIFIER_CONFLICTS: Partial<Record<NoteModifierKey, NoteModifierKey[]>> = 
   slideInAbove: ['slideInBelow'],
   slideOutDown: ['slideOutUp'],
   slideOutUp: ['slideOutDown'],
-  tapping: ['pickDown', 'pickUp'],
-  pickDown: ['tapping', 'pickUp'],
-  pickUp: ['tapping', 'pickDown'],
   staccato: ['vibrato', 'palmMute', 'letRing', 'trill'],
   vibrato: ['palmMute', 'staccato', 'trill'],
   palmMute: ['vibrato', 'letRing', 'staccato', 'trill'],
@@ -243,10 +240,17 @@ function cleanNoteModifiers(track: TabTrack): TabTrack {
     ...track,
     measures: track.measures.map((m) => ({
       ...m,
-      beats: m.beats.map((b) => ({
-        ...b,
-        notes: b.notes.map((n) => {
+      beats: m.beats.map((b) => {
+        // Migrate legacy per-note pickDown/pickUp to beat-level pickStroke (first note wins)
+        let pickStroke = b.pickStroke
+        const notes = b.notes.map((n) => {
           const mods = { ...n.modifiers } as Record<string, unknown>
+          if (!pickStroke) {
+            if (mods.pickDown) pickStroke = 'down'
+            else if (mods.pickUp) pickStroke = 'up'
+          }
+          delete mods.pickDown
+          delete mods.pickUp
           // vibrato: true is pre-VibratoType legacy data → default to Slight (1)
           if (mods.vibrato === true) mods.vibrato = 1
           // naturalHarmonic: true is pre-HarmonicType legacy data → Natural (1)
@@ -257,8 +261,9 @@ function cleanNoteModifiers(track: TabTrack): TabTrack {
           // harmonicType: true is invalid (was never valid but guard anyway)
           if (mods.harmonicType === true) mods.harmonicType = 1
           return { ...n, modifiers: mods as NoteModifiers }
-        }),
-      })),
+        })
+        return { ...b, notes, ...(pickStroke ? { pickStroke } : {}) }
+      }),
     })),
   }
 }
@@ -366,6 +371,7 @@ export function createInitialTabState(): TabEditorState {
     activeDuration: Duration.Quarter,
     activeDot: { dotted: false, doubleDotted: false, triplet: false },
     activeModifiers: {},
+    activePick: undefined,
     isPlaying: false,
     playheadMeasure: 0,
     playheadBeat: 0,
@@ -395,18 +401,18 @@ function cloneBeats(beats: Beat[]): Beat[] {
   }))
 }
 
-// Returns the activeDuration/activeDot sync for a cursor position.
+// Returns the activeDuration/activeDot/activePick sync for a cursor position.
 function durationSyncForCursor(cursor: TabCursor, track: TabTrack): Partial<TabEditorState> {
   const measure = track.measures[cursor.measureIndex]
   if (!measure) return {}
   const beat = measure.beats[cursor.beatIndex]
-  if (beat) return { activeDuration: beat.duration, activeDot: { ...beat.dot } }
+  if (beat) return { activeDuration: beat.duration, activeDot: { ...beat.dot }, activePick: beat.pickStroke }
   if (cursor.beatIndex >= measure.beats.length) {
     const timeSig = masterBarAt(track, cursor.measureIndex).timeSignature
     const remaining = measureCapacityTicks(timeSig) - measureUsedTicks(measure.beats)
     const fillRests = remaining > 1e-6 ? computeFillRests(remaining) : []
     const fillDur = fillRests[cursor.beatIndex - measure.beats.length]
-    if (fillDur !== undefined) return { activeDuration: fillDur, activeDot: { dotted: false, doubleDotted: false, triplet: false } }
+    if (fillDur !== undefined) return { activeDuration: fillDur, activeDot: { dotted: false, doubleDotted: false, triplet: false }, activePick: undefined }
   }
   return {}
 }
@@ -518,6 +524,7 @@ function placeNoteInMeasure(
   activeModifiers: NoteModifiers,
   timeSig: { numerator: number; denominator: number },
   harmonicValue?: number,
+  activePick?: 'down' | 'up',
 ): { measure: Measure; overflow: Omit<OverflowPending, 'measureIndex'> | null } {
   const capacity = measureCapacityTicks(timeSig)
   const newBeatTicks = durationTicks(duration, dot)
@@ -549,6 +556,7 @@ function placeNoteInMeasure(
     const newBeat = makeBeat(duration)
     newBeat.dot = { ...dot }
     newBeat.notes = upsertNote([], harmonicValue)
+    if (activePick) newBeat.pickStroke = activePick
     return { measure: { ...measure, beats: [...measure.beats, newBeat] }, overflow: null }
   }
 
@@ -666,6 +674,7 @@ export type TabEditorAction =
   | { type: 'RESOLVE_MEASURE_ERROR_SHIFT_NOTES'; measureIndex: number }
   | { type: 'RESOLVE_MEASURE_ERROR_ADJUST_RESTS'; measureIndex: number }
   | { type: 'INSERT_REST' }
+  | { type: 'TOGGLE_PICK_STROKE'; direction: 'down' | 'up' }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -703,6 +712,7 @@ function tabEditorReducerInner(
         mergedModifiers,
         timeSig,
         newHarmonicValue,
+        s.activePick,
       )
 
       if (overflow) {
@@ -807,6 +817,61 @@ function tabEditorReducerInner(
 
     case 'SET_ACTIVE_DOT':
       return { ...state, activeDot: action.dot }
+
+    case 'TOGGLE_PICK_STROKE': {
+      const { direction } = action
+      const { measureIndex: mi, beatIndex: bi } = state.cursor
+      const measure = state.track.measures[mi]
+      const beat = measure?.beats[bi]
+
+      if (state.selection) {
+        // Beat-range selection: toggle pick on all selected beats
+        const s = pushUndo(state)
+        const norm = normalizeSelection(state.selection)
+        const allHave = (() => {
+          for (let smi = norm.startMeasure; smi <= norm.endMeasure; smi++) {
+            const m = state.track.measures[smi]
+            if (!m) continue
+            const bStart = smi === norm.startMeasure ? norm.startBeat : 0
+            const bEnd = smi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+            for (let sbi = bStart; sbi <= bEnd; sbi++) {
+              if (m.beats[sbi]?.pickStroke !== direction) return false
+            }
+          }
+          return true
+        })()
+        const nextPick = allHave ? undefined : direction
+        const measures = s.track.measures.map((m, smi) => {
+          if (smi < norm.startMeasure || smi > norm.endMeasure) return m
+          const bStart = smi === norm.startMeasure ? norm.startBeat : 0
+          const bEnd = smi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+          return {
+            ...m,
+            beats: m.beats.map((b, sbi) =>
+              sbi >= bStart && sbi <= bEnd
+                ? { ...b, pickStroke: nextPick }
+                : b,
+            ),
+          }
+        })
+        return { ...s, track: { ...s.track, measures }, activePick: nextPick }
+      }
+
+      if (beat) {
+        // Single beat under cursor
+        const s = pushUndo(state)
+        const nextPick = beat.pickStroke === direction ? undefined : direction
+        const measures = s.track.measures.map((m, mIdx) => {
+          if (mIdx !== mi) return m
+          return { ...m, beats: m.beats.map((b, bIdx) => bIdx !== bi ? b : { ...b, pickStroke: nextPick }) }
+        })
+        return { ...s, track: { ...s.track, measures }, activePick: nextPick }
+      }
+
+      // No beat under cursor — just toggle activePick
+      const nextPick = state.activePick === direction ? undefined : direction
+      return { ...state, activePick: nextPick }
+    }
 
     case 'TOGGLE_MODIFIER': {
       const cur = state.activeModifiers[action.modifier]

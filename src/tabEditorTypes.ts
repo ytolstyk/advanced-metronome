@@ -46,8 +46,6 @@ export interface NoteModifiers {
   bend?: true
   vibrato?: 1 | 2  // 1 = Slight, 2 = Wide (alphaTab VibratoType)
   tapping?: true
-  pickDown?: true
-  pickUp?: true
   trill?: true      // alternates between this note and trillFret
 }
 
@@ -74,6 +72,7 @@ export interface Beat {
   repeatStart?: true
   repeatEnd?: true
   tempoChange?: number
+  pickStroke?: 'down' | 'up'  // beat-level pick direction (mirrors alphaTab Beat.pickStroke)
 }
 
 // Corresponds to alphaTab's MasterBar — holds time sig and optional BPM for a measure.
@@ -137,6 +136,7 @@ export interface TabEditorState {
   activeDuration: DurationValue
   activeDot: DotModifier
   activeModifiers: NoteModifiers
+  activePick?: 'down' | 'up'  // beat-level pick direction to apply to the next new beat
   activeHarmonicValue?: number
   activeTrillFret?: number
   activeTrillSpeed?: DurationValue

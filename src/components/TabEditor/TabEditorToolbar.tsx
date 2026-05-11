@@ -71,8 +71,6 @@ const MODIFIER_LABELS: Record<string, string> = {
   slideOutUp: 'Slide out↖',
   bend: 'Bend',
   vibrato: 'Vibrato',
-  pickDown: 'Pick↓',
-  pickUp: 'Pick↑',
 }
 
 const DURATIONS: { label: string; value: DurationValue }[] = [
@@ -104,8 +102,6 @@ const CONNECTIONS_BASE: { label: React.ReactNode; key: NoteModifierKey; title: s
   { label: '⌒', key: 'bend', title: 'Bend' },
   { label: '~', key: 'vibrato', title: 'Vibrato' },
   { label: 'T', key: 'tapping', title: 'Tapping' },
-  { label: '⬇', key: 'pickDown', title: 'Pickstroke down' },
-  { label: '⬆', key: 'pickUp', title: 'Pickstroke up' },
 ]
 
 const PALM_MUTE_ENTRY = MODIFIERS_BASE.find((m) => m.key === 'palmMute')!
@@ -172,7 +168,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
   const isOnNote = !!currentNote && currentNote.fret >= 0
 
   const activeSet = isOnNote ? currentNote.modifiers : activeModifiers
-  const hasTapOrPick = !!(activeSet.tapping || activeSet.pickDown || activeSet.pickUp)
+  const hasTapOrPick = !!(activeSet.tapping || currentBeat?.pickStroke || state.activePick)
 
   // Beat-range selection (shift+arrow) takes precedence over single-note mode
   const hasBeatSelection = !!state.selection && noteSelection.length < 2
@@ -510,6 +506,22 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
             </ToolBtn>
           )
         })}
+
+        {/* Pick stroke: beat-level, separate from per-note techniques */}
+        <ToolBtn
+          title="Pickstroke down"
+          activeEffect={currentBeat ? currentBeat.pickStroke === 'down' : state.activePick === 'down'}
+          onClick={() => dispatch({ type: 'TOGGLE_PICK_STROKE', direction: 'down' })}
+        >
+          ⬇
+        </ToolBtn>
+        <ToolBtn
+          title="Pickstroke up"
+          activeEffect={currentBeat ? currentBeat.pickStroke === 'up' : state.activePick === 'up'}
+          onClick={() => dispatch({ type: 'TOGGLE_PICK_STROKE', direction: 'up' })}
+        >
+          ⬆
+        </ToolBtn>
       </div>
 
       {/* Structure group */}

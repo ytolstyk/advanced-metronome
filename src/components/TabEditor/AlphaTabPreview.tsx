@@ -16,7 +16,7 @@ export interface AlphaTabPreviewHandle {
   play: () => void
   pause: () => void
   stop: () => void
-  print: (width?: number) => void
+  print: (width?: string) => void
   getContainer: () => HTMLElement | null
 }
 
@@ -45,7 +45,7 @@ export const AlphaTabPreview = forwardRef<AlphaTabPreviewHandle, AlphaTabPreview
       stop() {
         apiRef.current?.stop()
       },
-      print(width?: number) {
+      print(width?: string) {
         apiRef.current?.print(width)
       },
       getContainer() {
