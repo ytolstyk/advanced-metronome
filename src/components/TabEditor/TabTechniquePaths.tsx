@@ -309,37 +309,49 @@ function renderVibratoRuns(
   forPrint = false,
 ) {
   const PAD = 4
+  const TARGET_HALF_PERIOD = 8  // px per half-wave cycle; wave count adjusts to fill space
   let runStart: number | null = null
 
   function flushRun(endBi: number) {
     if (runStart === null) return
+    const startPos = beatPositions[runStart]
+    const endPos = beatPositions[endBi]
+    if (!startPos || !endPos) { runStart = null; return }
     const hasBendInRun = measure.beats.slice(runStart, endBi + 1).some((b) => b.notes.some((n) => n.modifiers.bend))
     const vy = hasBendInRun ? BEND_ELEVATED_Y : VIBRATO_ZONE_Y
 
-    for (let bi = runStart; bi <= endBi; bi++) {
-      const beat = measure.beats[bi]
-      const pos = beatPositions[bi]
-      if (!pos) continue
-      const { cx } = pos
-      const slotW = computeNoteSlotW(beat)
-      const prevPos = beatPositions[bi - 1]
-      const nextPos = beatPositions[bi + 1]
-      const isFirst = bi === runStart
-      const isLast = bi === endBi
-      const x0 = !isFirst && prevPos ? (prevPos.cx + cx) / 2 : cx - slotW / 2 + PAD
-      const x1 = !isLast && nextPos ? (cx + nextPos.cx) / 2 : cx + slotW / 2 + PAD
-      const totalW = x1 - x0
-      const step = totalW / 4
-      elements.push(
-        <path
-          key={`vib-${bi}`}
-          d={`M ${x0},${vy} Q ${x0 + step / 2},${vy - 5} ${x0 + step},${vy} Q ${x0 + step * 1.5},${vy + 5} ${x0 + step * 2},${vy} Q ${x0 + step * 2.5},${vy - 5} ${x0 + step * 3},${vy} Q ${x0 + step * 3.5},${vy + 5} ${x0 + step * 4},${vy}`}
-          stroke={forPrint ? '#000000' : '#ddaaff'}
-          strokeWidth={1.5}
-          fill="none"
-        />,
-      )
+    // Determine amplitude from the highest vibrato type in the run
+    const maxVibratoType = measure.beats.slice(runStart, endBi + 1)
+      .flatMap((b) => b.notes)
+      .reduce((max, n) => Math.max(max, n.modifiers.vibrato ?? 0), 0)
+    const amplitude = maxVibratoType >= 2 ? 6 : 3  // wide = 6px, slight = 3px
+
+    const startSlotW = computeNoteSlotW(measure.beats[runStart])
+    const x0 = startPos.cx - startSlotW / 2 + PAD
+    const x1 = endPos.x + endPos.w - PAD
+    const totalW = x1 - x0
+
+    // Round to nearest integer number of half-cycles so wave fills the span uniformly
+    const numHalfCycles = Math.max(2, Math.round(totalW / TARGET_HALF_PERIOD))
+    const halfPeriod = totalW / numHalfCycles
+
+    let d = `M ${x0},${vy}`
+    for (let i = 0; i < numHalfCycles; i++) {
+      const cpX = x0 + (i + 0.5) * halfPeriod
+      const cpY = i % 2 === 0 ? vy - amplitude : vy + amplitude
+      const endX = x0 + (i + 1) * halfPeriod
+      d += ` Q ${cpX},${cpY} ${endX},${vy}`
     }
+
+    elements.push(
+      <path
+        key={`vib-${runStart}-${endBi}`}
+        d={d}
+        stroke={forPrint ? '#000000' : '#ddaaff'}
+        strokeWidth={1.5}
+        fill="none"
+      />,
+    )
     runStart = null
   }
 
@@ -381,9 +393,8 @@ function renderPalmMuteRuns(
     const baseTopY = runHasOverlap(measure, runStart, endBi) ? PALM_MUTE_ELEVATED_Y : PALM_MUTE_ZONE_Y
     const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
     const startSlotW = computeNoteSlotW(measure.beats[runStart])
-    const endSlotW = computeNoteSlotW(measure.beats[endBi])
     const x1 = startPos.cx - startSlotW / 2 + PAD
-    const x2 = endPos.cx + endSlotW / 2 - PAD
+    const x2 = endPos.x + endPos.w - PAD
     elements.push(
       <g key={`pm-${runStart}-${endBi}`}>
         <line
@@ -433,9 +444,8 @@ function renderLetRingRuns(
     const baseTopY = runHasOverlap(measure, runStart, endBi) ? LET_RING_ELEVATED_Y : LET_RING_ZONE_Y
     const topY = hasBendInRun ? BEND_ELEVATED_Y - 4 : baseTopY
     const startSlotW = computeNoteSlotW(measure.beats[runStart])
-    const endSlotW = computeNoteSlotW(measure.beats[endBi])
     const x1 = startPos.cx - startSlotW / 2 + PAD
-    const x2 = endPos.cx + endSlotW / 2 - PAD
+    const x2 = endPos.x + endPos.w - PAD
     elements.push(
       <g key={`lr-${runStart}-${endBi}`}>
         <line
