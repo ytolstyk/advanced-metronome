@@ -91,7 +91,7 @@ export function HarmonicsDialog({ open, current, harmonicValue, onSelect, onRemo
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Harmonic Type</DialogTitle>
         </DialogHeader>

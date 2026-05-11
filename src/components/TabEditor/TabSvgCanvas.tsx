@@ -654,7 +654,7 @@ export function TabSvgCanvas({
 
       {/* Tuning modal */}
       <Dialog open={tuningModalOpen} onOpenChange={setTuningModalOpen}>
-        <DialogContent className="max-w-xs">
+        <DialogContent className="max-w-xs" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Strings &amp; Tuning</DialogTitle>
           </DialogHeader>

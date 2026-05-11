@@ -39,7 +39,7 @@ interface VibratoDialogProps {
 export function VibratoDialog({ open, current, onSelect, onRemove, onClose }: VibratoDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Vibrato Type</DialogTitle>
         </DialogHeader>

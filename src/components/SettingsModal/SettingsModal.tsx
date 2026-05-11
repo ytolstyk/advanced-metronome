@@ -26,7 +26,7 @@ export function SettingsModal() {
           <Settings size={18} />
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-[#0f0f0f] border-[#222] text-[#f0f0f0] max-w-sm">
+      <DialogContent className="bg-[#0f0f0f] border-[#222] text-[#f0f0f0] max-w-sm" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="text-[#f0f0f0]">Settings</DialogTitle>
         </DialogHeader>

@@ -85,7 +85,7 @@ export function TrillDialog({ open, current, baseFret, openMidi, onSelect, onRem
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Trill</DialogTitle>
         </DialogHeader>

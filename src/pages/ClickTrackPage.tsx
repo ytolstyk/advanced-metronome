@@ -1127,7 +1127,7 @@ export function ClickTrackPage() {
 
       {/* Load from Cloud dialog */}
       <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Load Saved Track</DialogTitle>
           </DialogHeader>
@@ -1162,7 +1162,7 @@ export function ClickTrackPage() {
 
       {/* Save to Cloud dialog */}
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Save Click Track</DialogTitle>
           </DialogHeader>
@@ -1187,7 +1187,7 @@ export function ClickTrackPage() {
 
       {/* Create Group dialog */}
       <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{groupTarget ? 'Edit Group' : 'Create Group'}</DialogTitle>
           </DialogHeader>

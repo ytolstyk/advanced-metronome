@@ -79,7 +79,7 @@ export function ChordPickerModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="chord-picker-dialog">
+      <DialogContent className="chord-picker-dialog" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="chord-picker-title">
             {existingChord ? 'Edit Chord' : 'Pick a Chord'}

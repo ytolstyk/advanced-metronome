@@ -34,7 +34,7 @@ export function GenerateDrumsModal({
 
   return (
     <Dialog open={open} onOpenChange={open => { if (!open) handleClose(); }}>
-      <DialogContent className="generate-drums-dialog">
+      <DialogContent className="generate-drums-dialog" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Generate Drum Pattern</DialogTitle>
         </DialogHeader>
