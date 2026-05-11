@@ -687,6 +687,7 @@ function tabEditorReducerInner(
       // Preserve existing note modifiers when editing; activeModifiers can add on top.
       // Trill is excluded from inheritance — it must be applied explicitly via the trill dialog.
       const existingNote = existingBeat?.notes.find((n) => n.string === action.stringIndex)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { trill: _dropTrill, ...baseModifiers } = existingNote ? existingNote.modifiers : {} as NoteModifiers
       const mergedModifiers = { ...baseModifiers, ...s.activeModifiers }
       const newHarmonicValue = mergedModifiers.harmonicType === 2
