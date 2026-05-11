@@ -236,19 +236,27 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
               points={`${endX - 3},${BEND_TOP_Y + 5} ${endX},${BEND_TOP_Y} ${endX + 3},${BEND_TOP_Y + 5}`}
               fill={bendColor}
             />
-            <text
-              x={endX + 4}
-              y={BEND_TOP_Y - 1}
-              fontSize={BEND_LABEL_FONT_SIZE}
-              fontWeight="bold"
-              textAnchor="start"
-              dominantBaseline="auto"
-              fill={bendColor}
-              style={{ cursor: 'pointer' }}
+            <g
+              className={!forPrint && onBendAmountClick ? 'tab-svg-interactive' : undefined}
+              style={{ cursor: onBendAmountClick ? 'pointer' : 'default' }}
               onClick={onBendAmountClick ? () => onBendAmountClick(measureIndex, bi, note.string) : undefined}
             >
-              {label}
-            </text>
+              {!forPrint && onBendAmountClick && (
+                <rect className="tab-hover-bg" x={endX + 2} y={BEND_TOP_Y - 9} width={22} height={12} rx={2} />
+              )}
+              <text
+                x={endX + 4}
+                y={BEND_TOP_Y - 1}
+                fontSize={BEND_LABEL_FONT_SIZE}
+                fontWeight="bold"
+                textAnchor="start"
+                dominantBaseline="auto"
+                fill={bendColor}
+                style={{ pointerEvents: 'none' }}
+              >
+                {label}
+              </text>
+            </g>
           </g>,
         )
       }

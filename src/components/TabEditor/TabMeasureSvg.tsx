@@ -230,19 +230,26 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   return (
     <g transform={`translate(${xOffset}, 0)`}>
       {/* Measure number — right-click for context menu */}
-      <text
-        x={BARLINE_W + 2}
-        y={topStringY - 4}
-        fontSize={MEASURE_NUMBER_FONT_SIZE}
-        fontWeight={600}
-        fill={forPrint ? '#777777' : '#a0a0b8'}
-        dominantBaseline="auto"
+      <g
+        className={!forPrint && onMeasureContextMenu ? 'tab-svg-interactive' : undefined}
         style={{ cursor: onMeasureContextMenu ? 'pointer' : 'default' }}
         onContextMenu={onMeasureContextMenu ? (e) => { e.preventDefault(); onMeasureContextMenu(measureIndex, e) } : undefined}
         onClick={onMeasureContextMenu ? (e) => { e.preventDefault(); onMeasureContextMenu(measureIndex, e) } : undefined}
       >
-        {measureIndex + 1}
-      </text>
+        {!forPrint && onMeasureContextMenu && (
+          <rect className="tab-hover-bg" x={BARLINE_W} y={topStringY - 15} width={28} height={14} rx={3} />
+        )}
+        <text
+          x={BARLINE_W + 2}
+          y={topStringY - 4}
+          fontSize={MEASURE_NUMBER_FONT_SIZE}
+          fontWeight={600}
+          fill={forPrint ? '#777777' : '#a0a0b8'}
+          dominantBaseline="auto"
+        >
+          {measureIndex + 1}
+        </text>
+      </g>
 
       {/* Measure fill warning — shown when cursor is not on this measure */}
       {!isCursorOnThisMeasure && measure.beats.length > 0 && (() => {
@@ -251,18 +258,26 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         const beats = delta / 240  // ticks → quarter beats for display
         const label = `⚠ +${beats % 1 === 0 ? beats : beats.toFixed(2)}b`
         return (
-          <text
-            x={mw - BARLINE_W - 2}
-            y={topStringY - 4}
-            fontSize={MEASURE_OVERFLOW_FONT_SIZE}
-            textAnchor="end"
-            dominantBaseline="auto"
-            fill={forPrint ? '#cc0000' : '#ff5555'}
+          <g
+            className={!forPrint && onMeasureErrorClick ? 'tab-svg-interactive' : undefined}
             style={{ cursor: onMeasureErrorClick ? 'pointer' : 'default' }}
             onClick={onMeasureErrorClick ? (e) => { e.stopPropagation(); onMeasureErrorClick(measureIndex) } : undefined}
           >
-            {label}
-          </text>
+            {!forPrint && onMeasureErrorClick && (
+              <rect className="tab-hover-bg" x={mw - BARLINE_W - 62} y={topStringY - 15} width={60} height={14} rx={3} />
+            )}
+            <text
+              x={mw - BARLINE_W - 2}
+              y={topStringY - 4}
+              fontSize={MEASURE_OVERFLOW_FONT_SIZE}
+              textAnchor="end"
+              dominantBaseline="auto"
+              fill={forPrint ? '#cc0000' : '#ff5555'}
+              style={{ pointerEvents: 'none' }}
+            >
+              {label}
+            </text>
+          </g>
         )
       })()}
 
@@ -286,15 +301,18 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
       {/* Stacked time signature — rendered after strings so it sits on top */}
       {showTimeSig && timeSig && (
         <g
+          className={!forPrint && onTimeSigClick ? 'tab-svg-interactive' : undefined}
           style={{ cursor: onTimeSigClick ? 'pointer' : 'default' }}
           onClick={onTimeSigClick ? () => onTimeSigClick(measureIndex) : undefined}
         >
           <rect
+            className="tab-hover-bg"
             x={BARLINE_W}
             y={topStringY - 4}
             width={TIME_SIG_W}
             height={bottomStringY - topStringY + 8}
             fill="transparent"
+            rx={3}
           />
           <text
             x={BARLINE_W + TIME_SIG_W / 2}
@@ -325,19 +343,34 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
 
       {/* BPM label — shown at start of each BPM segment */}
       {showBpm && bpm !== undefined && (
-        <text
-          x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + BPM_LABEL_W / 2}
-          y={MEASURE_NUMBER_H + 14}
-          fontSize={BPM_DISPLAY_FONT_SIZE}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill={forPrint ? '#333333' : '#aac4e8'}
-          fontFamily="sans-serif"
+        <g
+          className={!forPrint && onBpmClick ? 'tab-svg-interactive' : undefined}
           style={{ cursor: onBpmClick ? 'pointer' : 'default' }}
           onClick={onBpmClick ? () => onBpmClick(measureIndex) : undefined}
         >
-          {`\u2669=${bpm}`}
-        </text>
+          {!forPrint && onBpmClick && (
+            <rect
+              className="tab-hover-bg"
+              x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0)}
+              y={MEASURE_NUMBER_H + 5}
+              width={BPM_LABEL_W}
+              height={18}
+              rx={3}
+            />
+          )}
+          <text
+            x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + BPM_LABEL_W / 2}
+            y={MEASURE_NUMBER_H + 14}
+            fontSize={BPM_DISPLAY_FONT_SIZE}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill={forPrint ? '#333333' : '#aac4e8'}
+            fontFamily="sans-serif"
+            style={{ pointerEvents: 'none' }}
+          >
+            {`\u2669=${bpm}`}
+          </text>
+        </g>
       )}
 
       {/* Left barline */}
@@ -650,7 +683,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               width={STRING_LABEL_W - 2}
               height={(stringCount - 1) * STRING_SPACING + 16}
               rx={4}
-              fill="rgba(255,255,255,0.07)"
+              fill="rgba(255,255,255,0.22)"
             />
           )}
           {Array.from({ length: stringCount }, (_, rawSi) => {

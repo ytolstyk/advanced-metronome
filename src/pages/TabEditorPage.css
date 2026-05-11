@@ -436,3 +436,7 @@
     border-color: #555;
   }
 }
+
+/* ── SVG interactive element hover highlights ── */
+.tab-svg-interactive .tab-hover-bg { fill: transparent; }
+.tab-svg-interactive:hover .tab-hover-bg { fill: rgba(255,255,255,0.22); }
