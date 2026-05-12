@@ -246,7 +246,7 @@ export function playTabNote(opts: PlayTabNoteOptions): GainNode {
         const p2 = points[si + 1]!
         const curve = segments[si]!
         const segStartTime = startTime + (p1.offset / 60) * totalDur
-        const segDur = ((p2.offset - p1.offset) / 60) * totalDur
+        const segDur = ((p2.offset - p1.offset) / 60) * totalDur - 1e-5
         if (segDur < 0.001) continue
         const startMult = Math.pow(2, (p1.value / 4) / 12)
         const endMult = Math.pow(2, (p2.value / 4) / 12)
