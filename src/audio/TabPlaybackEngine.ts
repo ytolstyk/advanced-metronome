@@ -160,11 +160,12 @@ export class TabPlaybackEngine {
     const bpm = beat.tempoChange ?? effectiveBpmAt(track, this.measureIndex)
     const dur = beatDurationSeconds(beat.duration, beat.dot, bpm)
 
-    if (beat.tremoloSpeed !== undefined) {
-      // Tremolo picking: re-pluck all notes repeatedly at the given subdivision interval
+    if (beat.tremoloMarks !== undefined) {
+      // Tremolo: marks mirrors alphatab's TremoloPickingEffect.marks — plays 2^marks picks per beat.
+      // Interval = undotted beat duration / 2^marks, matching alphatab exactly.
       const noDot = { dotted: false, doubleDotted: false, triplet: false }
-      const interval = beatDurationSeconds(beat.tremoloSpeed, noDot, bpm)
-      const count = Math.max(1, Math.floor(dur / interval))
+      const count = 1 << beat.tremoloMarks
+      const interval = beatDurationSeconds(beat.duration, noDot, bpm) / count
 
       for (let i = 0; i < count; i++) {
         const pickTime = t + i * interval

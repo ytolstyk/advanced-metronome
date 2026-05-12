@@ -1,20 +1,22 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { DurationValue } from '../../tabEditorTypes'
-import { Duration } from '../../tabEditorTypes'
 
-const SPEED_OPTIONS: { value: DurationValue; label: string; description: string }[] = [
-  { value: Duration.Eighth,       label: '1/8',  description: '8th note' },
-  { value: Duration.Sixteenth,    label: '1/16', description: '16th note' },
-  { value: Duration.ThirtySecond, label: '1/32', description: '32nd note' },
-  { value: Duration.SixtyFourth,  label: '1/64', description: '64th note' },
+// marks=1 → 2 picks/beat (8th-note speed on a quarter beat)
+// marks=2 → 4 picks/beat (16th-note speed on a quarter beat)
+// marks=3 → 8 picks/beat (32nd-note speed on a quarter beat)
+// marks=4 → 16 picks/beat (64th-note speed on a quarter beat)
+const MARKS_OPTIONS: { value: number; label: string; description: string }[] = [
+  { value: 1, label: '1/8',  description: '8th note' },
+  { value: 2, label: '1/16', description: '16th note' },
+  { value: 3, label: '1/32', description: '32nd note' },
+  { value: 4, label: '1/64', description: '64th note' },
 ]
 
 interface TremoloPickingDialogProps {
   open: boolean
-  current?: DurationValue
-  onSelect: (speed: DurationValue) => void
+  current?: number
+  onSelect: (marks: number) => void
   onRemove: () => void
   onClose: () => void
 }
@@ -31,7 +33,7 @@ export function TremoloPickingDialog({ open, current, onSelect, onRemove, onClos
             Select the subdivision to repeat for each beat.
           </p>
           <div className="grid grid-cols-2 gap-2">
-            {SPEED_OPTIONS.map((opt) => (
+            {MARKS_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => onSelect(opt.value)}

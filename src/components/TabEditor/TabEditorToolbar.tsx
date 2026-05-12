@@ -351,11 +351,11 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
     setTrillDialogOpen(false)
   }
 
-  function applyTremoloPicking(speed: DurationValue) {
+  function applyTremoloPicking(marks: number) {
     if (hasBeatSelection) {
-      dispatch({ type: 'APPLY_TREMOLO_PICKING_TO_SELECTION', speed })
+      dispatch({ type: 'APPLY_TREMOLO_PICKING_TO_SELECTION', marks })
     } else {
-      dispatch({ type: 'APPLY_TREMOLO_PICKING', measureIndex: mi, beatIndex: bi, speed })
+      dispatch({ type: 'APPLY_TREMOLO_PICKING', measureIndex: mi, beatIndex: bi, marks })
     }
     setTremoloDialogOpen(false)
   }
@@ -544,7 +544,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         </ToolBtn>
         <ToolBtn
           title="Tremolo picking"
-          activeEffect={currentBeat ? !!currentBeat.tremoloSpeed : false}
+          activeEffect={currentBeat ? !!currentBeat.tremoloMarks : false}
           onClick={() => setTremoloDialogOpen(true)}
         >
           <span style={{ fontFamily: 'monospace', fontSize: '0.75em', letterSpacing: '-0.05em' }}>///</span>
@@ -668,7 +668,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
       />
       <TremoloPickingDialog
         open={tremoloDialogOpen}
-        current={currentBeat?.tremoloSpeed}
+        current={currentBeat?.tremoloMarks}
         onSelect={applyTremoloPicking}
         onRemove={removeTremoloPicking}
         onClose={() => setTremoloDialogOpen(false)}

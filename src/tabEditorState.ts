@@ -675,8 +675,8 @@ export type TabEditorAction =
   | { type: 'RESOLVE_MEASURE_ERROR_ADJUST_RESTS'; measureIndex: number }
   | { type: 'INSERT_REST' }
   | { type: 'TOGGLE_PICK_STROKE'; direction: 'down' | 'up' }
-  | { type: 'APPLY_TREMOLO_PICKING'; measureIndex: number; beatIndex: number; speed?: DurationValue }
-  | { type: 'APPLY_TREMOLO_PICKING_TO_SELECTION'; speed?: DurationValue }
+  | { type: 'APPLY_TREMOLO_PICKING'; measureIndex: number; beatIndex: number; marks?: number }
+  | { type: 'APPLY_TREMOLO_PICKING_TO_SELECTION'; marks?: number }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -883,7 +883,7 @@ function tabEditorReducerInner(
           ...m,
           beats: m.beats.map((b, bi) => {
             if (bi !== action.beatIndex) return b
-            return { ...b, tremoloSpeed: action.speed }
+            return { ...b, tremoloMarks: action.marks }
           }),
         }
       })
@@ -901,7 +901,7 @@ function tabEditorReducerInner(
         return {
           ...m,
           beats: m.beats.map((b, bi) =>
-            bi >= bStart && bi <= bEnd ? { ...b, tremoloSpeed: action.speed } : b,
+            bi >= bStart && bi <= bEnd ? { ...b, tremoloMarks: action.marks } : b,
           ),
         }
       })
