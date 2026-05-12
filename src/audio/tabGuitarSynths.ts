@@ -240,6 +240,7 @@ export function playTabNote(opts: PlayTabNoteOptions): GainNode {
     oscs.forEach((osc, idx) => {
       const h = idx + 1
       const preMult = Math.pow(2, (points[0]!.value / 4) / 12)
+      osc.frequency.cancelScheduledValues(startTime)
       osc.frequency.setValueAtTime(freq * h * preMult, startTime)
       for (let si = 0; si < segments.length; si++) {
         const p1 = points[si]!
@@ -257,7 +258,13 @@ export function playTabNote(opts: PlayTabNoteOptions): GainNode {
           const shaped = curve === 'up' ? t * t : 1 - (1 - t) * (1 - t)
           arr[i] = freq * h * (startMult + (endMult - startMult) * shaped)
         }
-        osc.frequency.setValueCurveAtTime(arr, segStartTime, segDur)
+        try {
+          osc.frequency.setValueCurveAtTime(arr, segStartTime, segDur)
+        } catch {
+          // If a curve still overlaps (e.g. floating-point boundary), fall back to a
+          // simple linear ramp so the bend is audible without crashing playback.
+          osc.frequency.linearRampToValueAtTime(arr[SAMPLES - 1]!, segStartTime + segDur)
+        }
       }
     })
   }
