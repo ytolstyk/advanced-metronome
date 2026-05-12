@@ -1,8 +1,21 @@
 import { useState, useCallback, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { playTabNote } from '@/audio/tabGuitarSynths'
-import type { BendCurve, BendData, BendPointDef } from '@/tabEditorTypes'
+import type { BendCurve, BendData, BendPointDef, DotModifier, DurationValue } from '@/tabEditorTypes'
 import './BendGraphDialog.css'
+
+const DURATION_NAMES: Record<number, string> = {
+  1: 'Whole', 2: 'Half', 4: 'Quarter', 8: 'Eighth',
+  16: 'Sixteenth', 32: 'Thirty-Second', 64: 'Sixty-Fourth',
+}
+
+function durationLabel(duration: DurationValue, dot: DotModifier): string {
+  const base = DURATION_NAMES[duration] ?? `${duration}`
+  if (dot.doubleDotted) return `${base} (double dotted)`
+  if (dot.dotted) return `${base} (dotted)`
+  if (dot.triplet) return `${base} (triplet)`
+  return base
+}
 
 const GRID_COLS = 60
 const GRID_ROWS = 24
@@ -60,12 +73,14 @@ interface BendGraphDialogProps {
   initialData: BendData
   noteFreq: number
   openMidi: number
+  duration: DurationValue
+  dot: DotModifier
   onSave: (data: BendData) => void
   onRemove?: () => void
   onClose: () => void
 }
 
-export function BendGraphDialog({ open, initialData, noteFreq, openMidi, onSave, onRemove, onClose }: BendGraphDialogProps) {
+export function BendGraphDialog({ open, initialData, noteFreq, openMidi, duration, dot, onSave, onRemove, onClose }: BendGraphDialogProps) {
   const [points, setPoints] = useState<BendPointDef[]>(initialData.points)
   const [segments, setSegments] = useState<BendCurve[]>(initialData.segments)
   const draggingIdxRef = useRef<number | null>(null)
@@ -170,10 +185,10 @@ export function BendGraphDialog({ open, initialData, noteFreq, openMidi, onSave,
   // Horizontal lines
   for (let row = 0; row <= GRID_ROWS; row++) {
     const y = valueToY(row)
-    let stroke = '#2a2a2a'
-    let strokeWidth = 0.5
-    if (row % 8 === 0) { stroke = '#555'; strokeWidth = 1 }
-    else if (row % 4 === 0) { stroke = '#3d3d3d'; strokeWidth = 0.75 }
+    let stroke = '#383838'
+    let strokeWidth = 1
+    if (row % 8 === 0) { stroke = '#666'; strokeWidth = 1.75 }
+    else if (row % 4 === 0) { stroke = '#4a4a4a'; strokeWidth = 1.25 }
     gridLines.push(
       <line key={`h${row}`} x1={PAD_LEFT} y1={y} x2={PAD_LEFT + SVG_W} y2={y}
         stroke={stroke} strokeWidth={strokeWidth} />
@@ -185,7 +200,7 @@ export function BendGraphDialog({ open, initialData, noteFreq, openMidi, onSave,
     const x = offsetToX(col)
     gridLines.push(
       <line key={`v${col}`} x1={x} y1={PAD_TOP} x2={x} y2={PAD_TOP + SVG_H}
-        stroke="#3d3d3d" strokeWidth={0.75} />
+        stroke="#4a4a4a" strokeWidth={1.25} />
     )
   }
 
@@ -197,24 +212,20 @@ export function BendGraphDialog({ open, initialData, noteFreq, openMidi, onSave,
     const label = step === 0 ? '0' : `${step}`
     yLabels.push(
       <text key={`yl${step}`} x={PAD_LEFT - 6} y={y} textAnchor="end" dominantBaseline="middle"
-        fontSize={9} fill="#777">
+        fontSize={12} fill="#aaa">
         {label}
       </text>
     )
   }
 
-  // X-axis labels
-  const xLabels: React.ReactNode[] = []
-  const xLabelMap: Record<number, string> = { 0: '0', 15: '¼', 30: '½', 45: '¾', 60: '1' }
-  for (const [col, label] of Object.entries(xLabelMap)) {
-    const x = offsetToX(Number(col))
-    xLabels.push(
-      <text key={`xl${col}`} x={x} y={PAD_TOP + SVG_H + 14} textAnchor="middle"
-        fontSize={9} fill="#777">
-        {label}
-      </text>
-    )
-  }
+  // Duration label centered below x-axis
+  const durationCenterX = PAD_LEFT + SVG_W / 2
+  const durationLabelEl = (
+    <text x={durationCenterX} y={PAD_TOP + SVG_H + 16} textAnchor="middle"
+      fontSize={11} fill="#888">
+      {durationLabel(duration, dot)}
+    </text>
+  )
 
   // Segment paths and toggle hit areas
   const segmentElements: React.ReactNode[] = []
@@ -252,8 +263,8 @@ export function BendGraphDialog({ open, initialData, noteFreq, openMidi, onSave,
     segmentElements.push(
       <g key={`tog${si}`} onClick={(e) => { e.stopPropagation(); toggleSegment(si) }}
         style={{ cursor: 'pointer' }}>
-        <circle cx={mid.x} cy={mid.y} r={10} fill="transparent" />
-        <circle cx={mid.x} cy={mid.y} r={4} fill="transparent" stroke="#ffaadd66" strokeWidth={1}
+        <circle cx={mid.x} cy={mid.y} r={14} fill="transparent" />
+        <circle cx={mid.x} cy={mid.y} r={8} fill="transparent" stroke="#ffaadd66" strokeWidth={2.5}
           className="bend-toggle-indicator" />
       </g>
     )
@@ -276,11 +287,6 @@ export function BendGraphDialog({ open, initialData, noteFreq, openMidi, onSave,
     )
   }
 
-  // Step labels on Y-axis
-  const stepUnitLabel = (
-    <text x={PAD_LEFT - 6} y={PAD_TOP - 4} textAnchor="end" fontSize={8} fill="#555">steps</text>
-  )
-
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="bend-graph-dialog-content" aria-describedby={undefined}>
@@ -302,8 +308,7 @@ export function BendGraphDialog({ open, initialData, noteFreq, openMidi, onSave,
           >
             {gridLines}
             {yLabels}
-            {stepUnitLabel}
-            {xLabels}
+            {durationLabelEl}
             {segmentElements}
             {dotElements}
           </svg>

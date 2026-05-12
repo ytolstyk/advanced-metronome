@@ -864,8 +864,9 @@ export function TabSvgCanvas({
 
       {/* Bend graph dialog */}
       {bendEdit !== null && (() => {
-        const note = track.measures[bendEdit.mi]?.beats[bendEdit.bi]?.notes.find(n => n.string === bendEdit.si)
-        if (!note) return null
+        const beat = track.measures[bendEdit.mi]?.beats[bendEdit.bi]
+        const note = beat?.notes.find(n => n.string === bendEdit.si)
+        if (!note || !beat) return null
         const openMidi = track.openMidi[note.string - 1] ?? 64
         const noteFreq = openMidi > 0 ? 440 * Math.pow(2, (openMidi + note.fret - 69) / 12) : 220
         const initialData: BendData = note.bendData ?? {
@@ -878,6 +879,8 @@ export function TabSvgCanvas({
             initialData={initialData}
             noteFreq={noteFreq}
             openMidi={openMidi}
+            duration={beat.duration}
+            dot={beat.dot}
             onSave={(data) => {
               dispatch({ type: 'SET_BEND_DATA', measureIndex: bendEdit.mi, beatIndex: bendEdit.bi, stringIndex: bendEdit.si, bendData: data })
               setBendEdit(null)

@@ -706,6 +706,8 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
             initialData={initialData}
             noteFreq={noteFreq}
             openMidi={openMidi}
+            duration={displayedDuration}
+            dot={displayedDot}
             onSave={applyBend}
             onRemove={() => {
               dispatch({ type: 'APPLY_MODIFIER', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, modifier: 'bend' })
