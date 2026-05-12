@@ -1,3 +1,17 @@
+export interface BendPointDef {
+  offset: number  // 0–60 (AlphaTab BendPoint.offset range)
+  value: number   // 0–24 quarter-tones (24 = 3 whole steps = 6 semitones)
+}
+
+export type BendCurve = 'up' | 'down'
+// 'up'  = concave up (accelerating): Q(x2,y1) bezier — horizontal start, vertical end
+// 'down' = concave down (decelerating): Q(x1,y2) bezier — vertical start, horizontal end
+
+export interface BendData {
+  points: BendPointDef[]   // ≥2 points, sorted by offset; points[0].offset === 0
+  segments: BendCurve[]    // length === points.length - 1
+}
+
 // Harmonic types matching alphaTab's HarmonicType enum
 export const HarmonicType = {
   Natural: 1,
@@ -55,7 +69,7 @@ export interface TabNote {
   string: number  // 1-based; 1 = lowest-pitched string (AlphaTab convention); always >= 1
   fret: number    // 0-24; always >= 0 (notes absent from beat.notes array = no note)
   modifiers: NoteModifiers
-  bendAmount?: number // 0.5–5 in 0.5 increments; defaults to 1 when modifiers.bend is set
+  bendData?: BendData // multi-point bend curve; replaces legacy bendAmount
   harmonicValue?: number // fret for artificial harmonic node point; only relevant when modifiers.harmonicType === 2
   trillFret?: number // auxiliary trill note fret (1-24); only relevant when modifiers.trill is set
   trillSpeed?: DurationValue // trill alternation speed; defaults to Duration.Sixteenth

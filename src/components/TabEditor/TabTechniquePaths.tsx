@@ -1,4 +1,4 @@
-import type { Beat, Measure, TabTrack } from '../../tabEditorTypes'
+import type { Beat, BendCurve, BendPointDef, Measure, TabTrack } from '../../tabEditorTypes'
 import {
   type BeatPosition,
   BARLINE_W,
@@ -55,7 +55,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
     const pos = beatPositions[bi]
     if (!pos) continue
 
-    const { cx } = pos
+    const { cx, w: posW } = pos
 
     // Detect if any string in this beat has a bend (affects technique zone Y positions)
     const hasBend = beat.notes.some((n) => n.modifiers.bend)
@@ -217,36 +217,69 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
         )
       }
 
-      // Bend — quarter-circle quadratic bezier: horizontal tangent at note, vertical at top
-      if (note.modifiers.bend) {
-        const amount = note.bendAmount ?? 1
-        const label = formatBendAmount(amount)
-        const startX = cx + 6
-        const endX = cx + 24
+      // Bend — multi-segment quadratic bezier curves from BendData
+      if (note.modifiers.bend && note.bendData) {
+        const { points, segments } = note.bendData
         const bendColor = forPrint ? '#000000' : '#ffaadd'
-        elements.push(
-          <g key={`bend-${key}`}>
-            <path
-              d={`M ${startX},${sy - 6} Q ${endX},${sy - 6} ${endX},${BEND_TOP_Y}`}
-              stroke={bendColor}
-              strokeWidth={1.5}
-              fill="none"
-            />
-            <polygon
-              points={`${endX - 3},${BEND_TOP_Y + 5} ${endX},${BEND_TOP_Y} ${endX + 3},${BEND_TOP_Y + 5}`}
-              fill={bendColor}
-            />
-            <g
-              className={!forPrint && onBendAmountClick ? 'tab-svg-interactive' : undefined}
-              style={{ cursor: onBendAmountClick ? 'pointer' : 'default' }}
-              onClick={onBendAmountClick ? () => onBendAmountClick(measureIndex, bi, note.string) : undefined}
-            >
-              {!forPrint && onBendAmountClick && (
-                <rect className="tab-hover-bg" x={endX + 2} y={BEND_TOP_Y - 9} width={22} height={12} rx={2} />
-              )}
-              <text
-                x={endX + 4}
-                y={BEND_TOP_Y - 1}
+        const svgStartX = cx + 6
+        // Use actual allocated slot width so curve never overflows into the next beat
+        const slotRightFromCx = posW - 12  // posW - BEAT_LEFT_PAD
+        const svgEndX = cx + slotRightFromCx - 8
+        const bottomY = sy - 6
+        const topY = BEND_TOP_Y
+
+        function offToX(offset: number): number {
+          return svgStartX + (offset / 60) * (svgEndX - svgStartX)
+        }
+        function valToY(value: number): number {
+          return bottomY + (value / 24) * (topY - bottomY)
+        }
+
+        const bendChildren: React.ReactNode[] = []
+        for (let si = 0; si < segments.length; si++) {
+          const p1 = points[si] as BendPointDef
+          const p2 = points[si + 1] as BendPointDef
+          const curve = segments[si] as BendCurve
+          const x1 = offToX(p1.offset)
+          const y1 = valToY(p1.value)
+          const x2 = offToX(p2.offset)
+          const y2 = valToY(p2.value)
+          const d = curve === 'up'
+            ? `M ${x1},${y1} Q ${x2},${y1} ${x2},${y2}`
+            : `M ${x1},${y1} Q ${x1},${y2} ${x2},${y2}`
+          bendChildren.push(
+            <path key={`bseg${si}`} d={d} stroke={bendColor} strokeWidth={1.5} fill="none" />
+          )
+
+          const valueDelta = p2.value - p1.value
+          const dy = y2 - y1  // negative = going up on screen
+          if (Math.abs(valueDelta) > 0) {
+            // Arrow tip offset beyond curve endpoint in the direction of travel:
+            // 'up' curve ends vertically → offset y; 'down' ends horizontally → offset x
+            const ARROW_OFFSET = 2
+            const ax = x2 + (curve === 'down' ? ARROW_OFFSET : 0)
+            const ay = y2 + (curve === 'up' ? (dy < 0 ? -ARROW_OFFSET : ARROW_OFFSET) : 0)
+            // dy < 0 means curve goes up → upward arrow (▲): base below tip, dir = +1
+            // dy > 0 means curve goes down → downward arrow (▼): base above tip, dir = -1
+            const dir = dy < 0 ? 1 : -1
+            const ARROW_H = 6
+            bendChildren.push(
+              <polygon key={`barr${si}`}
+                points={`${ax - 3},${ay + dir * ARROW_H} ${ax},${ay} ${ax + 3},${ay + dir * ARROW_H}`}
+                fill={bendColor}
+              />
+            )
+
+            // Label shows absolute position from base note (p2.value/4 semitones); skip if back to 0
+            if (p2.value === 0) continue
+            const semitones = p2.value / 4
+            const segLabel = formatBendAmount(semitones)
+            // "Above" always means smaller y (higher on screen), offset from the tip
+            const labelY = ay - 10
+            bendChildren.push(
+              <text key={`blbl${si}`}
+                x={ax + 5}
+                y={labelY}
                 fontSize={BEND_LABEL_FONT_SIZE}
                 fontWeight="bold"
                 textAnchor="start"
@@ -254,9 +287,20 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
                 fill={bendColor}
                 style={{ pointerEvents: 'none' }}
               >
-                {label}
+                {segLabel}
               </text>
-            </g>
+            )
+          }
+        }
+
+        elements.push(
+          <g
+            key={`bend-${key}`}
+            className={!forPrint && onBendAmountClick ? 'tab-svg-interactive' : undefined}
+            style={{ cursor: onBendAmountClick ? 'pointer' : 'default' }}
+            onClick={onBendAmountClick ? () => onBendAmountClick(measureIndex, bi, note.string) : undefined}
+          >
+            {bendChildren}
           </g>,
         )
       }

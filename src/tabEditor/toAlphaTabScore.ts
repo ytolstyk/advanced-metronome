@@ -143,14 +143,12 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
           }
         }
 
-        // Bend: bendAmount is in semitones; AlphaTab value is quarter-tones (×4)
-        if (note.modifiers.bend) {
-          const semitones = note.bendAmount ?? 1
-          const atValue = Math.round(semitones * 4)
-          atNote.bendType = at.model.BendType.Bend
-          atNote.addBendPoint(new at.model.BendPoint(0, 0))
-          atNote.addBendPoint(new at.model.BendPoint(6, atValue))
-          atNote.addBendPoint(new at.model.BendPoint(12, atValue))
+        // Bend: use Custom type with all BendData points (offset 0–60, value quarter-tones)
+        if (note.modifiers.bend && note.bendData) {
+          atNote.bendType = at.model.BendType.Custom
+          for (const pt of note.bendData.points) {
+            atNote.addBendPoint(new at.model.BendPoint(pt.offset, pt.value))
+          }
         }
 
         atBeat.addNote(atNote)

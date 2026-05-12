@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type {
+  BendData,
   ConnectionModifierKey,
   DotModifier,
   DurationValue,
@@ -17,6 +18,7 @@ import type { VibratoType } from './VibratoDialog'
 import { HarmonicsDialog, HARMONIC_LABELS, HARMONIC_SYMBOLS } from './HarmonicsDialog'
 import { TrillDialog } from './TrillDialog'
 import { TremoloPickingDialog } from './TremoloPickingDialog'
+import { BendGraphDialog } from './BendGraphDialog'
 
 const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide']
 
@@ -156,6 +158,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
   const [harmonicsDialogOpen, setHarmonicsDialogOpen] = useState(false)
   const [trillDialogOpen, setTrillDialogOpen] = useState(false)
   const [tremoloDialogOpen, setTremoloDialogOpen] = useState(false)
+  const [bendDialogOpen, setBendDialogOpen] = useState(false)
   const { activeDuration, activeDot, activeModifiers, cursor, noteSelection } = state
   const mi = cursor.measureIndex
   const bi = cursor.beatIndex
@@ -369,9 +372,25 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
     setTremoloDialogOpen(false)
   }
 
+  function applyBend(data: BendData) {
+    dispatch({ type: 'SET_BEND_DATA', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, bendData: data })
+    setBendDialogOpen(false)
+  }
+
   function onConnectionClick(key: NoteModifierKey) {
     if (key === 'vibrato') {
       setVibratoDialogOpen(true)
+      return
+    }
+    if (key === 'bend') {
+      if (isOnNote) {
+        if (!currentNote.modifiers.bend) {
+          dispatch({ type: 'APPLY_MODIFIER', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, modifier: 'bend' })
+        }
+        setBendDialogOpen(true)
+      } else {
+        dispatch({ type: 'TOGGLE_MODIFIER', modifier: 'bend' })
+      }
       return
     }
     if (noteSelection.length >= 2) {
@@ -673,6 +692,29 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         onRemove={removeTremoloPicking}
         onClose={() => setTremoloDialogOpen(false)}
       />
+      {bendDialogOpen && isOnNote && (() => {
+        const openMidi = state.track.openMidi[currentNote.string - 1] ?? 64
+        const noteFreq = 440 * Math.pow(2, (openMidi + currentNote.fret - 69) / 12)
+        const initialData: BendData = currentNote.bendData ?? {
+          points: [{ offset: 0, value: 0 }, { offset: 60, value: 4 }],
+          segments: ['up'],
+        }
+        return (
+          <BendGraphDialog
+            key={`bend-${mi}-${bi}-${cursor.stringIndex}`}
+            open={true}
+            initialData={initialData}
+            noteFreq={noteFreq}
+            openMidi={openMidi}
+            onSave={applyBend}
+            onRemove={() => {
+              dispatch({ type: 'APPLY_MODIFIER', measureIndex: mi, beatIndex: bi, stringIndex: cursor.stringIndex, modifier: 'bend' })
+              setBendDialogOpen(false)
+            }}
+            onClose={() => setBendDialogOpen(false)}
+          />
+        )
+      })()}
     </div>
   )
 }

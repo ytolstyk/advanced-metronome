@@ -1,5 +1,7 @@
 import type {
   Beat,
+  BendCurve,
+  BendData,
   ConnectionModifierKey,
   DotModifier,
   DurationValue,
@@ -260,6 +262,21 @@ function cleanNoteModifiers(track: TabTrack): TabTrack {
           }
           // harmonicType: true is invalid (was never valid but guard anyway)
           if (mods.harmonicType === true) mods.harmonicType = 1
+          // Migrate legacy bendAmount (semitones) to bendData (multi-point curve)
+          const note = n as TabNote & { bendAmount?: number }
+          if (note.modifiers.bend && !note.bendData && note.bendAmount !== undefined) {
+            const qtValue = Math.round(note.bendAmount * 4)
+            const { bendAmount: _ba, ...noteRest } = note as TabNote & { bendAmount?: number }
+            void _ba
+            return {
+              ...noteRest,
+              modifiers: mods as NoteModifiers,
+              bendData: {
+                points: [{ offset: 0, value: 0 }, { offset: 60, value: qtValue }],
+                segments: ['up' as BendCurve],
+              } satisfies BendData,
+            }
+          }
           return { ...n, modifiers: mods as NoteModifiers }
         })
         return { ...b, notes, ...(pickStroke ? { pickStroke } : {}) }
@@ -668,7 +685,7 @@ export type TabEditorAction =
   | { type: 'RESOLVE_OVERFLOW_TRIM' }
   | { type: 'RESOLVE_OVERFLOW_BLEED' }
   | { type: 'DISMISS_OVERFLOW' }
-  | { type: 'SET_BEND_AMOUNT'; measureIndex: number; beatIndex: number; stringIndex: number; amount: number }
+  | { type: 'SET_BEND_DATA'; measureIndex: number; beatIndex: number; stringIndex: number; bendData: BendData }
   | { type: 'CLEAR_NOTES' }
   | { type: 'RESOLVE_MEASURE_ERROR_REMOVE_NOTES'; measureIndex: number }
   | { type: 'RESOLVE_MEASURE_ERROR_SHIFT_NOTES'; measureIndex: number }
@@ -934,13 +951,21 @@ function tabEditorReducerInner(
             const setting = !cur
             const notes = b.notes.map((n) => {
               const mods = { ...n.modifiers }
+              let bendDataOverride: BendData | null | undefined = undefined // undefined = no change
               if (n.string === action.stringIndex) {
                 if (cur) {
                   delete mods[action.modifier]
+                  if (action.modifier === 'bend') bendDataOverride = null  // clear bendData
                 } else {
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   mods[action.modifier] = (action.value ?? true) as any
                   applyModifierConflicts(mods, action.modifier)
+                  if (action.modifier === 'bend' && !n.bendData) {
+                    bendDataOverride = {
+                      points: [{ offset: 0, value: 0 }, { offset: 60, value: 4 }],
+                      segments: ['up'],
+                    }
+                  }
                 }
               }
               // Beat-level spread: PM/LR/staccato applied to one note applies to all fretted notes
@@ -948,7 +973,14 @@ function tabEditorReducerInner(
                 mods[action.modifier] = true
                 applyBeatSpreadConflicts(mods, action.modifier)
               }
-              return { ...n, modifiers: mods }
+              if (bendDataOverride === null) {
+                const { bendData: _bd, ...rest } = n as TabNote & { bendData?: BendData }
+                void _bd
+                return { ...rest, modifiers: mods }
+              }
+              return bendDataOverride !== undefined
+                ? { ...n, modifiers: mods, bendData: bendDataOverride }
+                : { ...n, modifiers: mods }
             })
             return { ...b, notes }
           }),
@@ -1687,7 +1719,7 @@ function tabEditorReducerInner(
       return { ...s, track: { ...track, measures } }
     }
 
-    case 'SET_BEND_AMOUNT': {
+    case 'SET_BEND_DATA': {
       const s = pushUndo(state)
       const measures = s.track.measures.map((m, mi) => {
         if (mi !== action.measureIndex) return m
@@ -1697,7 +1729,9 @@ function tabEditorReducerInner(
             if (bi !== action.beatIndex) return b
             const notes = b.notes.map((n) => {
               if (n.string !== action.stringIndex) return n
-              return { ...n, bendAmount: action.amount }
+              const { ...rest } = n as TabNote & { bendAmount?: number }
+              delete (rest as { bendAmount?: number }).bendAmount
+              return { ...rest, bendData: action.bendData }
             })
             return { ...b, notes }
           }),

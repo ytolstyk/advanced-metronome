@@ -1,0 +1,77 @@
+.bend-graph-dialog-content {
+  max-width: 700px;
+  width: 95vw;
+}
+
+.bend-graph-instructions {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-bottom: 8px;
+}
+
+.bend-graph-svg-wrapper {
+  overflow-x: auto;
+}
+
+.bend-graph-svg {
+  cursor: crosshair;
+  background: #111;
+  border-radius: 4px;
+  display: block;
+}
+
+.bend-toggle-indicator {
+  transition: stroke 0.15s;
+}
+
+.bend-graph-svg:hover .bend-toggle-indicator {
+  stroke: #ffaadd99;
+}
+
+.bend-graph-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.bend-graph-footer-right {
+  display: flex;
+  gap: 8px;
+}
+
+.bend-graph-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: opacity 0.15s;
+}
+
+.bend-graph-btn:hover {
+  opacity: 0.85;
+}
+
+.bend-graph-btn-preview {
+  background: transparent;
+  border-color: #ffaadd66;
+  color: #ffaadd;
+}
+
+.bend-graph-btn-remove {
+  background: transparent;
+  border-color: var(--destructive);
+  color: var(--destructive);
+}
+
+.bend-graph-btn-cancel {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+.bend-graph-btn-save {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}

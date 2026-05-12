@@ -8,7 +8,7 @@ export interface PlayTabNoteOptions {
   fret: number
   openMidi: number
   modifiers: NoteModifiers
-  bendAmount: number      // in semitones (pre-converted from note.bendAmount * 2)
+  bendData?: import('../tabEditorTypes').BendData
   startTime: number
   beatDuration: number
   nextFreq: number | null // destination for legatoSlide (next note on same string)
@@ -87,7 +87,7 @@ function attachVibrato(
 }
 
 export function playTabNote(opts: PlayTabNoteOptions): GainNode {
-  const { ctx, freq, fret, openMidi, modifiers, bendAmount, startTime, beatDuration, nextFreq, vol, trillFret, trillSpeed } = opts
+  const { ctx, freq, fret, openMidi, modifiers, bendData, startTime, beatDuration, nextFreq, vol, trillFret, trillSpeed } = opts
   const decayTotal = 2.2
   const oscStop = startTime + 2.5
 
@@ -234,13 +234,31 @@ export function playTabNote(opts: PlayTabNoteOptions): GainNode {
     lfo.stop(oscStop)
   }
 
-  if (modifiers.bend) {
-    const targetFreq = freq * Math.pow(2, bendAmount / 12)
-    const bendEndTime = startTime + Math.min(beatDuration * 0.6, 0.4)
+  if (modifiers.bend && bendData && bendData.points.length >= 2) {
+    const { points, segments } = bendData
+    const totalDur = Math.min(beatDuration * 0.8, 1.2)
     oscs.forEach((osc, idx) => {
       const h = idx + 1
-      osc.frequency.setValueAtTime(freq * h, startTime)
-      osc.frequency.exponentialRampToValueAtTime(targetFreq * h, bendEndTime)
+      const preMult = Math.pow(2, (points[0]!.value / 4) / 12)
+      osc.frequency.setValueAtTime(freq * h * preMult, startTime)
+      for (let si = 0; si < segments.length; si++) {
+        const p1 = points[si]!
+        const p2 = points[si + 1]!
+        const curve = segments[si]!
+        const segStartTime = startTime + (p1.offset / 60) * totalDur
+        const segDur = ((p2.offset - p1.offset) / 60) * totalDur
+        if (segDur < 0.001) continue
+        const startMult = Math.pow(2, (p1.value / 4) / 12)
+        const endMult = Math.pow(2, (p2.value / 4) / 12)
+        const SAMPLES = 32
+        const arr = new Float32Array(SAMPLES)
+        for (let i = 0; i < SAMPLES; i++) {
+          const t = i / (SAMPLES - 1)
+          const shaped = curve === 'up' ? t * t : 1 - (1 - t) * (1 - t)
+          arr[i] = freq * h * (startMult + (endMult - startMult) * shaped)
+        }
+        osc.frequency.setValueCurveAtTime(arr, segStartTime, segDur)
+      }
     })
   }
 

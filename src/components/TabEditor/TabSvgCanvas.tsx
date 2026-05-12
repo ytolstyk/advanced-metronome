@@ -9,6 +9,8 @@ import { TUNINGS } from '../../data/tunings'
 import type { StringCount } from '../../data/tunings'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { BendGraphDialog } from './BendGraphDialog'
+import type { BendData } from '../../tabEditorTypes'
 
 interface TabSvgCanvasProps {
   state: TabEditorState
@@ -860,76 +862,32 @@ export function TabSvgCanvas({
         </div>
       )}
 
-      {/* Bend amount picker */}
+      {/* Bend graph dialog */}
       {bendEdit !== null && (() => {
         const note = track.measures[bendEdit.mi]?.beats[bendEdit.bi]?.notes.find(n => n.string === bendEdit.si)
-        const current = note?.bendAmount ?? 1
-        const BEND_VALUES = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
-        function fmt(v: number): string {
-          const whole = Math.floor(v)
-          const hasHalf = v % 1 !== 0
-          if (whole === 0) return '½'
-          if (hasHalf) return `${whole}½`
-          return `${whole}`
+        if (!note) return null
+        const openMidi = track.openMidi[note.string - 1] ?? 64
+        const noteFreq = openMidi > 0 ? 440 * Math.pow(2, (openMidi + note.fret - 69) / 12) : 220
+        const initialData: BendData = note.bendData ?? {
+          points: [{ offset: 0, value: 0 }, { offset: 60, value: 4 }],
+          segments: ['up'],
         }
         return (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 100,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(0,0,0,0.5)',
+          <BendGraphDialog
+            open={true}
+            initialData={initialData}
+            noteFreq={noteFreq}
+            openMidi={openMidi}
+            onSave={(data) => {
+              dispatch({ type: 'SET_BEND_DATA', measureIndex: bendEdit.mi, beatIndex: bendEdit.bi, stringIndex: bendEdit.si, bendData: data })
+              setBendEdit(null)
             }}
-            onMouseDown={(e) => { if (e.target === e.currentTarget) setBendEdit(null) }}
-          >
-            <div
-              style={{
-                background: '#1a1a1a',
-                border: '1px solid #333',
-                borderRadius: 8,
-                padding: '16px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-                minWidth: 200,
-              }}
-            >
-              <span style={{ color: '#ccc', fontSize: '0.85rem', fontWeight: 600 }}>Bend Amount</span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {BEND_VALUES.map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => {
-                      dispatch({ type: 'SET_BEND_AMOUNT', measureIndex: bendEdit.mi, beatIndex: bendEdit.bi, stringIndex: bendEdit.si, amount: v })
-                      setBendEdit(null)
-                    }}
-                    style={{
-                      width: 44,
-                      padding: '6px 0',
-                      background: v === current ? '#2a4a2a' : 'transparent',
-                      border: `1px solid ${v === current ? '#4a8a4a' : '#444'}`,
-                      borderRadius: 4,
-                      color: v === current ? '#88ff88' : '#e0e0e0',
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
-                      textAlign: 'center',
-                    }}
-                  >
-                    {fmt(v)}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setBendEdit(null)}
-                style={{ padding: '6px 12px', background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+            onRemove={() => {
+              dispatch({ type: 'APPLY_MODIFIER', measureIndex: bendEdit.mi, beatIndex: bendEdit.bi, stringIndex: bendEdit.si, modifier: 'bend' })
+              setBendEdit(null)
+            }}
+            onClose={() => setBendEdit(null)}
+          />
         )
       })()}
 
