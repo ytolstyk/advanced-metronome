@@ -6,6 +6,22 @@
   background: #fff;
 }
 
+.alphatab-preview--dark {
+  background: #1a1b26;
+}
+
+.alphatab-preview--dark .alphatab-preview-canvas .at-cursor-bar {
+  background: rgba(255, 220, 50, 0.18);
+}
+
+.alphatab-preview--dark .alphatab-preview-canvas .at-cursor-beat {
+  background: rgba(120, 140, 255, 0.7);
+}
+
+.alphatab-preview--dark .alphatab-preview-canvas .at-selection div {
+  background: rgba(120, 140, 255, 0.12);
+}
+
 .alphatab-mode-active {
   background: rgba(255, 255, 255, 0.15) !important;
   color: #fff !important;

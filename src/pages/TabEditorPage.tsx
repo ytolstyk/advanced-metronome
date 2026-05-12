@@ -212,6 +212,7 @@ export function TabEditorPage() {
   const [isPlaybackPaused, setIsPlaybackPaused] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [previewMode, setPreviewMode] = useState<'tab' | 'staff' | 'both'>('both')
+  const [previewDarkMode, setPreviewDarkMode] = useState(true)
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false)
   const alphaTabPreviewRef = useRef<AlphaTabPreviewHandle>(null)
 
@@ -728,6 +729,8 @@ export function TabEditorPage() {
           }}
           previewMode={previewMode}
           onPreviewModeChange={setPreviewMode}
+          previewDarkMode={previewDarkMode}
+          onPreviewDarkModeChange={setPreviewDarkMode}
         />
       </div>
       {showPreview ? (
@@ -735,6 +738,7 @@ export function TabEditorPage() {
           ref={alphaTabPreviewRef}
           track={state.track}
           mode={previewMode}
+          darkMode={previewDarkMode}
           onPlayerStateChange={setIsPreviewPlaying}
         />
       ) : (

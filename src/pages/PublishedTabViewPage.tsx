@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthenticator } from '@aws-amplify/ui-react'
-import { Play, Pause, Square, Link, ExternalLink, Printer } from 'lucide-react'
+import { Play, Pause, Square, Link, ExternalLink, Printer, Sun, Moon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TabEditorErrorBoundary, AlphaTabPreview, type AlphaTabPreviewHandle } from '../components/TabEditor'
 import { loadPublishedTab, getCurrentUsername, type PublishedTabRecord } from '../api/publishedTabApi'
@@ -23,6 +23,7 @@ export function PublishedTabViewPage() {
   const [isOwner, setIsOwner] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [viewMode, setViewMode] = useState<NotationMode>('tab')
+  const [darkMode, setDarkMode] = useState(true)
   const [copySuccess, setCopySuccess] = useState(false)
 
   const alphaTabRef = useRef<AlphaTabPreviewHandle>(null)
@@ -162,6 +163,15 @@ export function PublishedTabViewPage() {
               {m === 'tab' ? 'Tab' : m === 'staff' ? 'Staff' : 'Both'}
             </Button>
           ))}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setDarkMode((d) => !d)}
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            className={darkMode ? 'pub-tab-mode-active' : ''}
+          >
+            {darkMode ? <Moon size={15} /> : <Sun size={15} />}
+          </Button>
         </div>
       </div>
 
@@ -171,6 +181,7 @@ export function PublishedTabViewPage() {
             ref={alphaTabRef}
             track={track}
             mode={viewMode}
+            darkMode={darkMode}
             onPlayerStateChange={setIsPlaying}
           />
         </TabEditorErrorBoundary>

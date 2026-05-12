@@ -1,4 +1,4 @@
-import { Play, Pause, Square, ChevronUp, ChevronDown, Eye, EyeOff } from 'lucide-react'
+import { Play, Pause, Square, ChevronUp, ChevronDown, Eye, EyeOff, Sun, Moon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { TabEditorAction } from '../../tabEditorState'
 
@@ -15,6 +15,8 @@ interface TabEditorPlaybackProps {
   onTogglePreview: () => void
   previewMode: NotationMode
   onPreviewModeChange: (mode: NotationMode) => void
+  previewDarkMode: boolean
+  onPreviewDarkModeChange: (dark: boolean) => void
 }
 
 export function TabEditorPlayback({
@@ -27,6 +29,8 @@ export function TabEditorPlayback({
   onTogglePreview,
   previewMode,
   onPreviewModeChange,
+  previewDarkMode,
+  onPreviewDarkModeChange,
 }: TabEditorPlaybackProps) {
   return (
     <div className="tab-playback-bar">
@@ -53,6 +57,15 @@ export function TabEditorPlayback({
                 {m.charAt(0).toUpperCase() + m.slice(1)}
               </Button>
             ))}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onPreviewDarkModeChange(!previewDarkMode)}
+              title={previewDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              className={previewDarkMode ? 'alphatab-mode-active' : ''}
+            >
+              {previewDarkMode ? <Moon size={15} /> : <Sun size={15} />}
+            </Button>
           </>
         )}
         <Button

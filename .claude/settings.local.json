@@ -73,7 +73,8 @@
       "Bash(node -e \"const at = require\\('@coderline/alphatab'\\); console.log\\(Object.keys\\(at\\).slice\\(0,20\\)\\); console.log\\('Duration:', at.model?.Duration ?? at.Duration ?? 'not found'\\);\")",
       "Bash(node -e \"const at = require\\('@coderline/alphatab'\\); console.log\\('Duration values:', at.model?.Duration ?? JSON.stringify\\(at.Duration\\)\\); const m = new at.model?.Score\\(\\); console.log\\('Score:', m?.constructor?.name ?? 'not found'\\);\")",
       "Bash(node -e \"const at = require\\('@coderline/alphatab'\\); console.log\\('model keys:', Object.keys\\(at.model ?? {}\\).slice\\(0,20\\)\\); console.log\\('Duration from model:', at.model?.Duration\\);\")",
-      "Bash(node -e \"const at = require\\('@coderline/alphatab'\\); const d = at.model.Duration; console.log\\('Duration:', JSON.stringify\\(d\\)\\); const s = new at.model.Score\\(\\); console.log\\('Score keys:', Object.keys\\(s\\).slice\\(0,10\\)\\);\")"
+      "Bash(node -e \"const at = require\\('@coderline/alphatab'\\); const d = at.model.Duration; console.log\\('Duration:', JSON.stringify\\(d\\)\\); const s = new at.model.Score\\(\\); console.log\\('Score keys:', Object.keys\\(s\\).slice\\(0,10\\)\\);\")",
+      "Bash(node -e \"const at = require\\('/Users/yuriytolstykh/code/advanced-metronome/node_modules/@coderline/alphatab/dist/alphaTab.mjs'\\); console.log\\(typeof at.Color, typeof at.RenderingResources\\)\")"
     ]
   },
   "enableAllProjectMcpServers": true,
