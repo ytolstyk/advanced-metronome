@@ -16,6 +16,7 @@ import { VibratoDialog } from './VibratoDialog'
 import type { VibratoType } from './VibratoDialog'
 import { HarmonicsDialog, HARMONIC_LABELS, HARMONIC_SYMBOLS } from './HarmonicsDialog'
 import { TrillDialog } from './TrillDialog'
+import { TremoloPickingDialog } from './TremoloPickingDialog'
 
 const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide']
 
@@ -154,6 +155,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
   const [vibratoDialogOpen, setVibratoDialogOpen] = useState(false)
   const [harmonicsDialogOpen, setHarmonicsDialogOpen] = useState(false)
   const [trillDialogOpen, setTrillDialogOpen] = useState(false)
+  const [tremoloDialogOpen, setTremoloDialogOpen] = useState(false)
   const { activeDuration, activeDot, activeModifiers, cursor, noteSelection } = state
   const mi = cursor.measureIndex
   const bi = cursor.beatIndex
@@ -349,6 +351,24 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
     setTrillDialogOpen(false)
   }
 
+  function applyTremoloPicking(speed: DurationValue) {
+    if (hasBeatSelection) {
+      dispatch({ type: 'APPLY_TREMOLO_PICKING_TO_SELECTION', speed })
+    } else {
+      dispatch({ type: 'APPLY_TREMOLO_PICKING', measureIndex: mi, beatIndex: bi, speed })
+    }
+    setTremoloDialogOpen(false)
+  }
+
+  function removeTremoloPicking() {
+    if (hasBeatSelection) {
+      dispatch({ type: 'APPLY_TREMOLO_PICKING_TO_SELECTION' })
+    } else {
+      dispatch({ type: 'APPLY_TREMOLO_PICKING', measureIndex: mi, beatIndex: bi })
+    }
+    setTremoloDialogOpen(false)
+  }
+
   function onConnectionClick(key: NoteModifierKey) {
     if (key === 'vibrato') {
       setVibratoDialogOpen(true)
@@ -522,6 +542,13 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         >
           ⬆
         </ToolBtn>
+        <ToolBtn
+          title="Tremolo picking"
+          activeEffect={currentBeat ? !!currentBeat.tremoloSpeed : false}
+          onClick={() => setTremoloDialogOpen(true)}
+        >
+          <span style={{ fontFamily: 'monospace', fontSize: '0.75em', letterSpacing: '-0.05em' }}>///</span>
+        </ToolBtn>
       </div>
 
       {/* Structure group */}
@@ -638,6 +665,13 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         onSelect={applyTrill}
         onRemove={removeTrill}
         onClose={() => setTrillDialogOpen(false)}
+      />
+      <TremoloPickingDialog
+        open={tremoloDialogOpen}
+        current={currentBeat?.tremoloSpeed}
+        onSelect={applyTremoloPicking}
+        onRemove={removeTremoloPicking}
+        onClose={() => setTremoloDialogOpen(false)}
       />
     </div>
   )

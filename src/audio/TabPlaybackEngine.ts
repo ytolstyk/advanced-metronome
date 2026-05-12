@@ -160,39 +160,98 @@ export class TabPlaybackEngine {
     const bpm = beat.tempoChange ?? effectiveBpmAt(track, this.measureIndex)
     const dur = beatDurationSeconds(beat.duration, beat.dot, bpm)
 
-    // Schedule notes for all strings
-    for (const note of beat.notes) {
-      const s = note.string  // 1-based
-      const openMidi = track.openMidi[s - 1]  // low→high array; string 1=lowest → index 0
-      if (openMidi === undefined) continue
+    if (beat.tremoloSpeed !== undefined) {
+      // Tremolo picking: re-pluck all notes repeatedly at the given subdivision interval
+      const noDot = { dotted: false, doubleDotted: false, triplet: false }
+      const interval = beatDurationSeconds(beat.tremoloSpeed, noDot, bpm)
+      const count = Math.max(1, Math.floor(dur / interval))
 
-      const prevKill = this.prevNoteKill.get(s)
-      if (prevKill && !this.prevLetRing.get(s)) {
-        prevKill.gain.cancelAndHoldAtTime(t)
-        prevKill.gain.linearRampToValueAtTime(0, t + 0.005)
+      for (let i = 0; i < count; i++) {
+        const pickTime = t + i * interval
+        for (const note of beat.notes) {
+          const s = note.string
+          const openMidi = track.openMidi[s - 1]
+          if (openMidi === undefined) continue
+
+          if (i === 0) {
+            const prevKill = this.prevNoteKill.get(s)
+            if (prevKill && !this.prevLetRing.get(s)) {
+              prevKill.gain.cancelAndHoldAtTime(pickTime)
+              prevKill.gain.linearRampToValueAtTime(0, pickTime + 0.005)
+            }
+          }
+
+          const freq = fretToFreq(openMidi, note.fret)
+          const pickMods = { ...note.modifiers }
+          delete pickMods.letRing
+          delete pickMods.vibrato
+          delete pickMods.trill
+          delete pickMods.bend
+          delete pickMods.hammerOn
+          delete pickMods.pullOff
+          delete pickMods.legatoSlide
+          delete pickMods.slideInBelow
+          delete pickMods.slideInAbove
+          delete pickMods.slideOutDown
+          delete pickMods.slideOutUp
+          const killNode = playTabNote({
+            ctx,
+            freq,
+            fret: note.fret,
+            openMidi,
+            modifiers: pickMods,
+            bendAmount: 0,
+            startTime: pickTime,
+            beatDuration: interval,
+            nextFreq: null,
+            vol: 0.65,
+          })
+
+          if (i < count - 1) {
+            const nextPickTime = t + (i + 1) * interval
+            killNode.gain.cancelAndHoldAtTime(nextPickTime)
+            killNode.gain.linearRampToValueAtTime(0, nextPickTime + 0.005)
+          } else {
+            this.prevNoteKill.set(s, killNode)
+            this.prevLetRing.set(s, false)
+          }
+        }
       }
+    } else {
+      // Schedule notes for all strings
+      for (const note of beat.notes) {
+        const s = note.string  // 1-based
+        const openMidi = track.openMidi[s - 1]  // low→high array; string 1=lowest → index 0
+        if (openMidi === undefined) continue
 
-      const freq = fretToFreq(openMidi, note.fret)
-      const nextFreq = note.modifiers.legatoSlide
-        ? this.findNextFreqOnString(this.measureIndex, this.beatIndex, s, openMidi)
-        : null
-      const killNode = playTabNote({
-        ctx,
-        freq,
-        fret: note.fret,
-        openMidi,
-        modifiers: note.modifiers,
-        bendAmount: (note.bendAmount ?? 1) * 2,
-        startTime: t,
-        beatDuration: dur,
-        nextFreq,
-        vol: 0.65,
-        trillFret: note.trillFret,
-        trillSpeed: note.trillSpeed,
-      })
+        const prevKill = this.prevNoteKill.get(s)
+        if (prevKill && !this.prevLetRing.get(s)) {
+          prevKill.gain.cancelAndHoldAtTime(t)
+          prevKill.gain.linearRampToValueAtTime(0, t + 0.005)
+        }
 
-      this.prevNoteKill.set(s, killNode)
-      this.prevLetRing.set(s, note.modifiers.letRing === true)
+        const freq = fretToFreq(openMidi, note.fret)
+        const nextFreq = note.modifiers.legatoSlide
+          ? this.findNextFreqOnString(this.measureIndex, this.beatIndex, s, openMidi)
+          : null
+        const killNode = playTabNote({
+          ctx,
+          freq,
+          fret: note.fret,
+          openMidi,
+          modifiers: note.modifiers,
+          bendAmount: (note.bendAmount ?? 1) * 2,
+          startTime: t,
+          beatDuration: dur,
+          nextFreq,
+          vol: 0.65,
+          trillFret: note.trillFret,
+          trillSpeed: note.trillSpeed,
+        })
+
+        this.prevNoteKill.set(s, killNode)
+        this.prevLetRing.set(s, note.modifiers.letRing === true)
+      }
     }
 
     // Fire onBeat callback at the right time

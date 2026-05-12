@@ -73,6 +73,7 @@ export interface Beat {
   repeatEnd?: true
   tempoChange?: number
   pickStroke?: 'down' | 'up'  // beat-level pick direction (mirrors alphaTab Beat.pickStroke)
+  tremoloSpeed?: DurationValue  // tremolo picking speed — mirrors alphaTab Beat.tremoloPicking (Eighth/Sixteenth/ThirtySecond/SixtyFourth)
 }
 
 // Corresponds to alphaTab's MasterBar — holds time sig and optional BPM for a measure.

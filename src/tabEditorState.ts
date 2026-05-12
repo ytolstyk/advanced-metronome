@@ -675,6 +675,8 @@ export type TabEditorAction =
   | { type: 'RESOLVE_MEASURE_ERROR_ADJUST_RESTS'; measureIndex: number }
   | { type: 'INSERT_REST' }
   | { type: 'TOGGLE_PICK_STROKE'; direction: 'down' | 'up' }
+  | { type: 'APPLY_TREMOLO_PICKING'; measureIndex: number; beatIndex: number; speed?: DurationValue }
+  | { type: 'APPLY_TREMOLO_PICKING_TO_SELECTION'; speed?: DurationValue }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -871,6 +873,39 @@ function tabEditorReducerInner(
       // No beat under cursor — just toggle activePick
       const nextPick = state.activePick === direction ? undefined : direction
       return { ...state, activePick: nextPick }
+    }
+
+    case 'APPLY_TREMOLO_PICKING': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== action.beatIndex) return b
+            return { ...b, tremoloSpeed: action.speed }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'APPLY_TREMOLO_PICKING_TO_SELECTION': {
+      if (!state.selection) return state
+      const s = pushUndo(state)
+      const norm = normalizeSelection(state.selection)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi < norm.startMeasure || mi > norm.endMeasure) return m
+        const bStart = mi === norm.startMeasure ? norm.startBeat : 0
+        const bEnd = mi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) =>
+            bi >= bStart && bi <= bEnd ? { ...b, tremoloSpeed: action.speed } : b,
+          ),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
     }
 
     case 'TOGGLE_MODIFIER': {

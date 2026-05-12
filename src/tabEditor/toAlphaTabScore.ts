@@ -91,6 +91,17 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
       if (beat.pickStroke === 'down') atBeat.pickStroke = at.model.PickStroke.Down
       else if (beat.pickStroke === 'up') atBeat.pickStroke = at.model.PickStroke.Up
 
+      // Tremolo picking is beat-level.
+      // AlphaTab interprets marks as: each tremolo note = beat.duration × 2^marks.
+      // To get an absolute tremolo interval, marks must be relative to the beat duration:
+      //   marks = log2(tremoloSpeed / beat.duration)
+      if (beat.tremoloSpeed !== undefined) {
+        const tremoloEffect = new at.model.TremoloPickingEffect()
+        tremoloEffect.style = at.model.TremoloPickingStyle.Default
+        tremoloEffect.marks = Math.max(1, Math.round(Math.log2(beat.tremoloSpeed / beat.duration)))
+        atBeat.tremoloPicking = tremoloEffect
+      }
+
       for (const note of beat.notes) {
         const atNote = new at.model.Note()
         atNote.string = note.string

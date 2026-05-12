@@ -279,6 +279,43 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
         </text>,
       )
     }
+
+    // Tremolo picking: groups of diagonal slash marks tiled across the full beat slot
+    if (beat.tremoloSpeed) {
+      const markCount =
+        beat.tremoloSpeed === 8  ? 1 :
+        beat.tremoloSpeed === 16 ? 2 :
+        beat.tremoloSpeed === 32 ? 3 : 4
+      const slashH = 7
+      const slashW = 4
+      const innerGap = 2
+      const groupGap = 5
+      const groupW = markCount * (slashW + innerGap) - innerGap
+      const groupStep = groupW + groupGap
+      const areaStart = pos.cx
+      const areaEnd = pos.x + pos.w - 2
+      const slashY = techY - 4
+      const slashColor = forPrint ? '#000000' : '#ffaa44'
+      const slashLines: React.ReactNode[] = []
+      for (let gx = areaStart; gx + groupW <= areaEnd; gx += groupStep) {
+        for (let m = 0; m < markCount; m++) {
+          const sx = gx + m * (slashW + innerGap)
+          slashLines.push(
+            <line
+              key={`${gx}-${m}`}
+              x1={sx}
+              y1={slashY + slashH / 2}
+              x2={sx + slashW}
+              y2={slashY - slashH / 2}
+              stroke={slashColor}
+              strokeWidth={1.5}
+              strokeLinecap="round"
+            />,
+          )
+        }
+      }
+      elements.push(<g key={`tremolo-${bi}`}>{slashLines}</g>)
+    }
   }
 
   // Vibrato and palm mute: rendered as runs so the whole connected segment shares one Y level
@@ -376,7 +413,7 @@ function renderVibratoRuns(
 function runHasOverlap(measure: Measure, startBi: number, endBi: number): boolean {
   for (let bi = startBi; bi <= endBi; bi++) {
     const beat = measure.beats[bi]
-    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.bend || n.modifiers.trill) || beat.pickStroke) return true
+    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.bend || n.modifiers.trill) || beat.pickStroke || beat.tremoloSpeed) return true
   }
   return false
 }
@@ -573,7 +610,7 @@ function renderTrillRuns(
 function runHasOverlapWithoutTrill(measure: Measure, startBi: number, endBi: number): boolean {
   for (let bi = startBi; bi <= endBi; bi++) {
     const beat = measure.beats[bi]
-    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.bend) || beat.pickStroke) return true
+    if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.bend) || beat.pickStroke || beat.tremoloSpeed) return true
   }
   return false
 }
