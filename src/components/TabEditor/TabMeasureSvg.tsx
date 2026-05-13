@@ -472,6 +472,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                 fontStyle: 'normal' | 'italic'
                 labelW: number
                 trillAuxFret: number | undefined
+                trillAuxRightPad: number
               }
               // si is 1-based; stringCount=top (highest pitch), 1=bottom (lowest pitch)
               const strings: StringData[] = Array.from({ length: stringCount }, (_, rawSi) => {
@@ -492,7 +493,13 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                 const trillAuxFret = (hasNote && note?.modifiers.trill && note.trillFret !== undefined)
                   ? note.trillFret
                   : undefined
-                return { si, sy, isCursorNote, isNoteSelected, hasNote, fretLabel, fretFill, fontStyle, labelW, trillAuxFret }
+                // Ensure the note background extends far enough right to show the aux fret label.
+                // Aux text starts at labelW/2 + 3 from center; each char is ~7.2px at 12px monospace.
+                const auxNeeded = trillAuxFret !== undefined
+                  ? labelW / 2 + 3 + `(${trillAuxFret})`.length * 7.2
+                  : 0
+                const trillAuxRightPad = Math.max(0, auxNeeded - labelW / 2)
+                return { si, sy, isCursorNote, isNoteSelected, hasNote, fretLabel, fretFill, fontStyle, labelW, trillAuxFret, trillAuxRightPad }
               })
 
               const TRILL_AUX_FONT_SIZE = 12
@@ -500,13 +507,13 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               return (
                 <>
                   {/* Pass 1: cursor highlights, note backgrounds, texts, hit targets */}
-                  {strings.map(({ si, sy, isCursorNote, hasNote, fretLabel, fretFill, fontStyle, labelW, trillAuxFret }) => (
+                  {strings.map(({ si, sy, isCursorNote, hasNote, fretLabel, fretFill, fontStyle, labelW, trillAuxFret, trillAuxRightPad }) => (
                     <g key={si}>
                       {isCursorNote && !isPlaying && (
                         <rect
                           x={beatCX - labelW / 2}
                           y={sy - 11}
-                          width={labelW}
+                          width={labelW + trillAuxRightPad}
                           height={22}
                           fill="rgba(110,120,255,0.75)"
                           rx={2}
@@ -517,7 +524,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                         <rect
                           x={beatCX - labelW / 2}
                           y={sy - 10}
-                          width={labelW}
+                          width={labelW + trillAuxRightPad}
                           height={20}
                           fill={forPrint ? 'white' : '#111'}
                           rx={2}
@@ -572,13 +579,13 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                   ))}
 
                   {/* Pass 2: selection outlines on top of all note backgrounds */}
-                  {strings.map(({ si, sy, isNoteSelected, labelW }) =>
+                  {strings.map(({ si, sy, isNoteSelected, labelW, trillAuxRightPad }) =>
                     isNoteSelected ? (
                       <rect
                         key={`sel-${si}`}
                         x={beatCX - labelW / 2 - 2}
                         y={sy - 12}
-                        width={labelW + 4}
+                        width={labelW + trillAuxRightPad + 4}
                         height={24}
                         fill="none"
                         stroke="#14b8a6"
