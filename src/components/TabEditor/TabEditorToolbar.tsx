@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type {
@@ -113,6 +113,69 @@ const MODIFIER_SYMBOL: Record<string, React.ReactNode> = Object.fromEntries(
   [...MODIFIERS_BASE, ...CONNECTIONS_BASE].map((m) => [m.key, m.label]),
 )
 
+const BUTTON_TAGS: Record<string, string[]> = {
+  // Durations (keyed by numeric Duration value)
+  'dur-1':  ['whole', '1/1', 'note', 'duration', 'full'],
+  'dur-2':  ['half', '1/2', 'note', 'duration'],
+  'dur-4':  ['quarter', '1/4', 'note', 'duration'],
+  'dur-8':  ['eighth', '1/8', 'note', 'duration'],
+  'dur-16': ['sixteenth', '1/16', 'note', 'duration'],
+  'dur-32': ['thirty second', '1/32', 'note', 'duration'],
+  'dur-64': ['sixty fourth', '1/64', 'note', 'duration'],
+  'dur-dot':          ['dotted', 'dot', 'duration', 'modifier'],
+  'dur-doubledot':    ['double dotted', 'double dot', 'duration', 'modifier'],
+  'dur-triplet':      ['triplet', 'three', 'tuplet', 'duration', 'modifier'],
+  'dur-rest':         ['rest', 'silence', 'pause', 'empty beat'],
+  // Effects
+  'mod-ghost':        ['ghost', 'ghost note', 'muted', 'quiet', 'soft', 'parenthesis'],
+  'mod-staccato':     ['staccato', 'short', 'detached', 'articulation'],
+  'mod-letRing':      ['let ring', 'ring', 'sustain', 'open', 'ring out'],
+  'mod-palmMute':     ['palm mute', 'mute', 'muted', 'pm', 'chunk'],
+  'mod-dead':         ['dead', 'dead note', 'mute', 'x note', 'noise', 'percussive'],
+  'mod-harmonic':     ['harmonic', 'natural harmonic', 'artificial harmonic', 'diamond', 'bell', 'chime'],
+  'mod-trill':        ['trill', 'tr', 'ornament', 'fast alternating', 'shake'],
+  // Techniques
+  'con-hammerOn':        ['hammer on', 'hammer', 'h', 'legato', 'slur', 'ascending'],
+  'con-pullOff':         ['pull off', 'pull', 'p', 'legato', 'slur', 'descending'],
+  'con-legatoSlide':     ['legato slide', 'slide', 'gliss', 'glissando', 'portamento'],
+  'con-slideInBelow':    ['slide in below', 'slide in', 'approach', 'below', 'enter low'],
+  'con-slideInAbove':    ['slide in above', 'slide in', 'approach', 'above', 'enter high'],
+  'con-slideOutDown':    ['slide out down', 'slide out', 'exit', 'down', 'fall'],
+  'con-slideOutUp':      ['slide out up', 'slide out', 'exit', 'up', 'rise'],
+  'con-bend':            ['bend', 'string bend', 'bending', 'push', 'note bend'],
+  'con-vibrato':         ['vibrato', 'wobble', 'wave', 'vib', 'wavering'],
+  'con-tapping':         ['tapping', 'tap', 'two hand', 'two-hand', 't', 'right hand'],
+  'con-palmMute':        ['palm mute', 'mute', 'muted', 'pm', 'chunk'],
+  'con-pickDown':        ['pickstroke down', 'pick down', 'downstroke', 'pick', 'strum down'],
+  'con-pickUp':          ['pickstroke up', 'pick up', 'upstroke', 'pick', 'strum up'],
+  'con-tremolo':         ['tremolo picking', 'tremolo', 'fast picking', 'rapid', 'flutter'],
+  // Structure
+  'str-insertBeatBefore': ['insert beat before', 'insert', 'beat', 'before', 'add beat'],
+  'str-insertBeatAfter':  ['insert beat after', 'insert', 'beat', 'after', 'add beat'],
+  'str-deleteBeat':       ['delete beat', 'remove beat', 'erase beat'],
+  'str-insertMeasureBefore': ['insert measure before', 'insert', 'measure', 'before', 'add measure', 'bar', 'add bar'],
+  'str-insertMeasureAfter':  ['insert measure after', 'insert', 'measure', 'after', 'add measure', 'bar', 'add bar'],
+  'str-deleteMeasure':    ['delete measure', 'remove measure', 'erase measure', 'bar', 'remove bar'],
+  // Edit
+  'edit-undo':  ['undo', 'revert', 'back', 'history'],
+  'edit-redo':  ['redo', 'forward', 'repeat', 'history'],
+  'edit-copy':  ['copy', 'duplicate', 'cmd c'],
+  'edit-cut':   ['cut', 'move', 'cmd x'],
+  'edit-paste': ['paste', 'place', 'cmd v'],
+  'edit-clear': ['delete notes', 'clear', 'remove', 'rest', 'erase', 'blank'],
+  // Move / navigate
+  'move-up':    ['string up', 'up', 'navigate', 'cursor', 'arrow'],
+  'move-down':  ['string down', 'down', 'navigate', 'cursor', 'arrow'],
+  'move-left':  ['beat left', 'left', 'navigate', 'cursor', 'arrow'],
+  'move-right': ['beat right', 'right', 'navigate', 'cursor', 'arrow'],
+}
+
+function matchesSearch(id: string, query: string): boolean {
+  if (!query.trim()) return true
+  const q = query.toLowerCase().trim()
+  return (BUTTON_TAGS[id] ?? []).some((tag) => tag.includes(q))
+}
+
 interface TabEditorToolbarProps {
   state: TabEditorState
   dispatch: React.Dispatch<TabEditorAction>
@@ -124,6 +187,7 @@ function ToolBtn({
   active,
   activeEffect,
   disabled,
+  dimmed,
   onClick,
   children,
 }: {
@@ -131,6 +195,7 @@ function ToolBtn({
   active?: boolean
   activeEffect?: boolean | 'partial'
   disabled?: boolean
+  dimmed?: boolean
   onClick: () => void
   children: React.ReactNode
 }) {
@@ -145,6 +210,7 @@ function ToolBtn({
         active && 'active',
         activeEffect === true && 'active-effect',
         activeEffect === 'partial' && 'active-effect-partial',
+        dimmed && 'search-dimmed',
       )}
       onClick={onClick}
     >
@@ -154,6 +220,8 @@ function ToolBtn({
 }
 
 export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToolbarProps) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [vibratoDialogOpen, setVibratoDialogOpen] = useState(false)
   const [harmonicsDialogOpen, setHarmonicsDialogOpen] = useState(false)
   const [trillDialogOpen, setTrillDialogOpen] = useState(false)
@@ -260,6 +328,22 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         c.key === 'tapping' ? [PALM_MUTE_ENTRY, c] : [c],
       )
     : CONNECTIONS_BASE
+
+  function dim(id: string) { return !matchesSearch(id, searchQuery) }
+
+  const GROUP_KEYS: Record<string, string[]> = {
+    duration:   [`dur-${Duration.Whole}`, `dur-${Duration.Half}`, `dur-${Duration.Quarter}`, `dur-${Duration.Eighth}`, `dur-${Duration.Sixteenth}`, `dur-${Duration.ThirtySecond}`, `dur-${Duration.SixtyFourth}`, 'dur-dot', 'dur-doubledot', 'dur-triplet', 'dur-rest'],
+    effects:    [...(hasTapOrPick ? MODIFIERS_BASE.filter(m => m.key !== 'palmMute') : MODIFIERS_BASE).map(m => `mod-${m.key}`), 'mod-harmonic', 'mod-trill'],
+    techniques: [...(hasTapOrPick ? CONNECTIONS_BASE.flatMap(c => c.key === 'tapping' ? ['con-palmMute', `con-${c.key}`] : [`con-${c.key}`]) : CONNECTIONS_BASE.map(c => `con-${c.key}`)), 'con-pickDown', 'con-pickUp', 'con-tremolo'],
+    structure:  ['str-insertBeatBefore', 'str-insertBeatAfter', 'str-deleteBeat', 'str-insertMeasureBefore', 'str-insertMeasureAfter', 'str-deleteMeasure'],
+    edit:       ['edit-undo', 'edit-redo', 'edit-copy', 'edit-cut', 'edit-paste', 'edit-clear'],
+    move:       ['move-up', 'move-down', 'move-left', 'move-right'],
+  }
+
+  function groupDimmed(group: string) {
+    if (!searchQuery.trim()) return false
+    return (GROUP_KEYS[group] ?? []).every(id => dim(id))
+  }
 
   function pickDuration(duration: DurationValue) {
     dispatch({ type: 'SET_ACTIVE_DURATION', duration })
@@ -416,30 +500,53 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
 
   return (
     <div className="tab-toolbar">
+      {/* Search bar */}
+      <div className="tab-toolbar-search-row">
+        <svg className="tab-toolbar-search-icon" viewBox="0 0 16 16" width="14" height="14" fill="none">
+          <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4" />
+          <line x1="10" y1="10" x2="14" y2="14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+        <input
+          ref={searchInputRef}
+          type="text"
+          className="tab-toolbar-search-input"
+          placeholder="Search toolbar…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setSearchQuery('') }}
+        />
+        {searchQuery && (
+          <button className="tab-toolbar-search-clear" onClick={() => setSearchQuery('')} aria-label="Clear search">✕</button>
+        )}
+      </div>
+
       {/* Duration group */}
       <div className="tab-toolbar-group" data-group="duration">
-        <span className="tab-tool-label">Duration</span>
+        <span className={cn('tab-tool-label', groupDimmed('duration') && 'search-dimmed')}>Duration</span>
         {DURATIONS.map((d) => (
           <ToolBtn
             key={d.value}
             title={d.label}
             active={displayedDuration === d.value}
+            dimmed={dim(`dur-${d.value}`)}
             onClick={() => pickDuration(d.value)}
           >
             {d.label}
           </ToolBtn>
         ))}
-        <ToolBtn title="Dotted" active={displayedDot.dotted} onClick={() => toggleDot('dotted')}>·</ToolBtn>
-        <ToolBtn title="Double dotted" active={displayedDot.doubleDotted} onClick={() => toggleDot('doubleDotted')}>··</ToolBtn>
+        <ToolBtn title="Dotted" active={displayedDot.dotted} dimmed={dim('dur-dot')} onClick={() => toggleDot('dotted')}>·</ToolBtn>
+        <ToolBtn title="Double dotted" active={displayedDot.doubleDotted} dimmed={dim('dur-doubledot')} onClick={() => toggleDot('doubleDotted')}>··</ToolBtn>
         <ToolBtn
           title="Triplet"
           active={displayedDot.triplet}
+          dimmed={dim('dur-triplet')}
           onClick={() => toggleDot('triplet')}
         >
           3
         </ToolBtn>
         <ToolBtn
           title="Insert rest of selected duration"
+          dimmed={dim('dur-rest')}
           onClick={() => dispatch({ type: 'INSERT_REST' })}
         >
           <svg viewBox="-4 -14 12 27" width="10" height="20" fill="currentColor">
@@ -450,13 +557,14 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
 
       {/* Effects group */}
       <div className="tab-toolbar-group" data-group="effects">
-        <span className="tab-tool-label">
+        <span className={cn('tab-tool-label', groupDimmed('effects') && 'search-dimmed')}>
           Effects{hasBeatSelection ? ` · ${countBeatSelectionBeats()} beats` : ''}
         </span>
         {MODIFIERS.map((mod) => (
           <ToolBtn
             key={mod.key}
             title={mod.title}
+            dimmed={dim(`mod-${mod.key}`)}
             activeEffect={
               noteSelection.length >= 2
                 ? selectionEffectState(mod.key)
@@ -487,6 +595,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         ))}
         <ToolBtn
           title="Harmonic"
+          dimmed={dim('mod-harmonic')}
           activeEffect={
             noteSelection.length >= 2
               ? selectionEffectState('harmonicType')
@@ -502,6 +611,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         </ToolBtn>
         <ToolBtn
           title="Trill"
+          dimmed={dim('mod-trill')}
           activeEffect={
             noteSelection.length >= 2
               ? selectionEffectState('trill')
@@ -519,7 +629,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
 
       {/* Connections group */}
       <div className="tab-toolbar-group" data-group="techniques">
-        <span className="tab-tool-label">
+        <span className={cn('tab-tool-label', groupDimmed('techniques') && 'search-dimmed')}>
           Techniques{noteSelection.length >= 2 ? ` · ${noteSelection.length} selected` : hasBeatSelection ? ` · ${countBeatSelectionBeats()} beats` : ''}
         </span>
         {CONNECTIONS.map((c) => {
@@ -539,6 +649,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
               title={multi ? `Apply ${c.title} between selected notes` : c.title}
               activeEffect={activeEffectVal}
               disabled={disabledForBeatSel}
+              dimmed={dim(`con-${c.key}`)}
               onClick={() => onConnectionClick(c.key)}
             >
               {c.label}
@@ -549,6 +660,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         {/* Pick stroke: beat-level, separate from per-note techniques */}
         <ToolBtn
           title="Pickstroke down"
+          dimmed={dim('con-pickDown')}
           activeEffect={currentBeat ? currentBeat.pickStroke === 'down' : state.activePick === 'down'}
           onClick={() => dispatch({ type: 'TOGGLE_PICK_STROKE', direction: 'down' })}
         >
@@ -556,6 +668,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         </ToolBtn>
         <ToolBtn
           title="Pickstroke up"
+          dimmed={dim('con-pickUp')}
           activeEffect={currentBeat ? currentBeat.pickStroke === 'up' : state.activePick === 'up'}
           onClick={() => dispatch({ type: 'TOGGLE_PICK_STROKE', direction: 'up' })}
         >
@@ -563,6 +676,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         </ToolBtn>
         <ToolBtn
           title="Tremolo picking"
+          dimmed={dim('con-tremolo')}
           activeEffect={currentBeat ? !!currentBeat.tremoloMarks : false}
           onClick={() => setTremoloDialogOpen(true)}
         >
@@ -572,33 +686,33 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
 
       {/* Structure group */}
       <div className="tab-toolbar-group" data-group="structure">
-        <span className="tab-tool-label">Structure</span>
-        <ToolBtn title="Insert beat before" onClick={() => dispatch({ type: 'INSERT_BEAT_BEFORE', measureIndex: mi, beatIndex: bi })}>←+</ToolBtn>
-        <ToolBtn title="Insert beat after" onClick={() => dispatch({ type: 'INSERT_BEAT_AFTER', measureIndex: mi, beatIndex: bi })}>+→</ToolBtn>
-        <ToolBtn title="Delete beat" onClick={() => dispatch({ type: 'DELETE_BEAT', measureIndex: mi, beatIndex: bi })}>-♩</ToolBtn>
-        <ToolBtn title="Insert measure before" onClick={() => dispatch({ type: 'INSERT_MEASURE_BEFORE', measureIndex: mi })}>←𝄀</ToolBtn>
-        <ToolBtn title="Insert measure after" onClick={() => dispatch({ type: 'INSERT_MEASURE_AFTER', measureIndex: mi })}>𝄀→</ToolBtn>
-        <ToolBtn title="Delete measure" onClick={() => dispatch({ type: 'DELETE_MEASURE', measureIndex: mi })}>-𝄀</ToolBtn>
+        <span className={cn('tab-tool-label', groupDimmed('structure') && 'search-dimmed')}>Structure</span>
+        <ToolBtn title="Insert beat before" dimmed={dim('str-insertBeatBefore')} onClick={() => dispatch({ type: 'INSERT_BEAT_BEFORE', measureIndex: mi, beatIndex: bi })}>←+</ToolBtn>
+        <ToolBtn title="Insert beat after" dimmed={dim('str-insertBeatAfter')} onClick={() => dispatch({ type: 'INSERT_BEAT_AFTER', measureIndex: mi, beatIndex: bi })}>+→</ToolBtn>
+        <ToolBtn title="Delete beat" dimmed={dim('str-deleteBeat')} onClick={() => dispatch({ type: 'DELETE_BEAT', measureIndex: mi, beatIndex: bi })}>-♩</ToolBtn>
+        <ToolBtn title="Insert measure before" dimmed={dim('str-insertMeasureBefore')} onClick={() => dispatch({ type: 'INSERT_MEASURE_BEFORE', measureIndex: mi })}>←𝄀</ToolBtn>
+        <ToolBtn title="Insert measure after" dimmed={dim('str-insertMeasureAfter')} onClick={() => dispatch({ type: 'INSERT_MEASURE_AFTER', measureIndex: mi })}>𝄀→</ToolBtn>
+        <ToolBtn title="Delete measure" dimmed={dim('str-deleteMeasure')} onClick={() => dispatch({ type: 'DELETE_MEASURE', measureIndex: mi })}>-𝄀</ToolBtn>
       </div>
 
       {/* Edit group */}
       <div className="tab-toolbar-group" data-group="edit">
-        <span className="tab-tool-label">Edit</span>
-        <ToolBtn title="Undo (Cmd+Z)" onClick={() => dispatch({ type: 'UNDO' })}>↩</ToolBtn>
-        <ToolBtn title="Redo (Cmd+Shift+Z)" onClick={() => dispatch({ type: 'REDO' })}>↪</ToolBtn>
-        <ToolBtn title="Copy (Cmd+C)" onClick={() => dispatch({ type: 'COPY' })}>⧉</ToolBtn>
-        <ToolBtn title="Cut (Cmd+X)" onClick={() => dispatch({ type: 'CUT' })}>✂</ToolBtn>
-        <ToolBtn title="Paste (Cmd+V)" onClick={() => dispatch({ type: 'PASTE', measureIndex: mi, beatIndex: bi })}>⧫</ToolBtn>
-        <ToolBtn title="Delete notes (replace with rests)" onClick={() => dispatch({ type: 'CLEAR_NOTES' })}>✕</ToolBtn>
+        <span className={cn('tab-tool-label', groupDimmed('edit') && 'search-dimmed')}>Edit</span>
+        <ToolBtn title="Undo (Cmd+Z)" dimmed={dim('edit-undo')} onClick={() => dispatch({ type: 'UNDO' })}>↩</ToolBtn>
+        <ToolBtn title="Redo (Cmd+Shift+Z)" dimmed={dim('edit-redo')} onClick={() => dispatch({ type: 'REDO' })}>↪</ToolBtn>
+        <ToolBtn title="Copy (Cmd+C)" dimmed={dim('edit-copy')} onClick={() => dispatch({ type: 'COPY' })}>⧉</ToolBtn>
+        <ToolBtn title="Cut (Cmd+X)" dimmed={dim('edit-cut')} onClick={() => dispatch({ type: 'CUT' })}>✂</ToolBtn>
+        <ToolBtn title="Paste (Cmd+V)" dimmed={dim('edit-paste')} onClick={() => dispatch({ type: 'PASTE', measureIndex: mi, beatIndex: bi })}>⧫</ToolBtn>
+        <ToolBtn title="Delete notes (replace with rests)" dimmed={dim('edit-clear')} onClick={() => dispatch({ type: 'CLEAR_NOTES' })}>✕</ToolBtn>
       </div>
 
       {/* Move group */}
       <div className="tab-toolbar-group" data-group="move">
-        <span className="tab-tool-label">Move</span>
-        <ToolBtn title="String up" onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'up' })}>▲str</ToolBtn>
-        <ToolBtn title="String down" onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'down' })}>▼str</ToolBtn>
-        <ToolBtn title="Beat left" onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'left' })}>◀</ToolBtn>
-        <ToolBtn title="Beat right" onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'right' })}>▶</ToolBtn>
+        <span className={cn('tab-tool-label', groupDimmed('move') && 'search-dimmed')}>Move</span>
+        <ToolBtn title="String up" dimmed={dim('move-up')} onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'up' })}>▲str</ToolBtn>
+        <ToolBtn title="String down" dimmed={dim('move-down')} onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'down' })}>▼str</ToolBtn>
+        <ToolBtn title="Beat left" dimmed={dim('move-left')} onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'left' })}>◀</ToolBtn>
+        <ToolBtn title="Beat right" dimmed={dim('move-right')} onClick={() => dispatch({ type: 'MOVE_CURSOR', direction: 'right' })}>▶</ToolBtn>
       </div>
 
 

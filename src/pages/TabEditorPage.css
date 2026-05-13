@@ -129,6 +129,58 @@
   }
 }
 
+/* ── Toolbar search ── */
+.tab-toolbar-search-row {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: #0a0a0a;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.tab-toolbar-search-icon {
+  color: #555;
+  flex-shrink: 0;
+}
+
+.tab-toolbar-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ccc;
+  font-size: 0.78rem;
+  caret-color: #888;
+}
+
+.tab-toolbar-search-input::placeholder {
+  color: #444;
+}
+
+.tab-toolbar-search-clear {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.tab-toolbar-search-clear:hover {
+  color: #aaa;
+}
+
+.tab-tool-btn.search-dimmed {
+  opacity: 0.2;
+}
+
+.tab-tool-label.search-dimmed {
+  opacity: 0.2;
+}
+
 /* ── Toolbar ── */
 .tab-toolbar {
   display: flex;

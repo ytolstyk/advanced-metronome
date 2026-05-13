@@ -211,7 +211,7 @@ export function TabEditorPage() {
   const handlePlayRef = useRef<() => void>(() => {})
   const [isPlaybackPaused, setIsPlaybackPaused] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
-  const [previewMode, setPreviewMode] = useState<'tab' | 'staff' | 'both'>('both')
+  const [previewMode, setPreviewMode] = useState<'tab' | 'staff' | 'both'>('tab')
   const [previewDarkMode, setPreviewDarkMode] = useState(true)
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false)
   const alphaTabPreviewRef = useRef<AlphaTabPreviewHandle>(null)
