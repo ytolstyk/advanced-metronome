@@ -411,6 +411,38 @@ function pushUndo(state: TabEditorState): TabEditorState {
   return { ...state, undoStack: stack, redoStack: [] }
 }
 
+// Sync tied-string notes in the next beat to match the base beat when tiedToNext is active.
+// Only strings present in the base beat are updated; other strings in the next beat are untouched.
+function syncTiedNextBeat(measures: Measure[], baseMi: number, baseBi: number): Measure[] {
+  const baseBeat = measures[baseMi]?.beats[baseBi]
+  if (!baseBeat?.tiedToNext) return measures
+  const nextMi = baseBi + 1 < (measures[baseMi]?.beats.length ?? 0) ? baseMi : baseMi + 1
+  const nextBi = baseBi + 1 < (measures[baseMi]?.beats.length ?? 0) ? baseBi + 1 : 0
+  if (!measures[nextMi]?.beats[nextBi]) return measures
+  const baseByString = new Map(baseBeat.notes.map((n) => [n.string, n]))
+  return measures.map((m, mi) => {
+    if (mi !== nextMi) return m
+    return {
+      ...m,
+      beats: m.beats.map((b, bi) => {
+        if (bi !== nextBi) return b
+        // Update existing notes on tied strings; keep all other notes unchanged
+        const updated = b.notes.map((n) => {
+          const base = baseByString.get(n.string)
+          return base ? { ...n, fret: base.fret } : n
+        })
+        // Add notes for tied strings not already present in the next beat
+        for (const base of baseBeat.notes) {
+          if (!updated.some((n) => n.string === base.string)) {
+            updated.push({ ...base, modifiers: { ...base.modifiers } })
+          }
+        }
+        return { ...b, notes: updated }
+      }),
+    }
+  })
+}
+
 function cloneBeats(beats: Beat[]): Beat[] {
   return beats.map((b) => ({
     ...b,
@@ -785,7 +817,53 @@ function tabEditorReducerInner(
         })),
       }
 
-      const measures = s.track.measures.map((m, mi) => mi === action.measureIndex ? slideFixedMeasure : m)
+      // If the edited beat is a tied destination for the previous beat's tiedToNext,
+      // break the tie (the user is explicitly overriding the note on that string).
+      let baseWithBrokenTie = slideFixedMeasure
+      if (action.beatIndex < measure.beats.length) {
+        const prevBeatInMeasure = action.beatIndex > 0
+          ? s.track.measures[action.measureIndex]?.beats[action.beatIndex - 1]
+          : undefined
+        const prevBeatCrossMeasure = action.beatIndex === 0 && action.measureIndex > 0
+          ? (() => { const pm = s.track.measures[action.measureIndex - 1]; return pm?.beats[pm.beats.length - 1] })()
+          : undefined
+        const tieBaseBeat = prevBeatInMeasure ?? prevBeatCrossMeasure
+        if (tieBaseBeat?.tiedToNext && tieBaseBeat.notes.some((n) => n.string === action.stringIndex)) {
+          if (prevBeatInMeasure) {
+            baseWithBrokenTie = {
+              ...slideFixedMeasure,
+              beats: slideFixedMeasure.beats.map((b, bi) => {
+                if (bi !== action.beatIndex - 1) return b
+                const { tiedToNext: _t, ...rest } = b
+                void _t
+                return rest
+              }),
+            }
+          } else if (prevBeatCrossMeasure) {
+            // Cross-measure: break tiedToNext on last beat of previous measure
+            const prevMi = action.measureIndex - 1
+            const prevMeasure = s.track.measures[prevMi]!
+            const lastBi = prevMeasure.beats.length - 1
+            const updatedPrev: Measure = {
+              ...prevMeasure,
+              beats: prevMeasure.beats.map((b, bi) => {
+                if (bi !== lastBi) return b
+                const { tiedToNext: _t, ...rest } = b
+                void _t
+                return rest
+              }),
+            }
+            let measures = s.track.measures.map((m, mi) =>
+              mi === action.measureIndex ? slideFixedMeasure : mi === prevMi ? updatedPrev : m,
+            )
+            measures = syncTiedNextBeat(measures, action.measureIndex, affectedBi)
+            return { ...s, track: { ...s.track, measures }, pendingOverflow: null }
+          }
+        }
+      }
+
+      let measures = s.track.measures.map((m, mi) => mi === action.measureIndex ? baseWithBrokenTie : m)
+      measures = syncTiedNextBeat(measures, action.measureIndex, affectedBi)
       return { ...s, track: { ...s.track, measures }, pendingOverflow: null }
     }
 
@@ -2091,6 +2169,7 @@ function tabEditorReducerInner(
 
     case 'TOGGLE_TIE_TO_NEXT': {
       const s = pushUndo(state)
+      const enabling = !s.track.measures[action.measureIndex]?.beats[action.beatIndex]?.tiedToNext
       const measures = s.track.measures.map((m, mi) => {
         if (mi !== action.measureIndex) return m
         return {
@@ -2106,7 +2185,8 @@ function tabEditorReducerInner(
           }),
         }
       })
-      return { ...s, track: { ...s.track, measures } }
+      const synced = enabling ? syncTiedNextBeat(measures, action.measureIndex, action.beatIndex) : measures
+      return { ...s, track: { ...s.track, measures: synced } }
     }
 
     case 'SET_BEAT_CHORD': {

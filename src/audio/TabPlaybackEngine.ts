@@ -1,5 +1,5 @@
 import { playTabNote } from './tabGuitarSynths'
-import type { TabTrack } from '../tabEditorTypes'
+import type { Beat, TabTrack } from '../tabEditorTypes'
 import { beatDurationSeconds, fretToFreq, effectiveBpmAt, computeFillRests, measureCapacityTicks, measureUsedTicks, DURATION_TICKS } from '../tabEditorState'
 
 const SCHEDULE_AHEAD_TIME = 0.1
@@ -18,6 +18,7 @@ export class TabPlaybackEngine {
   private onStop: (() => void) | null = null
   private prevNoteKill: Map<number, GainNode | null> = new Map()
   private prevLetRing: Map<number, boolean> = new Map()
+  private prevBeat: Beat | null = null
 
   private ensureCtx(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext()
@@ -45,6 +46,7 @@ export class TabPlaybackEngine {
     this.isPaused = false
     this.prevNoteKill = new Map()
     this.prevLetRing = new Map()
+    this.prevBeat = null
 
     this.timer = setInterval(() => this.scheduler(), SCHEDULER_INTERVAL)
   }
@@ -76,6 +78,7 @@ export class TabPlaybackEngine {
     this.isPaused = false
     this.prevNoteKill = new Map()
     this.prevLetRing = new Map()
+    this.prevBeat = null
   }
 
   updateTrack(track: TabTrack): void {
@@ -218,11 +221,23 @@ export class TabPlaybackEngine {
         }
       }
     } else {
+      // Determine which strings are tied into this beat (should not be re-plucked).
+      // A string is tied if this beat is a measure-overflow tie (tiedFrom) or
+      // if the immediately preceding beat had tiedToNext and had a note on that string.
+      const prevBeatTiedToNext = this.prevBeat?.tiedToNext === true
+      const prevBeatStrings = prevBeatTiedToNext
+        ? new Set(this.prevBeat!.notes.map((n) => n.string))
+        : null
+
       // Schedule notes for all strings
       for (const note of beat.notes) {
         const s = note.string  // 1-based
         const openMidi = track.openMidi[s - 1]  // low→high array; string 1=lowest → index 0
         if (openMidi === undefined) continue
+
+        // Tied destination: let the origin note ring through without re-plucking
+        const isTiedDest = beat.tiedFrom === true || (prevBeatStrings?.has(s) ?? false)
+        if (isTiedDest) continue
 
         const prevKill = this.prevNoteKill.get(s)
         if (prevKill && !this.prevLetRing.get(s)) {
@@ -253,6 +268,8 @@ export class TabPlaybackEngine {
         this.prevLetRing.set(s, note.modifiers.letRing === true)
       }
     }
+
+    this.prevBeat = beat
 
     // Fire onBeat callback at the right time
     const mi = this.measureIndex

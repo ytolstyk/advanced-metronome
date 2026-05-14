@@ -474,6 +474,11 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         const overlayFill = isCursorCol && !isPlaying ? 'rgba(60,120,240,0.45)' : 'none'
 
         const isTied = beat.tiedFrom === true
+        // Strings tied in from a user-initiated tiedToNext on the previous beat
+        const prevBeat = bi > 0 ? measure.beats[bi - 1] : prevMeasureLastBeat
+        const tiedDestStrings = prevBeat?.tiedToNext
+          ? new Set(prevBeat.notes.map((n) => n.string))
+          : null
 
         return (
           <g key={beat.id}>
@@ -515,6 +520,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                 fretLabel: string
                 fretFill: string
                 fontStyle: 'normal' | 'italic'
+                noteFontSize: number
                 labelW: number
                 trillAuxFret: number | undefined
                 trillAuxRightPad: number
@@ -529,9 +535,13 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                   noteSelectionSet.has(`${measureIndex}:${bi}:${si}`) ||
                   (isCursorNote && !!note)
 
+                const isTiedDest = !isTied && (tiedDestStrings?.has(si) ?? false)
                 const { label: fretLabel, fill: fretFill, fontStyle } = note
-                  ? formatFretLabel(note, isTied, forPrint)
+                  ? isTiedDest
+                    ? { label: String(note.fret < 0 ? '' : note.fret), fill: forPrint ? '#999999' : '#666666', fontStyle: 'normal' as const }
+                    : formatFretLabel(note, isTied, forPrint)
                   : { label: '', fill: forPrint ? '#000000' : '#e8e8e8', fontStyle: 'normal' as const }
+                const noteFontSize = isTiedDest ? NOTE_FONT_SIZE * 0.8 : NOTE_FONT_SIZE
 
                 const hasNote = fretLabel !== ''
                 const labelW = Math.max(fretLabel.length * 8 + 4, 18)
@@ -544,7 +554,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                   ? labelW / 2 + 3 + `(${trillAuxFret})`.length * 7.2
                   : 0
                 const trillAuxRightPad = Math.max(0, auxNeeded - labelW / 2)
-                return { si, sy, isCursorNote, isNoteSelected, hasNote, fretLabel, fretFill, fontStyle, labelW, trillAuxFret, trillAuxRightPad }
+                return { si, sy, isCursorNote, isNoteSelected, hasNote, fretLabel, fretFill, fontStyle, noteFontSize, labelW, trillAuxFret, trillAuxRightPad }
               })
 
               const TRILL_AUX_FONT_SIZE = 12
@@ -552,7 +562,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
               return (
                 <>
                   {/* Pass 1: cursor highlights, note backgrounds, texts, hit targets */}
-                  {strings.map(({ si, sy, isCursorNote, hasNote, fretLabel, fretFill, fontStyle, labelW, trillAuxFret, trillAuxRightPad }) => (
+                  {strings.map(({ si, sy, isCursorNote, hasNote, fretLabel, fretFill, fontStyle, noteFontSize, labelW, trillAuxFret, trillAuxRightPad }) => (
                     <g key={si}>
                       {isCursorNote && !isPlaying && (
                         <rect
@@ -580,7 +590,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
                         <text
                           x={beatCX}
                           y={sy}
-                          fontSize={NOTE_FONT_SIZE}
+                          fontSize={noteFontSize}
                           fontWeight="600"
                           fontStyle={fontStyle}
                           fontFamily="'Courier New', monospace"
