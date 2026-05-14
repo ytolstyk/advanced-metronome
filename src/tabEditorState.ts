@@ -694,6 +694,10 @@ export type TabEditorAction =
   | { type: 'TOGGLE_PICK_STROKE'; direction: 'down' | 'up' }
   | { type: 'APPLY_TREMOLO_PICKING'; measureIndex: number; beatIndex: number; marks?: number }
   | { type: 'APPLY_TREMOLO_PICKING_TO_SELECTION'; marks?: number }
+  | { type: 'SET_BEAT_TEXT'; measureIndex: number; beatIndex: number; text: string | null }
+  | { type: 'SET_MEASURE_MARKER'; measureIndex: number; marker: string | null }
+  | { type: 'TOGGLE_TIE_TO_NEXT'; measureIndex: number; beatIndex: number }
+  | { type: 'SET_BEAT_CHORD'; measureIndex: number; beatIndex: number; chord: { name: string; frets: number[] } | null; populateFrets: boolean }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -2048,6 +2052,87 @@ function tabEditorReducerInner(
           }
         }),
       }))
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'SET_BEAT_TEXT': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== action.beatIndex) return b
+            if (!action.text) {
+              const { text: _t, ...rest } = b as Beat & { text?: string }
+              void _t
+              return rest
+            }
+            return { ...b, text: action.text }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'SET_MEASURE_MARKER': {
+      const s = pushUndo(state)
+      const masterBars = s.track.masterBars.map((mb, i) => {
+        if (i !== action.measureIndex) return mb
+        if (!action.marker) {
+          const { marker: _m, ...rest } = mb
+          void _m
+          return rest
+        }
+        return { ...mb, marker: action.marker }
+      })
+      return { ...s, track: { ...s.track, masterBars } }
+    }
+
+    case 'TOGGLE_TIE_TO_NEXT': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== action.beatIndex) return b
+            if (b.tiedToNext) {
+              const { tiedToNext: _t, ...rest } = b
+              void _t
+              return rest
+            }
+            return { ...b, tiedToNext: true as const }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'SET_BEAT_CHORD': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== action.beatIndex) return b
+            if (!action.chord) {
+              const { chord: _c, ...rest } = b as Beat & { chord?: unknown }
+              void _c
+              return rest
+            }
+            const withChord = { ...b, chord: action.chord }
+            if (!action.populateFrets) return withChord
+            const newNotes: TabNote[] = action.chord.frets
+              .map((fret, idx): TabNote | null =>
+                fret < 0 ? null : { string: idx + 1, fret, modifiers: {} },
+              )
+              .filter((n): n is TabNote => n !== null)
+            return { ...withChord, notes: newNotes }
+          }),
+        }
+      })
       return { ...s, track: { ...s.track, measures } }
     }
 

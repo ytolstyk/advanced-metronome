@@ -446,6 +446,16 @@ export function TabEditorPage() {
         }
       }
 
+      // T = toggle tie to next (no modifier keys)
+      if ((e.key === 't' || e.key === 'T') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const beat = state.track.measures[cursor.measureIndex]?.beats[cursor.beatIndex]
+        if (beat) {
+          e.preventDefault()
+          dispatch({ type: 'TOGGLE_TIE_TO_NEXT', measureIndex: cursor.measureIndex, beatIndex: cursor.beatIndex })
+        }
+        return
+      }
+
       if (e.metaKey || e.ctrlKey) {
         switch (e.key) {
           case 'c':

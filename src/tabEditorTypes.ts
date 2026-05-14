@@ -82,6 +82,9 @@ export interface Beat {
   notes: TabNote[]  // sparse; each note has .string (1-based, 1=lowest); fret always >= 0
   tiedFrom?: true   // this beat is a tied continuation from the previous measure
   tiedTo?: true     // this beat ties into the first beat of the next measure
+  tiedToNext?: true // user-initiated tie: notes sustain into the next beat (mirrors alphaTab Note.isTieOrigin)
+  text?: string     // free-form text annotation above the beat (mirrors alphaTab Beat.text)
+  chord?: { name: string; frets: number[] }  // chord label; frets[i] = fret for string (i+1); -1 = muted
   dynamics?: 'ppp' | 'pp' | 'p' | 'mp' | 'mf' | 'f' | 'ff' | 'fff'
   repeatStart?: true
   repeatEnd?: true
@@ -94,7 +97,8 @@ export interface Beat {
 // masterBars[i] corresponds to measures[i]. masterBars[0].bpm must always be set.
 export interface MasterBar {
   timeSignature: { numerator: number; denominator: number }
-  bpm?: number  // undefined = inherit from previous MasterBar's bpm
+  bpm?: number    // undefined = inherit from previous MasterBar's bpm
+  marker?: string // section label at measure start (mirrors alphaTab MasterBar.section.text)
 }
 
 export interface Measure {

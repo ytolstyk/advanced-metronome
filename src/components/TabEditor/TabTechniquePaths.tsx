@@ -15,6 +15,10 @@ import {
   BEND_LABEL_FONT_SIZE,
   PICK_DIR_FONT_SIZE,
   TECHNIQUE_LABEL_FONT_SIZE,
+  CHORD_LABEL_Y,
+  CHORD_LABEL_FONT_SIZE,
+  BEAT_TEXT_ZONE_Y,
+  BEAT_TEXT_FONT_SIZE,
   stringY,
 } from './tabSvgConstants'
 
@@ -37,11 +41,13 @@ interface TechniqueOverlayProps {
   track: TabTrack
   beatPositions: BeatPosition[]
   onBendAmountClick?: (measureIndex: number, beatIndex: number, stringIndex: number) => void
+  onChordClick?: (measureIndex: number, beatIndex: number) => void
+  onBeatTextClick?: (measureIndex: number, beatIndex: number) => void
   forPrint?: boolean
   prevMeasureLastBeat?: import('../../tabEditorTypes').Beat
 }
 
-export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, onBendAmountClick, forPrint = false, prevMeasureLastBeat }: TechniqueOverlayProps) {
+export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, onBendAmountClick, onChordClick, onBeatTextClick, forPrint = false, prevMeasureLastBeat }: TechniqueOverlayProps) {
   const elements: React.ReactNode[] = []
   const measureContentW = beatPositions.length > 0
     ? beatPositions[beatPositions.length - 1].x + beatPositions[beatPositions.length - 1].w
@@ -356,6 +362,78 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
         }
       }
       elements.push(<g key={`tremolo-${bi}`}>{slashLines}</g>)
+    }
+
+    // Chord label — italic, pink, top of technique zone
+    if (beat.chord?.name) {
+      const chordClickable = !forPrint && !!onChordClick
+      elements.push(
+        <g
+          key={`chord-${bi}`}
+          className={chordClickable ? 'tab-svg-interactive' : undefined}
+          style={{ cursor: chordClickable ? 'pointer' : 'default' }}
+          onClick={chordClickable ? () => onChordClick!(measureIndex, bi) : undefined}
+        >
+          {chordClickable && (
+            <rect
+              className="tab-hover-bg"
+              x={cx - 22}
+              y={CHORD_LABEL_Y - 7}
+              width={44}
+              height={14}
+              rx={3}
+            />
+          )}
+          <text
+            x={cx}
+            y={CHORD_LABEL_Y}
+            fontSize={CHORD_LABEL_FONT_SIZE}
+            fontStyle="italic"
+            fontWeight="600"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill={forPrint ? '#000000' : '#ffaacc'}
+            style={{ pointerEvents: 'none' }}
+          >
+            {beat.chord.name}
+          </text>
+        </g>,
+      )
+    }
+
+    // Beat text — regular, dim gray, mid technique zone
+    if (beat.text) {
+      const textClickable = !forPrint && !!onBeatTextClick
+      elements.push(
+        <g
+          key={`btxt-${bi}`}
+          className={textClickable ? 'tab-svg-interactive' : undefined}
+          style={{ cursor: textClickable ? 'pointer' : 'default' }}
+          onClick={textClickable ? () => onBeatTextClick!(measureIndex, bi) : undefined}
+        >
+          {textClickable && (
+            <rect
+              className="tab-hover-bg"
+              x={cx - 24}
+              y={BEAT_TEXT_ZONE_Y - 6}
+              width={48}
+              height={12}
+              rx={3}
+            />
+          )}
+          <text
+            x={cx}
+            y={BEAT_TEXT_ZONE_Y}
+            fontSize={BEAT_TEXT_FONT_SIZE}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill={forPrint ? '#000000' : '#cccccc'}
+            style={{ pointerEvents: 'none' }}
+          >
+            {beat.text}
+          </text>
+        </g>,
+      )
     }
   }
 

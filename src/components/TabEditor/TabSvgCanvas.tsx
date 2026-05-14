@@ -10,6 +10,9 @@ import type { StringCount } from '../../data/tunings'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BendGraphDialog } from './BendGraphDialog'
+import { BeatTextDialog } from './BeatTextDialog'
+import { MarkerDialog } from './MarkerDialog'
+import { ChordDialog } from './ChordDialog'
 import type { BendData } from '../../tabEditorTypes'
 
 interface TabSvgCanvasProps {
@@ -380,6 +383,9 @@ export function TabSvgCanvas({
   }
 
   const [bendEdit, setBendEdit] = useState<{ mi: number; bi: number; si: number } | null>(null)
+  const [chordEdit, setChordEdit] = useState<{ mi: number; bi: number } | null>(null)
+  const [beatTextEdit, setBeatTextEdit] = useState<{ mi: number; bi: number } | null>(null)
+  const [markerEdit, setMarkerEdit] = useState<{ mi: number } | null>(null)
 
   const [bpmEdit, setBpmEdit] = useState<{ mi: number; val: string } | null>(null)
   const bpmEditRef = useRef<HTMLInputElement>(null)
@@ -397,6 +403,9 @@ export function TabSvgCanvas({
   const handleBendAmountClick = useCallback((mi: number, bi: number, si: number) => {
     setBendEdit({ mi, bi, si })
   }, [])
+  const handleChordClick = useCallback((mi: number, bi: number) => { setChordEdit({ mi, bi }) }, [])
+  const handleBeatTextClick = useCallback((mi: number, bi: number) => { setBeatTextEdit({ mi, bi }) }, [])
+  const handleMarkerClick = useCallback((mi: number) => { setMarkerEdit({ mi }) }, [])
 
   function openMeasureMenu(mi: number, e: React.MouseEvent) {
     setMeasureMenu({ mi, x: e.clientX, y: e.clientY })
@@ -507,11 +516,16 @@ export function TabSvgCanvas({
                   onBeatMouseDown={onBeatMouseDown}
                   onBeatMouseEnter={onBeatMouseEnter}
                   onBendAmountClick={readOnly ? undefined : handleBendAmountClick}
+                  onChordClick={readOnly ? undefined : handleChordClick}
+                  onBeatTextClick={readOnly ? undefined : handleBeatTextClick}
+                  onMarkerClick={readOnly ? undefined : handleMarkerClick}
                   onMeasureErrorClick={readOnly ? undefined : openMeasureErrorModal}
                   onStringLabelClick={readOnly ? undefined : (mIdx === 0 ? openTuningModal : undefined)}
                   highlightBeatColumn={highlightColumn?.measureIndex === mi ? highlightColumn.beatIndex : undefined}
                   forPrint={forPrint}
                   prevMeasureLastBeat={prevMeasureLastBeat}
+                  hasMarker={!!(track.masterBars[mi]?.marker)}
+                  marker={track.masterBars[mi]?.marker}
                 />
               )
             })}
@@ -628,6 +642,90 @@ export function TabSvgCanvas({
                     }
                   }
                 }
+              })
+
+              // User-initiated tiedToNext arcs — blue, rendered after overflow-tie arcs
+              rowMeasures.forEach((measure, mIdx) => {
+                const globalMI = layout.rowStart + mIdx
+
+                measure.beats.forEach((beat, bi) => {
+                  if (!beat.tiedToNext) return
+                  if (beat.notes.length === 0) return
+
+                  const srcTimeSig = track.masterBars[globalMI]?.timeSignature ?? track.masterBars[0]!.timeSignature
+                  const srcFill = getFillRests(measure, srcTimeSig)
+                  const srcPositions = computeBeatPositions(measure, showTimeSigMap[globalMI] ?? false, srcFill, showBpmMap[globalMI] ?? false, beatWidthScale)
+                  const srcPos = srcPositions[bi]
+                  if (!srcPos) return
+
+                  const measureOffsetX = measureOffsets[mIdx] ?? STRING_LABEL_W
+                  const isLastBeat = bi === measure.beats.length - 1
+
+                  for (const note of beat.notes) {
+                    const si = note.string
+                    const noteY = stringY(si, track.stringCount)
+                    const y0 = noteY + TIE_Y_OFFSET
+                    const y1 = y0 + TIE_DIP
+                    const x1 = measureOffsetX + srcPos.cx
+
+                    if (!isLastBeat) {
+                      const dstPos = srcPositions[bi + 1]
+                      if (!dstPos) continue
+                      const x2 = measureOffsetX + dstPos.cx
+                      const dx = (x2 - x1) * 0.35
+                      arcs.push(
+                        <path
+                          key={`utie-${globalMI}-${bi}-${si}`}
+                          d={`M ${x1},${y0} C ${x1 + dx},${y1} ${x2 - dx},${y1} ${x2},${y0}`}
+                          fill="none"
+                          stroke={forPrint ? '#000000' : '#70aaff'}
+                          strokeWidth={1.5}
+                          strokeLinecap="round"
+                          style={{ pointerEvents: 'none' }}
+                        />,
+                      )
+                    } else {
+                      const nextGlobalMI = globalMI + 1
+                      const nextMeasure = track.measures[nextGlobalMI]
+                      if (!nextMeasure) continue
+                      const nextMIdx = mIdx + 1
+                      const nextInRow = nextMIdx < rowMeasures.length
+                      if (nextInRow) {
+                        const dstTimeSig = track.masterBars[nextGlobalMI]?.timeSignature ?? track.masterBars[0]!.timeSignature
+                        const dstFill = getFillRests(nextMeasure, dstTimeSig)
+                        const dstPositions = computeBeatPositions(nextMeasure, showTimeSigMap[nextGlobalMI] ?? false, dstFill, showBpmMap[nextGlobalMI] ?? false, beatWidthScale)
+                        const dstPos = dstPositions[0]
+                        if (!dstPos) continue
+                        const x2 = (measureOffsets[nextMIdx] ?? STRING_LABEL_W) + dstPos.cx
+                        const dx = (x2 - x1) * 0.35
+                        arcs.push(
+                          <path
+                            key={`utie-xm-${globalMI}-${bi}-${si}`}
+                            d={`M ${x1},${y0} C ${x1 + dx},${y1} ${x2 - dx},${y1} ${x2},${y0}`}
+                            fill="none"
+                            stroke={forPrint ? '#000000' : '#70aaff'}
+                            strokeWidth={1.5}
+                            strokeLinecap="round"
+                            style={{ pointerEvents: 'none' }}
+                          />,
+                        )
+                      } else {
+                        const dx = (displayW - x1) * 0.6
+                        arcs.push(
+                          <path
+                            key={`utie-exit-${globalMI}-${bi}-${si}`}
+                            d={`M ${x1},${y0} C ${x1 + dx},${y1} ${displayW},${y1} ${displayW},${y0}`}
+                            fill="none"
+                            stroke={forPrint ? '#000000' : '#70aaff'}
+                            strokeWidth={1.5}
+                            strokeLinecap="round"
+                            style={{ pointerEvents: 'none' }}
+                          />,
+                        )
+                      }
+                    }
+                  }
+                })
               })
 
               return arcs
@@ -860,6 +958,49 @@ export function TabSvgCanvas({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Chord dialog (from SVG click) */}
+      {chordEdit !== null && (
+        <ChordDialog
+          key={`chord-${chordEdit.mi}-${chordEdit.bi}`}
+          open={true}
+          currentChord={track.measures[chordEdit.mi]?.beats[chordEdit.bi]?.chord}
+          stringCount={track.stringCount}
+          onClose={() => setChordEdit(null)}
+          onSave={(chord, populateFrets) => {
+            dispatch({ type: 'SET_BEAT_CHORD', measureIndex: chordEdit.mi, beatIndex: chordEdit.bi, chord, populateFrets })
+            setChordEdit(null)
+          }}
+        />
+      )}
+
+      {/* Beat text dialog (from SVG click) */}
+      {beatTextEdit !== null && (
+        <BeatTextDialog
+          key={`beattext-${beatTextEdit.mi}-${beatTextEdit.bi}`}
+          open={true}
+          currentText={track.measures[beatTextEdit.mi]?.beats[beatTextEdit.bi]?.text}
+          onClose={() => setBeatTextEdit(null)}
+          onSave={(text) => {
+            dispatch({ type: 'SET_BEAT_TEXT', measureIndex: beatTextEdit.mi, beatIndex: beatTextEdit.bi, text })
+            setBeatTextEdit(null)
+          }}
+        />
+      )}
+
+      {/* Marker dialog (from SVG click) */}
+      {markerEdit !== null && (
+        <MarkerDialog
+          key={`marker-${markerEdit.mi}`}
+          open={true}
+          currentMarker={track.masterBars[markerEdit.mi]?.marker}
+          onClose={() => setMarkerEdit(null)}
+          onSave={(marker) => {
+            dispatch({ type: 'SET_MEASURE_MARKER', measureIndex: markerEdit.mi, marker })
+            setMarkerEdit(null)
+          }}
+        />
       )}
 
       {/* Bend graph dialog */}

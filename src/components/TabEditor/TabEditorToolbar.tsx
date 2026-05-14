@@ -19,6 +19,9 @@ import { HarmonicsDialog, HARMONIC_LABELS, HARMONIC_SYMBOLS } from './HarmonicsD
 import { TrillDialog } from './TrillDialog'
 import { TremoloPickingDialog } from './TremoloPickingDialog'
 import { BendGraphDialog } from './BendGraphDialog'
+import { BeatTextDialog } from './BeatTextDialog'
+import { MarkerDialog } from './MarkerDialog'
+import { ChordDialog } from './ChordDialog'
 
 const CONNECTION_KEYS: ConnectionModifierKey[] = ['hammerOn', 'pullOff', 'legatoSlide']
 
@@ -149,6 +152,11 @@ const BUTTON_TAGS: Record<string, string[]> = {
   'con-pickDown':        ['pickstroke down', 'pick down', 'downstroke', 'pick', 'strum down'],
   'con-pickUp':          ['pickstroke up', 'pick up', 'upstroke', 'pick', 'strum up'],
   'con-tremolo':         ['tremolo picking', 'tremolo', 'fast picking', 'rapid', 'flutter'],
+  // Notation
+  'not-beatText': ['beat text', 'text', 'annotation', 'label', 'word', 'lyric'],
+  'not-marker':   ['marker', 'section', 'section marker', 'rehearsal mark', 'label', 'double barline'],
+  'not-tie':      ['tie', 'tie to next', 'connect', 'sustain', 'slur', 'next note'],
+  'not-chord':    ['chord', 'chord label', 'chord name', 'harmony'],
   // Structure
   'str-insertBeatBefore': ['insert beat before', 'insert', 'beat', 'before', 'add beat'],
   'str-insertBeatAfter':  ['insert beat after', 'insert', 'beat', 'after', 'add beat'],
@@ -227,6 +235,9 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
   const [trillDialogOpen, setTrillDialogOpen] = useState(false)
   const [tremoloDialogOpen, setTremoloDialogOpen] = useState(false)
   const [bendDialogOpen, setBendDialogOpen] = useState(false)
+  const [beatTextDialogOpen, setBeatTextDialogOpen] = useState(false)
+  const [markerDialogOpen, setMarkerDialogOpen] = useState(false)
+  const [chordDialogOpen, setChordDialogOpen] = useState(false)
   const { activeDuration, activeDot, activeModifiers, cursor, noteSelection } = state
   const mi = cursor.measureIndex
   const bi = cursor.beatIndex
@@ -335,6 +346,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
     duration:   [`dur-${Duration.Whole}`, `dur-${Duration.Half}`, `dur-${Duration.Quarter}`, `dur-${Duration.Eighth}`, `dur-${Duration.Sixteenth}`, `dur-${Duration.ThirtySecond}`, `dur-${Duration.SixtyFourth}`, 'dur-dot', 'dur-doubledot', 'dur-triplet', 'dur-rest'],
     effects:    [...(hasTapOrPick ? MODIFIERS_BASE.filter(m => m.key !== 'palmMute') : MODIFIERS_BASE).map(m => `mod-${m.key}`), 'mod-harmonic', 'mod-trill'],
     techniques: [...(hasTapOrPick ? CONNECTIONS_BASE.flatMap(c => c.key === 'tapping' ? ['con-palmMute', `con-${c.key}`] : [`con-${c.key}`]) : CONNECTIONS_BASE.map(c => `con-${c.key}`)), 'con-pickDown', 'con-pickUp', 'con-tremolo'],
+    notation:   ['not-beatText', 'not-marker', 'not-tie', 'not-chord'],
     structure:  ['str-insertBeatBefore', 'str-insertBeatAfter', 'str-deleteBeat', 'str-insertMeasureBefore', 'str-insertMeasureAfter', 'str-deleteMeasure'],
     edit:       ['edit-undo', 'edit-redo', 'edit-copy', 'edit-cut', 'edit-paste', 'edit-clear'],
     move:       ['move-up', 'move-down', 'move-left', 'move-right'],
@@ -684,6 +696,43 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         </ToolBtn>
       </div>
 
+      {/* Notation group */}
+      <div className="tab-toolbar-group" data-group="notation">
+        <span className={cn('tab-tool-label', groupDimmed('notation') && 'search-dimmed')}>Notation</span>
+        <ToolBtn
+          title="Beat text"
+          dimmed={dim('not-beatText')}
+          activeEffect={!!currentBeat?.text}
+          onClick={() => setBeatTextDialogOpen(true)}
+        >
+          <span style={{ fontFamily: 'monospace', fontSize: '0.75em' }}>Txt</span>
+        </ToolBtn>
+        <ToolBtn
+          title="Section marker"
+          dimmed={dim('not-marker')}
+          activeEffect={!!(state.track.masterBars[mi]?.marker)}
+          onClick={() => setMarkerDialogOpen(true)}
+        >
+          §
+        </ToolBtn>
+        <ToolBtn
+          title="Tie to next note (T)"
+          dimmed={dim('not-tie')}
+          activeEffect={!!currentBeat?.tiedToNext}
+          onClick={() => dispatch({ type: 'TOGGLE_TIE_TO_NEXT', measureIndex: mi, beatIndex: bi })}
+        >
+          ⌒
+        </ToolBtn>
+        <ToolBtn
+          title="Chord label"
+          dimmed={dim('not-chord')}
+          activeEffect={!!currentBeat?.chord}
+          onClick={() => setChordDialogOpen(true)}
+        >
+          <span style={{ fontStyle: 'italic', fontSize: '0.85em' }}>Am</span>
+        </ToolBtn>
+      </div>
+
       {/* Structure group */}
       <div className="tab-toolbar-group" data-group="structure">
         <span className={cn('tab-tool-label', groupDimmed('structure') && 'search-dimmed')}>Structure</span>
@@ -805,6 +854,37 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         onSelect={applyTremoloPicking}
         onRemove={removeTremoloPicking}
         onClose={() => setTremoloDialogOpen(false)}
+      />
+      <BeatTextDialog
+        key={`beattext-${mi}-${bi}`}
+        open={beatTextDialogOpen}
+        currentText={currentBeat?.text}
+        onClose={() => setBeatTextDialogOpen(false)}
+        onSave={(text) => {
+          dispatch({ type: 'SET_BEAT_TEXT', measureIndex: mi, beatIndex: bi, text })
+          setBeatTextDialogOpen(false)
+        }}
+      />
+      <MarkerDialog
+        key={`marker-${mi}`}
+        open={markerDialogOpen}
+        currentMarker={state.track.masterBars[mi]?.marker}
+        onClose={() => setMarkerDialogOpen(false)}
+        onSave={(marker) => {
+          dispatch({ type: 'SET_MEASURE_MARKER', measureIndex: mi, marker })
+          setMarkerDialogOpen(false)
+        }}
+      />
+      <ChordDialog
+        key={`chord-${mi}-${bi}`}
+        open={chordDialogOpen}
+        currentChord={currentBeat?.chord}
+        stringCount={state.track.stringCount}
+        onClose={() => setChordDialogOpen(false)}
+        onSave={(chord, populateFrets) => {
+          dispatch({ type: 'SET_BEAT_CHORD', measureIndex: mi, beatIndex: bi, chord, populateFrets })
+          setChordDialogOpen(false)
+        }}
       />
       {bendDialogOpen && isOnNote && (() => {
         const openMidi = state.track.openMidi[currentNote.string - 1] ?? 64

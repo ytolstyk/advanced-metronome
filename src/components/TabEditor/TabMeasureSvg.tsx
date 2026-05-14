@@ -19,6 +19,8 @@ import {
   STRING_LABEL_FONT_SIZE,
   MEASURE_OVERFLOW_FONT_SIZE,
   NOTE_CURSOR_W,
+  MARKER_TEXT_Y,
+  MARKER_FONT_SIZE,
   stringY,
   rowSvgHeight,
   measureWidth,
@@ -50,9 +52,14 @@ interface TabMeasureSvgProps {
   onBendAmountClick?: (mi: number, bi: number, si: number) => void
   onMeasureErrorClick?: (measureIndex: number) => void
   onStringLabelClick?: () => void
+  onChordClick?: (mi: number, bi: number) => void
+  onBeatTextClick?: (mi: number, bi: number) => void
+  onMarkerClick?: (mi: number) => void
   highlightBeatColumn?: number
   forPrint?: boolean
   prevMeasureLastBeat?: import('../../tabEditorTypes').Beat
+  hasMarker?: boolean
+  marker?: string
 }
 
 interface RestSymbolProps {
@@ -183,9 +190,14 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   onBendAmountClick,
   onMeasureErrorClick,
   onStringLabelClick,
+  onChordClick,
+  onBeatTextClick,
+  onMarkerClick,
   highlightBeatColumn,
   forPrint = false,
   prevMeasureLastBeat,
+  hasMarker = false,
+  marker,
 }: TabMeasureSvgProps) {
   const [labelHovered, setLabelHovered] = useState(false)
   const { stringCount } = track
@@ -352,15 +364,15 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
             <rect
               className="tab-hover-bg"
               x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0)}
-              y={MEASURE_NUMBER_H + 5}
+              y={2}
               width={BPM_LABEL_W}
-              height={18}
+              height={12}
               rx={3}
             />
           )}
           <text
             x={BARLINE_W + (showTimeSig ? TIME_SIG_W : 0) + BPM_LABEL_W / 2}
-            y={MEASURE_NUMBER_H + 14}
+            y={MEASURE_NUMBER_H / 2}
             fontSize={BPM_DISPLAY_FONT_SIZE}
             textAnchor="middle"
             dominantBaseline="middle"
@@ -373,15 +385,48 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         </g>
       )}
 
-      {/* Left barline */}
-      <line
-        x1={0}
-        y1={topStringY}
-        x2={0}
-        y2={bottomStringY}
-        stroke={forPrint ? '#000000' : '#777'}
-        strokeWidth={BARLINE_W}
-      />
+      {/* Left barline — double when measure has a marker */}
+      {hasMarker ? (
+        <>
+          <line x1={0} y1={topStringY} x2={0} y2={bottomStringY} stroke={forPrint ? '#000000' : '#aaa'} strokeWidth={BARLINE_W} />
+          <line x1={BARLINE_W + 3} y1={topStringY} x2={BARLINE_W + 3} y2={bottomStringY} stroke={forPrint ? '#000000' : '#aaa'} strokeWidth={BARLINE_W} />
+        </>
+      ) : (
+        <line x1={0} y1={topStringY} x2={0} y2={bottomStringY} stroke={forPrint ? '#000000' : '#777'} strokeWidth={BARLINE_W} />
+      )}
+      {/* Marker text — bold gold, top of technique zone */}
+      {marker && (() => {
+        const clickable = !forPrint && !!onMarkerClick
+        return (
+          <g
+            className={clickable ? 'tab-svg-interactive' : undefined}
+            style={{ cursor: clickable ? 'pointer' : 'default' }}
+            onClick={clickable ? () => onMarkerClick!(measureIndex) : undefined}
+          >
+            {clickable && (
+              <rect
+                className="tab-hover-bg"
+                x={BARLINE_W + 4}
+                y={MARKER_TEXT_Y - 7}
+                width={64}
+                height={14}
+                rx={3}
+              />
+            )}
+            <text
+              x={BARLINE_W + 6}
+              y={MARKER_TEXT_Y}
+              fontSize={MARKER_FONT_SIZE}
+              fontWeight="bold"
+              fill={forPrint ? '#000000' : '#f0c060'}
+              dominantBaseline="middle"
+              style={{ pointerEvents: 'none' }}
+            >
+              {marker}
+            </text>
+          </g>
+        )
+      })()}
 
       {/* Continuous selection highlight — one rect spanning first→last selected beat */}
       {(() => {
@@ -671,6 +716,8 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         track={track}
         beatPositions={beatPositions}
         onBendAmountClick={onBendAmountClick}
+        onChordClick={onChordClick}
+        onBeatTextClick={onBeatTextClick}
         forPrint={forPrint}
         prevMeasureLastBeat={prevMeasureLastBeat}
       />

@@ -84,6 +84,7 @@ Note colors are managed globally via `NoteColorsContext` (`src/context/NoteColor
 `src/pages/TabEditorPage.tsx` + `src/tabEditorTypes.ts` + `src/tabEditorState.ts` + `src/components/TabEditor/`.
 
 Types in `tabEditorTypes.ts`:
+
 - `TabTrack` — title, globalBpm, globalTimeSig, stringCount (6/7/8), tuningName, openMidi[], measures[]
 - `Measure` — id, optional per-measure timeSignature/bpm, beats[]
 - `Beat` — id, duration, dot modifier, notes[], optional dynamics/repeatStart/repeatEnd/tempoChange/tiedFrom
@@ -101,6 +102,7 @@ Playback via `TabPlaybackEngine` (`src/audio/TabPlaybackEngine.ts`) — separate
 View modes: `tab` (default) and `staff` — toggled via toolbar.
 
 Components in `src/components/TabEditor/`:
+
 - `TabSvgCanvas` — SVG rendering with drag-to-select, click handlers
 - `TabMeasureSvg` — per-measure SVG
 - `StaffViewSvg` — staff notation view
@@ -182,6 +184,7 @@ All drum synths in `src/audio/drumSynths.ts` follow: `(ctx, dest, time, vel?, pi
 For WAV export, `exportAudio.ts` passes `offlineCtx.destination` directly — the master GainNode is intentionally bypassed so export is always at full volume.
 
 Chord synthesis (`src/audio/chordSynths.ts`):
+
 - `playGuitarChord()` — uses `CHORD_DATABASE` voicings + `pluckString`
 - `playPianoChord()` — harmonic series, 4-second sustain
 - `playPadChord()` — sawtooth + sine, lowpass filter, 6-second sustain
@@ -217,4 +220,4 @@ Make sure all these checks pass before accepting changes:
 
 1. **Lint** `rtk lint`
 2. **Types** `rtk tsc`
-3. **Build** `err npm run build`
+3. **Build** `rtk err npm run build`

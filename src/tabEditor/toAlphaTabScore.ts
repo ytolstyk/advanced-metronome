@@ -30,6 +30,14 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
       tempo.isLinear = false
       masterBar.tempoAutomations.push(tempo)
     }
+    // Section marker: text on this bar; isDoubleBar goes on the PREVIOUS bar so the
+    // double barline appears before the first note of the section (right edge of mi-1),
+    // matching the tab editor which draws it at the left edge of bar mi.
+    if (mb.marker) {
+      const section = new at.model.Section()
+      section.text = mb.marker
+      masterBar.section = section
+    }
     // Repeat markers live on Beat in our model; map to MasterBar
     const measure = track.measures[mi]
     if (measure) {
@@ -38,6 +46,10 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
       if (lastBeat?.repeatEnd) masterBar.repeatCount = 2
     }
     score.addMasterBar(masterBar)
+    // Apply double barline to the bar just added's predecessor so it renders at the correct boundary
+    if (mb.marker && mi > 0) {
+      score.masterBars[mi - 1]!.isDoubleBar = true
+    }
   }
 
   // Track + Staff + Bars; use addTrack / addStaff to wire cross-references
@@ -97,6 +109,22 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
         tremoloEffect.style = at.model.TremoloPickingStyle.Default
         tremoloEffect.marks = beat.tremoloMarks
         atBeat.tremoloPicking = tremoloEffect
+      }
+
+      // Beat text annotation (mirrors alphaTab Beat.text)
+      if (beat.text) atBeat.text = beat.text
+
+      // Chord label (mirrors alphaTab Beat.chordId + Staff.chords map)
+      if (beat.chord) {
+        const chord = new at.model.Chord()
+        chord.name = beat.chord.name
+        chord.showName = true
+        chord.showDiagram = false
+        // strings is high→low in alphaTab; our frets[] is low→high, so reverse
+        chord.strings = beat.chord.frets.length > 0 ? beat.chord.frets.slice().reverse() : []
+        const chordId = `chord-${beat.chord.name}-${beat.chord.frets.join(',')}`
+        atBeat.chordId = chordId
+        staff.addChord(chordId, chord)
       }
 
       for (const note of beat.notes) {
@@ -176,6 +204,7 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
 
   for (let i = 1; i < allBeatRefs.length; i++) {
     const { beat: atBeat, srcBeat } = allBeatRefs[i]!
+    const prevSrcBeat = allBeatRefs[i - 1]?.srcBeat
 
     for (const atNote of atBeat.notes) {
       const srcNote = srcBeat.notes.find(n => n.string === atNote.string)
@@ -190,9 +219,20 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
         }
       }
 
-      // Tied note: link to same-string note in nearest preceding real beat
+      // Overflow tie (tiedFrom): link to same-string note in nearest preceding real beat
       if (srcBeat.tiedFrom) {
         const originNote = findPrecedingNote(i, atNote.string)
+        if (originNote) {
+          originNote.tieDestination = atNote
+          atNote.tieOrigin = originNote
+          atNote.isTieDestination = true
+        }
+      }
+
+      // User tie (tiedToNext on previous beat): same-string note in previous beat ties to this note
+      if (prevSrcBeat?.tiedToNext) {
+        const prevAtBeat = allBeatRefs[i - 1]!.beat
+        const originNote = prevAtBeat.notes.find(n => n.string === atNote.string)
         if (originNote) {
           originNote.tieDestination = atNote
           atNote.tieOrigin = originNote

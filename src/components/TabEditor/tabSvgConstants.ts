@@ -35,6 +35,12 @@ export const TIME_SIG_FONT_SIZE = 30         // stacked time signature numerals
 export const BPM_DISPLAY_FONT_SIZE = 13      // ♩=120 label shown at start of BPM segment
 export const STRING_LABEL_FONT_SIZE = 11     // tuning note names left of first measure (e.g. "E", "A")
 export const MEASURE_OVERFLOW_FONT_SIZE = 12 // ⚠ overflow error shown on overfull measures
+export const CHORD_LABEL_Y = MEASURE_NUMBER_H + 8   // y=24, top of technique zone (above existing techniques)
+export const CHORD_LABEL_FONT_SIZE = 11
+export const MARKER_TEXT_Y = MEASURE_NUMBER_H + 10  // y=26, near top of technique zone
+export const MARKER_FONT_SIZE = 12                   // bold, slightly larger than beat text
+export const BEAT_TEXT_ZONE_Y = MEASURE_NUMBER_H + 20 // y=36, mid-technique zone — clear of string note numbers
+export const BEAT_TEXT_FONT_SIZE = 10
 export const BOTTOM_PADDING = 8
 export const BARLINE_W = 2
 export const MEASURE_END_PAD = 8   // fixed gap after last note slot, before right barline
@@ -92,7 +98,7 @@ export interface FretLabelData {
 
 export function formatFretLabel(note: TabNote, isTied: boolean, forPrint = false): FretLabelData {
   if (note.fret < 0) return { label: '', fill: forPrint ? '#000000' : '#e8e8e8', fontStyle: 'normal' }
-  if (isTied) return { label: `(${note.fret})`, fill: forPrint ? '#555555' : '#666', fontStyle: 'normal' }
+  if (isTied) return { label: `(${note.fret})`, fill: forPrint ? '#999999' : '#3a3a5a', fontStyle: 'italic' }
   if (note.modifiers.dead) return { label: 'X', fill: forPrint ? '#000000' : '#cc4444', fontStyle: 'normal' }
   if (note.modifiers.harmonicType) return { label: `<${note.fret}>`, fill: forPrint ? '#000000' : '#88ccff', fontStyle: 'italic' }
   if (note.modifiers.ghost) return { label: `(${note.fret})`, fill: forPrint ? '#555555' : '#888888', fontStyle: 'normal' }
