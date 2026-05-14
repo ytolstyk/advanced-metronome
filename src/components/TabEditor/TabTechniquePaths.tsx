@@ -238,7 +238,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
           return svgStartX + (offset / 60) * (svgEndX - svgStartX)
         }
         function valToY(value: number): number {
-          return bottomY + (value / 24) * (topY - bottomY)
+          return bottomY + (value / 12) * (topY - bottomY)
         }
 
         const bendChildren: React.ReactNode[] = []

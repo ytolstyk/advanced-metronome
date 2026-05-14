@@ -18,9 +18,9 @@ function durationLabel(duration: DurationValue, dot: DotModifier): string {
 }
 
 const GRID_COLS = 60
-const GRID_ROWS = 24
+const GRID_ROWS = 12
 const CELL_W = 10
-const CELL_H = 12
+const CELL_H = 24
 const SVG_W = GRID_COLS * CELL_W   // 600
 const SVG_H = GRID_ROWS * CELL_H   // 288
 const PAD_LEFT = 36
@@ -187,8 +187,8 @@ export function BendGraphDialog({ open, initialData, noteFreq, openMidi, duratio
     const y = valueToY(row)
     let stroke = '#383838'
     let strokeWidth = 1
-    if (row % 8 === 0) { stroke = '#666'; strokeWidth = 1.75 }
-    else if (row % 4 === 0) { stroke = '#4a4a4a'; strokeWidth = 1.25 }
+    if (row % 4 === 0) { stroke = '#666'; strokeWidth = 1.75 }
+    else if (row % 2 === 0) { stroke = '#4a4a4a'; strokeWidth = 1.25 }
     gridLines.push(
       <line key={`h${row}`} x1={PAD_LEFT} y1={y} x2={PAD_LEFT + SVG_W} y2={y}
         stroke={stroke} strokeWidth={strokeWidth} />
@@ -204,12 +204,12 @@ export function BendGraphDialog({ open, initialData, noteFreq, openMidi, duratio
     )
   }
 
-  // Y-axis labels (whole steps)
+  // Y-axis labels (whole steps: value/4 = whole steps, matching tab rendering)
   const yLabels: React.ReactNode[] = []
   for (let step = 0; step <= 3; step++) {
-    const qtValue = step * 8
+    const qtValue = step * 4
     const y = valueToY(qtValue)
-    const label = step === 0 ? '0' : `${step}`
+    const label = `${step}`
     yLabels.push(
       <text key={`yl${step}`} x={PAD_LEFT - 6} y={y} textAnchor="end" dominantBaseline="middle"
         fontSize={12} fill="#aaa">
