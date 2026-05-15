@@ -16,6 +16,7 @@ export interface PlayTabNoteOptions {
   vol: number
   trillFret?: number      // auxiliary trill fret; only used when modifiers.trill is set
   trillSpeed?: DurationValue // trill alternation speed
+  harmonicValue?: number  // touch-point fret for artificial harmonics (modifiers.harmonicType === 2)
 }
 
 const HARMONIC_MULTIPLIER: Partial<Record<number, number>> = {
@@ -61,6 +62,7 @@ function spawnHarmonics(
     hg.connect(dest)
     osc.start(oscStart)
     osc.stop(oscStop)
+    osc.onended = () => { osc.disconnect(); hg.disconnect() }
     oscs.push(osc)
   }
   return oscs
@@ -72,25 +74,29 @@ function attachVibrato(
   baseFreq: number,
   startTime: number,
   stopTime: number,
+  vibratoType: 1 | 2 = 1,
 ): void {
+  const rate = vibratoType === 2 ? 6.5 : 5.0
+  const depthFactor = vibratoType === 2 ? 0.04 : 0.015
   const lfo = ctx.createOscillator()
   lfo.type = 'sine'
-  lfo.frequency.value = 6
+  lfo.frequency.value = rate
   oscs.forEach((osc, idx) => {
     const h = idx + 1
     const depth = ctx.createGain()
-    depth.gain.value = baseFreq * h * 0.0293
+    depth.gain.value = baseFreq * h * depthFactor
     lfo.connect(depth)
     depth.connect(osc.frequency)
   })
   lfo.start(startTime + 0.05)
   lfo.stop(stopTime)
+  lfo.onended = () => { lfo.disconnect() }
 }
 
 export function playTabNote(opts: PlayTabNoteOptions): GainNode {
-  const { ctx, freq, fret, openMidi, modifiers, bendData, whammyBarData, startTime, beatDuration, nextFreq, vol, trillFret, trillSpeed } = opts
-  const decayTotal = 2.2
-  const oscStop = startTime + 2.5
+  const { ctx, freq, fret, openMidi, modifiers, bendData, whammyBarData, startTime, beatDuration, nextFreq, vol, trillFret, trillSpeed, harmonicValue } = opts
+  const decayTotal = modifiers.letRing ? 5.0 : 2.2
+  const oscStop = startTime + (modifiers.letRing ? 5.5 : 2.5)
 
   if (modifiers.dead) {
     const env = buildEnvelope(ctx, startTime, vol * 0.6, 0.003, 0.07)
@@ -114,9 +120,19 @@ export function playTabNote(opts: PlayTabNoteOptions): GainNode {
   }
 
   if (modifiers.harmonicType) {
-    const mult = HARMONIC_MULTIPLIER[fret] ?? null
-    const openFreq = fretToFreq(openMidi, 0)
-    const harmonicFreq = mult !== null ? Math.min(openFreq * mult, 18000) : freq
+    let harmonicFreq: number
+    if (modifiers.harmonicType === 2 && harmonicValue != null) {
+      // Artificial harmonic: touch fret is harmonicValue frets above the fretted note.
+      // Pitch is the corresponding overtone of the fretted note's frequency.
+      const interval = harmonicValue - fret
+      const mult = HARMONIC_MULTIPLIER[interval] ?? 2
+      harmonicFreq = Math.min(freq * mult, 18000)
+    } else {
+      // Natural (and other) harmonics: overtone of the open string
+      const mult = HARMONIC_MULTIPLIER[fret] ?? null
+      const openFreq = fretToFreq(openMidi, 0)
+      harmonicFreq = mult !== null ? Math.min(openFreq * mult, 18000) : freq
+    }
     const env = buildEnvelope(ctx, startTime, vol, 0.012, 3.5)
     const harmonicGains = [1.0, 0.12, 0.04]
     spawnHarmonics(ctx, env, harmonicFreq, startTime, startTime + 3.5, 3, h => harmonicGains[h - 1] ?? 0.01)
@@ -207,6 +223,12 @@ export function playTabNote(opts: PlayTabNoteOptions): GainNode {
     return env
   }
 
+  if (modifiers.tapping) {
+    const env = buildEnvelope(ctx, startTime, vol * 0.6, 0.010, decayTotal)
+    spawnHarmonics(ctx, env, freq, startTime, oscStop, 6, h => 0.5 / (h * h))
+    return env
+  }
+
   const effectiveVol = modifiers.ghost ? vol * 0.25 : vol
   const env = buildEnvelope(ctx, startTime, effectiveVol, 0.008, decayTotal)
 
@@ -233,6 +255,7 @@ export function playTabNote(opts: PlayTabNoteOptions): GainNode {
     })
     lfo.start(startTime)
     lfo.stop(oscStop)
+    lfo.onended = () => { lfo.disconnect() }
   }
 
   if (modifiers.bend && bendData && bendData.points.length >= 2) {
@@ -288,7 +311,7 @@ export function playTabNote(opts: PlayTabNoteOptions): GainNode {
   }
 
   if (modifiers.vibrato) {
-    attachVibrato(ctx, oscs, freq, startTime, oscStop)
+    attachVibrato(ctx, oscs, freq, startTime, oscStop, modifiers.vibrato)
   }
 
   return env

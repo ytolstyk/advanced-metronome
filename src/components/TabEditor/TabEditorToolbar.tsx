@@ -158,6 +158,14 @@ const BUTTON_TAGS: Record<string, string[]> = {
   'eff-fadeIn':          ['fade in', 'fade', 'crescendo', 'swell', 'volume in'],
   'eff-fadeOut':         ['fade out', 'fade', 'decrescendo', 'diminuendo', 'volume out'],
   'eff-fadeInOut':       ['fade in out', 'fade', 'swell', 'volume swell', 'in and out'],
+  'eff-dyn-ppp':         ['ppp', 'pianissimissimo', 'very very soft', 'dynamics', 'volume'],
+  'eff-dyn-pp':          ['pp', 'pianissimo', 'very soft', 'dynamics', 'volume'],
+  'eff-dyn-p':           ['p', 'piano', 'soft', 'dynamics', 'volume'],
+  'eff-dyn-mp':          ['mp', 'mezzo piano', 'medium soft', 'dynamics', 'volume'],
+  'eff-dyn-mf':          ['mf', 'mezzo forte', 'medium loud', 'dynamics', 'volume'],
+  'eff-dyn-f':           ['f', 'forte', 'loud', 'dynamics', 'volume'],
+  'eff-dyn-ff':          ['ff', 'fortissimo', 'very loud', 'dynamics', 'volume'],
+  'eff-dyn-fff':         ['fff', 'fortissimissimo', 'very very loud', 'dynamics', 'volume'],
   // Repeats
   'str-repeatOpen':      ['open repeat', 'repeat start', 'repeat', 'bar repeat', '|:'],
   'str-repeatClose':     ['close repeat', 'repeat end', 'repeat', 'bar repeat', ':|'],
@@ -354,7 +362,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
 
   const GROUP_KEYS: Record<string, string[]> = {
     duration:   [`dur-${Duration.Whole}`, `dur-${Duration.Half}`, `dur-${Duration.Quarter}`, `dur-${Duration.Eighth}`, `dur-${Duration.Sixteenth}`, `dur-${Duration.ThirtySecond}`, `dur-${Duration.SixtyFourth}`, 'dur-dot', 'dur-doubledot', 'dur-triplet', 'dur-rest'],
-    effects:    [...(hasTapOrPick ? MODIFIERS_BASE.filter(m => m.key !== 'palmMute') : MODIFIERS_BASE).map(m => `mod-${m.key}`), 'mod-harmonic', 'mod-trill', 'eff-fadeIn', 'eff-fadeOut', 'eff-fadeInOut'],
+    effects:    [...(hasTapOrPick ? MODIFIERS_BASE.filter(m => m.key !== 'palmMute') : MODIFIERS_BASE).map(m => `mod-${m.key}`), 'mod-harmonic', 'mod-trill', 'eff-fadeIn', 'eff-fadeOut', 'eff-fadeInOut', 'eff-dyn-ppp', 'eff-dyn-pp', 'eff-dyn-p', 'eff-dyn-mp', 'eff-dyn-mf', 'eff-dyn-f', 'eff-dyn-ff', 'eff-dyn-fff'],
     techniques: [...(hasTapOrPick ? CONNECTIONS_BASE.flatMap(c => c.key === 'tapping' ? ['con-palmMute', `con-${c.key}`] : [`con-${c.key}`]) : CONNECTIONS_BASE.map(c => `con-${c.key}`)), 'con-pickDown', 'con-pickUp', 'con-tremolo', 'con-whammy'],
     notation:   ['not-beatText', 'not-marker', 'not-tie', 'not-chord'],
     structure:  ['str-insertBeatBefore', 'str-insertBeatAfter', 'str-deleteBeat', 'str-insertMeasureBefore', 'str-insertMeasureAfter', 'str-deleteMeasure', 'str-repeatOpen', 'str-repeatClose'],
@@ -666,6 +674,26 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
             </span>
           </ToolBtn>
         ))}
+        {(['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff'] as const).map((dv) => {
+          const activeDyn = currentBeat ? currentBeat.dynamics : state.activeDynamics
+          return (
+            <ToolBtn
+              key={dv}
+              title={`Dynamics: ${dv}`}
+              dimmed={dim(`eff-dyn-${dv}`)}
+              activeEffect={activeDyn === dv}
+              onClick={() => {
+                if (hasBeatSelection) {
+                  dispatch({ type: 'SET_BEAT_DYNAMICS_TO_SELECTION', dynamics: dv })
+                } else {
+                  dispatch({ type: 'SET_BEAT_DYNAMICS', dynamics: dv })
+                }
+              }}
+            >
+              <span style={{ fontFamily: 'serif', fontSize: '0.75em', fontStyle: 'italic' }}>{dv}</span>
+            </ToolBtn>
+          )
+        })}
       </div>
 
       {/* Connections group */}

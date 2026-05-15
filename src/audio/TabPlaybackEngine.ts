@@ -5,6 +5,11 @@ import { beatDurationSeconds, fretToFreq, effectiveBpmAt, computeFillRests, meas
 const SCHEDULE_AHEAD_TIME = 0.1
 const SCHEDULER_INTERVAL = 25
 
+const DYNAMICS_VOL: Record<string, number> = {
+  ppp: 0.20, pp: 0.30, p: 0.45, mp: 0.55,
+  mf: 0.65, f: 0.80, ff: 0.90, fff: 1.00,
+}
+
 export class TabPlaybackEngine {
   private ctx: AudioContext | null = null
   private timer: ReturnType<typeof setInterval> | null = null
@@ -217,6 +222,8 @@ export class TabPlaybackEngine {
     const bpm = beat.tempoChange ?? effectiveBpmAt(track, this.measureIndex)
     const dur = beatDurationSeconds(beat.duration, beat.dot, bpm)
 
+    const beatVol = beat.dynamics ? (DYNAMICS_VOL[beat.dynamics] ?? 0.65) : 0.65
+
     if (beat.tremoloMarks !== undefined) {
       // Tremolo: marks mirrors alphatab's TremoloPickingEffect.marks — plays 2^marks picks per beat.
       // Interval = undotted beat duration / 2^marks, matching alphatab exactly.
@@ -261,7 +268,7 @@ export class TabPlaybackEngine {
             startTime: pickTime,
             beatDuration: interval,
             nextFreq: null,
-            vol: 0.65,
+            vol: beatVol,
           })
 
           if (i < count - 1) {
@@ -314,9 +321,10 @@ export class TabPlaybackEngine {
           startTime: t,
           beatDuration: dur,
           nextFreq,
-          vol: 0.65,
+          vol: beatVol,
           trillFret: note.trillFret,
           trillSpeed: note.trillSpeed,
+          harmonicValue: note.harmonicValue,
         })
 
         this.prevNoteKill.set(s, killNode)
@@ -331,14 +339,14 @@ export class TabPlaybackEngine {
           killNode.gain.cancelScheduledValues(t)
           if (beat.fade === 'fadeIn') {
             killNode.gain.setValueAtTime(0, t)
-            killNode.gain.linearRampToValueAtTime(0.65, t + dur)
+            killNode.gain.linearRampToValueAtTime(beatVol, t + dur)
           } else if (beat.fade === 'fadeOut') {
-            killNode.gain.setValueAtTime(0.65, t)
+            killNode.gain.setValueAtTime(beatVol, t)
             killNode.gain.linearRampToValueAtTime(0, t + dur)
           } else {
             // fadeInOut
             killNode.gain.setValueAtTime(0, t)
-            killNode.gain.linearRampToValueAtTime(0.65, t + dur / 2)
+            killNode.gain.linearRampToValueAtTime(beatVol, t + dur / 2)
             killNode.gain.linearRampToValueAtTime(0, t + dur)
           }
         }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react'
 import * as at from '@coderline/alphatab'
 import type { TabTrack } from '../../tabEditorTypes'
 import { toAlphaTabScore } from '../../tabEditor/toAlphaTabScore'
@@ -144,11 +144,13 @@ export const AlphaTabPreview = forwardRef<AlphaTabPreviewHandle, AlphaTabPreview
       api.render()
     }, [darkMode])
 
+    const alphaScore = useMemo(() => toAlphaTabScore(track), [track])
+
     useEffect(() => {
       const api = apiRef.current
       if (!api || !mountedRef.current) return
-      api.renderScore(toAlphaTabScore(track))
-    }, [track])
+      api.renderScore(alphaScore)
+    }, [alphaScore])
 
     return (
       <div className={`alphatab-preview${darkMode ? ' alphatab-preview--dark' : ''}`}>

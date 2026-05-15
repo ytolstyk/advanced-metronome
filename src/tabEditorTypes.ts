@@ -162,6 +162,7 @@ export interface TabEditorState {
   activeDot: DotModifier
   activeModifiers: NoteModifiers
   activePick?: 'down' | 'up'  // beat-level pick direction to apply to the next new beat
+  activeDynamics?: Beat['dynamics']
   activeHarmonicValue?: number
   activeTrillFret?: number
   activeTrillSpeed?: DurationValue

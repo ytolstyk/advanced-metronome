@@ -420,6 +420,7 @@ export function createInitialTabState(): TabEditorState {
     activeDot: { dotted: false, doubleDotted: false, triplet: false },
     activeModifiers: {},
     activePick: undefined,
+    activeDynamics: undefined,
     isPlaying: false,
     playheadMeasure: 0,
     playheadBeat: 0,
@@ -486,13 +487,13 @@ function durationSyncForCursor(cursor: TabCursor, track: TabTrack): Partial<TabE
   const measure = track.measures[cursor.measureIndex]
   if (!measure) return {}
   const beat = measure.beats[cursor.beatIndex]
-  if (beat) return { activeDuration: beat.duration, activeDot: { ...beat.dot }, activePick: beat.pickStroke }
+  if (beat) return { activeDuration: beat.duration, activeDot: { ...beat.dot }, activePick: beat.pickStroke, activeDynamics: beat.dynamics }
   if (cursor.beatIndex >= measure.beats.length) {
     const timeSig = masterBarAt(track, cursor.measureIndex).timeSignature
     const remaining = measureCapacityTicks(timeSig) - measureUsedTicks(measure.beats)
     const fillRests = remaining > 1e-6 ? computeFillRests(remaining) : []
     const fillDur = fillRests[cursor.beatIndex - measure.beats.length]
-    if (fillDur !== undefined) return { activeDuration: fillDur, activeDot: { dotted: false, doubleDotted: false, triplet: false }, activePick: undefined }
+    if (fillDur !== undefined) return { activeDuration: fillDur, activeDot: { dotted: false, doubleDotted: false, triplet: false }, activePick: undefined, activeDynamics: undefined }
   }
   return {}
 }
@@ -605,6 +606,7 @@ function placeNoteInMeasure(
   timeSig: { numerator: number; denominator: number },
   harmonicValue?: number,
   activePick?: 'down' | 'up',
+  activeDynamics?: Beat['dynamics'],
 ): { measure: Measure; overflow: Omit<OverflowPending, 'measureIndex'> | null } {
   const capacity = measureCapacityTicks(timeSig)
   const newBeatTicks = durationTicks(duration, dot)
@@ -637,6 +639,7 @@ function placeNoteInMeasure(
     newBeat.dot = { ...dot }
     newBeat.notes = upsertNote([], harmonicValue)
     if (activePick) newBeat.pickStroke = activePick
+    if (activeDynamics) newBeat.dynamics = activeDynamics
     return { measure: { ...measure, beats: [...measure.beats, newBeat] }, overflow: null }
   }
 
@@ -763,6 +766,8 @@ export type TabEditorAction =
   | { type: 'SET_BEAT_CHORD'; measureIndex: number; beatIndex: number; chord: { name: string; frets: number[] } | null; populateFrets: boolean }
   | { type: 'SET_BEAT_FADE'; measureIndex: number; beatIndex: number; fade: Beat['fade'] }
   | { type: 'SET_BEAT_FADE_TO_SELECTION'; fade: Beat['fade'] }
+  | { type: 'SET_BEAT_DYNAMICS'; dynamics: Beat['dynamics'] }
+  | { type: 'SET_BEAT_DYNAMICS_TO_SELECTION'; dynamics: Beat['dynamics'] }
   | { type: 'SET_WHAMMY_BAR'; measureIndex: number; beatIndex: number; data: WhammyBarData | null }
   | { type: 'TOGGLE_REPEAT_OPEN'; measureIndex: number }
   | { type: 'SET_REPEAT_CLOSE'; measureIndex: number; count: number | null }
@@ -804,6 +809,7 @@ function tabEditorReducerInner(
         timeSig,
         newHarmonicValue,
         s.activePick,
+        s.activeDynamics,
       )
 
       if (overflow) {
@@ -2303,6 +2309,71 @@ function tabEditorReducerInner(
               return rest as Beat
             }
             return { ...b, fade: nextFade }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'SET_BEAT_DYNAMICS': {
+      const { cursor } = state
+      const { measureIndex: mi, beatIndex: bi } = cursor
+      const measure = state.track.measures[mi]
+      const beat = measure?.beats[bi]
+      const nextDynamics = beat?.dynamics === action.dynamics ? undefined : action.dynamics
+      if (beat) {
+        const s = pushUndo(state)
+        const measures = s.track.measures.map((m, mIdx) => {
+          if (mIdx !== mi) return m
+          return {
+            ...m,
+            beats: m.beats.map((b, bIdx) => {
+              if (bIdx !== bi) return b
+              if (!nextDynamics) {
+                const { dynamics: _d, ...rest } = b as Beat & { dynamics?: unknown }
+                void _d
+                return rest as Beat
+              }
+              return { ...b, dynamics: nextDynamics }
+            }),
+          }
+        })
+        return { ...s, track: { ...s.track, measures }, activeDynamics: nextDynamics }
+      }
+      return { ...state, activeDynamics: nextDynamics }
+    }
+
+    case 'SET_BEAT_DYNAMICS_TO_SELECTION': {
+      if (!state.selection) return state
+      const s = pushUndo(state)
+      const norm = normalizeSelection(state.selection)
+      const allHaveDynamics = (() => {
+        for (let smi = norm.startMeasure; smi <= norm.endMeasure; smi++) {
+          const m = s.track.measures[smi]
+          if (!m) continue
+          const bStart = smi === norm.startMeasure ? norm.startBeat : 0
+          const bEnd = smi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+          for (let sbi = bStart; sbi <= bEnd; sbi++) {
+            if (m.beats[sbi]?.dynamics !== action.dynamics) return false
+          }
+        }
+        return true
+      })()
+      const nextDynamics = allHaveDynamics ? undefined : action.dynamics
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi < norm.startMeasure || mi > norm.endMeasure) return m
+        const bStart = mi === norm.startMeasure ? norm.startBeat : 0
+        const bEnd = mi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi < bStart || bi > bEnd) return b
+            if (!nextDynamics) {
+              const { dynamics: _d, ...rest } = b as Beat & { dynamics?: unknown }
+              void _d
+              return rest as Beat
+            }
+            return { ...b, dynamics: nextDynamics }
           }),
         }
       })
