@@ -19,6 +19,10 @@ import {
   CHORD_LABEL_FONT_SIZE,
   BEAT_TEXT_ZONE_Y,
   BEAT_TEXT_FONT_SIZE,
+  FADE_ZONE_Y,
+  FADE_HALF_H,
+  WHAMMY_ZERO_Y,
+  WHAMMY_PX_PER_QT,
   stringY,
 } from './tabSvgConstants'
 
@@ -45,9 +49,10 @@ interface TechniqueOverlayProps {
   onBeatTextClick?: (measureIndex: number, beatIndex: number) => void
   forPrint?: boolean
   prevMeasureLastBeat?: import('../../tabEditorTypes').Beat
+  nextMeasureFirstBeat?: import('../../tabEditorTypes').Beat
 }
 
-export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, onBendAmountClick, onChordClick, onBeatTextClick, forPrint = false, prevMeasureLastBeat }: TechniqueOverlayProps) {
+export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, onBendAmountClick, onChordClick, onBeatTextClick, forPrint = false, prevMeasureLastBeat, nextMeasureFirstBeat }: TechniqueOverlayProps) {
   const elements: React.ReactNode[] = []
   const measureContentW = beatPositions.length > 0
     ? beatPositions[beatPositions.length - 1].x + beatPositions[beatPositions.length - 1].w
@@ -364,6 +369,41 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
       elements.push(<g key={`tremolo-${bi}`}>{slashLines}</g>)
     }
 
+    // Fade hairpin (beat-level dynamic)
+    if (beat.fade) {
+      const fadeColor = forPrint ? '#000000' : '#aaddff'
+      const x0 = pos.x + 2
+      const x1 = pos.x + posW - 2
+      const xMid = (x0 + x1) / 2
+      const yMid = FADE_ZONE_Y
+      const yTop = FADE_ZONE_Y - FADE_HALF_H
+      const yBot = FADE_ZONE_Y + FADE_HALF_H
+      if (beat.fade === 'fadeIn') {
+        elements.push(
+          <g key={`fade-${bi}`} style={{ pointerEvents: 'none' }}>
+            <line x1={x0} y1={yMid} x2={x1} y2={yTop} stroke={fadeColor} strokeWidth={1.5} strokeLinecap="round" />
+            <line x1={x0} y1={yMid} x2={x1} y2={yBot} stroke={fadeColor} strokeWidth={1.5} strokeLinecap="round" />
+          </g>
+        )
+      } else if (beat.fade === 'fadeOut') {
+        elements.push(
+          <g key={`fade-${bi}`} style={{ pointerEvents: 'none' }}>
+            <line x1={x0} y1={yTop} x2={x1} y2={yMid} stroke={fadeColor} strokeWidth={1.5} strokeLinecap="round" />
+            <line x1={x0} y1={yBot} x2={x1} y2={yMid} stroke={fadeColor} strokeWidth={1.5} strokeLinecap="round" />
+          </g>
+        )
+      } else {
+        elements.push(
+          <g key={`fade-${bi}`} style={{ pointerEvents: 'none' }}>
+            <line x1={x0} y1={yMid} x2={xMid} y2={yTop} stroke={fadeColor} strokeWidth={1.5} strokeLinecap="round" />
+            <line x1={x0} y1={yMid} x2={xMid} y2={yBot} stroke={fadeColor} strokeWidth={1.5} strokeLinecap="round" />
+            <line x1={xMid} y1={yTop} x2={x1} y2={yMid} stroke={fadeColor} strokeWidth={1.5} strokeLinecap="round" />
+            <line x1={xMid} y1={yBot} x2={x1} y2={yMid} stroke={fadeColor} strokeWidth={1.5} strokeLinecap="round" />
+          </g>
+        )
+      }
+    }
+
     // Chord label — italic, pink, top of technique zone
     if (beat.chord?.name) {
       const chordClickable = !forPrint && !!onChordClick
@@ -442,6 +482,7 @@ export function TechniqueOverlay({ measure, measureIndex, track, beatPositions, 
   renderPalmMuteRuns(measure, beatPositions, elements, forPrint, prevMeasureLastBeat, measureTotalW)
   renderLetRingRuns(measure, beatPositions, elements, forPrint, prevMeasureLastBeat, measureTotalW)
   renderTrillRuns(measure, beatPositions, elements, forPrint, prevMeasureLastBeat, measureTotalW)
+  renderWhammyBar(measure, beatPositions, elements, forPrint, nextMeasureFirstBeat)
 
   return <g>{elements}</g>
 }
@@ -732,4 +773,89 @@ function runHasOverlapWithoutTrill(measure: Measure, startBi: number, endBi: num
     if (beat.notes.some((n) => n.modifiers.tapping || n.modifiers.vibrato || n.modifiers.bend) || beat.pickStroke || beat.tremoloMarks) return true
   }
   return false
+}
+
+function whammyValueToY(value: number): number {
+  return WHAMMY_ZERO_Y - value * WHAMMY_PX_PER_QT
+}
+
+function renderWhammyBar(
+  measure: Measure,
+  beatPositions: BeatPosition[],
+  elements: React.ReactNode[],
+  forPrint = false,
+  nextMeasureFirstBeat?: Beat,
+) {
+  const whammyColor = forPrint ? '#000000' : '#ff9944'
+
+  for (let bi = 0; bi < measure.beats.length; bi++) {
+    const beat = measure.beats[bi]
+    if (!beat.whammyBar) continue
+    const pos = beatPositions[bi]
+    if (!pos) continue
+
+    const nextBeat = bi + 1 < measure.beats.length ? measure.beats[bi + 1] : nextMeasureFirstBeat
+    const nextHasWhammy = !!nextBeat?.whammyBar
+
+    // x range: extend to right edge if next beat continues whammy (seamless connection)
+    const xStart = pos.x
+    const xEnd = nextHasWhammy ? pos.x + pos.w : pos.x + pos.w - 2
+
+    function offToX(offset: number): number {
+      return xStart + (offset / 60) * (xEnd - xStart)
+    }
+
+    const pts = beat.whammyBar.points
+    if (pts.length < 2) continue
+
+    const polyPts = pts.map(p => `${offToX(p.offset)},${whammyValueToY(p.value)}`).join(' ')
+    elements.push(
+      <polyline
+        key={`whammy-${bi}`}
+        points={polyPts}
+        stroke={whammyColor}
+        strokeWidth={1.75}
+        fill="none"
+        style={{ pointerEvents: 'none' }}
+      />
+    )
+
+    // Zero reference line (dashed, thin)
+    elements.push(
+      <line
+        key={`whammy-zero-${bi}`}
+        x1={xStart}
+        y1={WHAMMY_ZERO_Y}
+        x2={xEnd}
+        y2={WHAMMY_ZERO_Y}
+        stroke={forPrint ? '#888888' : '#444'}
+        strokeWidth={0.75}
+        strokeDasharray="3 2"
+        style={{ pointerEvents: 'none' }}
+      />
+    )
+
+    // Value labels at non-zero points
+    for (const pt of pts) {
+      if (pt.value === 0) continue
+      const x = offToX(pt.offset)
+      const y = whammyValueToY(pt.value)
+      const steps = pt.value / 4
+      const label = steps > 0 ? `+${steps}` : `${steps}`
+      const labelY = pt.value > 0 ? y - 6 : y + 12
+      elements.push(
+        <text
+          key={`whammy-lbl-${bi}-${pt.offset}`}
+          x={x}
+          y={labelY}
+          textAnchor="middle"
+          fontSize={8}
+          fill={whammyColor}
+          style={{ pointerEvents: 'none' }}
+        >
+          {label}
+        </text>
+      )
+    }
+  }
 }

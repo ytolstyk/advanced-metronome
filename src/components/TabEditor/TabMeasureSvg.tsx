@@ -55,11 +55,15 @@ interface TabMeasureSvgProps {
   onChordClick?: (mi: number, bi: number) => void
   onBeatTextClick?: (mi: number, bi: number) => void
   onMarkerClick?: (mi: number) => void
+  onRepeatCloseClick?: (measureIndex: number) => void
+  onRepeatErrorClick?: (measureIndex: number) => void
   highlightBeatColumn?: number
   forPrint?: boolean
   prevMeasureLastBeat?: import('../../tabEditorTypes').Beat
+  nextMeasureFirstBeat?: import('../../tabEditorTypes').Beat
   hasMarker?: boolean
   marker?: string
+  repeatStatus?: 'open-orphan' | 'close-orphan' | 'valid' | null
 }
 
 interface RestSymbolProps {
@@ -193,11 +197,15 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
   onChordClick,
   onBeatTextClick,
   onMarkerClick,
+  onRepeatCloseClick,
+  onRepeatErrorClick,
   highlightBeatColumn,
   forPrint = false,
   prevMeasureLastBeat,
+  nextMeasureFirstBeat,
   hasMarker = false,
   marker,
+  repeatStatus,
 }: TabMeasureSvgProps) {
   const [labelHovered, setLabelHovered] = useState(false)
   const { stringCount } = track
@@ -385,15 +393,43 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         </g>
       )}
 
-      {/* Left barline — double when measure has a marker */}
-      {hasMarker ? (
+      {/* Left barline — double when measure has a marker or open repeat */}
+      {(hasMarker || measure.repeatOpen) ? (
         <>
-          <line x1={0} y1={topStringY} x2={0} y2={bottomStringY} stroke={forPrint ? '#000000' : '#aaa'} strokeWidth={BARLINE_W} />
-          <line x1={BARLINE_W + 3} y1={topStringY} x2={BARLINE_W + 3} y2={bottomStringY} stroke={forPrint ? '#000000' : '#aaa'} strokeWidth={BARLINE_W} />
+          <line x1={0} y1={topStringY} x2={0} y2={bottomStringY} stroke={forPrint ? '#000000' : '#aaa'} strokeWidth={1} />
+          <line x1={5} y1={topStringY} x2={5} y2={bottomStringY} stroke={forPrint ? '#000000' : '#aaa'} strokeWidth={3.5} />
         </>
       ) : (
         <line x1={0} y1={topStringY} x2={0} y2={bottomStringY} stroke={forPrint ? '#000000' : '#777'} strokeWidth={BARLINE_W} />
       )}
+      {/* Open repeat dots */}
+      {measure.repeatOpen && (() => {
+        const dotX = 12
+        const dotYTop = topStringY + (bottomStringY - topStringY) * 0.33
+        const dotYBot = topStringY + (bottomStringY - topStringY) * 0.67
+        const dotColor = forPrint ? '#000000' : '#aaa'
+        const isOrphan = repeatStatus === 'open-orphan'
+        return (
+          <>
+            <circle cx={dotX} cy={dotYTop} r={2.5} fill={dotColor} style={{ pointerEvents: 'none' }} />
+            <circle cx={dotX} cy={dotYBot} r={2.5} fill={dotColor} style={{ pointerEvents: 'none' }} />
+            {isOrphan && !forPrint && (
+              <text
+                x={dotX}
+                y={topStringY - 6}
+                textAnchor="middle"
+                fontSize={13}
+                fontWeight="bold"
+                fill="#ff4444"
+                style={{ cursor: onRepeatErrorClick ? 'pointer' : 'default' }}
+                onClick={onRepeatErrorClick ? (e) => { e.stopPropagation(); onRepeatErrorClick(measureIndex) } : undefined}
+              >
+                !
+              </text>
+            )}
+          </>
+        )
+      })()}
       {/* Marker text — bold gold, top of technique zone */}
       {marker && (() => {
         const clickable = !forPrint && !!onMarkerClick
@@ -709,15 +745,73 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         )
       })}
 
-      {/* Right barline */}
-      <line
-        x1={mw}
-        y1={topStringY}
-        x2={mw}
-        y2={bottomStringY}
-        stroke={forPrint ? '#000000' : '#777'}
-        strokeWidth={BARLINE_W}
-      />
+      {/* Right barline — double with dots when close repeat */}
+      {measure.repeatClose !== undefined ? (() => {
+        const dotX = mw - 10
+        const dotYTop = topStringY + (bottomStringY - topStringY) * 0.33
+        const dotYBot = topStringY + (bottomStringY - topStringY) * 0.67
+        const barColor = forPrint ? '#000000' : '#aaa'
+        const isOrphan = repeatStatus === 'close-orphan'
+        const countLabel = measure.repeatClose > 2 ? `×${measure.repeatClose}` : undefined
+        const clickable = !forPrint && !!onRepeatCloseClick
+        return (
+          <>
+            <circle cx={dotX} cy={dotYTop} r={2.5} fill={barColor} style={{ pointerEvents: 'none' }} />
+            <circle cx={dotX} cy={dotYBot} r={2.5} fill={barColor} style={{ pointerEvents: 'none' }} />
+            <line x1={mw - 5} y1={topStringY} x2={mw - 5} y2={bottomStringY} stroke={barColor} strokeWidth={3.5} />
+            <line x1={mw} y1={topStringY} x2={mw} y2={bottomStringY} stroke={barColor} strokeWidth={1} />
+            {/* Clickable overlay for the close bar */}
+            {clickable && (
+              <rect
+                x={mw - 14}
+                y={topStringY}
+                width={16}
+                height={bottomStringY - topStringY}
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onClick={(e) => { e.stopPropagation(); onRepeatCloseClick!(measureIndex) }}
+              />
+            )}
+            {/* Repeat count label (above) */}
+            {countLabel && (
+              <text
+                x={mw - 5}
+                y={topStringY - 5}
+                textAnchor="middle"
+                fontSize={10}
+                fill={forPrint ? '#000000' : '#aaa'}
+                style={{ pointerEvents: 'none' }}
+              >
+                {countLabel}
+              </text>
+            )}
+            {/* Orphan indicator */}
+            {isOrphan && !forPrint && (
+              <text
+                x={mw - 5}
+                y={topStringY - 6}
+                textAnchor="middle"
+                fontSize={13}
+                fontWeight="bold"
+                fill="#ff4444"
+                style={{ cursor: onRepeatErrorClick ? 'pointer' : 'default' }}
+                onClick={onRepeatErrorClick ? (e) => { e.stopPropagation(); onRepeatErrorClick(measureIndex) } : undefined}
+              >
+                !
+              </text>
+            )}
+          </>
+        )
+      })() : (
+        <line
+          x1={mw}
+          y1={topStringY}
+          x2={mw}
+          y2={bottomStringY}
+          stroke={forPrint ? '#000000' : '#777'}
+          strokeWidth={BARLINE_W}
+        />
+      )}
 
       {/* Technique overlays */}
       <TechniqueOverlay
@@ -730,6 +824,7 @@ export const TabMeasureSvg = memo(function TabMeasureSvg({
         onBeatTextClick={onBeatTextClick}
         forPrint={forPrint}
         prevMeasureLastBeat={prevMeasureLastBeat}
+        nextMeasureFirstBeat={nextMeasureFirstBeat}
       />
 
       {/* String labels */}

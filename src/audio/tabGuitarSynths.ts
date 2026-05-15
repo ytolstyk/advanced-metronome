@@ -1,4 +1,4 @@
-import type { DurationValue, NoteModifiers } from '../tabEditorTypes'
+import type { DurationValue, NoteModifiers, WhammyBarData } from '../tabEditorTypes'
 import { Duration } from '../tabEditorTypes'
 import { fretToFreq } from '../tabEditorState'
 
@@ -9,6 +9,7 @@ export interface PlayTabNoteOptions {
   openMidi: number
   modifiers: NoteModifiers
   bendData?: import('../tabEditorTypes').BendData
+  whammyBarData?: WhammyBarData
   startTime: number
   beatDuration: number
   nextFreq: number | null // destination for legatoSlide (next note on same string)
@@ -87,7 +88,7 @@ function attachVibrato(
 }
 
 export function playTabNote(opts: PlayTabNoteOptions): GainNode {
-  const { ctx, freq, fret, openMidi, modifiers, bendData, startTime, beatDuration, nextFreq, vol, trillFret, trillSpeed } = opts
+  const { ctx, freq, fret, openMidi, modifiers, bendData, whammyBarData, startTime, beatDuration, nextFreq, vol, trillFret, trillSpeed } = opts
   const decayTotal = 2.2
   const oscStop = startTime + 2.5
 
@@ -265,6 +266,23 @@ export function playTabNote(opts: PlayTabNoteOptions): GainNode {
           // simple linear ramp so the bend is audible without crashing playback.
           osc.frequency.linearRampToValueAtTime(arr[SAMPLES - 1]!, segStartTime + segDur)
         }
+      }
+    })
+  }
+
+  if (whammyBarData && whammyBarData.points.length >= 2 && !modifiers.bend) {
+    const pts = whammyBarData.points
+    const totalDur = beatDuration * 0.98
+    oscs.forEach((osc, idx) => {
+      const h = idx + 1
+      const initMult = Math.pow(2, (pts[0]!.value / 4) / 12)
+      osc.frequency.cancelScheduledValues(startTime)
+      osc.frequency.setValueAtTime(freq * h * initMult, startTime)
+      for (let i = 1; i < pts.length; i++) {
+        const pt = pts[i]!
+        const t = startTime + (pt.offset / 60) * totalDur
+        const mult = Math.pow(2, (pt.value / 4) / 12)
+        osc.frequency.linearRampToValueAtTime(freq * h * mult, t)
       }
     })
   }

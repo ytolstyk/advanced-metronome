@@ -3,6 +3,10 @@ export interface BendPointDef {
   value: number   // 0–24 quarter-tones (24 = 3 whole steps = 6 semitones)
 }
 
+export interface WhammyBarData {
+  points: Array<{ offset: number; value: number }>  // offset 0–60; value in quarter-tones (-20 = -5 steps, +12 = +3 steps)
+}
+
 export type BendCurve = 'up' | 'down'
 // 'up'  = concave up (accelerating): Q(x2,y1) bezier — horizontal start, vertical end
 // 'down' = concave down (decelerating): Q(x1,y2) bezier — vertical start, horizontal end
@@ -86,11 +90,11 @@ export interface Beat {
   text?: string     // free-form text annotation above the beat (mirrors alphaTab Beat.text)
   chord?: { name: string; frets: number[] }  // chord label; frets[i] = fret for string (i+1); -1 = muted
   dynamics?: 'ppp' | 'pp' | 'p' | 'mp' | 'mf' | 'f' | 'ff' | 'fff'
-  repeatStart?: true
-  repeatEnd?: true
   tempoChange?: number
   pickStroke?: 'down' | 'up'  // beat-level pick direction (mirrors alphaTab Beat.pickStroke)
   tremoloMarks?: number  // tremolo picking marks (1–4) — mirrors alphaTab TremoloPickingEffect.marks directly; plays 2^marks picks per beat
+  fade?: 'fadeIn' | 'fadeOut' | 'fadeInOut'  // dynamic hairpin — maps to alphaTab FadeType
+  whammyBar?: WhammyBarData  // whammy bar pitch manipulation (beat-level)
 }
 
 // Corresponds to alphaTab's MasterBar — holds time sig and optional BPM for a measure.
@@ -104,10 +108,12 @@ export interface MasterBar {
 export interface Measure {
   id: string
   beats: Beat[]
+  repeatOpen?: true    // open repeat at left barline of this measure (maps to alphaTab MasterBar.isRepeatStart)
+  repeatClose?: number // close repeat at right barline; value = repeat count ≥2 (maps to alphaTab MasterBar.repeatCount)
 }
 
 export interface TabTrack {
-  schemaVersion: 3  // v3 = string 1 = lowest-pitched (AlphaTab convention); openMidi low→high
+  schemaVersion: 4  // v4: repeatStart/End moved from Beat to Measure (repeatOpen/repeatClose)
   title: string
   artist?: string
   tabAuthor?: string

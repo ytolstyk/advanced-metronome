@@ -38,12 +38,11 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
       section.text = mb.marker
       masterBar.section = section
     }
-    // Repeat markers live on Beat in our model; map to MasterBar
+    // Repeat markers live on Measure in our model; map to MasterBar
     const measure = track.measures[mi]
     if (measure) {
-      if (measure.beats[0]?.repeatStart) masterBar.isRepeatStart = true
-      const lastBeat = measure.beats[measure.beats.length - 1]
-      if (lastBeat?.repeatEnd) masterBar.repeatCount = 2
+      if (measure.repeatOpen) masterBar.isRepeatStart = true
+      if (measure.repeatClose !== undefined) masterBar.repeatCount = measure.repeatClose
     }
     score.addMasterBar(masterBar)
     // Apply double barline to the bar just added's predecessor so it renders at the correct boundary
@@ -109,6 +108,23 @@ export function toAlphaTabScore(track: TabTrack): at.model.Score {
         tremoloEffect.style = at.model.TremoloPickingStyle.Default
         tremoloEffect.marks = beat.tremoloMarks
         atBeat.tremoloPicking = tremoloEffect
+      }
+
+      // Fade
+      if (beat.fade) {
+        const fadeMap = { fadeIn: at.model.FadeType.FadeIn, fadeOut: at.model.FadeType.FadeOut, fadeInOut: at.model.FadeType.VolumeSwell } as const
+        atBeat.fade = fadeMap[beat.fade]
+      }
+
+      // Whammy bar
+      if (beat.whammyBar?.points.length) {
+        atBeat.whammyBarType = at.model.WhammyType.Custom
+        for (const pt of beat.whammyBar.points) {
+          const bp = new at.model.BendPoint()
+          bp.offset = pt.offset
+          bp.value = pt.value
+          atBeat.addWhammyBarPoint(bp)
+        }
       }
 
       // Beat text annotation (mirrors alphaTab Beat.text)

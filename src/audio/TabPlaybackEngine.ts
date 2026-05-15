@@ -14,11 +14,14 @@ export class TabPlaybackEngine {
   private nextBeatTime = 0
   private isRunning = false
   private isPaused = false
-  private onBeat: ((mi: number, bi: number, intendedTime: number) => void) | null = null
+  private onBeat: ((mi: number, bi: number, intendedTime: number, nextMi?: number, nextBi?: number) => void) | null = null
   private onStop: (() => void) | null = null
   private prevNoteKill: Map<number, GainNode | null> = new Map()
   private prevLetRing: Map<number, boolean> = new Map()
   private prevBeat: Beat | null = null
+  // Flat sequence of measure indices respecting repeats, built at start time
+  private playbackOrder: number[] = []
+  private playbackPos = 0
 
   private ensureCtx(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext()
@@ -29,7 +32,7 @@ export class TabPlaybackEngine {
     track: TabTrack,
     fromMeasure: number,
     fromBeat: number,
-    onBeat: (mi: number, bi: number, intendedTime: number) => void,
+    onBeat: (mi: number, bi: number, intendedTime: number, nextMi?: number, nextBi?: number) => void,
     onStop: () => void,
   ): void {
     this.stop()
@@ -37,8 +40,6 @@ export class TabPlaybackEngine {
     if (ctx.state === 'suspended') ctx.resume().catch(err => console.warn('AudioContext resume failed:', err))
 
     this.track = track
-    this.measureIndex = fromMeasure
-    this.beatIndex = fromBeat
     this.onBeat = onBeat
     this.onStop = onStop
     this.nextBeatTime = ctx.currentTime + 0.05
@@ -47,6 +48,10 @@ export class TabPlaybackEngine {
     this.prevNoteKill = new Map()
     this.prevLetRing = new Map()
     this.prevBeat = null
+    this.playbackOrder = this.buildPlaybackOrder(track, fromMeasure)
+    this.playbackPos = 0
+    this.measureIndex = this.playbackOrder[0] ?? fromMeasure
+    this.beatIndex = fromBeat
 
     this.timer = setInterval(() => this.scheduler(), SCHEDULER_INTERVAL)
   }
@@ -85,6 +90,54 @@ export class TabPlaybackEngine {
     this.track = track
   }
 
+  private buildPlaybackOrder(track: TabTrack, fromMeasure: number): number[] {
+    const order: number[] = []
+    const repeatCounts = new Map<number, number>()
+    let mi = fromMeasure
+
+    while (mi < track.measures.length) {
+      order.push(mi)
+      const measure = track.measures[mi]!
+
+      if (measure.repeatClose !== undefined && measure.repeatClose >= 2) {
+        const played = repeatCounts.get(mi) ?? 1
+        if (played < measure.repeatClose) {
+          repeatCounts.set(mi, played + 1)
+          // Jump back to the nearest repeatOpen at or after fromMeasure
+          let openMi = -1
+          for (let j = mi; j >= fromMeasure; j--) {
+            if (track.measures[j]?.repeatOpen) { openMi = j; break }
+          }
+          if (openMi >= 0) { mi = openMi; continue }
+        } else {
+          repeatCounts.delete(mi)
+        }
+      }
+      mi++
+    }
+    return order
+  }
+
+  // Returns the next measure index only when it is a non-sequential jump (repeat),
+  // so the cursor animation knows to hold position instead of animating forward.
+  private repeatJumpTarget(): number | undefined {
+    const nextMi = this.playbackOrder[this.playbackPos + 1]
+    if (nextMi === undefined) return undefined
+    // Only a "hint" when the next measure is not the natural sequential successor
+    return nextMi !== this.measureIndex + 1 ? nextMi : undefined
+  }
+
+  private advanceMeasure(): void {
+    this.playbackPos++
+    if (this.playbackPos < this.playbackOrder.length) {
+      this.measureIndex = this.playbackOrder[this.playbackPos]!
+    } else {
+      // Signal end-of-playback (measureIndex past end used as sentinel)
+      this.measureIndex = this.track ? this.track.measures.length : 0
+    }
+    this.beatIndex = 0
+  }
+
   private findNextFreqOnString(measureIndex: number, beatIndex: number, stringIndex: number, openMidi: number): number | null {
     const track = this.track
     if (!track) return null
@@ -118,7 +171,7 @@ export class TabPlaybackEngine {
     const track = this.track
 
     // Check if we've reached the end
-    if (this.measureIndex >= track.measures.length) {
+    if (this.playbackPos >= this.playbackOrder.length) {
       const delay = (this.nextBeatTime - ctx.currentTime) * 1000
       setTimeout(() => {
         this.stop()
@@ -145,15 +198,16 @@ export class TabPlaybackEngine {
 
         const mi = this.measureIndex
         const bi = this.beatIndex
+        const isLastFill = fillIdx === fillRests.length - 1
+        const nextHint = isLastFill ? this.repeatJumpTarget() : undefined
         const delay = (t - ctx.currentTime) * 1000
         const intendedTime = performance.now() + Math.max(0, delay)
-        setTimeout(() => this.onBeat?.(mi, bi, intendedTime), Math.max(0, delay))
+        setTimeout(() => this.onBeat?.(mi, bi, intendedTime, nextHint, undefined), Math.max(0, delay))
 
         this.nextBeatTime += dur
         this.beatIndex++
       } else {
-        this.measureIndex++
-        this.beatIndex = 0
+        this.advanceMeasure()
       }
       return
     }
@@ -256,6 +310,7 @@ export class TabPlaybackEngine {
           openMidi,
           modifiers: note.modifiers,
           bendData: note.bendData,
+          whammyBarData: beat.whammyBar,
           startTime: t,
           beatDuration: dur,
           nextFreq,
@@ -267,23 +322,51 @@ export class TabPlaybackEngine {
         this.prevNoteKill.set(s, killNode)
         this.prevLetRing.set(s, note.modifiers.letRing === true)
       }
+
+      // Apply fade gain envelope to all newly-scheduled kill nodes
+      if (beat.fade) {
+        for (const note of beat.notes) {
+          const killNode = this.prevNoteKill.get(note.string)
+          if (!killNode) continue
+          killNode.gain.cancelScheduledValues(t)
+          if (beat.fade === 'fadeIn') {
+            killNode.gain.setValueAtTime(0, t)
+            killNode.gain.linearRampToValueAtTime(0.65, t + dur)
+          } else if (beat.fade === 'fadeOut') {
+            killNode.gain.setValueAtTime(0.65, t)
+            killNode.gain.linearRampToValueAtTime(0, t + dur)
+          } else {
+            // fadeInOut
+            killNode.gain.setValueAtTime(0, t)
+            killNode.gain.linearRampToValueAtTime(0.65, t + dur / 2)
+            killNode.gain.linearRampToValueAtTime(0, t + dur)
+          }
+        }
+      }
     }
 
     this.prevBeat = beat
 
-    // Fire onBeat callback at the right time
+    // Fire onBeat callback at the right time, passing next-position hint for cursor animation
     const mi = this.measureIndex
     const bi = this.beatIndex
+    const isLastBeat = bi === measure.beats.length - 1
+    let nextHint: number | undefined
+    if (isLastBeat) {
+      const timeSig = track.masterBars[mi]?.timeSignature ?? track.masterBars[0]!.timeSignature
+      const remainingTicks = measureCapacityTicks(timeSig) - measureUsedTicks(measure.beats)
+      const hasFillRests = remainingTicks > 0 && computeFillRests(remainingTicks).length > 0
+      if (!hasFillRests) nextHint = this.repeatJumpTarget()
+    }
     const delay = (t - ctx.currentTime) * 1000
     const intendedTime = performance.now() + Math.max(0, delay)
-    setTimeout(() => this.onBeat?.(mi, bi, intendedTime), Math.max(0, delay))
+    setTimeout(() => this.onBeat?.(mi, bi, intendedTime, nextHint, undefined), Math.max(0, delay))
 
     // Advance
     this.nextBeatTime += dur
     this.beatIndex++
     if (this.beatIndex >= measure.beats.length) {
-      this.beatIndex = 0
-      this.measureIndex++
+      this.advanceMeasure()
     }
   }
 }

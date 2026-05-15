@@ -246,8 +246,8 @@ export function TabEditorPage() {
   const [savedTabs, setSavedTabs] = useState<CloudTabTrack[]>([])
   const [loadingTabs, setLoadingTabs] = useState(false)
 
-  const directBeatHandlerRef = useRef<((mi: number, bi: number, intendedTime: number) => void) | null>(null)
-  const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, intendedTime: number) => void) => {
+  const directBeatHandlerRef = useRef<((mi: number, bi: number, intendedTime: number, nextMi?: number, nextBi?: number) => void) | null>(null)
+  const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, intendedTime: number, nextMi?: number, nextBi?: number) => void) => {
     directBeatHandlerRef.current = handler
   }, [])
 
@@ -596,8 +596,8 @@ export function TabEditorPage() {
         state.track,
         state.cursor.measureIndex,
         state.cursor.beatIndex,
-        (mi, bi, intendedTime) => {
-          directBeatHandlerRef.current?.(mi, bi, intendedTime)
+        (mi, bi, intendedTime, nextMi, nextBi) => {
+          directBeatHandlerRef.current?.(mi, bi, intendedTime, nextMi, nextBi)
         },
         () => {
           setIsPlaybackPaused(false)

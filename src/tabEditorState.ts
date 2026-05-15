@@ -16,6 +16,7 @@ import type {
   TabNote,
   TabSelection,
   TabTrack,
+  WhammyBarData,
 } from './tabEditorTypes'
 import { Duration } from './tabEditorTypes'
 import { NOTE_NAMES } from './data/noteColors'
@@ -215,7 +216,7 @@ function createDefaultTrack(): TabTrack {
   const tuningName = 'Standard'
   const openMidi = buildOpenMidi(tuningName, stringCount)
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     title: 'Untitled',
     masterBars: [{ timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 }],
     stringCount,
@@ -285,11 +286,40 @@ function cleanNoteModifiers(track: TabTrack): TabTrack {
   }
 }
 
+function migrateV3ToV4(track: TabTrack & { schemaVersion: 3 | 4 }): TabTrack {
+  return {
+    ...track,
+    schemaVersion: 4,
+    measures: track.measures.map((m) => {
+      const firstBeat = m.beats[0] as (Beat & { repeatStart?: unknown }) | undefined
+      const lastBeat = m.beats[m.beats.length - 1] as (Beat & { repeatEnd?: unknown }) | undefined
+      const repeatOpen = firstBeat?.repeatStart ? true as const : undefined
+      const repeatClose = lastBeat?.repeatEnd ? 2 : undefined
+      return {
+        ...m,
+        ...(repeatOpen !== undefined ? { repeatOpen } : {}),
+        ...(repeatClose !== undefined ? { repeatClose } : {}),
+        beats: m.beats.map((b) => {
+          const { repeatStart: _rs, repeatEnd: _re, ...rest } = b as Beat & { repeatStart?: unknown; repeatEnd?: unknown }
+          void _rs; void _re
+          return rest as Beat
+        }),
+      }
+    }),
+  }
+}
+
 export function migrateTrackIfNeeded(raw: unknown): TabTrack {
   const data = raw as Record<string, unknown>
 
-  // Already v3 format — still run modifier cleanup to fix legacy boolean values
-  if (data.schemaVersion === 3) return cleanNoteModifiers(data as unknown as TabTrack)
+  // Already v4 format — still run modifier cleanup to fix legacy boolean values
+  if (data.schemaVersion === 4) return cleanNoteModifiers(data as unknown as TabTrack)
+
+  // v3 → v4: move repeatStart/repeatEnd from beats to measure-level repeatOpen/repeatClose
+  if (data.schemaVersion === 3) {
+    const v3 = cleanNoteModifiers(data as unknown as TabTrack)
+    return migrateV3ToV4(v3 as TabTrack & { schemaVersion: 3 | 4 })
+  }
 
   // v2 → v3: flip string indices (1=highest → 1=lowest) and reverse openMidi (high→low → low→high)
   if (data.schemaVersion === 2) {
@@ -302,7 +332,7 @@ export function migrateTrackIfNeeded(raw: unknown): TabTrack {
         notes: b.notes.map((n) => ({ ...n, string: sc + 1 - n.string })),
       })),
     }))
-    return { ...v2, schemaVersion: 3, openMidi: v2.openMidi.slice().reverse(), measures }
+    return migrateV3ToV4({ ...v2, schemaVersion: 3, openMidi: v2.openMidi.slice().reverse(), measures } as unknown as TabTrack & { schemaVersion: 3 | 4 })
   }
 
   // Legacy format: has globalBpm / globalTimeSig and fixed-array notes
@@ -355,13 +385,14 @@ export function migrateTrackIfNeeded(raw: unknown): TabTrack {
   }
   void _gb; void _gt
 
-  return {
+  const v3track = {
     ...(rest as Omit<TabTrack, 'masterBars' | 'measures' | 'openMidi' | 'schemaVersion'>),
-    schemaVersion: 3,
+    schemaVersion: 3 as const,
     masterBars,
     measures,
     openMidi,
   }
+  return migrateV3ToV4(v3track as unknown as TabTrack & { schemaVersion: 3 | 4 })
 }
 
 export function createInitialTabState(): TabEditorState {
@@ -730,6 +761,11 @@ export type TabEditorAction =
   | { type: 'SET_MEASURE_MARKER'; measureIndex: number; marker: string | null }
   | { type: 'TOGGLE_TIE_TO_NEXT'; measureIndex: number; beatIndex: number }
   | { type: 'SET_BEAT_CHORD'; measureIndex: number; beatIndex: number; chord: { name: string; frets: number[] } | null; populateFrets: boolean }
+  | { type: 'SET_BEAT_FADE'; measureIndex: number; beatIndex: number; fade: Beat['fade'] }
+  | { type: 'SET_BEAT_FADE_TO_SELECTION'; fade: Beat['fade'] }
+  | { type: 'SET_WHAMMY_BAR'; measureIndex: number; beatIndex: number; data: WhammyBarData | null }
+  | { type: 'TOGGLE_REPEAT_OPEN'; measureIndex: number }
+  | { type: 'SET_REPEAT_CLOSE'; measureIndex: number; count: number | null }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -2212,6 +2248,111 @@ function tabEditorReducerInner(
             return { ...withChord, notes: newNotes }
           }),
         }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'SET_BEAT_FADE': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== action.beatIndex) return b
+            if (!action.fade || b.fade === action.fade) {
+              const { fade: _f, ...rest } = b as Beat & { fade?: unknown }
+              void _f
+              return rest as Beat
+            }
+            return { ...b, fade: action.fade }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'SET_BEAT_FADE_TO_SELECTION': {
+      if (!state.selection) return state
+      const s = pushUndo(state)
+      const norm = normalizeSelection(state.selection)
+      const allHaveFade = (() => {
+        for (let smi = norm.startMeasure; smi <= norm.endMeasure; smi++) {
+          const m = s.track.measures[smi]
+          if (!m) continue
+          const bStart = smi === norm.startMeasure ? norm.startBeat : 0
+          const bEnd = smi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+          for (let sbi = bStart; sbi <= bEnd; sbi++) {
+            if (m.beats[sbi]?.fade !== action.fade) return false
+          }
+        }
+        return true
+      })()
+      const nextFade = allHaveFade ? undefined : action.fade
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi < norm.startMeasure || mi > norm.endMeasure) return m
+        const bStart = mi === norm.startMeasure ? norm.startBeat : 0
+        const bEnd = mi === norm.endMeasure ? norm.endBeat : m.beats.length - 1
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi < bStart || bi > bEnd) return b
+            if (!nextFade) {
+              const { fade: _f, ...rest } = b as Beat & { fade?: unknown }
+              void _f
+              return rest as Beat
+            }
+            return { ...b, fade: nextFade }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'SET_WHAMMY_BAR': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        return {
+          ...m,
+          beats: m.beats.map((b, bi) => {
+            if (bi !== action.beatIndex) return b
+            if (!action.data) {
+              const { whammyBar: _w, ...rest } = b as Beat & { whammyBar?: unknown }
+              void _w
+              return rest as Beat
+            }
+            return { ...b, whammyBar: action.data }
+          }),
+        }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'TOGGLE_REPEAT_OPEN': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        if (m.repeatOpen) {
+          const { repeatOpen: _ro, ...rest } = m
+          void _ro
+          return rest as Measure
+        }
+        return { ...m, repeatOpen: true as const }
+      })
+      return { ...s, track: { ...s.track, measures } }
+    }
+
+    case 'SET_REPEAT_CLOSE': {
+      const s = pushUndo(state)
+      const measures = s.track.measures.map((m, mi) => {
+        if (mi !== action.measureIndex) return m
+        if (action.count === null) {
+          const { repeatClose: _rc, ...rest } = m
+          void _rc
+          return rest as Measure
+        }
+        return { ...m, repeatClose: action.count }
       })
       return { ...s, track: { ...s.track, measures } }
     }

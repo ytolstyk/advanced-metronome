@@ -13,6 +13,7 @@ import type {
 import { Duration } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
 import { normalizeSelection } from '../../tabEditorState'
+import { WhammyBarDialog, DEFAULT_WHAMMY_DATA } from './WhammyBarDialog'
 import { VibratoDialog } from './VibratoDialog'
 import type { VibratoType } from './VibratoDialog'
 import { HarmonicsDialog, HARMONIC_LABELS, HARMONIC_SYMBOLS } from './HarmonicsDialog'
@@ -152,6 +153,14 @@ const BUTTON_TAGS: Record<string, string[]> = {
   'con-pickDown':        ['pickstroke down', 'pick down', 'downstroke', 'pick', 'strum down'],
   'con-pickUp':          ['pickstroke up', 'pick up', 'upstroke', 'pick', 'strum up'],
   'con-tremolo':         ['tremolo picking', 'tremolo', 'fast picking', 'rapid', 'flutter'],
+  'con-whammy':          ['whammy bar', 'whammy', 'tremolo arm', 'dive bomb', 'pitch bend', 'vibrato bar'],
+  // Fades (beat-level)
+  'eff-fadeIn':          ['fade in', 'fade', 'crescendo', 'swell', 'volume in'],
+  'eff-fadeOut':         ['fade out', 'fade', 'decrescendo', 'diminuendo', 'volume out'],
+  'eff-fadeInOut':       ['fade in out', 'fade', 'swell', 'volume swell', 'in and out'],
+  // Repeats
+  'str-repeatOpen':      ['open repeat', 'repeat start', 'repeat', 'bar repeat', '|:'],
+  'str-repeatClose':     ['close repeat', 'repeat end', 'repeat', 'bar repeat', ':|'],
   // Notation
   'not-beatText': ['beat text', 'text', 'annotation', 'label', 'word', 'lyric'],
   'not-marker':   ['marker', 'section', 'section marker', 'rehearsal mark', 'label', 'double barline'],
@@ -238,6 +247,7 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
   const [beatTextDialogOpen, setBeatTextDialogOpen] = useState(false)
   const [markerDialogOpen, setMarkerDialogOpen] = useState(false)
   const [chordDialogOpen, setChordDialogOpen] = useState(false)
+  const [whammyDialogOpen, setWhammyDialogOpen] = useState(false)
   const { activeDuration, activeDot, activeModifiers, cursor, noteSelection } = state
   const mi = cursor.measureIndex
   const bi = cursor.beatIndex
@@ -344,10 +354,10 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
 
   const GROUP_KEYS: Record<string, string[]> = {
     duration:   [`dur-${Duration.Whole}`, `dur-${Duration.Half}`, `dur-${Duration.Quarter}`, `dur-${Duration.Eighth}`, `dur-${Duration.Sixteenth}`, `dur-${Duration.ThirtySecond}`, `dur-${Duration.SixtyFourth}`, 'dur-dot', 'dur-doubledot', 'dur-triplet', 'dur-rest'],
-    effects:    [...(hasTapOrPick ? MODIFIERS_BASE.filter(m => m.key !== 'palmMute') : MODIFIERS_BASE).map(m => `mod-${m.key}`), 'mod-harmonic', 'mod-trill'],
-    techniques: [...(hasTapOrPick ? CONNECTIONS_BASE.flatMap(c => c.key === 'tapping' ? ['con-palmMute', `con-${c.key}`] : [`con-${c.key}`]) : CONNECTIONS_BASE.map(c => `con-${c.key}`)), 'con-pickDown', 'con-pickUp', 'con-tremolo'],
+    effects:    [...(hasTapOrPick ? MODIFIERS_BASE.filter(m => m.key !== 'palmMute') : MODIFIERS_BASE).map(m => `mod-${m.key}`), 'mod-harmonic', 'mod-trill', 'eff-fadeIn', 'eff-fadeOut', 'eff-fadeInOut'],
+    techniques: [...(hasTapOrPick ? CONNECTIONS_BASE.flatMap(c => c.key === 'tapping' ? ['con-palmMute', `con-${c.key}`] : [`con-${c.key}`]) : CONNECTIONS_BASE.map(c => `con-${c.key}`)), 'con-pickDown', 'con-pickUp', 'con-tremolo', 'con-whammy'],
     notation:   ['not-beatText', 'not-marker', 'not-tie', 'not-chord'],
-    structure:  ['str-insertBeatBefore', 'str-insertBeatAfter', 'str-deleteBeat', 'str-insertMeasureBefore', 'str-insertMeasureAfter', 'str-deleteMeasure'],
+    structure:  ['str-insertBeatBefore', 'str-insertBeatAfter', 'str-deleteBeat', 'str-insertMeasureBefore', 'str-insertMeasureAfter', 'str-deleteMeasure', 'str-repeatOpen', 'str-repeatClose'],
     edit:       ['edit-undo', 'edit-redo', 'edit-copy', 'edit-cut', 'edit-paste', 'edit-clear'],
     move:       ['move-up', 'move-down', 'move-left', 'move-right'],
   }
@@ -637,6 +647,25 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         >
           <span style={{ fontStyle: 'italic', fontWeight: 'bold' }}>tr</span>
         </ToolBtn>
+        {(['fadeIn', 'fadeOut', 'fadeInOut'] as const).map((fv) => (
+          <ToolBtn
+            key={fv}
+            title={fv === 'fadeIn' ? 'Fade In' : fv === 'fadeOut' ? 'Fade Out' : 'Fade In/Out'}
+            dimmed={dim(`eff-${fv}`)}
+            activeEffect={currentBeat?.fade === fv}
+            onClick={() => {
+              if (hasBeatSelection) {
+                dispatch({ type: 'SET_BEAT_FADE_TO_SELECTION', fade: fv })
+              } else {
+                dispatch({ type: 'SET_BEAT_FADE', measureIndex: mi, beatIndex: bi, fade: fv })
+              }
+            }}
+          >
+            <span style={{ fontFamily: 'monospace', fontSize: '0.85em' }}>
+              {fv === 'fadeIn' ? '<' : fv === 'fadeOut' ? '>' : '<>'}
+            </span>
+          </ToolBtn>
+        ))}
       </div>
 
       {/* Connections group */}
@@ -694,6 +723,19 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         >
           <span style={{ fontFamily: 'monospace', fontSize: '0.75em', letterSpacing: '-0.05em' }}>///</span>
         </ToolBtn>
+        <ToolBtn
+          title="Whammy Bar"
+          dimmed={dim('con-whammy')}
+          activeEffect={!!currentBeat?.whammyBar}
+          onClick={() => {
+            if (!currentBeat?.whammyBar) {
+              dispatch({ type: 'SET_WHAMMY_BAR', measureIndex: mi, beatIndex: bi, data: DEFAULT_WHAMMY_DATA })
+            }
+            setWhammyDialogOpen(true)
+          }}
+        >
+          <span style={{ fontFamily: 'monospace', fontSize: '0.8em' }}>WB</span>
+        </ToolBtn>
       </div>
 
       {/* Notation group */}
@@ -742,6 +784,22 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
         <ToolBtn title="Insert measure before" dimmed={dim('str-insertMeasureBefore')} onClick={() => dispatch({ type: 'INSERT_MEASURE_BEFORE', measureIndex: mi })}>←𝄀</ToolBtn>
         <ToolBtn title="Insert measure after" dimmed={dim('str-insertMeasureAfter')} onClick={() => dispatch({ type: 'INSERT_MEASURE_AFTER', measureIndex: mi })}>𝄀→</ToolBtn>
         <ToolBtn title="Delete measure" dimmed={dim('str-deleteMeasure')} onClick={() => dispatch({ type: 'DELETE_MEASURE', measureIndex: mi })}>-𝄀</ToolBtn>
+        <ToolBtn
+          title="Open Repeat"
+          dimmed={dim('str-repeatOpen')}
+          activeEffect={!!state.track.measures[mi]?.repeatOpen}
+          onClick={() => dispatch({ type: 'TOGGLE_REPEAT_OPEN', measureIndex: mi })}
+        >
+          <span style={{ fontFamily: 'monospace', fontSize: '0.8em' }}>|:</span>
+        </ToolBtn>
+        <ToolBtn
+          title="Close Repeat"
+          dimmed={dim('str-repeatClose')}
+          activeEffect={state.track.measures[mi]?.repeatClose !== undefined}
+          onClick={() => dispatch({ type: 'SET_REPEAT_CLOSE', measureIndex: mi, count: state.track.measures[mi]?.repeatClose !== undefined ? null : 2 })}
+        >
+          <span style={{ fontFamily: 'monospace', fontSize: '0.8em' }}>:|</span>
+        </ToolBtn>
       </div>
 
       {/* Edit group */}
@@ -886,6 +944,25 @@ export function TabEditorToolbar({ state, dispatch, isNavigating }: TabEditorToo
           setChordDialogOpen(false)
         }}
       />
+      {whammyDialogOpen && (() => {
+        const whammy = currentBeat?.whammyBar ?? DEFAULT_WHAMMY_DATA
+        return (
+          <WhammyBarDialog
+            key={`whammy-${mi}-${bi}`}
+            open={true}
+            initialData={whammy}
+            onSave={(data) => {
+              dispatch({ type: 'SET_WHAMMY_BAR', measureIndex: mi, beatIndex: bi, data })
+              setWhammyDialogOpen(false)
+            }}
+            onRemove={() => {
+              dispatch({ type: 'SET_WHAMMY_BAR', measureIndex: mi, beatIndex: bi, data: null })
+              setWhammyDialogOpen(false)
+            }}
+            onClose={() => setWhammyDialogOpen(false)}
+          />
+        )
+      })()}
       {bendDialogOpen && isOnNote && (() => {
         const openMidi = state.track.openMidi[currentNote.string - 1] ?? 64
         const noteFreq = 440 * Math.pow(2, (openMidi + currentNote.fret - 69) / 12)

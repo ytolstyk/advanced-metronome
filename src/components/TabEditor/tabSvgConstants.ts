@@ -41,6 +41,14 @@ export const MARKER_TEXT_Y = MEASURE_NUMBER_H + 10  // y=26, near top of techniq
 export const MARKER_FONT_SIZE = 12                   // bold, slightly larger than beat text
 export const BEAT_TEXT_ZONE_Y = MEASURE_NUMBER_H + 20 // y=36, mid-technique zone — clear of string note numbers
 export const BEAT_TEXT_FONT_SIZE = 10
+// Fade hairpin zone (< > <> symbols, just above strings)
+export const FADE_ZONE_Y = TOP_MARGIN - 14  // hairpin center y (≈44px from top)
+export const FADE_HALF_H = 5  // half-height of hairpin symbol
+
+// Whammy bar graph zone
+export const WHAMMY_ZERO_Y = MEASURE_NUMBER_H + 22  // y position for value=0 (center of graph)
+export const WHAMMY_PX_PER_QT = 0.75  // pixels per quarter-tone pitch shift
+
 export const BOTTOM_PADDING = 8
 export const BARLINE_W = 2
 export const MEASURE_END_PAD = 8   // fixed gap after last note slot, before right barline

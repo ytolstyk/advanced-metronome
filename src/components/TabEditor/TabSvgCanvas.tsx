@@ -4,7 +4,7 @@ import type { DurationValue, Measure, TabEditorState } from '../../tabEditorType
 import type { TabEditorAction } from '../../tabEditorState'
 import { BEAT_WIDTHS, measureCapacityTicks, measureUsedTicks, computeFillRests, effectiveBpmAt, beatDurationSeconds, buildOpenMidi, DURATION_TICKS } from '../../tabEditorState'
 import { TabMeasureSvg } from './TabMeasureSvg'
-import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, stringY, NOTE_CURSOR_W, beatWidth } from './tabSvgConstants'
+import { STRING_LABEL_W, measureWidth, rowSvgHeight, computeBeatPositions, MEASURE_NUMBER_H, stringY, NOTE_CURSOR_W, beatWidth, MEASURE_END_PAD, BEND_EXTRA_W, TRILL_AUX_EXTRA_W, beatHasBend, beatHasTrill } from './tabSvgConstants'
 import { TUNINGS } from '../../data/tunings'
 import type { StringCount } from '../../data/tunings'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -22,7 +22,7 @@ interface TabSvgCanvasProps {
   dispatch: React.Dispatch<TabEditorAction>
   onBeatMouseDown: (mi: number, bi: number, si: number, shiftKey: boolean) => void
   onBeatMouseEnter: (mi: number, bi: number) => void
-  onRegisterBeatHandler?: (handler: (mi: number, bi: number, intendedTime: number) => void) => void
+  onRegisterBeatHandler?: (handler: (mi: number, bi: number, intendedTime: number, nextMi?: number, nextBi?: number) => void) => void
   onBeatPositionsChange?: (positions: Map<string, { x: number; rowIdx: number }>) => void
   readOnly?: boolean
   highlightColumn?: { measureIndex: number; beatIndex: number } | null
@@ -236,7 +236,7 @@ export function TabSvgCanvas({
   // render cycle, eliminating the 1-2 frame delay that caused the jerky cursor transition.
   useEffect(() => {
     if (!onRegisterBeatHandler) return
-    onRegisterBeatHandler((mi: number, bi: number, intendedTime: number) => {
+    onRegisterBeatHandler((mi: number, bi: number, intendedTime: number, hintNextMi?: number, hintNextBi?: number) => {
       const positions = beatAbsolutePositionsRef.current
       const currentTrack = trackRef.current
       const currentLayouts = rowLayoutsRef.current
@@ -255,8 +255,13 @@ export function TabSvgCanvas({
         nextMi = mi + 1
         nextBi = 0
       }
-      const toPos = positions.get(`${nextMi}:${nextBi}`)
-
+      // Engine hint overrides when the next playback position differs from the physical next beat
+      // (e.g. a repeat jumps back to an earlier measure). We still compute the physical default
+      // above so the hint only changes things when there is actually a repeat jump.
+      if (hintNextMi !== undefined) {
+        nextMi = hintNextMi
+        nextBi = hintNextBi ?? 0
+      }
       const beat = measure?.beats[bi]
       const bpm = beat?.tempoChange ?? effectiveBpmAt(currentTrack, mi)
       let durationMs: number
@@ -268,17 +273,42 @@ export function TabSvgCanvas({
         durationMs = restDur ? ((DURATION_TICKS[restDur] ?? 240) / 240) * (60 / bpm) * 1000 : 500
       }
       const fromRow = fromPos.rowIdx
-      const toRow = toPos?.rowIdx ?? fromPos.rowIdx
-      const rowEndX = fromRow !== toRow
-        ? (currentLayouts[fromRow]?.displayW ?? fromPos.x)
-        : fromPos.x
+
+      // hintNextMi is set only for non-sequential repeat jumps.
+      // Animate to the end of the closing measure (just before its barline) so the cursor
+      // slides rightward while the note rings, then the next onBeat snaps it to the repeat start.
+      const isRepeatJump = hintNextMi !== undefined
+      let toX: number
+      let toRow: number
+      let rowEndX: number
+      if (isRepeatJump) {
+        const scale = currentLayouts[fromRow]?.beatWidthScale ?? 1
+        if (beat) {
+          toX = fromPos.x
+            + beatWidth(beat, scale)
+            + (beatHasBend(beat) ? BEND_EXTRA_W : 0)
+            + (beatHasTrill(beat) ? TRILL_AUX_EXTRA_W : 0)
+            + MEASURE_END_PAD
+        } else {
+          const fillIdx = bi - (measure?.beats.length ?? 0)
+          const restDur = fillRests[fillIdx]
+          toX = fromPos.x + (restDur ? BEAT_WIDTHS[restDur]! * scale : 0) + MEASURE_END_PAD
+        }
+        toRow = fromRow
+        rowEndX = fromPos.x
+      } else {
+        const toPos = positions.get(`${nextMi}:${nextBi}`)
+        toX = toPos?.x ?? fromPos.x
+        toRow = toPos?.rowIdx ?? fromRow
+        rowEndX = toRow !== fromRow ? (currentLayouts[fromRow]?.displayW ?? fromPos.x) : fromPos.x
+      }
 
       animStateRef.current = {
         startTime: intendedTime,
         durationMs,
         fromX: fromPos.x,
         fromRow,
-        toX: toPos?.x ?? fromPos.x,
+        toX,
         toRow,
         rowEndX,
       }
@@ -386,6 +416,48 @@ export function TabSvgCanvas({
   const [chordEdit, setChordEdit] = useState<{ mi: number; bi: number } | null>(null)
   const [beatTextEdit, setBeatTextEdit] = useState<{ mi: number; bi: number } | null>(null)
   const [markerEdit, setMarkerEdit] = useState<{ mi: number } | null>(null)
+  const [repeatCloseDialog, setRepeatCloseDialog] = useState<{ mi: number; count: string } | null>(null)
+  const [repeatErrorDialog, setRepeatErrorDialog] = useState<{
+    mi: number
+    type: 'open' | 'close'
+    closeInN: string
+    closeWithM: string
+    setM: string
+  } | null>(null)
+
+  const repeatStatuses = useMemo<Array<'open-orphan' | 'close-orphan' | 'valid' | null>>(() => {
+    const statuses: Array<'open-orphan' | 'close-orphan' | 'valid' | null> = track.measures.map(() => null)
+    const openStack: number[] = []
+    for (let i = 0; i < track.measures.length; i++) {
+      const m = track.measures[i]!
+      if (m.repeatOpen) openStack.push(i)
+      if (m.repeatClose !== undefined) {
+        if (openStack.length > 0) {
+          statuses[openStack.pop()!] = 'valid'
+          statuses[i] = 'valid'
+        } else {
+          statuses[i] = 'close-orphan'
+        }
+      }
+    }
+    for (const openIdx of openStack) statuses[openIdx] = 'open-orphan'
+    return statuses
+  }, [track.measures])
+
+  const handleRepeatCloseClick = useCallback((mi: number) => {
+    const count = track.measures[mi]?.repeatClose ?? 2
+    setRepeatCloseDialog({ mi, count: String(count) })
+  }, [track.measures])
+
+  const handleRepeatErrorClick = useCallback((mi: number) => {
+    const status = repeatStatuses[mi]
+    if (status === 'open-orphan') {
+      setRepeatErrorDialog({ mi, type: 'open', closeInN: '1', closeWithM: '2', setM: '2' })
+    } else if (status === 'close-orphan') {
+      const count = track.measures[mi]?.repeatClose ?? 2
+      setRepeatErrorDialog({ mi, type: 'close', closeInN: '1', closeWithM: '2', setM: String(count) })
+    }
+  }, [repeatStatuses, track.measures])
 
   const [bpmEdit, setBpmEdit] = useState<{ mi: number; val: string } | null>(null)
   const bpmEditRef = useRef<HTMLInputElement>(null)
@@ -492,6 +564,8 @@ export function TabSvgCanvas({
               const fillRests = getFillRests(measure, sig)
               const prevMeasure = mi > 0 ? track.measures[mi - 1] : undefined
               const prevMeasureLastBeat = prevMeasure?.beats[prevMeasure.beats.length - 1]
+              const nextMeasure = track.measures[mi + 1]
+              const nextMeasureFirstBeat = nextMeasure?.beats[0]
               return (
                 <TabMeasureSvg
                   key={measure.id}
@@ -520,12 +594,16 @@ export function TabSvgCanvas({
                   onBeatTextClick={readOnly ? undefined : handleBeatTextClick}
                   onMarkerClick={readOnly ? undefined : handleMarkerClick}
                   onMeasureErrorClick={readOnly ? undefined : openMeasureErrorModal}
+                  onRepeatCloseClick={readOnly ? undefined : handleRepeatCloseClick}
+                  onRepeatErrorClick={readOnly ? undefined : handleRepeatErrorClick}
                   onStringLabelClick={readOnly ? undefined : (mIdx === 0 ? openTuningModal : undefined)}
                   highlightBeatColumn={highlightColumn?.measureIndex === mi ? highlightColumn.beatIndex : undefined}
                   forPrint={forPrint}
                   prevMeasureLastBeat={prevMeasureLastBeat}
+                  nextMeasureFirstBeat={nextMeasureFirstBeat}
                   hasMarker={!!(track.masterBars[mi]?.marker)}
                   marker={track.masterBars[mi]?.marker}
+                  repeatStatus={repeatStatuses[mi]}
                 />
               )
             })}
@@ -1034,6 +1112,152 @@ export function TabSvgCanvas({
           />
         )
       })()}
+
+      {/* Repeat close dialog */}
+      {repeatCloseDialog !== null && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)' }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setRepeatCloseDialog(null) }}
+        >
+          <div style={{ background: '#1a1a1a', border: '1px solid #444', borderRadius: 8, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, minWidth: 260 }}>
+            <span style={{ color: '#ccc', fontSize: '0.85rem', fontWeight: 600 }}>
+              Close Repeat — Measure {repeatCloseDialog.mi + 1}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: '#888', fontSize: '0.82rem' }}>Repeat count:</span>
+              <input
+                type="number" min={2} max={99}
+                value={repeatCloseDialog.count}
+                onChange={(e) => setRepeatCloseDialog(prev => prev ? { ...prev, count: e.target.value } : null)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const n = parseInt(repeatCloseDialog.count, 10)
+                    if (n >= 2) { dispatch({ type: 'SET_REPEAT_CLOSE', measureIndex: repeatCloseDialog.mi, count: n }); setRepeatCloseDialog(null) }
+                  }
+                  if (e.key === 'Escape') setRepeatCloseDialog(null)
+                }}
+                style={{ width: 60, background: '#111', color: '#e0e0e0', border: '1px solid #444', borderRadius: 4, padding: '4px 8px', fontSize: '1.1rem', textAlign: 'center' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button
+                onClick={() => {
+                  const n = parseInt(repeatCloseDialog.count, 10)
+                  if (n >= 2) { dispatch({ type: 'SET_REPEAT_CLOSE', measureIndex: repeatCloseDialog.mi, count: n }); setRepeatCloseDialog(null) }
+                }}
+                style={{ padding: '7px 12px', background: '#1a3a5c', border: '1px solid #2a5a8c', borderRadius: 4, color: '#7ac0ff', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+              >
+                Apply
+              </button>
+              <button
+                onClick={() => { dispatch({ type: 'SET_REPEAT_CLOSE', measureIndex: repeatCloseDialog.mi, count: null }); setRepeatCloseDialog(null) }}
+                style={{ padding: '7px 12px', background: 'transparent', border: '1px solid #5c1a1a', borderRadius: 4, color: '#f87171', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+              >
+                Remove close repeat
+              </button>
+              <button
+                onClick={() => setRepeatCloseDialog(null)}
+                style={{ padding: '7px 12px', background: 'transparent', border: 'none', borderRadius: 4, color: '#666', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Repeat error dialog */}
+      {repeatErrorDialog !== null && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)' }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setRepeatErrorDialog(null) }}
+        >
+          <div style={{ background: '#1a1a1a', border: '1px solid #444', borderRadius: 8, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, minWidth: 300, maxWidth: 380 }}>
+            <span style={{ color: '#e0a040', fontSize: '0.85rem', fontWeight: 600 }}>
+              {repeatErrorDialog.type === 'open' ? 'Open Repeat — no matching close' : 'Close Repeat — no matching open'}
+            </span>
+            {repeatErrorDialog.type === 'open' ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ color: '#888', fontSize: '0.82rem' }}>Close in</span>
+                  <input
+                    type="number" min={0} max={99}
+                    value={repeatErrorDialog.closeInN}
+                    onChange={(e) => setRepeatErrorDialog(prev => prev ? { ...prev, closeInN: e.target.value } : null)}
+                    style={{ width: 52, background: '#111', color: '#e0e0e0', border: '1px solid #444', borderRadius: 4, padding: '3px 6px', fontSize: '1rem', textAlign: 'center' }}
+                  />
+                  <span style={{ color: '#888', fontSize: '0.82rem' }}>measures with</span>
+                  <input
+                    type="number" min={2} max={99}
+                    value={repeatErrorDialog.closeWithM}
+                    onChange={(e) => setRepeatErrorDialog(prev => prev ? { ...prev, closeWithM: e.target.value } : null)}
+                    style={{ width: 52, background: '#111', color: '#e0e0e0', border: '1px solid #444', borderRadius: 4, padding: '3px 6px', fontSize: '1rem', textAlign: 'center' }}
+                  />
+                  <span style={{ color: '#888', fontSize: '0.82rem' }}>repeats</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <button
+                    onClick={() => {
+                      const n = parseInt(repeatErrorDialog.closeInN, 10)
+                      const m = parseInt(repeatErrorDialog.closeWithM, 10)
+                      if (isNaN(n) || n < 0 || m < 2) return
+                      const targetMi = repeatErrorDialog.mi + n
+                      if (targetMi < track.measures.length) {
+                        dispatch({ type: 'SET_REPEAT_CLOSE', measureIndex: targetMi, count: m })
+                      }
+                      setRepeatErrorDialog(null)
+                    }}
+                    style={{ padding: '7px 12px', background: '#1a3a5c', border: '1px solid #2a5a8c', borderRadius: 4, color: '#7ac0ff', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+                  >
+                    Add close repeat
+                  </button>
+                  <button
+                    onClick={() => { dispatch({ type: 'TOGGLE_REPEAT_OPEN', measureIndex: repeatErrorDialog.mi }); setRepeatErrorDialog(null) }}
+                    style={{ padding: '7px 12px', background: 'transparent', border: '1px solid #5c1a1a', borderRadius: 4, color: '#f87171', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+                  >
+                    Remove open repeat
+                  </button>
+                  <button onClick={() => setRepeatErrorDialog(null)} style={{ padding: '7px 12px', background: 'transparent', border: 'none', borderRadius: 4, color: '#666', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: '#888', fontSize: '0.82rem' }}>Set repeat count:</span>
+                  <input
+                    type="number" min={2} max={99}
+                    value={repeatErrorDialog.setM}
+                    onChange={(e) => setRepeatErrorDialog(prev => prev ? { ...prev, setM: e.target.value } : null)}
+                    style={{ width: 52, background: '#111', color: '#e0e0e0', border: '1px solid #444', borderRadius: 4, padding: '3px 6px', fontSize: '1rem', textAlign: 'center' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <button
+                    onClick={() => {
+                      const m = parseInt(repeatErrorDialog.setM, 10)
+                      if (m >= 2) { dispatch({ type: 'SET_REPEAT_CLOSE', measureIndex: repeatErrorDialog.mi, count: m }); setRepeatErrorDialog(null) }
+                    }}
+                    style={{ padding: '7px 12px', background: '#1a3a5c', border: '1px solid #2a5a8c', borderRadius: 4, color: '#7ac0ff', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+                  >
+                    Apply
+                  </button>
+                  <button
+                    onClick={() => { dispatch({ type: 'SET_REPEAT_CLOSE', measureIndex: repeatErrorDialog.mi, count: null }); setRepeatErrorDialog(null) }}
+                    style={{ padding: '7px 12px', background: 'transparent', border: '1px solid #5c1a1a', borderRadius: 4, color: '#f87171', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}
+                  >
+                    Remove close repeat
+                  </button>
+                  <button onClick={() => setRepeatErrorDialog(null)} style={{ padding: '7px 12px', background: 'transparent', border: 'none', borderRadius: 4, color: '#666', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Timing change edit dialog (from context menu) */}
       {timingChangeEdit !== null && (

@@ -1,0 +1,60 @@
+.whammy-dialog-content {
+  max-width: 700px;
+  width: 95vw;
+}
+
+.whammy-instructions {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-bottom: 8px;
+}
+
+.whammy-svg-wrapper {
+  overflow-x: auto;
+}
+
+.whammy-svg {
+  cursor: crosshair;
+  background: #111;
+  border-radius: 4px;
+  display: block;
+}
+
+.whammy-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 12px;
+  gap: 8px;
+}
+
+.whammy-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: opacity 0.15s;
+}
+
+.whammy-btn:hover {
+  opacity: 0.85;
+}
+
+.whammy-btn-remove {
+  background: transparent;
+  border-color: var(--destructive);
+  color: var(--destructive);
+  margin-right: auto;
+}
+
+.whammy-btn-cancel {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+.whammy-btn-save {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
