@@ -83,6 +83,8 @@ Note colors are managed globally via `NoteColorsContext` (`src/context/NoteColor
 
 `src/pages/TabEditorPage.tsx` + `src/tabEditorTypes.ts` + `src/tabEditorState.ts` + `src/components/TabEditor/`.
 
+**AlphaTab integration (critical):** The tab editor's internal data model must mirror the alphaTab library's domain model (`@coderline/alphatab`). When adding or updating any feature, the same feature must be reflected in both the alphaTab preview (visual rendering) and the `TabPlaybackEngine` (audio playback). Never add a feature to the UI/state model that isn't also wired up to alphaTab. The canonical mapping lives in `src/components/TabEditor/` — any new `TabNote` modifier, `Beat` property, or `Measure` property must have a corresponding alphaTab `Note`, `Beat`, or `Bar` property set during the score-building step.
+
 Types in `tabEditorTypes.ts`:
 
 - `TabTrack` — title, globalBpm, globalTimeSig, stringCount (6/7/8), tuningName, openMidi[], measures[]
