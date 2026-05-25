@@ -15,6 +15,7 @@ import { exportClickTrack } from '@/audio/exportClickTrack';
 import { saveCloudClickTrack, loadCloudClickTracks, deleteCloudClickTrack } from '@/api/clickTrackApi';
 import type { SegmentGroup, CloudClickTrack } from '@/api/clickTrackApi';
 import { clickTrackToDrumMeasures } from '../utils/clickTrackToDrum';
+import { clickTrackToTabTrack } from '../utils/clickTrackToTab';
 import './ClickTrackPage.css';
 
 // ── Color palette ──────────────────────────────────────────────────────────
@@ -327,6 +328,9 @@ export function ClickTrackPage() {
   const [showDrumExportConfirm, setShowDrumExportConfirm] = useState(false);
   const [drumImportBanner, setDrumImportBanner] = useState<boolean>(() => {
     return sessionStorage.getItem('drum-to-click-import') !== null;
+  });
+  const [tabImportBanner, setTabImportBanner] = useState<boolean>(() => {
+    return sessionStorage.getItem('tab-to-click-import') !== null;
   });
 
   const engineRef = useRef<ClickTrackEngine | null>(null);
@@ -678,6 +682,24 @@ export function ClickTrackPage() {
     } catch { /* malformed — ignore */ }
   }
 
+  // ── Tab editor integration ─────────────────────────────────────────────
+  function handleOpenInTabEditor() {
+    const tabTrack = clickTrackToTabTrack(pieces);
+    void navigate('/tab-editor', { state: { importedTrack: tabTrack } });
+  }
+
+  function handleAcceptTabImport() {
+    const raw = sessionStorage.getItem('tab-to-click-import');
+    sessionStorage.removeItem('tab-to-click-import');
+    setTabImportBanner(false);
+    if (!raw) return;
+    try {
+      const imported = JSON.parse(raw) as TrackPiece[];
+      stopPlayback();
+      setPieces(imported);
+    } catch { /* malformed — ignore */ }
+  }
+
   // ── Save to cloud ──────────────────────────────────────────────────────
   async function saveCloud() {
     setSaveStatus('saving');
@@ -728,6 +750,24 @@ export function ClickTrackPage() {
         </div>
       )}
 
+      {/* Tab import banner */}
+      {tabImportBanner && (
+        <div className="ct-import-banner">
+          <span>Tab editor track imported — load it as click track segments?</span>
+          <div className="ct-import-banner-actions">
+            <button className="ct-import-btn ct-import-btn--accept" onClick={handleAcceptTabImport}>
+              Load
+            </button>
+            <button className="ct-import-btn" onClick={() => {
+              sessionStorage.removeItem('tab-to-click-import');
+              setTabImportBanner(false);
+            }}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Drum export confirm */}
       {showDrumExportConfirm && (
         <div className="ct-export-overlay" onClick={() => setShowDrumExportConfirm(false)}>
@@ -761,6 +801,14 @@ export function ClickTrackPage() {
             className="gap-1 text-xs"
           >
             Build Drum Track
+          </Button>
+          <Button
+            size="sm" variant="outline"
+            onClick={handleOpenInTabEditor}
+            disabled={pieces.length === 0}
+            className="gap-1 text-xs"
+          >
+            Open in Tab Editor
           </Button>
           <Button size="sm" variant="ghost" onClick={reset} className="gap-1 text-xs">
             <RotateCcw size={13} /> Reset

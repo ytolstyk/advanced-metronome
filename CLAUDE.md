@@ -220,10 +220,15 @@ Cloud-first with localStorage fallback. All API modules in `src/api/` follow thi
 
 ### after file edit
 
-If any edited file matches the parity trigger patterns listed in
-`tab-alphatab-parity-checker.md`, run the tab-editor ↔ alphaTab parity
-check subagent defined in that file before completing the task.
-Report the parity result inline in your final summary.
+**MANDATORY — no exceptions:** if any file edited in the session matches one of these patterns, you MUST run the `tab-alphatab-parity-checker` subagent before the task is considered complete:
+
+- `src/tabEditorTypes.ts`
+- `src/tabEditorState.ts`
+- `src/audio/TabPlaybackEngine.ts`
+- any file under `src/components/TabEditor/`
+- any file that adds or modifies fields on `TabNote`, `Beat`, `Measure`, `MasterBar`, or `TabTrack`
+
+Do not skip this step even if the edit looks purely cosmetic (e.g. a new UI button in a TabEditor component file). Report the parity result inline in your final summary.
 
 ### after functionality change
 

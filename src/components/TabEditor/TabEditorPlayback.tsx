@@ -8,6 +8,7 @@ interface TabEditorPlaybackProps {
   isPlaying: boolean
   onPlay: () => void
   onStop: () => void
+  onGenerateClickTrack: () => void
   dispatch: React.Dispatch<TabEditorAction>
   menuOpen: boolean
   onToggleMenu: () => void
@@ -23,6 +24,7 @@ export function TabEditorPlayback({
   isPlaying,
   onPlay,
   onStop,
+  onGenerateClickTrack,
   menuOpen,
   onToggleMenu,
   showPreview,
@@ -42,6 +44,9 @@ export function TabEditorPlayback({
       </Button>
       <Button variant="ghost" size="icon" onClick={onStop} title="Stop">
         <Square size={16} />
+      </Button>
+      <Button variant="ghost" size="sm" onClick={onGenerateClickTrack} title="Export to Click Track Builder">
+        Click Track
       </Button>
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
         {showPreview && (

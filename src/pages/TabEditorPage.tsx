@@ -1,5 +1,5 @@
 import { useReducer, useEffect, useLayoutEffect, useRef, useCallback, useState, useMemo } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './TabEditorPage.css'
 import type { TabCursor } from '../tabEditorTypes'
 import {
@@ -38,6 +38,7 @@ import {
   deletePublishedTab,
 } from '../api/publishedTabApi'
 import { PublishTabDialog } from '../components/TabEditor/PublishTabDialog'
+import { tabTrackToClickTrackPieces } from '../utils/tabToClickTrack'
 import {
   Dialog,
   DialogContent,
@@ -218,6 +219,7 @@ export function TabEditorPage() {
 
   const { authStatus } = useAuthenticator(ctx => [ctx.authStatus])
   const location = useLocation()
+  const navigate = useNavigate()
 
   // Handle tab imported from the public library (navigate('/tab-editor', { state: { importedTrack, ... } }))
   useEffect(() => {
@@ -622,6 +624,14 @@ export function TabEditorPage() {
     dispatch({ type: 'SET_PLAYHEAD', measureIndex: 0, beatIndex: 0 })
   }
 
+  function handleGenerateClickTrack() {
+    const clickPieces = tabTrackToClickTrackPieces(state.track)
+    try {
+      sessionStorage.setItem('tab-to-click-import', JSON.stringify(clickPieces))
+    } catch { /* storage full — navigate anyway */ }
+    void navigate('/click-track')
+  }
+
   function onBeatMouseDown(mi: number, bi: number, si: number, shiftKey: boolean) {
     if (shiftKey) {
       dispatch({ type: 'ENSURE_NOTE_IN_SELECTION', cursor: state.cursor })
@@ -725,6 +735,7 @@ export function TabEditorPage() {
           isPlaying={showPreview ? isPreviewPlaying : state.isPlaying}
           onPlay={handlePlay}
           onStop={handleStop}
+          onGenerateClickTrack={handleGenerateClickTrack}
           dispatch={dispatch}
           menuOpen={menuOpen}
           onToggleMenu={() => setMenuOpen((m) => !m)}
