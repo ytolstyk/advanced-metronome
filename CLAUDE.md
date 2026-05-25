@@ -221,36 +221,6 @@ Cloud-first with localStorage fallback. All API modules in `src/api/` follow thi
 
 **Presets** — 8 built-in drum patterns in `src/presets.ts` (Basic Rock, Four on the Floor, Hip-Hop, Funk, Reggae, Bossa Nova, Waltz, Shuffle). User presets in `src/userPresets.ts`.
 
-## Hooks
-
-### after file edit
-
-**MANDATORY — no exceptions:** if any file edited in the session matches one of these patterns, you MUST run the `tab-alphatab-parity-checker` subagent before the task is considered complete:
-
-- `src/tabEditorTypes.ts`
-- `src/tabEditorState.ts`
-- `src/audio/TabPlaybackEngine.ts`
-- any file under `src/components/TabEditor/`
-- any file that adds or modifies fields on `TabNote`, `Beat`, `Measure`, `MasterBar`, or `TabTrack`
-
-Do not skip this step even if the edit looks purely cosmetic (e.g. a new UI button in a TabEditor component file). Report the parity result inline in your final summary.
-
-### after functionality change
-
-**MANDATORY — no exceptions:** after ANY session where you added, changed, or removed behavior in a source file, you MUST invoke the `test-writer` subagent (via the `Agent` tool with `subagent_type: "test-writer"`) before the task is considered complete. This hook fires when **any** of the following are true:
-
-- A new feature, option, or UI behavior is added to any module
-- Existing logic is changed (reducer cases, audio engine methods, utility functions, hooks)
-- A bug is fixed that had observable behavior
-- Any file under `src/` is edited beyond pure style, CSS, or import-only changes
-
-The `test-writer` subagent must:
-1. Write unit tests using **Vitest** + **React Testing Library** covering the changed files
-2. Run `npm run test:run` and ensure all tests pass
-3. If no new tests are needed, run the full existing suite anyway and confirm it is green
-
-Do not skip this step even if the change looks trivial. Report test results inline in your final summary.
-
 ## Validations
 
 Make sure all these checks pass before accepting changes:
@@ -258,3 +228,5 @@ Make sure all these checks pass before accepting changes:
 1. **Lint** `rtk lint`
 2. **Types** `rtk tsc`
 3. **Build** `rtk err npm run build`
+
+@CLAUDE.local.md
