@@ -216,6 +216,22 @@ Cloud-first with localStorage fallback. All API modules in `src/api/` follow thi
 
 **Presets** — 8 built-in drum patterns in `src/presets.ts` (Basic Rock, Four on the Floor, Hip-Hop, Funk, Reggae, Bossa Nova, Waltz, Shuffle). User presets in `src/userPresets.ts`.
 
+## Hooks
+
+### after file edit
+
+If any edited file matches the parity trigger patterns listed in
+`tab-alphatab-parity-checker.md`, run the tab-editor ↔ alphaTab parity
+check subagent defined in that file before completing the task.
+Report the parity result inline in your final summary.
+
+### after functionality change
+
+Use the agent `test-writer.md` to write tests for the changes in the current session.
+Run those test and ensure they all pass. If you determine no new tests need to be written,
+then run all tests anyway until they pass. If functionality changed in unexpected ways, prompt
+to fix the test or to fix the functionality.
+
 ## Validations
 
 Make sure all these checks pass before accepting changes:

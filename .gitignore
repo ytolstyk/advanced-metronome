@@ -27,3 +27,9 @@ dist-ssr
 .amplify
 amplify_outputs*
 amplifyconfiguration*
+
+# claude
+.claude/agents*
+.claude/agent-memory*
+.claude/agent-logs*
+.claude/agent-outputs*
