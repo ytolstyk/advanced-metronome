@@ -76,7 +76,8 @@
       "Bash(node -e \"const at = require\\('@coderline/alphatab'\\); const d = at.model.Duration; console.log\\('Duration:', JSON.stringify\\(d\\)\\); const s = new at.model.Score\\(\\); console.log\\('Score keys:', Object.keys\\(s\\).slice\\(0,10\\)\\);\")",
       "Bash(node -e \"const at = require\\('/Users/yuriytolstykh/code/advanced-metronome/node_modules/@coderline/alphatab/dist/alphaTab.mjs'\\); console.log\\(typeof at.Color, typeof at.RenderingResources\\)\")",
       "Bash(./node_modules/.bin/eslint src/tabEditorState.ts)",
-      "Bash(rtk --help)"
+      "Bash(rtk --help)",
+      "Bash(npm *)"
     ]
   },
   "enableAllProjectMcpServers": true,

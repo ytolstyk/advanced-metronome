@@ -12,7 +12,12 @@ rtk lint                    # ESLint (flat config, v9+)
 npm run preview             # Preview production build locally
 ```
 
-No test framework is configured yet.
+Test framework: **Vitest** + **React Testing Library** (preferred over Jest — same API, native Vite integration, faster).
+
+```bash
+npm test                    # Run tests (Vitest watch mode)
+npm run test:run            # Single-pass test run (CI)
+```
 
 ## Architecture
 
@@ -232,10 +237,19 @@ Do not skip this step even if the edit looks purely cosmetic (e.g. a new UI butt
 
 ### after functionality change
 
-Use the agent `test-writer.md` to write tests for the changes in the current session.
-Run those test and ensure they all pass. If you determine no new tests need to be written,
-then run all tests anyway until they pass. If functionality changed in unexpected ways, prompt
-to fix the test or to fix the functionality.
+**MANDATORY — no exceptions:** after ANY session where you added, changed, or removed behavior in a source file, you MUST invoke the `test-writer` subagent (via the `Agent` tool with `subagent_type: "test-writer"`) before the task is considered complete. This hook fires when **any** of the following are true:
+
+- A new feature, option, or UI behavior is added to any module
+- Existing logic is changed (reducer cases, audio engine methods, utility functions, hooks)
+- A bug is fixed that had observable behavior
+- Any file under `src/` is edited beyond pure style, CSS, or import-only changes
+
+The `test-writer` subagent must:
+1. Write unit tests using **Vitest** + **React Testing Library** covering the changed files
+2. Run `npm run test:run` and ensure all tests pass
+3. If no new tests are needed, run the full existing suite anyway and confirm it is green
+
+Do not skip this step even if the change looks trivial. Report test results inline in your final summary.
 
 ## Validations
 
