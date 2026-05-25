@@ -1,6 +1,17 @@
 import type { TrackPiece } from '../audio/ClickTrackEngine'
-import type { TabTrack, MasterBar, Measure } from '../tabEditorTypes'
+import type { TabTrack, MasterBar, Measure, DurationValue } from '../tabEditorTypes'
 import { buildOpenMidi } from '../tabEditorState'
+
+function makeRestBeats(numerator: number, denominator: number): Measure['beats'] {
+  const duration = denominator as DurationValue
+  const dot = { dotted: false, doubleDotted: false, triplet: false }
+  return Array.from({ length: numerator }, () => ({
+    id: crypto.randomUUID(),
+    duration,
+    dot,
+    notes: [],
+  }))
+}
 
 export function clickTrackToTabTrack(pieces: TrackPiece[]): TabTrack {
   if (pieces.length === 0) {
@@ -11,7 +22,7 @@ export function clickTrackToTabTrack(pieces: TrackPiece[]): TabTrack {
       stringCount: 6,
       tuningName: 'Standard',
       openMidi: buildOpenMidi('Standard', 6),
-      measures: [{ id: crypto.randomUUID(), beats: [] }],
+      measures: [{ id: crypto.randomUUID(), beats: makeRestBeats(4, 4) }],
     }
   }
 
@@ -29,7 +40,10 @@ export function clickTrackToTabTrack(pieces: TrackPiece[]): TabTrack {
         },
         ...(setBpm ? { bpm: piece.bpm } : {}),
       })
-      measures.push({ id: crypto.randomUUID(), beats: [] })
+      measures.push({
+        id: crypto.randomUUID(),
+        beats: makeRestBeats(piece.timeSignature.numerator, piece.timeSignature.denominator),
+      })
     }
     prevPieceBpm = piece.bpm
   }
