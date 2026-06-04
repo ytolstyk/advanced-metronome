@@ -85,6 +85,8 @@ function subTickToBeat(subTick: number, sub: SubdivisionLabel, numerator: number
 interface PendulumProps {
   bpm: number;
   isPlaying: boolean;
+  isPaused: boolean;
+  animKey: number;
   currentBeat: number;
   numerator: number;
   isAccent: boolean;
@@ -92,10 +94,10 @@ interface PendulumProps {
 }
 
 const Pendulum = memo(function Pendulum({
-  bpm, isPlaying, currentBeat, numerator, isAccent, color = '#6ee7b7',
+  bpm, isPlaying, isPaused, animKey, currentBeat, numerator, isAccent, color = '#6ee7b7',
 }: PendulumProps) {
   const swingPeriod = `${(60 / bpm).toFixed(3)}s`;
-  const swingState = isPlaying ? 'running' : 'paused';
+  const swingState = (isPlaying && !isPaused) ? 'running' : 'paused';
   const dots = Array.from({ length: numerator }, (_, i) => i);
 
   return (
@@ -105,8 +107,9 @@ const Pendulum = memo(function Pendulum({
           {/* Base triangle */}
           <polygon points="110,240 55,240 110,80 165,240" fill="#1a1a1a" stroke="#2a2a2a" strokeWidth="1.5" />
 
-          {/* Pendulum arm — transform-origin at the SVG pivot point (110, 80) */}
+          {/* Pendulum arm — key changes on BPM commit to remount and restart animation from -32deg */}
           <g
+            key={animKey}
             className="pendulum-arm"
             style={{ '--swing-period': swingPeriod, '--swing-state': swingState } as React.CSSProperties}
           >
@@ -150,7 +153,8 @@ const Pendulum = memo(function Pendulum({
 
 interface SimpleControlsProps {
   bpm: number;
-  onBpmChange: (v: number) => void;
+  onBpmDrag: (v: number) => void;
+  onBpmCommit: (v: number) => void;
   onTap: () => void;
   numerator: number;
   onNumeratorChange: (v: number) => void;
@@ -168,7 +172,7 @@ const SUB_OPTIONS: { label: string; value: SubdivisionLabel }[] = [
 ];
 
 const SimpleControls = memo(function SimpleControls({
-  bpm, onBpmChange, onTap,
+  bpm, onBpmDrag, onBpmCommit, onTap,
   numerator, onNumeratorChange,
   denominator, onDenominatorChange,
   subdivision, onSubdivisionChange,
@@ -183,7 +187,8 @@ const SimpleControls = memo(function SimpleControls({
         <Slider
           min={MIN_BPM} max={MAX_BPM} step={1}
           value={[bpm]}
-          onValueChange={([v]) => onBpmChange(v)}
+          onValueChange={([v]) => onBpmDrag(v)}
+          onValueCommit={([v]) => onBpmCommit(v)}
           aria-label="BPM"
         />
       </div>
@@ -363,8 +368,15 @@ export function MetronomePage() {
   // Advanced mode state
   const [measures, setMeasures] = useState<MeasureConfig[]>([makeMeasure()]);
 
+  const [bpmDragging, setBpmDragging] = useState(false);
+  const [pendulumKey, setPendulumKey] = useState(0);
+
   const engineRef = useRef<ClickTrackEngine | null>(null);
   const tapTimestamps = useRef<number[]>([]);
+  // Tracks drag-start state without stale-closure issues
+  const bpmDragRef = useRef({ dragging: false, wasPlaying: false });
+  // Tracks last piece index seen by onBeat so we can detect transitions
+  const prevPieceIndexRef = useRef(-1);
 
   useEffect(() => {
     return () => { engineRef.current?.stop(); };
@@ -391,6 +403,7 @@ export function MetronomePage() {
         : toTrackPieces(measures)
     );
 
+    prevPieceIndexRef.current = -1; // so the first onBeat always triggers a pendulum reset
     setIsPlaying(true);
     setBeatState(RESET_BEAT_STATE);
 
@@ -404,6 +417,12 @@ export function MetronomePage() {
         if (!piece) return;
         const beat = subTickToBeat(subTick, piece.subdivision, piece.timeSignature.numerator);
         setBeatState({ beat, isAccent: subTick === 0, pieceIndex });
+        // In advanced mode, remount the pendulum arm on every piece transition so
+        // the animation restarts from -32deg in sync with the new measure's tempo.
+        if (mode === 'advanced' && subTick === 0 && pieceIndex !== prevPieceIndexRef.current) {
+          prevPieceIndexRef.current = pieceIndex;
+          setPendulumKey((k) => k + 1);
+        }
       },
       0,
       true, // loop
@@ -411,8 +430,15 @@ export function MetronomePage() {
   }, [mode, bpm, numerator, denominator, subdivision, measures]);
 
   const handlePlayStop = useCallback(() => {
-    if (isPlaying) stopPlayback(); else startPlayback();
-  }, [isPlaying, stopPlayback, startPlayback]);
+    if (isPlaying) {
+      stopPlayback();
+    } else {
+      // Simple mode: reset animation so it starts at -32deg on play.
+      // Advanced mode: onBeat handles the reset on first piece entry.
+      if (mode === 'simple') setPendulumKey((k) => k + 1);
+      startPlayback();
+    }
+  }, [isPlaying, mode, stopPlayback, startPlayback]);
 
   const handleTap = useCallback(() => {
     const now = Date.now();
@@ -427,6 +453,7 @@ export function MetronomePage() {
     const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
     const newBpm = clampBpm(Math.round(60000 / avg));
     setBpm(newBpm);
+    setPendulumKey((k) => k + 1);
     if (isPlaying) {
       startPlayback(toTrackPieces([{ id: 'simple', bpm: newBpm, numerator, denominator, subdivision, repeats: 1 }]));
     }
@@ -437,12 +464,25 @@ export function MetronomePage() {
     setMode(newMode);
   }, [isPlaying, stopPlayback]);
 
-  const handleSimpleBpmChange = useCallback((v: number) => {
+  const handleBpmDrag = useCallback((v: number) => {
     setBpm(v);
-    if (isPlaying) {
+    if (!bpmDragRef.current.dragging) {
+      bpmDragRef.current.dragging = true;
+      bpmDragRef.current.wasPlaying = isPlaying;
+      setBpmDragging(true);
+      engineRef.current?.stop();
+    }
+  }, [isPlaying]);
+
+  const handleBpmCommit = useCallback((v: number) => {
+    setBpm(v);
+    bpmDragRef.current.dragging = false;
+    setBpmDragging(false);
+    setPendulumKey((k) => k + 1);
+    if (bpmDragRef.current.wasPlaying) {
       startPlayback(toTrackPieces([{ id: 'simple', bpm: v, numerator, denominator, subdivision, repeats: 1 }]));
     }
-  }, [isPlaying, numerator, denominator, subdivision, startPlayback]);
+  }, [numerator, denominator, subdivision, startPlayback]);
 
   const handleSimpleTimeSigChange = useCallback((field: 'numerator' | 'denominator', value: number) => {
     if (field === 'numerator') setNumerator(value); else setDenominator(value as Denominator);
@@ -489,6 +529,8 @@ export function MetronomePage() {
         <Pendulum
           bpm={activeMeasure.bpm}
           isPlaying={isPlaying}
+          isPaused={bpmDragging}
+          animKey={pendulumKey}
           currentBeat={beatState.beat}
           numerator={activeMeasure.numerator}
           isAccent={beatState.isAccent}
@@ -498,7 +540,8 @@ export function MetronomePage() {
         {mode === 'simple' ? (
           <SimpleControls
             bpm={bpm}
-            onBpmChange={handleSimpleBpmChange}
+            onBpmDrag={handleBpmDrag}
+            onBpmCommit={handleBpmCommit}
             onTap={handleTap}
             numerator={numerator}
             onNumeratorChange={(v) => handleSimpleTimeSigChange('numerator', v)}
