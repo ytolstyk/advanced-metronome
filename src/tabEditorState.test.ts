@@ -1722,3 +1722,223 @@ describe('measure normalization after state change', () => {
     expect(measureUsedTicks(beats)).toBeCloseTo(720)
   })
 })
+
+// ─── Reducer: IMPORT_TRACK ───────────────────────────────────────────────────
+
+describe('tabEditorReducer IMPORT_TRACK', () => {
+  beforeEach(() => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => undefined)
+  })
+
+  it('replaces the current track with the imported one', () => {
+    const state = makeState()
+    const importedTrack = makeTrack({ title: 'Imported Song' })
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: importedTrack,
+      fileBase64: 'base64data==',
+      trackInfos: [{ index: 0, name: 'Guitar', stringCount: 6 }],
+      activeIndex: 0,
+    })
+    expect(next.track.title).toBe('Imported Song')
+  })
+
+  it('attaches importedFileBase64 to the track', () => {
+    const state = makeState()
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack(),
+      fileBase64: 'abc123==',
+      trackInfos: [],
+      activeIndex: 0,
+    })
+    expect(next.track.importedFileBase64).toBe('abc123==')
+  })
+
+  it('attaches importedTrackInfos to the track', () => {
+    const state = makeState()
+    const trackInfos = [
+      { index: 0, name: 'Guitar', stringCount: 6 },
+      { index: 1, name: 'Bass', stringCount: 4 },
+    ]
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack(),
+      fileBase64: 'data',
+      trackInfos,
+      activeIndex: 0,
+    })
+    expect(next.track.importedTrackInfos).toEqual(trackInfos)
+  })
+
+  it('attaches importedActiveTrackIndex to the track', () => {
+    const state = makeState()
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack(),
+      fileBase64: 'data',
+      trackInfos: [{ index: 1, name: 'Bass', stringCount: 4 }],
+      activeIndex: 1,
+    })
+    expect(next.track.importedActiveTrackIndex).toBe(1)
+  })
+
+  it('resets cursor to the beginning', () => {
+    const state = makeState({}, { measureIndex: 3, beatIndex: 2 })
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack(),
+      fileBase64: 'data',
+      trackInfos: [],
+      activeIndex: 0,
+    })
+    expect(next.cursor.measureIndex).toBe(0)
+    expect(next.cursor.beatIndex).toBe(0)
+  })
+
+  it('resets cursor stringIndex to track.stringCount', () => {
+    const state = makeState()
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack({ stringCount: 7 }),
+      fileBase64: 'data',
+      trackInfos: [],
+      activeIndex: 0,
+    })
+    expect(next.cursor.stringIndex).toBe(7)
+  })
+
+  it('clears selection', () => {
+    const state: TabEditorState = {
+      ...makeState(),
+      selection: { startMeasure: 0, startBeat: 0, endMeasure: 0, endBeat: 1 },
+    }
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack(),
+      fileBase64: 'data',
+      trackInfos: [],
+      activeIndex: 0,
+    })
+    expect(next.selection).toBeNull()
+  })
+
+  it('clears noteSelection', () => {
+    const state: TabEditorState = {
+      ...makeState(),
+      noteSelection: [{ measureIndex: 0, beatIndex: 0, stringIndex: 1 }],
+    }
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack(),
+      fileBase64: 'data',
+      trackInfos: [],
+      activeIndex: 0,
+    })
+    expect(next.noteSelection).toHaveLength(0)
+  })
+
+  it('clears clipboard', () => {
+    const state: TabEditorState = {
+      ...makeState(),
+      clipboard: [makeBeat()],
+    }
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack(),
+      fileBase64: 'data',
+      trackInfos: [],
+      activeIndex: 0,
+    })
+    expect(next.clipboard).toBeNull()
+  })
+
+  it('clears undoStack', () => {
+    const state: TabEditorState = {
+      ...makeState(),
+      undoStack: [makeTrack(), makeTrack()],
+    }
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack(),
+      fileBase64: 'data',
+      trackInfos: [],
+      activeIndex: 0,
+    })
+    expect(next.undoStack).toHaveLength(0)
+  })
+
+  it('clears redoStack', () => {
+    const state: TabEditorState = {
+      ...makeState(),
+      redoStack: [makeTrack()],
+    }
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack(),
+      fileBase64: 'data',
+      trackInfos: [],
+      activeIndex: 0,
+    })
+    expect(next.redoStack).toHaveLength(0)
+  })
+
+  it('clears pendingOverflow', () => {
+    const state: TabEditorState = {
+      ...makeState(),
+      pendingOverflow: {
+        fret: 5,
+        measureIndex: 0,
+        beatIndex: 0,
+        stringIndex: 1,
+        newDuration: Duration.Quarter,
+        newDot: { dotted: false, doubleDotted: false, triplet: false },
+        overshootTicks: 120,
+      },
+    }
+    const next = tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack(),
+      fileBase64: 'data',
+      trackInfos: [],
+      activeIndex: 0,
+    })
+    expect(next.pendingOverflow).toBeNull()
+  })
+
+  it('calls saveTabTrack (localStorage.setItem) with the imported track', () => {
+    const state = makeState()
+    const importedTrack = makeTrack({ title: 'GP File' })
+    tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: importedTrack,
+      fileBase64: 'gpdata==',
+      trackInfos: [],
+      activeIndex: 0,
+    })
+    expect(localStorage.setItem).toHaveBeenCalledWith(
+      'tab-editor-track',
+      expect.stringContaining('"title":"GP File"'),
+    )
+  })
+
+  it('strips all import-derived fields from localStorage', () => {
+    const state = makeState()
+    tabEditorReducer(state, {
+      type: 'IMPORT_TRACK',
+      track: makeTrack(),
+      fileBase64: 'stored-base64',
+      trackInfos: [{ index: 0, name: 'Guitar', stringCount: 6 }],
+      activeIndex: 0,
+    })
+    // None of the import-derived fields should be persisted (quota protection + useless without the file bytes)
+    const allCalls = vi.mocked(localStorage.setItem).mock.calls
+    const trackCalls = allCalls.filter(([key]) => key === 'tab-editor-track')
+    expect(trackCalls.length).toBeGreaterThan(0)
+    trackCalls.forEach(([, value]) => {
+      expect(value).not.toContain('"importedFileBase64"')
+      expect(value).not.toContain('"importedTrackInfos"')
+      expect(value).not.toContain('"importedActiveTrackIndex"')
+    })
+  })
+})

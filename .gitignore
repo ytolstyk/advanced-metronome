@@ -33,4 +33,5 @@ amplifyconfiguration*
 .claude/agent-memory*
 .claude/agent-logs*
 .claude/agent-outputs*
+.claude/settings.local.json
 CLAUDE.local.md

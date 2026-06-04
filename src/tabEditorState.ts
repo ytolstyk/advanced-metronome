@@ -6,6 +6,7 @@ import type {
   DotModifier,
   DurationValue,
   HarmonicTypeValue,
+  ImportedTrackInfo,
   MasterBar,
   Measure,
   NoteModifierKey,
@@ -432,7 +433,13 @@ export function createInitialTabState(): TabEditorState {
 
 export function saveTabTrack(track: TabTrack): void {
   try {
-    localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(track))
+    // Strip import-derived fields before persisting:
+    // importedFileBase64 — GP files are hundreds of KB and exhaust the 5MB localStorage quota.
+    // importedTrackInfos / importedActiveTrackIndex — useless without the file bytes anyway.
+    // On page reload the alphaTab preview falls back to toAlphaTabScore(track).
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { importedFileBase64: _, importedTrackInfos: _ti, importedActiveTrackIndex: _ai, ...rest } = track
+    localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(rest))
   } catch {
     // storage full, ignore
   }
@@ -771,6 +778,13 @@ export type TabEditorAction =
   | { type: 'SET_WHAMMY_BAR'; measureIndex: number; beatIndex: number; data: WhammyBarData | null }
   | { type: 'TOGGLE_REPEAT_OPEN'; measureIndex: number }
   | { type: 'SET_REPEAT_CLOSE'; measureIndex: number; count: number | null }
+  | {
+      type: 'IMPORT_TRACK'
+      track: TabTrack
+      fileBase64: string
+      trackInfos: ImportedTrackInfo[]
+      activeIndex: number
+    }
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
@@ -1627,6 +1641,28 @@ function tabEditorReducerInner(
         redoStack: [],
         pendingOverflow: null,
       }
+
+    case 'IMPORT_TRACK': {
+      const track: TabTrack = {
+        ...action.track,
+        importedFileBase64: action.fileBase64,
+        importedTrackInfos: action.trackInfos,
+        importedActiveTrackIndex: action.activeIndex,
+      }
+      saveTabTrack(track)
+      return {
+        ...state,
+        track,
+        cursor: { measureIndex: 0, beatIndex: 0, stringIndex: track.stringCount },
+        selection: null,
+        selectionAnchor: null,
+        noteSelection: [],
+        clipboard: null,
+        undoStack: [],
+        redoStack: [],
+        pendingOverflow: null,
+      }
+    }
 
     case 'SET_GLOBAL_TIME_SIG': {
       const s = pushUndo(state)

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import * as at from '@coderline/alphatab'
 import type { TabTrack } from '../../tabEditorTypes'
 import { toAlphaTabScore } from '../../tabEditor/toAlphaTabScore'
+import { base64ToUint8Array } from '../../lib/utils'
 import './AlphaTabPreview.css'
 
 type NotationMode = 'tab' | 'staff' | 'both'
@@ -70,6 +71,7 @@ export const AlphaTabPreview = forwardRef<AlphaTabPreviewHandle, AlphaTabPreview
     const apiRef = useRef<at.AlphaTabApi | null>(null)
     const mountedRef = useRef(false)
     const originalColorsRef = useRef<OriginalColors | null>(null)
+    const parsedImportedScoreRef = useRef<{ b64: string; score: at.model.Score } | null>(null)
     const onPlayerStateChangeRef = useRef(onPlayerStateChange)
     onPlayerStateChangeRef.current = onPlayerStateChange
 
@@ -113,7 +115,11 @@ export const AlphaTabPreview = forwardRef<AlphaTabPreviewHandle, AlphaTabPreview
         onPlayerStateChangeRef.current?.(args.state === 1)
       })
 
-      api.renderScore(toAlphaTabScore(track))
+      // useMemo already populated parsedImportedScoreRef during render — use it
+      const initialScore = (track.importedFileBase64 && parsedImportedScoreRef.current?.b64 === track.importedFileBase64)
+        ? parsedImportedScoreRef.current.score
+        : toAlphaTabScore(track)
+      api.renderScore(initialScore)
       return () => {
         mountedRef.current = false
         api.destroy()
@@ -144,7 +150,24 @@ export const AlphaTabPreview = forwardRef<AlphaTabPreviewHandle, AlphaTabPreview
       api.render()
     }, [darkMode])
 
-    const alphaScore = useMemo(() => toAlphaTabScore(track), [track])
+    // Render-phase lazy cache: parse imported bytes once per unique b64 string.
+    // Mutating a ref during render is safe here because the output (alphaScore) is
+    // fully determined by track.importedFileBase64 — concurrent re-renders produce the same result.
+    const b64 = track.importedFileBase64
+    if (b64 && parsedImportedScoreRef.current?.b64 !== b64) {
+      try {
+        const bytes = base64ToUint8Array(b64)
+        const score = at.importer.ScoreLoader.loadScoreFromBytes(bytes, new at.Settings())
+        parsedImportedScoreRef.current = { b64, score }
+      } catch {
+        parsedImportedScoreRef.current = null
+      }
+    } else if (!b64) {
+      parsedImportedScoreRef.current = null
+    }
+    const alphaScore = (b64 && parsedImportedScoreRef.current?.b64 === b64)
+      ? parsedImportedScoreRef.current!.score
+      : toAlphaTabScore(track)
 
     useEffect(() => {
       const api = apiRef.current

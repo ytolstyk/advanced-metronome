@@ -1,7 +1,8 @@
 import { useReducer, useEffect, useLayoutEffect, useRef, useCallback, useState, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import * as at from '@coderline/alphatab'
 import './TabEditorPage.css'
-import type { TabCursor } from '../tabEditorTypes'
+import type { TabCursor, ImportedTrackInfo } from '../tabEditorTypes'
 import {
   tabEditorReducer,
   createInitialTabState,
@@ -13,6 +14,7 @@ import {
   migrateTrackIfNeeded,
   DURATION_LABELS,
 } from '../tabEditorState'
+import { fromAlphaTabScore } from '../tabEditor/fromAlphaTabScore'
 import { TabPlaybackEngine } from '../audio/TabPlaybackEngine'
 import { pluckString } from '../audio/pluckString'
 import {
@@ -22,6 +24,8 @@ import {
   TabEditorPlayback,
   TabSvgCanvas,
   AlphaTabPreview,
+  ImportCompletedModal,
+  ExportDialog,
   type AlphaTabPreviewHandle,
 } from '../components/TabEditor'
 import { useAuthenticator } from '@aws-amplify/ui-react'
@@ -39,6 +43,7 @@ import {
 } from '../api/publishedTabApi'
 import { PublishTabDialog } from '../components/TabEditor/PublishTabDialog'
 import { tabTrackToClickTrackPieces } from '../utils/tabToClickTrack'
+import { uint8ToBase64 } from '../lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -248,6 +253,18 @@ export function TabEditorPage() {
   const [savedTabs, setSavedTabs] = useState<CloudTabTrack[]>([])
   const [loadingTabs, setLoadingTabs] = useState(false)
 
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [pendingImport, setPendingImport] = useState<{
+    fileBase64: string
+    score: at.model.Score
+    trackInfos: ImportedTrackInfo[]
+    unsupportedFeatures: string[]
+    firstTrackIndex: number
+  } | null>(null)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+
   const directBeatHandlerRef = useRef<((mi: number, bi: number, intendedTime: number, nextMi?: number, nextBi?: number) => void) | null>(null)
   const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, intendedTime: number, nextMi?: number, nextBi?: number) => void) => {
     directBeatHandlerRef.current = handler
@@ -290,8 +307,8 @@ export function TabEditorPage() {
   }
 
   const previewBeat = useCallback(
-    (at: TabCursor, overrideFret?: { stringIndex: number; fret: number }) => {
-      const beat = state.track.measures[at.measureIndex]?.beats[at.beatIndex]
+    (pos: TabCursor, overrideFret?: { stringIndex: number; fret: number }) => {
+      const beat = state.track.measures[pos.measureIndex]?.beats[pos.beatIndex]
       const ctx = ensureCtx()
       const openMidi = state.track.openMidi
       const played = new Set<number>()
@@ -685,6 +702,72 @@ export function TabEditorPage() {
     setPublishedTabId(null)
   }
 
+  function handleImportClick() {
+    setImportError(null)
+    fileInputRef.current?.click()
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!e.target) return
+    // Reset input so the same file can be re-imported
+    ;(e.target as HTMLInputElement).value = ''
+    if (!file) return
+
+    setImportError(null)
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const bytes = new Uint8Array(arrayBuffer)
+
+      // Parse the score once; store it in pendingImport to avoid re-parsing on confirm
+      const score = at.importer.ScoreLoader.loadScoreFromBytes(bytes, new at.Settings())
+      const fileBase64 = uint8ToBase64(bytes)
+
+      // Build track info list from all tracks
+      const trackInfos: ImportedTrackInfo[] = score.tracks.map((t, i) => ({
+        index: i,
+        name: t.name || `Track ${i + 1}`,
+        stringCount: t.staves[0]?.stringTuning?.tunings?.length ?? 6,
+      }))
+
+      // Scan only the default (first) track for unsupported features — full per-track
+      // scanning is O(tracks × file) and too slow for multi-track GP files.
+      const { unsupportedFeatures } = fromAlphaTabScore(score, 0)
+
+      setPendingImport({ fileBase64, score, trackInfos, unsupportedFeatures, firstTrackIndex: 0 })
+      setImportModalOpen(true)
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Failed to read file. Is it a valid Guitar Pro or AlphaTex file?')
+    }
+  }
+
+  function handleImportConfirm(selectedTrackIndex: number) {
+    if (!pendingImport) return
+    try {
+      const { track } = fromAlphaTabScore(pendingImport.score, selectedTrackIndex)
+      dispatch({
+        type: 'IMPORT_TRACK',
+        track,
+        fileBase64: pendingImport.fileBase64,
+        trackInfos: pendingImport.trackInfos,
+        activeIndex: selectedTrackIndex,
+      })
+      setLoadedCloudId(null)
+      setPublishedTabId(null)
+      setCleanSnapshot(JSON.stringify(track))
+      setImportModalOpen(false)
+      setPendingImport(null)
+    } catch {
+      setImportError('Failed to import track.')
+      // Keep modal open and pendingImport intact so user can retry with a different track
+    }
+  }
+
+  function handleImportCancel() {
+    setImportModalOpen(false)
+    setPendingImport(null)
+  }
+
   // Overflow dialog helpers
   const overflow = state.pendingOverflow
   let trimLabel = ''
@@ -727,6 +810,8 @@ export function TabEditorPage() {
               onUpdatePublished={authStatus === 'authenticated' && publishedTabId ? handlePublishClick : undefined}
               onUnpublish={authStatus === 'authenticated' && publishedTabId ? () => void handleUnpublish() : undefined}
               publishedTabId={publishedTabId}
+              onImport={handleImportClick}
+              onExport={() => setExportDialogOpen(true)}
             />
             <TabEditorToolbar state={state} dispatch={dispatch} isNavigating={isNavigating} />
           </>
@@ -850,6 +935,41 @@ export function TabEditorPage() {
         }}
         onClose={() => setPublishDialogOpen(false)}
         onConfirm={handlePublishConfirm}
+      />
+
+      {/* Hidden file input for GP import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".gp,.gp3,.gp4,.gp5,.gpx,.alphatex"
+        style={{ display: 'none' }}
+        onChange={(e) => void handleFileChange(e)}
+      />
+
+      {/* Import error banner */}
+      {importError && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[300] bg-red-900/90 border border-red-600 text-red-200 text-sm px-4 py-2 rounded-lg max-w-md text-center">
+          {importError}
+          <button className="ml-3 text-red-400 hover:text-red-200" onClick={() => setImportError(null)}>✕</button>
+        </div>
+      )}
+
+      {/* Import completed modal */}
+      {pendingImport && (
+        <ImportCompletedModal
+          open={importModalOpen}
+          trackInfos={pendingImport.trackInfos}
+          unsupportedFeatures={pendingImport.unsupportedFeatures}
+          onConfirm={handleImportConfirm}
+          onCancel={handleImportCancel}
+        />
+      )}
+
+      {/* Export dialog */}
+      <ExportDialog
+        open={exportDialogOpen}
+        track={state.track}
+        onClose={() => setExportDialogOpen(false)}
       />
 
       {/* Overflow dialog */}

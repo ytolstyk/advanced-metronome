@@ -112,6 +112,12 @@ export interface Measure {
   repeatClose?: number // close repeat at right barline; value = repeat count ≥2 (maps to alphaTab MasterBar.repeatCount)
 }
 
+export interface ImportedTrackInfo {
+  index: number
+  name: string
+  stringCount: number
+}
+
 export interface TabTrack {
   schemaVersion: 4  // v4: repeatStart/End moved from Beat to Measure (repeatOpen/repeatClose)
   title: string
@@ -124,6 +130,10 @@ export interface TabTrack {
   tuningName: string
   openMidi: number[]  // low→high order: openMidi[0] = string 1 (lowest pitch)
   measures: Measure[]
+  // GP import data: raw file bytes (base64) preserved for full-fidelity alphaTab preview
+  importedFileBase64?: string
+  importedTrackInfos?: ImportedTrackInfo[]
+  importedActiveTrackIndex?: number
 }
 
 export interface TabCursor {
