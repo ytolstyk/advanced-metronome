@@ -13,6 +13,13 @@ const FEATURES = [
     color: "#6366f1",
   },
   {
+    icon: "🎵",
+    title: "Metronome",
+    desc: "Simple and advanced metronome with pendulum visualization",
+    route: "/metronome",
+    color: "#6ee7b7",
+  },
+  {
     icon: "🎯",
     title: "Click Track",
     desc: "Custom metronome with subdivisions and speed control",

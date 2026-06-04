@@ -1,0 +1,371 @@
+.metronome-page {
+  min-height: calc(100vh - 120px);
+  padding: 1.5rem 1rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #0a0a0a;
+  color: #f0f0f0;
+}
+
+.metronome-inner {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ── Mode toggle ── */
+.metronome-mode-toggle {
+  display: flex;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #2a2a2a;
+}
+
+.metronome-mode-btn {
+  flex: 1;
+  padding: 0.55rem 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  transition: background 0.15s, color 0.15s;
+}
+
+.metronome-mode-btn.active {
+  background: #1e1e1e;
+  color: #f0f0f0;
+}
+
+/* ── Visualization card ── */
+.metronome-viz-card {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 16px;
+  padding: 1rem 1rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* pendulum SVG wrapper */
+.pendulum-wrap {
+  width: 100%;
+  max-height: 260px;
+  display: flex;
+  justify-content: center;
+}
+
+.pendulum-wrap svg {
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+}
+
+/* pendulum group — origin at pivot */
+.pendulum-arm {
+  transform-origin: 110px 80px;
+  animation: metronome-swing var(--swing-period, 0.5s) ease-in-out infinite alternate;
+  animation-play-state: var(--swing-state, paused);
+}
+
+@keyframes metronome-swing {
+  from { transform: rotate(-32deg); }
+  to   { transform: rotate(32deg); }
+}
+
+/* weight glow on accent — forwards keeps filter:none after decay completes */
+.pendulum-weight.accent {
+  animation: weight-flash 0.18s ease-out forwards;
+}
+
+@keyframes weight-flash {
+  0%   { filter: drop-shadow(0 0 8px #fff) brightness(1.8); }
+  100% { filter: none; }
+}
+
+/* beat dots */
+.beat-dots {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding-bottom: 0.25rem;
+}
+
+.beat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  transition: background 0.06s, transform 0.06s;
+  flex-shrink: 0;
+}
+
+.beat-dot.active {
+  background: #f0f0f0;
+  transform: scale(1.25);
+}
+
+.beat-dot.accent {
+  background: #6ee7b7;
+  transform: scale(1.4);
+}
+
+/* current measure label (advanced) */
+.metronome-measure-label {
+  font-size: 0.75rem;
+  color: #666;
+  letter-spacing: 0.04em;
+}
+
+/* ── Controls ── */
+.metronome-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.metronome-bpm-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.metronome-bpm-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.78rem;
+  color: #888;
+}
+
+.metronome-bpm-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f0f0f0;
+  font-variant-numeric: tabular-nums;
+}
+
+.metronome-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.metronome-label {
+  font-size: 0.78rem;
+  color: #888;
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.metronome-select-pair {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.metronome-select-pair span {
+  color: #555;
+  font-size: 1.1rem;
+}
+
+.metronome-select-pair > * {
+  flex: 1;
+}
+
+.metronome-sub-group {
+  display: flex;
+  width: 100%;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid #2a2a2a;
+}
+
+.metronome-sub-btn {
+  flex: 1;
+  padding: 0.45rem 0.25rem;
+  font-size: 0.78rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.metronome-sub-btn.active {
+  background: #1e1e1e;
+  color: #f0f0f0;
+}
+
+/* ── Advanced mode measure list ── */
+.metronome-measures {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.metronome-measure-card {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: border-color 0.15s;
+}
+
+.metronome-measure-card.playing {
+  border-color: #6ee7b7;
+}
+
+.metronome-measure-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.metronome-measure-num {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #888;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.metronome-measure-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #444;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  transition: color 0.12s;
+  line-height: 1;
+}
+
+.metronome-measure-delete:hover {
+  color: #ef4444;
+}
+
+.metronome-measure-fields {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.metronome-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+  min-width: 64px;
+}
+
+.metronome-field-label {
+  font-size: 0.65rem;
+  color: #555;
+  letter-spacing: 0.04em;
+}
+
+.metronome-number-input {
+  width: 100%;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 5px;
+  color: #f0f0f0;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.4rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+
+.metronome-number-input::-webkit-outer-spin-button,
+.metronome-number-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+
+.metronome-number-input:focus {
+  outline: 1px solid #3a3a3a;
+}
+
+.add-measure-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border: 1px dashed #2a2a2a;
+  border-radius: 10px;
+  background: transparent;
+  color: #555;
+  font-size: 0.82rem;
+  cursor: pointer;
+  width: 100%;
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.add-measure-btn:hover {
+  border-color: #444;
+  color: #aaa;
+}
+
+/* ── Play button ── */
+.metronome-play-btn {
+  width: 100%;
+  height: 3rem;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.07s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.metronome-play-btn.play {
+  background: #6ee7b7;
+  color: #0a0a0a;
+}
+
+.metronome-play-btn.play:active {
+  transform: scale(0.97);
+}
+
+.metronome-play-btn.stop {
+  background: #1e1e1e;
+  color: #f0f0f0;
+  border: 1px solid #2a2a2a;
+}
+
+.metronome-play-btn.stop:active {
+  transform: scale(0.97);
+}
+
+/* ── Select overrides for dark theme ── */
+.metronome-page [data-radix-select-trigger] {
+  background: #1a1a1a;
+  border-color: #2a2a2a;
+  color: #f0f0f0;
+  font-size: 0.82rem;
+  height: 2rem;
+  min-height: 2rem;
+}
