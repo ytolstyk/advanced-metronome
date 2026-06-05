@@ -249,7 +249,7 @@ export function getTuningById(id: string): GuitarTuning {
   return GUITAR_TUNINGS.find((t) => t.id === id) ?? GUITAR_TUNINGS[0];
 }
 
-const ROOT_NOTE_TO_PC: Record<RootNote, number> = {
+export const ROOT_NOTE_TO_PC: Record<RootNote, number> = {
   C: 0,
   "C#": 1,
   D: 2,

@@ -5,7 +5,7 @@ import type { ChordBeat, ChordInstrumentType } from '../types';
 // Standard guitar tuning: low E → high e (MIDI note numbers)
 const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
 
-const CHORD_INTERVALS: Record<ChordType, number[]> = {
+export const CHORD_INTERVALS: Record<ChordType, number[]> = {
   major:  [0, 4, 7],
   minor:  [0, 3, 7],
   sus2:   [0, 2, 7],

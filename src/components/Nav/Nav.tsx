@@ -23,6 +23,7 @@ const NAV_GROUPS = [
     items: [
       { to: "/lessons", label: "Lessons" },
       { to: "/chords", label: "Chords" },
+      { to: "/chord-progression", label: "Chord Progression" },
       { to: "/scales", label: "Scales" },
       { to: "/circle", label: "Circle of 5ths" },
       { to: "/fret-memorizer", label: "Fret Memorizer" },

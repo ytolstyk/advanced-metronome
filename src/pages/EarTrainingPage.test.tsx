@@ -17,11 +17,10 @@ vi.mock('@/api/earTrainingApi', () => ({
 
 // ── Mock audio synthesis ───────────────────────────────────────────────────
 
-const noop = () => {};
 vi.mock('@/audio/earTrainingSynths', () => ({
-  playInterval: vi.fn().mockReturnValue(noop),
-  playEarTrainingChord: vi.fn().mockReturnValue(noop),
-  playScale: vi.fn().mockReturnValue(noop),
+  playInterval: vi.fn().mockReturnValue(() => {}),
+  playEarTrainingChord: vi.fn().mockReturnValue(() => {}),
+  playScale: vi.fn().mockReturnValue(() => {}),
 }));
 
 // ── Stub AudioContext ──────────────────────────────────────────────────────

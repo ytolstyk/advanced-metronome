@@ -28,6 +28,7 @@ import { TabLibraryPage } from './pages/TabLibraryPage.tsx'
 import { PublishedTabViewPage } from './pages/PublishedTabViewPage.tsx'
 import { MetronomePage } from './pages/MetronomePage.tsx'
 import { EarTrainingPage } from './pages/EarTrainingPage.tsx'
+import { ChordProgressionPage } from './pages/ChordProgressionPage.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -43,6 +44,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/drums" element={<DrumMachinePage />} />
           <Route path="/tuner" element={<TunerPage />} />
           <Route path="/chords" element={<ChordsPage />} />
+          <Route path="/chord-progression" element={<ChordProgressionPage />} />
           <Route path="/scales" element={<ScalesPage />} />
           <Route path="/circle" element={<CircleOfFifthsPage />} />
           <Route path="/lessons" element={<LessonsPage />} />
