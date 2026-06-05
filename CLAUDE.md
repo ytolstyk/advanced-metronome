@@ -225,6 +225,10 @@ Cloud-first with localStorage fallback. All API modules in `src/api/` follow thi
 
 When a new page is created and added to the nav (`src/main.tsx`), it **must also be added to the welcome screen** (`src/pages/WelcomePage.tsx`).
 
+## Responsive design
+
+All pages must be responsive and usable on mobile screens. Use Tailwind responsive prefixes (`sm:`, `md:`, `lg:`) for layout breakpoints. Avoid fixed pixel widths that would cause horizontal scroll on small screens. Test layouts at 375px viewport width.
+
 ## Validations
 
 Make sure all these checks pass before accepting changes:
