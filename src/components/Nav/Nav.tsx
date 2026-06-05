@@ -25,6 +25,7 @@ const NAV_GROUPS = [
       { to: "/chords", label: "Chords" },
       { to: "/chord-progression", label: "Chord Progression" },
       { to: "/scales", label: "Scales" },
+      { to: "/caged", label: "CAGED System" },
       { to: "/circle", label: "Circle of 5ths" },
       { to: "/fret-memorizer", label: "Fret Memorizer" },
       { to: "/ear-training", label: "Ear Training" },

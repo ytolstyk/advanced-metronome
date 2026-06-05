@@ -1,0 +1,61 @@
+.caged-shape-btn {
+  border: 1.5px solid #333355;
+  background: transparent;
+  color: #8888b8;
+  border-radius: 6px;
+  padding: 4px 14px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  letter-spacing: 0.03em;
+}
+
+.caged-shape-btn:hover {
+  color: #d0d0f0;
+  border-color: #555577;
+}
+
+.caged-shape-btn[data-shape="C"][data-active="true"] {
+  border-color: #f59e0b;
+  background: color-mix(in srgb, #f59e0b 14%, #0b0b16);
+  color: #f59e0b;
+}
+.caged-shape-btn[data-shape="A"][data-active="true"] {
+  border-color: #10b981;
+  background: color-mix(in srgb, #10b981 14%, #0b0b16);
+  color: #10b981;
+}
+.caged-shape-btn[data-shape="G"][data-active="true"] {
+  border-color: #3b82f6;
+  background: color-mix(in srgb, #3b82f6 14%, #0b0b16);
+  color: #3b82f6;
+}
+.caged-shape-btn[data-shape="E"][data-active="true"] {
+  border-color: #8b5cf6;
+  background: color-mix(in srgb, #8b5cf6 14%, #0b0b16);
+  color: #8b5cf6;
+}
+.caged-shape-btn[data-shape="D"][data-active="true"] {
+  border-color: #ef4444;
+  background: color-mix(in srgb, #ef4444 14%, #0b0b16);
+  color: #ef4444;
+}
+
+.caged-legend-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.caged-legend-ring {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid white;
+  background: transparent;
+  flex-shrink: 0;
+}

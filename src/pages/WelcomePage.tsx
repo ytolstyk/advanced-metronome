@@ -55,6 +55,13 @@ const FEATURES = [
     color: "#8b5cf6",
   },
   {
+    icon: "🧩",
+    title: "CAGED System",
+    desc: "Visualize the 5 major chord shapes tiling the fretboard for any root",
+    route: "/caged",
+    color: "#14b8a6",
+  },
+  {
     icon: "⭕",
     title: "Circle of 5ths",
     desc: "Visual key relationships and chord families",

@@ -29,6 +29,7 @@ import { PublishedTabViewPage } from './pages/PublishedTabViewPage.tsx'
 import { MetronomePage } from './pages/MetronomePage.tsx'
 import { EarTrainingPage } from './pages/EarTrainingPage.tsx'
 import { ChordProgressionPage } from './pages/ChordProgressionPage.tsx'
+import { CAGEDPage } from './pages/CAGEDPage.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -46,6 +47,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/chords" element={<ChordsPage />} />
           <Route path="/chord-progression" element={<ChordProgressionPage />} />
           <Route path="/scales" element={<ScalesPage />} />
+          <Route path="/caged" element={<CAGEDPage />} />
           <Route path="/circle" element={<CircleOfFifthsPage />} />
           <Route path="/lessons" element={<LessonsPage />} />
           <Route path="/lessons/:moduleId" element={<ModulePage />} />
