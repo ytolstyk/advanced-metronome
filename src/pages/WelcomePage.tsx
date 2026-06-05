@@ -41,6 +41,13 @@ const FEATURES = [
     color: "#3b82f6",
   },
   {
+    icon: "🎶",
+    title: "Chord Progression",
+    desc: "Chain chords, detect the key, and get scale suggestions",
+    route: "/chord-progression",
+    color: "#5b7fff",
+  },
+  {
     icon: "🎼",
     title: "Scales",
     desc: "Explore scales across all keys and modes",

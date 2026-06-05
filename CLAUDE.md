@@ -221,6 +221,10 @@ Cloud-first with localStorage fallback. All API modules in `src/api/` follow thi
 
 **Presets** — 8 built-in drum patterns in `src/presets.ts` (Basic Rock, Four on the Floor, Hip-Hop, Funk, Reggae, Bossa Nova, Waltz, Shuffle). User presets in `src/userPresets.ts`.
 
+## Adding new pages
+
+When a new page is created and added to the nav (`src/main.tsx`), it **must also be added to the welcome screen** (`src/pages/WelcomePage.tsx`).
+
 ## Validations
 
 Make sure all these checks pass before accepting changes:
