@@ -26,6 +26,7 @@ const NAV_GROUPS = [
       { to: "/scales", label: "Scales" },
       { to: "/circle", label: "Circle of 5ths" },
       { to: "/fret-memorizer", label: "Fret Memorizer" },
+      { to: "/ear-training", label: "Ear Training" },
     ],
   },
 ];

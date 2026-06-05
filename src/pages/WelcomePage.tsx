@@ -69,6 +69,13 @@ const FEATURES = [
     color: "#06b6d4",
   },
   {
+    icon: "👂",
+    title: "Ear Training",
+    desc: "Train your ears to recognize intervals, chords, and scales by sound",
+    route: "/ear-training",
+    color: "#a855f7",
+  },
+  {
     icon: "🎸",
     title: "Tab Editor",
     desc: "Write and play back guitar tabs with full notation",

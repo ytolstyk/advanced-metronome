@@ -44,7 +44,7 @@ export function chordFrequencies(root: RootNote, type: ChordType): number[] {
   });
 }
 
-function pluckString(ctx: AudioContext, dest: AudioNode, freq: number, startTime: number, vol: number) {
+export function pluckString(ctx: AudioContext, dest: AudioNode, freq: number, startTime: number, vol: number) {
   const env = ctx.createGain();
   env.connect(dest);
   env.gain.setValueAtTime(0.001, startTime);

@@ -91,6 +91,18 @@ const schema = a.schema({
     tuning: a.string().required(),
     completedAt: a.string().required(),
   }).authorization(allow => [allow.owner()]),
+
+  // Ear training game scores — one record per completed session
+  EarTrainingScore: a.model({
+    exerciseType: a.string().required(),
+    score: a.integer().required(),
+    wrongAnswers: a.integer().required(),
+    totalQuestions: a.integer().required(),
+    elapsedSeconds: a.integer().required(),
+    gameMode: a.string().required(),
+    difficulty: a.string().required(),
+    completedAt: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

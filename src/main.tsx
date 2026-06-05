@@ -27,6 +27,7 @@ import { TabEditorPage } from './pages/TabEditorPage.tsx'
 import { TabLibraryPage } from './pages/TabLibraryPage.tsx'
 import { PublishedTabViewPage } from './pages/PublishedTabViewPage.tsx'
 import { MetronomePage } from './pages/MetronomePage.tsx'
+import { EarTrainingPage } from './pages/EarTrainingPage.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -50,6 +51,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/build-lesson" element={<BuildLessonPage />} />
           <Route path="/click-track" element={<ClickTrackPage />} />
           <Route path="/fret-memorizer" element={<FretMemorizerPage />} />
+          <Route path="/ear-training" element={<EarTrainingPage />} />
           <Route path="/tab-editor" element={<TabEditorPage />} />
           <Route path="/tabs" element={<TabLibraryPage />} />
           <Route path="/tabs/:id" element={<PublishedTabViewPage />} />
