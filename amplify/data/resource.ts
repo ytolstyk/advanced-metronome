@@ -103,6 +103,19 @@ const schema = a.schema({
     difficulty: a.string().required(),
     completedAt: a.string().required(),
   }).authorization(allow => [allow.owner()]),
+
+  // Practice session records — one record per completed practice session
+  PracticeSession: a.model({
+    goalDurationMinutes: a.integer(),
+    goalBpm: a.integer(),
+    goalSkill: a.string(),
+    goalToolsJson: a.string(),
+    actualDurationSeconds: a.integer().required(),
+    toolTimesJson: a.string().required(),
+    notes: a.string(),
+    startedAt: a.string().required(),
+    completedAt: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

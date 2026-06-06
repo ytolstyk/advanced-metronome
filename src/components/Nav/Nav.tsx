@@ -31,6 +31,12 @@ const NAV_GROUPS = [
       { to: "/ear-training", label: "Ear Training" },
     ],
   },
+  {
+    label: "Track",
+    items: [
+      { to: "/practice", label: "Practice" },
+    ],
+  },
 ];
 
 function linkCls(isActive: boolean) {

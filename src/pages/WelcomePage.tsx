@@ -103,6 +103,13 @@ const FEATURES = [
     route: "/tabs",
     color: "#f59e0b",
   },
+  {
+    icon: "📅",
+    title: "Practice Tracker",
+    desc: "Log sessions, track streaks, and see which tools you've neglected",
+    route: "/practice",
+    color: "#22d3ee",
+  },
 ] as const;
 
 export function WelcomePage() {
