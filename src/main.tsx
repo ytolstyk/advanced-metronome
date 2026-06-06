@@ -9,6 +9,7 @@ import { DrumMachinePage } from './pages/DrumMachinePage.tsx'
 import { WelcomePage } from './pages/WelcomePage.tsx'
 import { Nav } from './components/Nav/Nav.tsx'
 import { DonationModal } from './components/DonationModal/DonationModal.tsx'
+import { Button } from './components/ui/button.tsx'
 import { TunerPage } from './pages/TunerPage.tsx'
 import { ChordsPage } from './pages/ChordsPage.tsx'
 import { CircleOfFifthsPage } from './pages/CircleOfFifthsPage.tsx'
@@ -33,6 +34,7 @@ import { CAGEDPage } from './pages/CAGEDPage.tsx'
 import { PracticeSessionPage } from './pages/PracticeSessionPage.tsx'
 import { IntervalTrainerPage } from './pages/IntervalTrainerPage.tsx'
 import { ArpeggiosPage } from './pages/ArpeggiosPage.tsx'
+import { Github } from 'lucide-react'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -69,6 +71,12 @@ createRoot(document.getElementById('root')!).render(
         </Routes>
         <footer style={{ textAlign: 'center', padding: '1rem', color: '#666', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
           <span>&copy; Yuriy Tolstykh</span>
+          <a href="https://github.com/ytolstyk/advanced-metronome" target="_blank" rel="noopener noreferrer">
+            <Button variant="ghost" size="sm">
+              <Github className="h-3.5 w-3.5" />
+              GitHub
+            </Button>
+          </a>
           <DonationModal />
         </footer>
       </BrowserRouter>
