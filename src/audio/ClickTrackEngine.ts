@@ -15,6 +15,29 @@ export interface TrackPiece {
   subdivision: SubdivisionLabel;
   bpm: number;
   repeats: number;
+  // Speed ramp (all optional — omitting means fixed tempo)
+  rampEndBpm?: number;
+  rampMode?: 'linear' | 'stepped';
+  rampStepSize?: number;
+  rampStepMeasures?: number;
+}
+
+/** Returns the effective BPM for a specific repetition (measure) within a piece. */
+export function getBpmAtRepetition(piece: TrackPiece, repetition: number): number {
+  if (!piece.rampMode || piece.rampEndBpm === undefined) return piece.bpm;
+  const { bpm: startBpm, rampEndBpm: endBpm, repeats } = piece;
+  if (piece.rampMode === 'linear') {
+    if (repeats <= 1) return startBpm;
+    const t = repetition / (repeats - 1);
+    return startBpm + (endBpm - startBpm) * t;
+  }
+  // stepped
+  const stepSize = piece.rampStepSize ?? 5;
+  const stepMeasures = Math.max(1, piece.rampStepMeasures ?? 4);
+  const direction = Math.sign(endBpm - startBpm);
+  const steps = Math.floor(repetition / stepMeasures);
+  const raw = startBpm + steps * stepSize * direction;
+  return direction >= 0 ? Math.min(raw, endBpm) : Math.max(raw, endBpm);
 }
 
 const SCHEDULE_AHEAD_TIME = 0.1;
@@ -134,14 +157,15 @@ export class ClickTrackEngine {
     return 60 / (bpm * this.speedMultiplier);
   }
 
-  private getBeatDuration(piece: TrackPiece): number {
-    return (60 / (piece.bpm * this.speedMultiplier)) * (4 / piece.timeSignature.denominator);
+  private getBeatDuration(piece: TrackPiece, repetition: number): number {
+    const bpm = getBpmAtRepetition(piece, repetition);
+    return (60 / (bpm * this.speedMultiplier)) * (4 / piece.timeSignature.denominator);
   }
 
-  private getSubDuration(piece: TrackPiece): number {
+  private getSubDuration(piece: TrackPiece, repetition: number): number {
     const subs = subsPerBeat(piece.subdivision, piece.timeSignature.numerator);
-    if (subs <= 0) return this.getBeatDuration(piece) * piece.timeSignature.numerator;
-    return this.getBeatDuration(piece) / subs;
+    if (subs <= 0) return this.getBeatDuration(piece, repetition) * piece.timeSignature.numerator;
+    return this.getBeatDuration(piece, repetition) / subs;
   }
 
   private scheduler(): void {
@@ -238,6 +262,6 @@ export class ClickTrackEngine {
       }
     }
 
-    this.nextBeatTime += this.getSubDuration(piece);
+    this.nextBeatTime += this.getSubDuration(piece, rep);
   }
 }

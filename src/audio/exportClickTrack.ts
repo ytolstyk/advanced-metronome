@@ -1,3 +1,4 @@
+import { getBpmAtRepetition } from './ClickTrackEngine';
 import type { TrackPiece } from './ClickTrackEngine';
 import { accentClick, beatClick, subClick } from './clickSynth';
 import { subsPerBeat } from './clickMath';
@@ -12,7 +13,6 @@ export async function exportClickTrack(pieces: TrackPiece[], speedPercent: numbe
 
   let cursor = 0;
   for (const piece of pieces) {
-    const beatDur = (60 / (piece.bpm * speedMult)) * (4 / piece.timeSignature.denominator);
     const subs = subsPerBeat(piece.subdivision, piece.timeSignature.numerator);
     let subTicksPerMeasure: number;
     if (piece.subdivision === 'whole') {
@@ -20,11 +20,14 @@ export async function exportClickTrack(pieces: TrackPiece[], speedPercent: numbe
     } else {
       subTicksPerMeasure = Math.round(piece.timeSignature.numerator * subs);
     }
-    const subDur = piece.subdivision === 'whole'
-      ? beatDur * piece.timeSignature.numerator
-      : beatDur / subs;
 
     for (let rep = 0; rep < piece.repeats; rep++) {
+      const bpm = getBpmAtRepetition(piece, rep);
+      const beatDur = (60 / (bpm * speedMult)) * (4 / piece.timeSignature.denominator);
+      const subDur = piece.subdivision === 'whole'
+        ? beatDur * piece.timeSignature.numerator
+        : beatDur / subs;
+
       for (let tick = 0; tick < subTicksPerMeasure; tick++) {
         let kind: ClickEvent['kind'];
         if (tick === 0) {

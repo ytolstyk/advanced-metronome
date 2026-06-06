@@ -9,7 +9,7 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { ClickTrackEngine } from '@/audio/ClickTrackEngine';
+import { ClickTrackEngine, getBpmAtRepetition } from '@/audio/ClickTrackEngine';
 import type { TrackPiece, SubdivisionLabel } from '@/audio/ClickTrackEngine';
 import { exportClickTrack } from '@/audio/exportClickTrack';
 import { saveCloudClickTrack, loadCloudClickTracks, deleteCloudClickTrack } from '@/api/clickTrackApi';
@@ -44,7 +44,16 @@ const SUBDIVISIONS: { value: SubdivisionLabel; label: string }[] = [
 // ── Common time signatures ─────────────────────────────────────────────────
 const COMMON_TIME_SIGS = ['2/4','3/4','4/4','5/4','6/8','7/8','12/8','custom'] as const;
 
-type DraftPiece = Omit<TrackPiece, 'id'> & { customNum: string; customDen: string; useCustom: boolean; bpmRaw: string };
+type DraftPiece = Omit<TrackPiece, 'id' | 'rampMode' | 'rampEndBpm' | 'rampStepSize' | 'rampStepMeasures'> & {
+  customNum: string;
+  customDen: string;
+  useCustom: boolean;
+  bpmRaw: string;
+  rampMode: 'linear' | 'stepped' | '';
+  rampEndBpmRaw: string;
+  rampStepSize: number;
+  rampStepMeasures: number;
+};
 
 const DEFAULT_DRAFT: DraftPiece = {
   label: '',
@@ -58,6 +67,10 @@ const DEFAULT_DRAFT: DraftPiece = {
   customDen: '4',
   useCustom: false,
   bpmRaw: '120',
+  rampMode: '',
+  rampEndBpmRaw: '',
+  rampStepSize: 5,
+  rampStepMeasures: 4,
 };
 
 // ── localStorage ───────────────────────────────────────────────────────────
@@ -156,6 +169,13 @@ function getMeasureDots(piece: TrackPiece): Array<'accent' | 'beat' | 'sub'> {
   return result;
 }
 
+// ── BPM display label for segment cards ───────────────────────────────────
+function bpmLabel(piece: TrackPiece): string {
+  if (!piece.rampMode || piece.rampEndBpm === undefined) return `${piece.bpm} BPM`;
+  if (piece.rampMode === 'linear') return `${piece.bpm} → ${piece.rampEndBpm} BPM`;
+  return `${piece.bpm} → ${piece.rampEndBpm} BPM (+${piece.rampStepSize ?? 5}/${piece.rampStepMeasures ?? 4}m)`;
+}
+
 // ── Time sig select helpers ────────────────────────────────────────────
 function applyTimeSigSelect(val: string, setD: React.Dispatch<React.SetStateAction<DraftPiece>>) {
   if (val === 'custom') {
@@ -182,8 +202,13 @@ function PieceForm({ d, setD, onSubmit, submitLabel, groups }: {
 }) {
   const bpmParsed = parseInt(d.bpmRaw, 10);
   const bpmValid = !isNaN(bpmParsed) && bpmParsed >= 20 && bpmParsed <= 400;
+  const rampEndBpmParsed = parseInt(d.rampEndBpmRaw, 10);
+  const rampValid = d.rampMode === '' || (
+    !isNaN(rampEndBpmParsed) && rampEndBpmParsed >= 20 && rampEndBpmParsed <= 400 && rampEndBpmParsed !== bpmParsed &&
+    (d.rampMode !== 'stepped' || (d.rampStepSize >= 1 && d.rampStepMeasures >= 1))
+  );
 
-  const handleKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); if (bpmValid) onSubmit(); } };
+  const handleKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); if (bpmValid && rampValid) onSubmit(); } };
 
   return (
     <div className="ct-edit-form">
@@ -278,8 +303,63 @@ function PieceForm({ d, setD, onSubmit, submitLabel, groups }: {
           </>
         )}
 
-        <Button size="sm" className="h-7 text-xs ml-auto" onClick={onSubmit} disabled={!bpmValid}>{submitLabel}</Button>
+        <Button size="sm" className="h-7 text-xs ml-auto" onClick={onSubmit} disabled={!bpmValid || !rampValid}>{submitLabel}</Button>
       </div>
+
+      {/* Speed ramp row */}
+      <div className="ct-form-row">
+        <Label className="ct-form-label">Speed Ramp</Label>
+        <button
+          type="button"
+          className={cn('ct-toggle', d.rampMode !== '' && 'on')}
+          onClick={() => setD(x => ({ ...x, rampMode: x.rampMode !== '' ? '' : 'linear' }))}
+          aria-label="Toggle speed ramp"
+        />
+        {d.rampMode !== '' && (
+          <>
+            <Label className="ct-form-label">End BPM</Label>
+            <Input
+              type="number" className="h-7 text-xs w-20"
+              value={d.rampEndBpmRaw}
+              onChange={e => setD(x => ({ ...x, rampEndBpmRaw: e.target.value }))}
+              onKeyDown={handleKey}
+            />
+            <div className="ct-ramp-mode-group">
+              <button
+                type="button"
+                className={cn('ct-ramp-mode-btn', d.rampMode === 'linear' && 'selected')}
+                onClick={() => setD(x => ({ ...x, rampMode: 'linear' }))}
+              >Linear</button>
+              <button
+                type="button"
+                className={cn('ct-ramp-mode-btn', d.rampMode === 'stepped' && 'selected')}
+                onClick={() => setD(x => ({ ...x, rampMode: 'stepped' }))}
+              >Stepped</button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Stepped ramp options */}
+      {d.rampMode === 'stepped' && (
+        <div className="ct-form-row">
+          <Label className="ct-form-label">Step</Label>
+          <Input
+            type="number" className="h-7 text-xs w-16"
+            value={d.rampStepSize} min={1} max={100}
+            onChange={e => setD(x => ({ ...x, rampStepSize: Math.max(1, parseInt(e.target.value) || 1) }))}
+            onKeyDown={handleKey}
+          />
+          <Label className="ct-form-label">BPM every</Label>
+          <Input
+            type="number" className="h-7 text-xs w-16"
+            value={d.rampStepMeasures} min={1} max={99}
+            onChange={e => setD(x => ({ ...x, rampStepMeasures: Math.max(1, parseInt(e.target.value) || 1) }))}
+            onKeyDown={handleKey}
+          />
+          <Label className="ct-form-label">measures</Label>
+        </div>
+      )}
     </div>
   );
 }
@@ -350,6 +430,17 @@ export function ClickTrackPage() {
     for (const p of pieces) { offsets.push(total); total += p.repeats; }
     return offsets;
   }, [pieces]);
+
+  // Per-measure BPMs and dot patterns for score view (memoized so sub-tick renders don't recompute)
+  const measureDots = useMemo(() => pieces.map(getMeasureDots), [pieces]);
+  const measureBpms = useMemo(() =>
+    pieces.map(piece =>
+      Array.from({ length: piece.repeats }, (_, r) =>
+        Math.round(getBpmAtRepetition(piece, r) * (speedPercent / 100))
+      )
+    ),
+    [pieces, speedPercent]
+  );
 
   // Persist to localStorage
   useEffect(() => {
@@ -468,6 +559,8 @@ export function ClickTrackPage() {
   function addPiece() {
     const d = applyDraftTimeSig(draft);
     const label = d.label.trim() || `Segment ${pieces.length + 1}`;
+    const rampEndBpm = d.rampMode ? parseInt(d.rampEndBpmRaw, 10) : NaN;
+    const hasRamp = d.rampMode !== '' && !isNaN(rampEndBpm);
     const piece: TrackPiece = {
       id: uid(),
       label,
@@ -477,6 +570,11 @@ export function ClickTrackPage() {
       subdivision: d.subdivision,
       bpm: d.bpm,
       repeats: d.repeats,
+      ...(hasRamp ? {
+        rampMode: d.rampMode as 'linear' | 'stepped',
+        rampEndBpm,
+        ...(d.rampMode === 'stepped' ? { rampStepSize: d.rampStepSize, rampStepMeasures: d.rampStepMeasures } : {}),
+      } : {}),
     };
     setPieces(p => [...p, piece]);
     setDraft(prev => ({
@@ -513,13 +611,32 @@ export function ClickTrackPage() {
       customNum: String(piece.timeSignature.numerator),
       customDen: String(piece.timeSignature.denominator),
       useCustom: !commonSig,
+      rampMode: piece.rampMode ?? '',
+      rampEndBpmRaw: piece.rampEndBpm !== undefined ? String(piece.rampEndBpm) : '',
+      rampStepSize: piece.rampStepSize ?? 5,
+      rampStepMeasures: piece.rampStepMeasures ?? 4,
     });
   }
 
   function saveEdit(id: string) {
     const d = applyDraftTimeSig(editDraft);
     const label = d.label.trim() || (pieces.find(p => p.id === id)?.label ?? 'Segment');
-    setPieces(p => p.map(x => x.id === id ? { ...x, label, color: d.color, groupId: d.groupId, timeSignature: d.timeSignature, subdivision: d.subdivision, bpm: d.bpm, repeats: d.repeats } : x));
+    const rampEndBpm = d.rampMode ? parseInt(d.rampEndBpmRaw, 10) : NaN;
+    const hasRamp = d.rampMode !== '' && !isNaN(rampEndBpm);
+    setPieces(p => p.map(x => x.id === id ? {
+      ...x,
+      label,
+      color: d.color,
+      groupId: d.groupId,
+      timeSignature: d.timeSignature,
+      subdivision: d.subdivision,
+      bpm: d.bpm,
+      repeats: d.repeats,
+      rampMode: hasRamp ? d.rampMode as 'linear' | 'stepped' : undefined,
+      rampEndBpm: hasRamp ? rampEndBpm : undefined,
+      rampStepSize: hasRamp && d.rampMode === 'stepped' ? d.rampStepSize : undefined,
+      rampStepMeasures: hasRamp && d.rampMode === 'stepped' ? d.rampStepMeasures : undefined,
+    } : x));
     setEditingId(null);
   }
 
@@ -933,7 +1050,7 @@ export function ClickTrackPage() {
             <div className="ct-score-view">
               {pieces.map((piece, pi) => {
                 const color = getEffectiveColor(piece);
-                const dots = getMeasureDots(piece);
+                const dots = measureDots[pi];
                 return Array.from({ length: piece.repeats }, (_, r) => {
                   const flatIdx = measureOffsets[pi] + r;
                   const isActiveCell = currentPieceIndex === pi && currentRepetition === r;
@@ -981,7 +1098,7 @@ export function ClickTrackPage() {
                       <div className="ct-measure-info">
                         <span>{piece.timeSignature.numerator}/{piece.timeSignature.denominator}</span>
                         <span className="ct-measure-info-sep">·</span>
-                        <span>{Math.round(piece.bpm * (speedPercent / 100))} bpm</span>
+                        <span>{measureBpms[pi][r]} bpm</span>
                       </div>
                       <div className="ct-measure-footer">
                         <button
@@ -1066,7 +1183,7 @@ export function ClickTrackPage() {
                     <span className="ct-piece-sep">·</span>
                     <span>{subLabel(piece.subdivision)}</span>
                     <span className="ct-piece-sep">·</span>
-                    <span>{piece.bpm} BPM</span>
+                    <span>{bpmLabel(piece)}</span>
                     <span className="ct-piece-sep">·</span>
                     <span>×{piece.repeats}</span>
                   </div>

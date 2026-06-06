@@ -409,6 +409,37 @@
 .ct-swatch:hover { transform: scale(1.15); }
 .ct-swatch.selected { border-color: #fff; }
 
+/* ── Ramp mode button group ── */
+.ct-ramp-mode-group {
+  display: flex;
+  gap: 2px;
+}
+
+.ct-ramp-mode-btn {
+  font-size: 0.72rem;
+  padding: 0 0.5rem;
+  height: 28px;
+  background: #222;
+  border: 1px solid #333;
+  color: #888;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.ct-ramp-mode-btn:first-child { border-radius: 4px 0 0 4px; }
+.ct-ramp-mode-btn:last-child  { border-radius: 0 4px 4px 0; }
+
+.ct-ramp-mode-btn.selected {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+}
+
+.ct-ramp-mode-btn:hover:not(.selected) {
+  background: #2a2a2a;
+  color: #ccc;
+}
+
 /* ── Add piece panel ── */
 .ct-add-panel {
   background: #111;
