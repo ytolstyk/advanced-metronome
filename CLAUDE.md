@@ -54,13 +54,22 @@ Routes:
 
 - `/` — Welcome/landing (`src/pages/WelcomePage.tsx`)
 - `/drums` — Drum machine (`src/pages/DrumMachinePage.tsx`, logic in `src/App.tsx`)
+- `/metronome` — Standalone metronome, simple + advanced mode (`src/pages/MetronomePage.tsx`)
 - `/tuner` — Guitar tuner (`src/pages/TunerPage.tsx`)
 - `/chords` — Chord library (`src/pages/ChordsPage.tsx`)
+- `/chord-progression` — Chord progression builder + key analysis (`src/pages/ChordProgressionPage.tsx`)
 - `/scales` — Scale fretboard (`src/pages/ScalesPage.tsx`)
+- `/caged` — CAGED system visualizer (`src/pages/CAGEDPage.tsx`)
 - `/circle` — Circle of Fifths (`src/pages/CircleOfFifthsPage.tsx`)
+- `/ear-training` — Ear training: intervals, chords, scales (`src/pages/EarTrainingPage.tsx`)
+- `/interval-trainer` — Fretboard interval identification game (`src/pages/IntervalTrainerPage.tsx`)
+- `/arpeggios` — Arpeggio library with CAGED shapes and sweep playback (`src/pages/ArpeggiosPage.tsx`)
 - `/click-track` — Click track builder (`src/pages/ClickTrackPage.tsx`)
 - `/fret-memorizer` — Fretboard note memorizer game (`src/pages/FretMemorizerPage.tsx`)
-- `/tab-editor` — Guitar tab editor (`src/pages/TabEditorPage.tsx`)
+- `/practice` — Practice session tracker: goals, timer, history (`src/pages/PracticeSessionPage.tsx`)
+- `/tab-editor` — Guitar tab editor + publish (`src/pages/TabEditorPage.tsx`)
+- `/tabs` — Community tab library (`src/pages/TabLibraryPage.tsx`)
+- `/tabs/:id` — Read-only published tab viewer (`src/pages/PublishedTabViewPage.tsx`)
 - `/lessons` — Lesson library (`src/pages/LessonsPage.tsx`)
 - `/lessons/:moduleId` — Module view (`src/pages/ModulePage.tsx`)
 - `/lessons/:moduleId/:lessonId` — Individual lesson (`src/pages/LessonPage.tsx`)
@@ -135,6 +144,10 @@ Playback via `TabPlaybackEngine` (`src/audio/TabPlaybackEngine.ts`) — separate
 
 View modes: `tab` (default) and `staff` — toggled via toolbar.
 
+Publishing: a signed-in user can publish a tab to the Tab Library via `src/api/publishedTabApi.ts`. Published tabs are browsable at `/tabs` (`TabLibraryPage`) and rendered read-only at `/tabs/:id` (`PublishedTabViewPage`) using alphaTab.
+
+Guitar Pro import/export is handled via alphaTab's built-in GP parser/serialiser, wired up in the tab editor toolbar.
+
 Components in `src/components/TabEditor/`:
 
 - `TabSvgCanvas` — SVG rendering with drag-to-select, click handlers
@@ -145,6 +158,34 @@ Components in `src/components/TabEditor/`:
 - `TabEditorPlayback` — play/stop controls + view mode toggle
 - `TabTechniquePaths` — SVG path definitions for technique symbols
 - `tabSvgConstants.ts` — font and layout constants
+
+## Metronome
+
+`src/pages/MetronomePage.tsx`. Two modes: **simple** (single BPM/time sig/subdivision with animated pendulum) and **advanced** (multi-measure list, each measure has its own BPM/time sig/subdivision/repeat count). Both modes drive `ClickTrackEngine` for scheduling. Tap tempo averages the last 6 taps; resets after 3 s of inactivity. Beat accent fires on beat 0. Preferences (mode, BPM, time sig, subdivision) persist via `src/api/metronomeApi.ts` (localStorage + cloud).
+
+## Ear Training
+
+`src/pages/EarTrainingPage.tsx` + `src/pages/earTrainingLogic.ts`. Three tabs: intervals, chords, scales. Each tab has configurable question pool, difficulty tier (intervals only), game mode (10/20/30/∞), and a replay button. Audio synthesis in `src/audio/earTrainingSynths.ts`. Game flow managed by `useExercise` hook (`src/hooks/useExercise.ts`). Scores saved to cloud via `src/api/earTrainingApi.ts` (requires auth).
+
+## Chord Progression
+
+`src/pages/ChordProgressionPage.tsx`. Eight-slot progression builder. Chord picker modal selects root + quality. Playback scheduler (`ClickTrackEngine` pattern) fires chord audio at the selected beats-per-chord and BPM. Key detection and Roman numeral labelling in `src/utils/chordTheory.ts`. Three instruments (guitar/piano/pad) use synths from `src/audio/chordSynths.ts`. State persists via `src/api/chordProgressionApi.ts`.
+
+## CAGED Visualizer
+
+`src/pages/CAGEDPage.tsx`. Renders the full neck (16 frets) as an SVG. CAGED shape positions computed by `computeCAGEDShapes` in `src/data/caged.ts`. Optional major scale overlay highlights scale tones within the selected shape. Root note and active shape persist via `src/api/cagedApi.ts`.
+
+## Interval Trainer
+
+`src/pages/IntervalTrainerPage.tsx`. Fretboard game — shows a root note dot; player clicks the correct target interval fret. Difficulty tiers progressively unlock interval types (P4/P5 → m3/M3/Oct → M2/m6/M6 → m2/m7/M7/Tritone). Supports 6/7/8-string tunings. Uses `pluckString` for audio. Scores saved via `src/api/intervalTrainerApi.ts`.
+
+## Arpeggios
+
+`src/pages/ArpeggiosPage.tsx`. Browsable arpeggio database keyed by quality (`ArpeggioQuality`) and CAGED shape. Data in `src/data/arpeggios.ts`. Each card shows an SVG fretboard diagram with barre support. Playback via `playArpeggio` in `src/audio/arpeggioSynths.ts` — sweep direction (up/down/alt) and BPM are user-configurable. No cloud persistence (stateless browse).
+
+## Practice Session Tracker
+
+`src/pages/PracticeSessionPage.tsx`. Phase-based UI (setup → active → summary). Goal fields: duration, target BPM, skill focus text, and which tools to practice. Live timer via `usePracticeTimer` hook (`src/hooks/usePracticeTimer.ts`). Interrupted sessions are persisted to localStorage so the user can resume. Completed sessions save to cloud via `src/api/practiceSessionApi.ts`. History view shows weekly calendar, streak counter, and contextual nudges (`computeNudges` in `src/practiceSessionUtils.ts`). Types in `src/practiceSessionTypes.ts`.
 
 ## Lessons
 
@@ -193,6 +234,8 @@ All use `cn()` from `src/lib/utils.ts` (clsx + tailwind-merge) for class merging
 - `SettingsModal` (`src/components/SettingsModal/`) — per-note color picker with reset
 - `AuthModal` (`src/components/AuthModal/`) — AWS Amplify auth modal
 - `MeasureHeaders` (`src/components/MeasureHeaders/`) — time signature headers above drum grid
+- `ChordPickerModal` (`src/components/ChordPickerModal/`) — root + quality chord picker used by chord progression builder
+- `TabLibraryCard` (`src/components/TabLibrary/TabLibraryCard`) — card for a published tab in the library
 
 ## Custom hooks
 
@@ -202,6 +245,8 @@ All use `cn()` from `src/lib/utils.ts` (clsx + tailwind-merge) for class merging
 - `useFavorites` (`src/hooks/useFavorites.ts`) — favorites list management
 - `useLessonAudio` (`src/hooks/useLessonAudio.ts`) — audio playback for lesson examples
 - `useLessonsProgress` (`src/hooks/useLessonsProgress.ts`) — lesson completion tracking
+- `useExercise(mode)` (`src/hooks/useExercise.ts`) — game state machine (idle/playing/result) shared by ear training tabs
+- `usePracticeTimer()` (`src/hooks/usePracticeTimer.ts`) — wall-clock elapsed timer for practice sessions; returns elapsed seconds and a reset function
 
 ## Context providers
 
@@ -222,6 +267,16 @@ Chord synthesis (`src/audio/chordSynths.ts`):
 - `playGuitarChord()` — uses `CHORD_DATABASE` voicings + `pluckString`
 - `playPianoChord()` — harmonic series, 4-second sustain
 - `playPadChord()` — sawtooth + sine, lowpass filter, 6-second sustain
+
+Ear training synthesis (`src/audio/earTrainingSynths.ts`):
+
+- `playInterval(ctx, rootMidi, targetMidi, direction)` — plays two notes sequentially or simultaneously
+- `playEarTrainingChord(ctx, rootMidi, type)` — plays a chord voicing for chord identification
+- `playScale(ctx, rootMidi, mode)` — plays scale tones ascending for scale identification
+
+Arpeggio synthesis (`src/audio/arpeggioSynths.ts`):
+
+- `playArpeggio(ctx, frets, openMidi, direction, bpm)` — sweeps an arpeggio shape using `pluckString`; `SweepDirection` = `'up' | 'down' | 'alt'`
 
 ## Data persistence pattern
 
