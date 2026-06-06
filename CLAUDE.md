@@ -198,12 +198,20 @@ Chord synthesis (`src/audio/chordSynths.ts`):
 
 ## Data persistence pattern
 
-Cloud-first with localStorage fallback. All API modules in `src/api/` follow this shape:
+**Every page that has user-configurable state must persist it.** This is a non-negotiable requirement:
+
+- **Always** save to localStorage so state survives page refresh (unauthenticated users included).
+- **If the user is signed in**, also save to the cloud via AWS Amplify so state roams across devices.
+- Load from cloud on mount when authenticated; fall back to localStorage otherwise.
+
+All API modules in `src/api/` follow this shape:
 
 1. Call `isAuthenticated()` from `src/api/authUtils.ts`
 2. If authenticated → read/write via AWS Amplify `generateClient()` with `amplify/data/resource` schema
 3. If not → fall back to localStorage via `src/api/storageUtils.ts`
 4. Debounce cloud saves (500ms) to avoid thrashing
+
+When adding a new page with user state, create a corresponding `src/api/<feature>Api.ts` that implements both paths. Do not leave state ephemeral.
 
 ## Common patterns
 
