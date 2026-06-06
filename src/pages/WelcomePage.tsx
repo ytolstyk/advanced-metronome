@@ -117,6 +117,13 @@ const FEATURES = [
     route: "/interval-trainer",
     color: "#8b5cf6",
   },
+  {
+    icon: "🎸",
+    title: "Arpeggio Library",
+    desc: "CAGED arpeggio shapes across all keys with sweep playback",
+    route: "/arpeggios",
+    color: "#7c3aed",
+  },
 ] as const;
 
 export function WelcomePage() {

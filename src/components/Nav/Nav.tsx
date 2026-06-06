@@ -23,6 +23,7 @@ const NAV_GROUPS = [
     items: [
       { to: "/lessons", label: "Lessons" },
       { to: "/chords", label: "Chords" },
+      { to: "/arpeggios", label: "Arpeggios" },
       { to: "/chord-progression", label: "Chord Progression" },
       { to: "/scales", label: "Scales" },
       { to: "/caged", label: "CAGED System" },
