@@ -10,7 +10,10 @@
     "preview": "vite preview",
     "type-check": "tsc -b",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
     "@aws-amplify/ui-react": "^6.15.2",
@@ -40,6 +43,7 @@
     "@aws-amplify/backend": "^1.21.1",
     "@aws-amplify/backend-cli": "^1.8.2",
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

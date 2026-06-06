@@ -19,6 +19,33 @@ npm test                    # Run tests (Vitest watch mode)
 npm run test:run            # Single-pass test run (CI)
 ```
 
+End-to-end tests: **Playwright** (Chromium only) running against the Vite dev server.
+
+```bash
+npm run test:e2e            # Run Playwright e2e tests (headless Chromium)
+npm run test:e2e:ui         # Playwright test runner UI (interactive)
+npm run test:e2e:debug      # Debug a single test with inspector
+```
+
+## E2E Tests
+
+Playwright e2e tests live in `e2e/`. All test files import `{ test, expect }` from `'../fixtures/auth-bypass'` (not from `@playwright/test` directly) — this fixture blocks AWS Amplify network calls so tests run against the unauthenticated app state.
+
+**When to write e2e tests:**
+- Any new page added to the app must have a corresponding `e2e/<page-name>.spec.ts` covering at least the happy path: page renders, primary interaction works, navigation works.
+- A new significant feature on an existing page (new mode, new form, new game flow) warrants a new `test()` block in the existing spec file for that page.
+
+**When to run e2e tests:**
+- Run `npm run test:e2e` before considering any new page or major feature complete.
+- Always run after changes to `src/main.tsx` (routing), `src/pages/`, or any component that appears in the nav or welcome screen.
+
+**Test patterns:**
+- Prefer `getByRole`, `getByText`, `getByLabel` over CSS selectors.
+- For Radix UI ToggleGroupItem, check `await expect(locator).toHaveAttribute('data-state', 'on')` for active state.
+- For Radix UI Select, wait for `[role="listbox"]` before clicking an option.
+- Never use `page.waitForTimeout()` — use `waitForSelector` or `waitForLoadState` instead.
+- Microphone-dependent features (`/tuner` Start Tuner, `/fret-memorizer` mic mode) must be skipped with `test.skip` and a brief explanation comment.
+
 ## Architecture
 
 Multi-page app (React Router) with a shared `<Nav>` rendered in `src/main.tsx`. Auth wraps the tree via `Authenticator.Provider` (AWS Amplify). Three contexts at root: `FavoritesProvider`, `LessonsProgressProvider`, `NoteColorsProvider`.
