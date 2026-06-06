@@ -171,6 +171,8 @@ Components in `src/components/TabEditor/`:
 
 `src/pages/ChordProgressionPage.tsx`. Eight-slot progression builder. Chord picker modal selects root + quality. Playback scheduler (`ClickTrackEngine` pattern) fires chord audio at the selected beats-per-chord and BPM. Key detection and Roman numeral labelling in `src/utils/chordTheory.ts`. Three instruments (guitar/piano/pad) use synths from `src/audio/chordSynths.ts`. State persists via `src/api/chordProgressionApi.ts`.
 
+**Coupling with Arpeggios:** The Chord Progression and Arpeggios pages share chord/quality vocabulary and fretboard rendering conventions. When adding a new chord quality, tuning, or instrument to either page, check whether the same addition makes sense on the other page — and prompt the user if unsure. Shared data lives in `src/data/arpeggios.ts` (arpeggio shapes) and `src/utils/chordTheory.ts` (quality labels, Roman numeral logic).
+
 ## CAGED Visualizer
 
 `src/pages/CAGEDPage.tsx`. Renders the full neck (16 frets) as an SVG. CAGED shape positions computed by `computeCAGEDShapes` in `src/data/caged.ts`. Optional major scale overlay highlights scale tones within the selected shape. Root note and active shape persist via `src/api/cagedApi.ts`.
@@ -182,6 +184,8 @@ Components in `src/components/TabEditor/`:
 ## Arpeggios
 
 `src/pages/ArpeggiosPage.tsx`. Browsable arpeggio database keyed by quality (`ArpeggioQuality`) and CAGED shape. Data in `src/data/arpeggios.ts`. Each card shows an SVG fretboard diagram with barre support. Playback via `playArpeggio` in `src/audio/arpeggioSynths.ts` — sweep direction (up/down/alt) and BPM are user-configurable. No cloud persistence (stateless browse).
+
+**Coupling with Chord Progression:** See the note under **Chord Progression** above. Changes to quality enums, tuning support, or fretboard layout on the Arpeggios page should be evaluated for parity on the Chord Progression page (and vice versa).
 
 ## Practice Session Tracker
 
