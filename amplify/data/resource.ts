@@ -104,6 +104,21 @@ const schema = a.schema({
     completedAt: a.string().required(),
   }).authorization(allow => [allow.owner()]),
 
+  // CAGED visualizer prefs — one record per user
+  UserCAGEDPrefs: a.model({
+    prefsJson: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
+
+  // Chord progression builder state — one record per user
+  UserChordProgressionPrefs: a.model({
+    stateJson: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
+
+  // Metronome prefs — one record per user
+  UserMetronomePrefs: a.model({
+    stateJson: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
+
   // Practice session records — one record per completed practice session
   PracticeSession: a.model({
     goalDurationMinutes: a.integer(),

@@ -2,6 +2,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
+// ── Mock AWS Amplify UI (useAuthenticator) ────────────────────────────────
+// MetronomePage uses useAuthenticator to decide when to save prefs to cloud.
+// Without this mock the component throws "must be inside Authenticator.Provider".
+
+vi.mock('@aws-amplify/ui-react', () => ({
+  useAuthenticator: () => ({ authStatus: 'unauthenticated' }),
+  Authenticator: { Provider: ({ children }: { children: React.ReactNode }) => children },
+}))
+
+// ── Mock metronomeApi (prevent real localStorage / cloud calls in tests) ──
+
+vi.mock('@/api/metronomeApi', () => ({
+  loadMetronomePrefs: vi.fn().mockResolvedValue(null),
+  saveMetronomePrefs: vi.fn().mockResolvedValue(undefined),
+}))
+
 // ── Mock ClickTrackEngine before importing the page ────────────────────────
 
 const mockStart = vi.fn()

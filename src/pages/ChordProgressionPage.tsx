@@ -1,4 +1,10 @@
 import { useReducer, useMemo, useRef, useEffect, useCallback, useState } from 'react';
+import { useAuthenticator } from '@aws-amplify/ui-react';
+import {
+  loadChordProgression,
+  saveChordProgression,
+  CHORD_PROGRESSION_LS_KEY,
+} from '@/api/chordProgressionApi';
 import type { RootNote, ChordType } from '../data/chords';
 import {
   CHORD_DATABASE,
@@ -54,7 +60,6 @@ type ProgressionAction =
   | { type: 'APPLY_SLOTS'; slots: (ChordSlot | null)[] };
 
 const SLOT_COUNT = 8;
-const STORAGE_KEY = 'chord-progression-v1';
 const LOOKAHEAD = 0.1;
 const SCHEDULER_INTERVAL_MS = 25;
 
@@ -70,7 +75,7 @@ const initialState: ProgressionState = {
 
 function loadSavedState(): ProgressionState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(CHORD_PROGRESSION_LS_KEY);
     if (!raw) return initialState;
     const saved = JSON.parse(raw) as Partial<ProgressionState>;
     return {
@@ -421,6 +426,8 @@ function TheoryBar({ detectedKey, onApplyRomanInput }: TheoryBarProps) {
 
 export function ChordProgressionPage() {
   const [state, dispatch] = useReducer(progressionReducer, undefined, loadSavedState);
+  const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Audio refs — never trigger re-renders
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -450,14 +457,33 @@ export function ChordProgressionPage() {
     }
   }, [state.slots]);
 
-  // Persist to localStorage
+  // Load from cloud when auth changes (overrides localStorage-initialized state)
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      slots: state.slots,
-      bpm: state.bpm,
-      beatsPerChord: state.beatsPerChord,
-      instrument: state.instrument,
-    }));
+    void loadChordProgression().then(loaded => {
+      if (!loaded) return;
+      dispatch({ type: 'APPLY_SLOTS', slots: loaded.slots as (import('../utils/chordTheory').ChordSlot | null)[] });
+      dispatch({ type: 'SET_BPM', bpm: loaded.bpm });
+      if (loaded.beatsPerChord === 1 || loaded.beatsPerChord === 2 || loaded.beatsPerChord === 4) {
+        dispatch({ type: 'SET_BEATS_PER_CHORD', beats: loaded.beatsPerChord as BeatsPerChord });
+      }
+      if (loaded.instrument === 'guitar' || loaded.instrument === 'piano' || loaded.instrument === 'pad') {
+        dispatch({ type: 'SET_INSTRUMENT', instrument: loaded.instrument as InstrumentType });
+      }
+    });
+  }, [authStatus]);
+
+  // Persist to localStorage + cloud (debounced)
+  useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void saveChordProgression({
+        slots: state.slots,
+        bpm: state.bpm,
+        beatsPerChord: state.beatsPerChord,
+        instrument: state.instrument,
+      });
+    }, 500);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [state.slots, state.bpm, state.beatsPerChord, state.instrument]);
 
   // Derived values

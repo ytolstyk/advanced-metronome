@@ -1,4 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useAuthenticator } from '@aws-amplify/ui-react';
+import { loadCAGEDPrefs, saveCAGEDPrefs } from '@/api/cagedApi';
 import type { RootNote } from '@/data/chords';
 import { ROOT_NOTES, ROOT_NOTE_TO_PC } from '@/data/chords';
 import { SCALE_INTERVALS } from '@/data/scales';
@@ -51,6 +53,25 @@ export function CAGEDPage() {
   const [rootNote, setRootNote] = useState<RootNote>('C');
   const [activeShape, setActiveShape] = useState<CagedName | null>(null);
   const [showScale, setShowScale] = useState(false);
+  const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    void loadCAGEDPrefs().then(prefs => {
+      if (!prefs) return;
+      setRootNote(prefs.rootNote as RootNote);
+      setActiveShape(prefs.activeShape as CagedName | null);
+      setShowScale(prefs.showScale);
+    });
+  }, [authStatus]);
+
+  useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void saveCAGEDPrefs({ rootNote, activeShape, showScale });
+    }, 500);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [rootNote, activeShape, showScale]);
 
   const rootPc = ROOT_NOTE_TO_PC[rootNote];
 

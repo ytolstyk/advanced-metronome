@@ -1,4 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAuthenticator } from '@aws-amplify/ui-react';
+import { loadMetronomePrefs, saveMetronomePrefs } from '@/api/metronomeApi';
 import { ClickTrackEngine } from '@/audio/ClickTrackEngine';
 import type { SubdivisionLabel, TrackPiece } from '@/audio/ClickTrackEngine';
 import { subsPerBeat } from '@/audio/clickMath';
@@ -373,6 +375,32 @@ export function MetronomePage() {
 
   const engineRef = useRef<ClickTrackEngine | null>(null);
   const tapTimestamps = useRef<number[]>([]);
+  const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    void loadMetronomePrefs().then(prefs => {
+      if (!prefs) return;
+      if (prefs.mode === 'simple' || prefs.mode === 'advanced') setMode(prefs.mode as Mode);
+      setBpm(clampBpm(prefs.bpm));
+      setNumerator(prefs.numerator);
+      if (prefs.denominator === 2 || prefs.denominator === 4 || prefs.denominator === 8) {
+        setDenominator(prefs.denominator as Denominator);
+      }
+      setSubdivision(prefs.subdivision as SubdivisionLabel);
+      if (Array.isArray(prefs.measures) && prefs.measures.length > 0) {
+        setMeasures(prefs.measures as MeasureConfig[]);
+      }
+    });
+  }, [authStatus]);
+
+  useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void saveMetronomePrefs({ mode, bpm, numerator, denominator, subdivision, measures });
+    }, 500);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [mode, bpm, numerator, denominator, subdivision, measures]);
   // Tracks drag-start state without stale-closure issues
   const bpmDragRef = useRef({ dragging: false, wasPlaying: false });
   // Tracks last piece index seen by onBeat so we can detect transitions
