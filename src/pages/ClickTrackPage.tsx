@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, Sele
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { ClickTrackEngine, getBpmAtRepetition } from '@/audio/ClickTrackEngine';
-import type { TrackPiece, SubdivisionLabel } from '@/audio/ClickTrackEngine';
+import type { TrackPiece, SubdivisionLabel, LoopRampConfig } from '@/audio/ClickTrackEngine';
 import { exportClickTrack } from '@/audio/exportClickTrack';
 import { saveCloudClickTrack, loadCloudClickTracks, deleteCloudClickTrack } from '@/api/clickTrackApi';
 import type { SegmentGroup, CloudClickTrack } from '@/api/clickTrackApi';
@@ -397,6 +397,10 @@ export function ClickTrackPage() {
 
   const [exporting, setExporting] = useState(false);
 
+  // Loop ramp state
+  const [loopRampDraft, setLoopRampDraft] = useState({ startPercent: 70, endPercent: 100, stepPercent: 5 });
+  const [currentLoopPass, setCurrentLoopPass] = useState<number | null>(null);
+
   const { authStatus } = useAuthenticator(ctx => [ctx.authStatus]);
 
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
@@ -479,6 +483,7 @@ export function ClickTrackPage() {
     setCurrentRepetition(null);
     setCurrentSubTick(null);
     setCountdownDisplay(null);
+    setCurrentLoopPass(null);
   }, []);
 
   const handleProgress = useCallback((pi: number, rep: number) => {
@@ -519,6 +524,37 @@ export function ClickTrackPage() {
       pieces, start.pi, speedPercent / 100, countdownEnabled,
       handleProgress, handleCountdown, handleStop, handleBeat,
       start.r, true, end.pi, end.r,
+    );
+    setIsPlaying(true);
+    setCountdownDisplay(countdownEnabled ? 3 : null);
+    setCurrentPieceIndex(start.pi);
+    setCurrentRepetition(start.r);
+  }
+
+  const handleLoopPass = useCallback((pass: number, speedMult: number) => {
+    setCurrentLoopPass(pass);
+    setSpeedPercent(Math.round(speedMult * 100));
+  }, []);
+
+  function startLoopRamp() {
+    if (pieces.length === 0 || selectedMeasures.size === 0) return;
+    const { startPercent, endPercent, stepPercent } = loopRampDraft;
+    const minFlat = Math.min(...selectedMeasures);
+    const maxFlat = Math.max(...selectedMeasures);
+    const start = flatToPieceRep(pieces, minFlat);
+    const end = flatToPieceRep(pieces, maxFlat);
+    const ramp: LoopRampConfig = {
+      startMultiplier: startPercent / 100,
+      endMultiplier: endPercent / 100,
+      stepMultiplier: stepPercent / 100,
+    };
+    setSpeedPercent(startPercent);
+    setCurrentLoopPass(0);
+    engineRef.current!.start(
+      pieces, start.pi, startPercent / 100, countdownEnabled,
+      handleProgress, handleCountdown, handleStop, handleBeat,
+      start.r, true, end.pi, end.r,
+      ramp, handleLoopPass,
     );
     setIsPlaying(true);
     setCountdownDisplay(countdownEnabled ? 3 : null);
@@ -1044,7 +1080,52 @@ export function ClickTrackPage() {
             {selectedMeasures.size > 0 && (
               <div className="ct-loop-bar">
                 <span>Loop: measures {Math.min(...selectedMeasures) + 1}–{Math.max(...selectedMeasures) + 1} ({selectedMeasures.size} selected)</span>
-                <button className="ct-loop-bar-clear" onClick={() => setSelectedMeasures(new Set())}>Clear selection</button>
+                {currentLoopPass !== null && (
+                  <span className="ct-loop-pass-badge">Pass {currentLoopPass + 1}</span>
+                )}
+                <div className="ct-loop-ramp">
+                  <span className="ct-loop-ramp-label">Ramp</span>
+                  <input
+                    type="number"
+                    className="ct-loop-ramp-input"
+                    value={loopRampDraft.startPercent}
+                    min={25} max={200}
+                    onChange={e => setLoopRampDraft(d => ({ ...d, startPercent: Math.max(25, Math.min(200, parseInt(e.target.value) || d.startPercent)) }))}
+                    disabled={isPlaying}
+                    title="Start speed %"
+                  />
+                  <span className="ct-loop-ramp-sep">→</span>
+                  <input
+                    type="number"
+                    className="ct-loop-ramp-input"
+                    value={loopRampDraft.endPercent}
+                    min={25} max={200}
+                    onChange={e => setLoopRampDraft(d => ({ ...d, endPercent: Math.max(25, Math.min(200, parseInt(e.target.value) || d.endPercent)) }))}
+                    disabled={isPlaying}
+                    title="Target speed %"
+                  />
+                  <span className="ct-loop-ramp-sep">%</span>
+                  <span className="ct-loop-ramp-label">+</span>
+                  <input
+                    type="number"
+                    className="ct-loop-ramp-input ct-loop-ramp-input--step"
+                    value={loopRampDraft.stepPercent}
+                    min={1} max={100}
+                    onChange={e => setLoopRampDraft(d => ({ ...d, stepPercent: Math.max(1, parseInt(e.target.value) || d.stepPercent) }))}
+                    disabled={isPlaying}
+                    title="Step per pass %"
+                  />
+                  <span className="ct-loop-ramp-sep">%/pass</span>
+                  <button
+                    className="ct-loop-ramp-play"
+                    disabled={isPlaying || loopRampDraft.startPercent === loopRampDraft.endPercent}
+                    onClick={startLoopRamp}
+                    title="Play with speed ramp"
+                  >
+                    ▶ Play Ramp
+                  </button>
+                </div>
+                <button className="ct-loop-bar-clear" onClick={() => { if (isPlaying) stopPlayback(); setSelectedMeasures(new Set()); }}>Clear</button>
               </div>
             )}
             <div className="ct-score-view">
@@ -1065,6 +1146,7 @@ export function ClickTrackPage() {
                       className={cn('ct-measure-cell', isActiveCell && 'is-active-rep', isSelected && 'is-selected')}
                       style={{ '--piece-color': color } as React.CSSProperties}
                       onClick={(e) => {
+                        if (isPlaying) stopPlayback();
                         if (e.shiftKey && lastClickedMeasure.current !== null) {
                           const lo = Math.min(lastClickedMeasure.current, flatIdx);
                           const hi = Math.max(lastClickedMeasure.current, flatIdx);

@@ -40,6 +40,13 @@ export function getBpmAtRepetition(piece: TrackPiece, repetition: number): numbe
   return direction >= 0 ? Math.min(raw, endBpm) : Math.max(raw, endBpm);
 }
 
+/** Config for per-loop-pass speed ramping. All multipliers are relative to 1× (100%). */
+export interface LoopRampConfig {
+  startMultiplier: number;
+  endMultiplier: number;
+  stepMultiplier: number;
+}
+
 const SCHEDULE_AHEAD_TIME = 0.1;
 const SCHEDULER_INTERVAL = 25;
 
@@ -57,6 +64,10 @@ export class ClickTrackEngine {
   private loopMode = false;
   private loopEndPieceIndex: number | undefined = undefined;
   private loopEndRepetition: number | undefined = undefined;
+  // Per-loop-pass speed ramp
+  private loopRamp: LoopRampConfig | null = null;
+  private loopPassCount = 0;
+  private loopRampDone = false;
   // Cursor within sequence
   private countdownStep = 0;   // 3..1 when in countdown, 0 when done
   private pieceIndex = 0;
@@ -71,6 +82,7 @@ export class ClickTrackEngine {
   private onCountdown: ((n: number) => void) | null = null;
   private onStop: (() => void) | null = null;
   private onBeat: ((pieceIndex: number, repetition: number, subTick: number) => void) | null = null;
+  private onLoopPass: ((pass: number, speedMultiplier: number) => void) | null = null;
 
   private ensureCtx(): AudioContext {
     if (!this.ctx) {
@@ -94,6 +106,8 @@ export class ClickTrackEngine {
     loopMode = false,
     loopEndPieceIndex?: number,
     loopEndRepetition?: number,
+    loopRamp?: LoopRampConfig,
+    onLoopPass?: (pass: number, speedMultiplier: number) => void,
   ): void {
     this.stop();
     const ctx = this.ensureCtx();
@@ -108,10 +122,14 @@ export class ClickTrackEngine {
     this.loopMode = loopMode;
     this.loopEndPieceIndex = loopEndPieceIndex;
     this.loopEndRepetition = loopEndRepetition;
+    this.loopRamp = loopRamp ?? null;
+    this.loopPassCount = 0;
+    this.loopRampDone = false;
     this.onProgress = onProgress;
     this.onCountdown = onCountdownFn;
     this.onStop = onStop;
     this.onBeat = onBeat ?? null;
+    this.onLoopPass = onLoopPass ?? null;
 
     this.pieceIndex = startPieceIndex;
     this.repetition = startRepetition;
@@ -256,9 +274,31 @@ export class ClickTrackEngine {
       const pastEnd = this.pieceIndex > this.loopEndPieceIndex ||
         (this.pieceIndex === this.loopEndPieceIndex && this.repetition > this.loopEndRepetition);
       if (pastEnd) {
+        // If the final ramp pass just completed, stop instead of looping again
+        if (this.loopRampDone) {
+          const delay = (t - ctx.currentTime) * 1000;
+          setTimeout(() => { this.stop(); this.onStop?.(); }, Math.max(0, delay));
+          this.isRunning = false;
+          return;
+        }
+
         this.pieceIndex = this.startPieceIndex;
         this.repetition = this.startRepetition;
         this.subIndex = 0;
+
+        if (this.loopRamp) {
+          this.loopPassCount++;
+          const { startMultiplier, endMultiplier, stepMultiplier } = this.loopRamp;
+          const dir = Math.sign(endMultiplier - startMultiplier);
+          const raw = startMultiplier + this.loopPassCount * stepMultiplier;
+          const clamped = dir >= 0 ? Math.min(raw, endMultiplier) : Math.max(raw, endMultiplier);
+          this.speedMultiplier = clamped;
+          const pass = this.loopPassCount;
+          setTimeout(() => { this.onLoopPass?.(pass, clamped); }, 0);
+          if (clamped === endMultiplier) {
+            this.loopRampDone = true; // play one more pass at target, then stop
+          }
+        }
       }
     }
 

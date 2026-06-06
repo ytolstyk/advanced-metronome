@@ -713,3 +713,80 @@
   color: #f0f0f0;
   border-color: #888;
 }
+
+/* ── Loop ramp controls (inside loop bar) ── */
+.ct-loop-ramp {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.6rem;
+  padding-left: 0.6rem;
+  border-left: 1px solid #3a3a6a;
+  flex-wrap: wrap;
+}
+
+.ct-loop-ramp-label {
+  font-size: 0.72rem;
+  color: #8888cc;
+  white-space: nowrap;
+}
+
+.ct-loop-ramp-sep {
+  font-size: 0.72rem;
+  color: #6666aa;
+}
+
+.ct-loop-ramp-input {
+  width: 46px;
+  height: 22px;
+  font-size: 0.72rem;
+  background: #12122a;
+  border: 1px solid #3a3a6a;
+  border-radius: 4px;
+  color: #cccce0;
+  text-align: center;
+  padding: 0 4px;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.ct-loop-ramp-input::-webkit-inner-spin-button,
+.ct-loop-ramp-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+.ct-loop-ramp-input--step { width: 36px; }
+
+.ct-loop-ramp-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ct-loop-ramp-play {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  height: 22px;
+  background: #2d2d70;
+  border: 1px solid #5555bb;
+  border-radius: 4px;
+  color: #cccce0;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.ct-loop-ramp-play:hover:not(:disabled) {
+  background: #3a3a90;
+  border-color: #7777cc;
+  color: #fff;
+}
+
+.ct-loop-ramp-play:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.ct-loop-pass-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #aaaaff;
+  background: #1e1e4a;
+  border: 1px solid #4444aa;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  white-space: nowrap;
+}
