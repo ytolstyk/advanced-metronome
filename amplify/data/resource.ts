@@ -119,6 +119,19 @@ const schema = a.schema({
     stateJson: a.string().required(),
   }).authorization(allow => [allow.owner()]),
 
+  // Interval trainer game scores — one record per completed session
+  IntervalTrainerScore: a.model({
+    score: a.integer().required(),
+    wrongAnswers: a.integer().required(),
+    totalQuestions: a.integer().required(),
+    elapsedSeconds: a.integer().required(),
+    gameMode: a.string().required(),
+    stringCount: a.integer().required(),
+    tuning: a.string().required(),
+    intervalsJson: a.string().required(),
+    completedAt: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
+
   // Practice session records — one record per completed practice session
   PracticeSession: a.model({
     goalDurationMinutes: a.integer(),

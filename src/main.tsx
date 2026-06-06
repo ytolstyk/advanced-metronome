@@ -31,6 +31,7 @@ import { EarTrainingPage } from './pages/EarTrainingPage.tsx'
 import { ChordProgressionPage } from './pages/ChordProgressionPage.tsx'
 import { CAGEDPage } from './pages/CAGEDPage.tsx'
 import { PracticeSessionPage } from './pages/PracticeSessionPage.tsx'
+import { IntervalTrainerPage } from './pages/IntervalTrainerPage.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -62,6 +63,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/tabs/:id" element={<PublishedTabViewPage />} />
           <Route path="/metronome" element={<MetronomePage />} />
           <Route path="/practice" element={<PracticeSessionPage />} />
+          <Route path="/interval-trainer" element={<IntervalTrainerPage />} />
         </Routes>
         <footer style={{ textAlign: 'center', padding: '1rem', color: '#666', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
           <span>&copy; Yuriy Tolstykh</span>

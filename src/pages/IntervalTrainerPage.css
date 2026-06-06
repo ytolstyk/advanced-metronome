@@ -1,0 +1,23 @@
+.it-string-glow {
+  filter: drop-shadow(0 0 4px #5b7fff);
+}
+
+.it-feedback-correct {
+  animation: it-pop 0.2s ease-out;
+}
+
+.it-feedback-wrong {
+  animation: it-shake 0.3s ease-out;
+}
+
+@keyframes it-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes it-shake {
+  0%, 100% { transform: translateX(0); }
+  25%       { transform: translateX(-4px); }
+  75%       { transform: translateX(4px); }
+}

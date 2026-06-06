@@ -110,6 +110,13 @@ const FEATURES = [
     route: "/practice",
     color: "#22d3ee",
   },
+  {
+    icon: "🎵",
+    title: "Interval Trainer",
+    desc: "Find intervals on the fretboard and build your ear for music theory",
+    route: "/interval-trainer",
+    color: "#8b5cf6",
+  },
 ] as const;
 
 export function WelcomePage() {
