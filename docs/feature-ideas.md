@@ -4,132 +4,83 @@ Surveyed the full codebase on 2026-06-03. Notes on what exists, what's missing, 
 
 ---
 
-## Priority Ranking
+## Done
+
+All items below were shipped and are reflected in the codebase as of 2026-06-07.
+
+| Feature | Notes |
+|---------|-------|
+| Standalone Metronome | `/metronome` — simple + advanced mode, pendulum, tap tempo, subdivisions |
+| Ear Training | `/ear-training` — intervals, chord quality, scale/mode recognition |
+| Chord Progression Builder | `/chord-progression` — 8-slot builder, Roman numeral analysis, key detection |
+| CAGED System Visualizer | `/caged` — full-neck SVG, shape isolation, scale overlay |
+| Practice Session Tracker | `/practice` — goal setup, live timer, streak counter, cloud persistence |
+| Interval Trainer on Fretboard | `/interval-trainer` — click-the-fret quiz, difficulty tiers, cloud scores |
+| Arpeggio Library | `/arpeggios` — CAGED shapes, sweep playback (up/down/alt), quality filter |
+| Click Track: Speed Trainer Ramp Mode | Ramp segment type with linear BPM interpolation across measures |
+
+---
+
+## Priority Ranking (open items)
 
 | # | Feature | Effort | Impact |
 |---|---------|--------|--------|
-| 1 | Standalone Metronome | Low | High |
-| 2 | Ear Training (intervals + chords) | Medium | Very High |
-| 3 | Practice Session Tracker | Medium | High |
-| 4 | Speed Trainer ramp mode (Click Track) | Low | High |
-| 5 | CAGED System Visualizer | Medium | High |
-| 6 | Fret Memorizer stats UI | Low | Medium |
-| 7 | Chord Progression Builder | High | High |
-| 8 | Reference Tone in Tuner | Low | Medium |
+| 1 | Tuner: Reference Tone + A4 Calibration | Low | High |
+| 2 | Fret Memorizer: Stats & Progression UI | Low | Medium |
+| 3 | Scale Page: Degree Labels + Pentatonic Subset | Low | Medium |
+| 4 | Chord Library: Left-Handed Mode + Scale Suggestions | Low | Medium |
+| 5 | Capo Calculator | Medium | Medium |
+| 6 | Drum Machine: Pattern Randomize / Mutation | Low | Medium |
+| 7 | Tab Editor: MusicXML Export + Alternate Tuning Playback | Medium | High |
+| 8 | PWA / Offline Support | Medium | High |
+| 9 | Song Arranger | High | High |
+| 10 | Rhythm Tap Trainer | Medium | Medium |
 
 ---
 
 ## New Tools
-
-### Standalone Metronome
-The app is called "advanced-metronome" but has no dedicated metronome page — the most glaring gap.
-
-- Visual pulse: flashing ring, pendulum animation, or beat indicator
-- Subdivision selector (quarter, eighth, triplet, sixteenth)
-- Accent pattern controls (e.g. accent beats 1 and 3)
-- Tap tempo
-- The `ClickTrackEngine` already handles all the audio math — mostly a UI-only page
-
----
-
-### Ear Training
-Biggest learning gap in the app. The fret memorizer already has the quiz-loop, scoring, and cloud persistence infrastructure — ear training is the same pattern with sound as the prompt instead of a visual cue.
-
-Three exercises to start:
-
-**Interval Recognition**
-- Play two notes (ascending, descending, or harmonic)
-- User identifies the interval: unison, minor 2nd … octave
-- Configurable range (e.g. only intervals up to a 5th)
-
-**Chord Quality Recognition**
-- Play a chord voicing
-- User identifies: major, minor, dom7, maj7, dim, aug, sus2/sus4, etc.
-- Reuses chord synthesis from `chordSynths.ts`
-
-**Scale / Mode Recognition**
-- Play a scale ascending and descending
-- User identifies the mode: major, natural minor, Dorian, Phrygian, etc.
-- Reuses `pluckString` + `SCALE_INTERVALS` from `src/data/scales.ts`
-
----
-
-### Chord Progression Builder
-Chords currently exist only as a browse library. A progression tool would:
-
-- Chain chords by click or Roman numeral input (I–IV–V–I, ii–V–I, etc.)
-- Loop-play the progression with selectable strum rhythm
-- Show Roman numeral analysis and detected key
-- Suggest scales/modes that fit the progression
-- Integrates naturally with the drum machine chord layer already present
-
----
-
-### CAGED System Visualizer
-A core guitar theory tool that's entirely absent.
-
-- Show the 5 chord shapes (C, A, G, E, D) for any root note across the full fretboard
-- Highlight where each shape lives and how they connect end-to-end
-- Click a shape to see it isolated with fingering dots
-- Toggle to show the scale pattern that overlaps each shape
-- Builds directly on the existing `Fretboard` SVG component in `src/components/Fretboard/`
-
----
-
-### Practice Session Tracker
-Turns the app from a collection of tools into a practice system.
-
-- Set a session goal: duration, tools to use, target BPM or skill
-- Timer with per-tool time tracking (how long on scales vs. tab editor vs. click track)
-- Session log with notes field
-- Streak counter and weekly practice calendar
-- Could surface prompts like "you haven't practiced fret memorizer in 5 days"
-- Cloud-persist via the same pattern as `fretMemorizerApi.ts`
-
----
-
-### Interval Trainer on Fretboard
-Like the fret memorizer, but for intervals — bridges theory and physical positions.
-
-- Show a root note highlighted on the fretboard
-- Ask: "find the minor 3rd above this note"
-- User clicks the correct fret dot
-- Score and cloud-persist like existing fret memorizer
-- Difficulty progression: start with perfect 4th/5th, add more intervals as accuracy improves
-
----
-
-### Arpeggio Library
-Same structure as the chord library (`ChordVoicing` type in `src/data/chords.ts`) but for arpeggio patterns.
-
-- Show fingering across the fretboard (not just one position)
-- Multiple shapes per arpeggio (one per CAGED position)
-- Playback sweeps the notes in sequence rather than strumming simultaneously
-- Filter by chord quality (maj7 arpeggio, minor arpeggio, dom7 arpeggio, etc.)
-
----
 
 ### Capo Calculator
 Enter a capo fret position, get all chord shapes transposed.
 
 - "Capo 2: E-shape → F#, A-shape → B, …"
 - Show before/after chord diagrams side by side
-- Reuses the chord diagram renderer from `src/components/TabEditor/` (chord SVG) or `ChordsPage`
+- Reuses the chord diagram renderer from `ChordsPage`
 - Useful for songwriters working from chord charts in a different key
 
 ---
 
-## Improvements to Existing Tools
+### Song Arranger
+Combine click track segments, drum patterns, and chord progressions into a full arrangement view.
 
-### Click Track: Speed Trainer Ramp Mode
-Already 80% there. Add a "ramp" segment type:
-
-- Start BPM, end BPM, duration in measures
-- `ClickTrackEngine` interpolates BPM linearly beat-by-beat across the segment
-- Guitarists use this constantly: learn something slowly, gradually reach target tempo
-- Could also add a "stepped ramp" variant: increase by X BPM every N measures
+- Drag sections (Intro, Verse, Chorus, Bridge) onto a timeline
+- Each section links to a saved click track segment + drum pattern + chord progression
+- Export the full arrangement as a WAV or share link
+- Natural evolution of the existing click track builder — reuse `ClickTrackEngine` and `TrackPiece`
 
 ---
+
+### Rhythm Tap Trainer
+Complement to the metronome: instead of keeping time against a click, the user taps a target rhythm.
+
+- Show a rhythm pattern on screen (e.g. as a notation grid or beat cells)
+- User taps along; score is based on timing accuracy relative to the grid
+- Difficulty: simple quarter-note patterns → syncopated rhythms → polyrhythms
+- Reuse `ClickTrackEngine` for the reference pulse; score taps with `AudioContext.currentTime` delta
+
+---
+
+### Polyrhythm Visualizer
+Two independent loops at different beat divisions displayed as rotating circles (like a clock face).
+
+- Set numerator/denominator: e.g. 3 against 4, 5 against 3
+- Color-coded click for each layer, aligned click when they coincide
+- Audio via two `ClickTrackEngine` instances at different tempos
+- Pure teaching tool — helps students internalize cross-rhythms
+
+---
+
+## Improvements to Existing Tools
 
 ### Fret Memorizer: Stats & Progression
 The scoring API exists (`fretMemorizerApi.ts`) but the UI shows no history.
@@ -187,10 +138,56 @@ Three small additions that together make the tuner significantly more useful:
 
 ---
 
-### General / Cross-Cutting
+### Metronome Improvements
+
+- **Accent pattern editor**: let users define a custom accent map per measure (e.g. accent beats 1 and 3, ghost beats 2 and 4) rather than only accenting beat 1
+- **Polyrhythm mode**: two simultaneous subdivisions at different divisions (3 over 4) displayed visually as two rings
+- **Practice goals integration**: from the practice session tracker, open the metronome at the target BPM so the workflow is one click
+
+---
+
+### Click Track: Stepped Ramp Variant
+The linear ramp exists. Add a stepped variant:
+
+- Increase by X BPM every N measures (e.g. +5 BPM every 4 measures)
+- Surface as a new segment type alongside the existing ramp
+- Useful for systematic speed-building exercises
+
+---
+
+### Chord Progression: Voicing Explorer
+Currently the progression uses default voicings from `CHORD_DATABASE`. Let users swap voicings inline:
+
+- Click a chord in the progression to open a voicing picker (shows all matching shapes from the chord library)
+- Selected voicing persists per slot
+- Show the fretboard diagram above each chord slot in the progression
+
+---
+
+## Polish & Cleanup
+
+### Cross-Cutting
 
 - **Dark/light theme toggle**: currently dark-only; light mode is better for printing and outdoor use. Wire into a `ThemeContext` similar to `NoteColorsContext`
 - **PWA / offline support**: the app largely works offline (localStorage fallback everywhere) but isn't installable or cached as a PWA; adding a service worker + manifest would make it phone-friendly
-- **Mobile optimization**: the tools most useful on a phone during practice (tuner, chord library, metronome, fret memorizer) should be made touch-friendly with larger tap targets
+- **Mobile optimization**: tools most useful on a phone (tuner, chord library, metronome, fret memorizer) should have larger tap targets and touch-friendly layouts; test at 375px
 - **Print stylesheets**: tab editor and chord library are the main candidates; `PublishedTabViewPage` already has print support as a reference
 - **Accessibility**: several SVG components lack `aria-label`; keyboard navigation in the chord library and scale page is incomplete
+- **Welcome page categorization**: the welcome page lists all tools flat — group them (Learning, Rhythm, Theory, Composition) to help new users find the right tool faster
+- **Nav overflow on mobile**: at small widths the nav wraps awkwardly; consider a hamburger menu or icon-only compact nav below a breakpoint
+
+### Page-Specific Polish
+
+| Page | Polish Item |
+|------|------------|
+| Metronome | Show BPM as large readable number during playback; current display is small |
+| Ear Training | Add a "skip" button so users can pass on a question without failing it |
+| Ear Training | Show the answer revealed on incorrect attempts (currently unclear what the right answer was) |
+| Chord Progression | Add a "clear all" button; currently must remove chords one by one |
+| Chord Progression | Show the fretboard diagram for the currently-playing chord above the progression |
+| CAGED | Add a "next shape" shortcut to cycle through shapes without using the picker |
+| Fret Memorizer | Add a visual "streak flame" indicator alongside the score counter for motivation |
+| Tab Editor | Add a minimap / measure overview for long tabs (scrolling through 30+ measures is painful) |
+| Click Track | Segment reordering via keyboard (arrow keys while focused) in addition to drag-and-drop |
+| Practice Session | Add tags/categories to sessions (e.g. "technique", "song", "theory") for filtering in history |
+| Tuner | Add a "hold" mode that freezes the last stable reading so users can check it hands-free |
