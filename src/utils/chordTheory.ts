@@ -165,6 +165,108 @@ export function suggestScales(slots: (ChordSlot | null)[]): ScaleSuggestion[] {
   return results;
 }
 
+// ── Progression suggestions ────────────────────────────────────────────────
+
+export interface ProgressionSuggestion {
+  name: string;
+  chords: string[];
+}
+
+type ProgContext = 'major' | 'minor';
+
+interface ProgressionTemplate {
+  pattern: string[];
+  name: string;
+  context: ProgContext;
+}
+
+const PROGRESSION_TEMPLATES: ProgressionTemplate[] = [
+  { pattern: ['I', 'IV', 'V'],          name: 'I – IV – V',          context: 'major' },
+  { pattern: ['I', 'V', 'vi', 'IV'],    name: 'I – V – vi – IV', context: 'major' },
+  { pattern: ['I', 'vi', 'IV', 'V'],    name: 'I – vi – IV – V', context: 'major' },
+  { pattern: ['ii', 'V', 'I'],          name: 'ii – V – I (jazz)',     context: 'major' },
+  { pattern: ['vi', 'IV', 'I', 'V'],    name: 'vi – IV – I – V', context: 'major' },
+  { pattern: ['i', 'VII', 'VI', 'VII'], name: 'i – VII – VI – VII',    context: 'minor' },
+  { pattern: ['i', 'iv', 'VII', 'III'], name: 'i – iv – VII – III',   context: 'minor' },
+  { pattern: ['i', 'VI', 'III', 'VII'], name: 'i – VI – III – VII',   context: 'minor' },
+];
+
+const NUMERAL_INFO: Record<ProgContext, Record<string, { degree: number; quality: DiatonicQuality }>> = {
+  major: {
+    'I':   { degree: 0, quality: 'major' },
+    'ii':  { degree: 1, quality: 'minor' },
+    'iii': { degree: 2, quality: 'minor' },
+    'IV':  { degree: 3, quality: 'major' },
+    'V':   { degree: 4, quality: 'major' },
+    'vi':  { degree: 5, quality: 'minor' },
+    'vii': { degree: 6, quality: 'dim'   },
+  },
+  minor: {
+    'i':   { degree: 0, quality: 'minor' },
+    'ii°': { degree: 1, quality: 'dim'   },
+    'III': { degree: 2, quality: 'major' },
+    'iv':  { degree: 3, quality: 'minor' },
+    'v':   { degree: 4, quality: 'minor' },
+    'VI':  { degree: 5, quality: 'major' },
+    'VII': { degree: 6, quality: 'major' },
+  },
+};
+
+function resolveNumeral(numeral: string, keyRoot: RootNote, context: ProgContext): string {
+  const info = NUMERAL_INFO[context][numeral];
+  if (!info) return numeral;
+  const scaleOffsets = context === 'major' ? SCALE_INTERVALS['major'] : SCALE_INTERVALS['minor'];
+  const keyPc = ROOT_NOTE_TO_PC[keyRoot];
+  const notePc = (keyPc + scaleOffsets[info.degree]) % 12;
+  const note = ROOT_NOTES[notePc];
+  const suffix = info.quality === 'minor' ? 'm' : info.quality === 'dim' ? 'dim' : '';
+  return note + suffix;
+}
+
+export function suggestProgressionsForChord(root: RootNote, type: ChordType): ProgressionSuggestion[] {
+  const quality = simplifyQuality(type);
+  if (quality === 'other') return [];
+
+  const results: ProgressionSuggestion[] = [];
+  const seen = new Set<string>();
+
+  const prioritizedRoots = [root, ...ROOT_NOTES.filter((r) => r !== root)];
+  for (const keyRoot of prioritizedRoots) {
+    const keyPc = ROOT_NOTE_TO_PC[keyRoot];
+    for (const context of ['major', 'minor'] as const) {
+      const scaleOffsets = context === 'major' ? SCALE_INTERVALS['major'] : SCALE_INTERVALS['minor'];
+      const diatonicQ = context === 'major' ? MAJOR_DIATONIC : MINOR_DIATONIC;
+
+      for (let d = 0; d < 7; d++) {
+        const degreePc = (keyPc + scaleOffsets[d]) % 12;
+        if (degreePc !== ROOT_NOTE_TO_PC[root]) continue;
+        if (diatonicQ[d] !== quality) continue;
+
+        const degreeNumerals = Object.entries(NUMERAL_INFO[context])
+          .filter(([, info]) => info.degree === d)
+          .map(([n]) => n);
+
+        for (const template of PROGRESSION_TEMPLATES) {
+          if (template.context !== context) continue;
+          if (!degreeNumerals.some((n) => template.pattern.includes(n))) continue;
+
+          const chords = template.pattern.map((n) => resolveNumeral(n, keyRoot, context));
+          const dedupeKey = chords.join('-');
+          if (seen.has(dedupeKey)) continue;
+          seen.add(dedupeKey);
+
+          const keyLabel = context === 'major' ? `${keyRoot} major` : `${keyRoot} minor`;
+          results.push({ name: `${template.name} in ${keyLabel}`, chords });
+
+          if (results.length >= 8) return results;
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
 // ── Roman numeral input parser ─────────────────────────────────────────────
 
 const ROMAN_DEGREE: Record<string, number> = {

@@ -1212,3 +1212,31 @@ export const CHORD_DATABASE: ChordEntry[] = [
     voicings: [{ frets: [-1, 2, 4, -1, -1, -1], startFret: 2 }],
   },
 ];
+
+// ── Voicing difficulty ────────────────────────────────────────────────────────
+
+export function computeVoicingDifficulty(voicing: ChordVoicing): 'beginner' | 'intermediate' | 'advanced' {
+  const { frets, barre, startFret = 1 } = voicing;
+  const playedFrets = frets.filter((f) => f > 0);
+  if (playedFrets.length === 0) return 'beginner';
+
+  const maxFret = Math.max(...playedFrets);
+  const minFret = Math.min(...playedFrets);
+  const spread = maxFret - minFret;
+  const uniqueFrets = new Set(playedFrets).size;
+
+  if (!barre && startFret <= 1 && maxFret <= 3 && spread <= 2) {
+    return 'beginner';
+  }
+
+  if (
+    startFret > 7 ||
+    (barre && (barre.fret > 5 || startFret > 5)) ||
+    spread > 4 ||
+    uniqueFrets >= 5
+  ) {
+    return 'advanced';
+  }
+
+  return 'intermediate';
+}

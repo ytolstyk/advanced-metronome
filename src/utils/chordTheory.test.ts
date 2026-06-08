@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import type { ChordSlot, DetectedKey } from './chordTheory';
+import type { ChordSlot, DetectedKey, ProgressionSuggestion } from './chordTheory';
 import {
   chordPitchClasses,
   detectKey,
   toRomanNumeral,
   suggestScales,
   parseRomanNumeralInput,
+  suggestProgressionsForChord,
 } from './chordTheory';
 
 // ── chordPitchClasses ─────────────────────────────────────────────────────────
@@ -400,5 +401,147 @@ describe('parseRomanNumeralInput', () => {
   it('parses m7b5 suffix', () => {
     const slots = parseRomanNumeralInput('viim7b5', cMajor);
     expect(slots[0]).toEqual({ root: 'B', type: 'm7b5' });
+  });
+});
+
+// ── suggestProgressionsForChord ───────────────────────────────────────────────
+
+describe('suggestProgressionsForChord', () => {
+  it('returns an array of ProgressionSuggestion objects for C major', () => {
+    const result = suggestProgressionsForChord('C', 'major');
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThan(0);
+    for (const s of result) {
+      expect(typeof s.name).toBe('string');
+      expect(Array.isArray(s.chords)).toBe(true);
+      expect(s.chords.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('returns at most 8 progressions for C major', () => {
+    const result = suggestProgressionsForChord('C', 'major');
+    expect(result.length).toBeLessThanOrEqual(8);
+  });
+
+  it('includes a C major key progression containing ["C","F","G"] for C major (I-IV-V)', () => {
+    const result = suggestProgressionsForChord('C', 'major');
+    const iFourFive = result.find(
+      (s: ProgressionSuggestion) =>
+        s.chords.includes('C') && s.chords.includes('F') && s.chords.includes('G'),
+    );
+    expect(iFourFive).toBeDefined();
+  });
+
+  it('includes a C major key progression containing ["C","G","Am","F"] for C major (I-V-vi-IV)', () => {
+    const result = suggestProgressionsForChord('C', 'major');
+    const popProg = result.find(
+      (s: ProgressionSuggestion) =>
+        s.chords.includes('C') &&
+        s.chords.includes('G') &&
+        s.chords.includes('Am') &&
+        s.chords.includes('F'),
+    );
+    expect(popProg).toBeDefined();
+  });
+
+  it('includes a progression in "C major" for C major', () => {
+    const result = suggestProgressionsForChord('C', 'major');
+    const inCMajor = result.some((s: ProgressionSuggestion) => s.name.includes('C major'));
+    expect(inCMajor).toBe(true);
+  });
+
+  it('returns empty array for augmented chord type (quality "other")', () => {
+    const result = suggestProgressionsForChord('C', 'aug');
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array for any chord type that maps to quality "other"', () => {
+    // aug is the primary "other" quality in ChordType
+    expect(suggestProgressionsForChord('G', 'aug')).toEqual([]);
+    expect(suggestProgressionsForChord('A', 'aug')).toEqual([]);
+  });
+
+  it('includes progressions in "A minor" for Am (A minor)', () => {
+    const result = suggestProgressionsForChord('A', 'minor');
+    const inAMinor = result.some((s: ProgressionSuggestion) => s.name.includes('A minor'));
+    expect(inAMinor).toBe(true);
+  });
+
+  it('includes Am in the chord list for Am suggestions', () => {
+    const result = suggestProgressionsForChord('A', 'minor');
+    const hasAm = result.some((s: ProgressionSuggestion) => s.chords.includes('Am'));
+    expect(hasAm).toBe(true);
+  });
+
+  it('finds progressions for C minor in minor keys', () => {
+    const result = suggestProgressionsForChord('C', 'minor');
+    expect(result.length).toBeGreaterThan(0);
+    const hasCm = result.some((s: ProgressionSuggestion) => s.chords.includes('Cm'));
+    expect(hasCm).toBe(true);
+  });
+
+  it('includes a "C minor" key progression for Cm', () => {
+    const result = suggestProgressionsForChord('C', 'minor');
+    const inCMinor = result.some((s: ProgressionSuggestion) => s.name.includes('C minor'));
+    expect(inCMinor).toBe(true);
+  });
+
+  it('does not include duplicate progressions (same chord string content)', () => {
+    const result = suggestProgressionsForChord('C', 'major');
+    const seen = new Set<string>();
+    for (const s of result) {
+      const key = s.chords.join('-');
+      expect(seen.has(key)).toBe(false);
+      seen.add(key);
+    }
+  });
+
+  it('includes the given chord root in every returned progression', () => {
+    const result = suggestProgressionsForChord('G', 'major');
+    for (const s of result) {
+      // The progression must feature G somewhere (as the I, IV, V, etc.)
+      expect(s.chords.some((c: string) => c === 'G' || c.startsWith('G'))).toBe(true);
+    }
+  });
+
+  it('works for a sharp root note: C# major', () => {
+    const result = suggestProgressionsForChord('C#', 'major');
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.length).toBeLessThanOrEqual(8);
+  });
+
+  it('finds progressions for a dominant 7 chord (maps to major quality)', () => {
+    // G7 simplifies to 'major' quality, so it should find major progressions where G appears
+    const result = suggestProgressionsForChord('G', '7');
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('finds progressions for a minor 7 chord (maps to minor quality)', () => {
+    // Am7 simplifies to 'minor' quality
+    const result = suggestProgressionsForChord('A', 'm7');
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('returns empty array for a diminished chord (no template uses the vii degree)', () => {
+    // None of the PROGRESSION_TEMPLATES include the vii/ii° numerals, so dim quality never
+    // matches and suggestProgressionsForChord always returns [] for dim types.
+    const result = suggestProgressionsForChord('B', 'dim');
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array for dim7 (also maps to dim quality, no template matches)', () => {
+    const result = suggestProgressionsForChord('B', 'dim7');
+    expect(result).toEqual([]);
+  });
+
+  it('returns at most 8 progressions even for a chord that appears in many keys', () => {
+    // C major appears in C major (I), G major (IV), F major (V), etc.
+    const result = suggestProgressionsForChord('C', 'major');
+    expect(result.length).toBeLessThanOrEqual(8);
+  });
+
+  it('result length is at most 8 for A minor', () => {
+    const result = suggestProgressionsForChord('A', 'minor');
+    expect(result.length).toBeLessThanOrEqual(8);
   });
 });

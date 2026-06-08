@@ -11,9 +11,12 @@ import {
   DEFAULT_TUNING_ID,
   getTuningById,
   getChordDatabase,
+  computeVoicingDifficulty,
 } from '../data/chords';
+import { suggestScales, suggestProgressionsForChord } from '../utils/chordTheory';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { pluckString } from '@/audio/pluckString';
 
 // ── SVG constants ───────────────────────────────────────────────────────────
@@ -24,10 +27,6 @@ const FRET_Y_START = 18;
 const FRET_SPACING = 21;
 const FRETS_SHOWN = 5;
 const NUT_Y = FRET_Y_START;
-
-function stringX(idx: number): number {
-  return STRING_X_START + idx * STRING_SPACING;
-}
 
 function dotY(fretNum: number, visibleStart: number): number {
   return FRET_Y_START + (fretNum - visibleStart) * FRET_SPACING + FRET_SPACING / 2;
@@ -50,18 +49,28 @@ const FILTER_ITEM_CLS =
   'data-[state=on]:border-[#5b7fff] data-[state=on]:bg-[#252850] data-[state=on]:text-[#8eaaff]';
 
 // ── FretboardDiagram ────────────────────────────────────────────────────────
-function FretboardDiagram({ voicing, stringNames }: { voicing: ChordVoicing; stringNames: string[] }) {
+function FretboardDiagram({
+  voicing, stringNames, leftHanded,
+}: {
+  voicing: ChordVoicing;
+  stringNames: string[];
+  leftHanded?: boolean;
+}) {
   const { frets, barre, startFret = 1 } = voicing;
   const visibleStart = startFret;
   const isOpenPosition = startFret <= 1;
   const numStrings = frets.length;
   const svgWidth = STRING_X_START + (numStrings - 1) * STRING_SPACING + 18 + STRING_X_START;
 
+  const sx = (i: number) => leftHanded
+    ? STRING_X_START + (numStrings - 1 - i) * STRING_SPACING
+    : STRING_X_START + i * STRING_SPACING;
+
   const stringLines = frets.map((_, i) => (
     <line
       key={`s${i}`}
-      x1={stringX(i)} y1={FRET_Y_START}
-      x2={stringX(i)} y2={FRET_Y_START + FRET_SPACING * FRETS_SHOWN}
+      x1={sx(i)} y1={FRET_Y_START}
+      x2={sx(i)} y2={FRET_Y_START + FRET_SPACING * FRETS_SHOWN}
       stroke="#888" strokeWidth="1"
     />
   ));
@@ -72,8 +81,8 @@ function FretboardDiagram({ voicing, stringNames }: { voicing: ChordVoicing; str
     return (
       <line
         key={`f${f}`}
-        x1={stringX(0)} y1={y}
-        x2={stringX(numStrings - 1)} y2={y}
+        x1={sx(0)} y1={y}
+        x2={sx(numStrings - 1)} y2={y}
         stroke={isNut ? '#eee' : '#888'}
         strokeWidth={isNut ? 3 : 1}
       />
@@ -83,13 +92,13 @@ function FretboardDiagram({ voicing, stringNames }: { voicing: ChordVoicing; str
   const markers = frets.map((fret, i) => {
     if (fret === 0) {
       return (
-        <text key={`m${i}`} x={stringX(i)} y={NUT_Y - 4}
+        <text key={`m${i}`} x={sx(i)} y={NUT_Y - 4}
           textAnchor="middle" fontSize="14" fill="#bbb">○</text>
       );
     }
     if (fret === -1) {
       return (
-        <text key={`m${i}`} x={stringX(i)} y={NUT_Y - 4}
+        <text key={`m${i}`} x={sx(i)} y={NUT_Y - 4}
           textAnchor="middle" fontSize="14" fill="#999">×</text>
       );
     }
@@ -97,8 +106,8 @@ function FretboardDiagram({ voicing, stringNames }: { voicing: ChordVoicing; str
   });
 
   const barreEl = barre ? (() => {
-    const x1 = stringX(barre.fromString - 1);
-    const x2 = stringX(barre.toString - 1);
+    const x1 = sx(barre.fromString - 1);
+    const x2 = sx(barre.toString - 1);
     const y = dotY(barre.fret, visibleStart);
     return (
       <rect
@@ -115,19 +124,23 @@ function FretboardDiagram({ voicing, stringNames }: { voicing: ChordVoicing; str
     if (barre && fret === barre.fret && i >= barre.fromString - 1 && i <= barre.toString - 1) {
       return null;
     }
-    return <circle key={`d${i}`} cx={stringX(i)} cy={dotY(fret, visibleStart)} r={5.5} fill="#5b7fff" />;
+    return <circle key={`d${i}`} cx={sx(i)} cy={dotY(fret, visibleStart)} r={5.5} fill="#5b7fff" />;
   });
 
   const fretLabel = !isOpenPosition ? (
-    <text x={svgWidth - 2} y={FRET_Y_START + FRET_SPACING / 2}
-      textAnchor="end" fontSize="14" fill="#bbb" dominantBaseline="middle">
+    <text
+      x={leftHanded ? 2 : svgWidth - 2}
+      y={FRET_Y_START + FRET_SPACING / 2}
+      textAnchor={leftHanded ? 'start' : 'end'}
+      fontSize="14" fill="#bbb" dominantBaseline="middle"
+    >
       {startFret}fr
     </text>
   ) : null;
 
   const STRING_LABEL_Y = FRET_Y_START + FRET_SPACING * FRETS_SHOWN + 12;
   const stringLabels = frets.map((_, i) => (
-    <text key={`n${i}`} x={stringX(i)} y={STRING_LABEL_Y}
+    <text key={`n${i}`} x={sx(i)} y={STRING_LABEL_Y}
       textAnchor="middle" fontSize="9" fill="#666">
       {stringNames[i]}
     </text>
@@ -168,14 +181,16 @@ function TabView({ voicing, stringNames }: { voicing: ChordVoicing; stringNames:
 
 // ── ChordCard ────────────────────────────────────────────────────────────────
 function ChordCard({
-  root, type, voicing, viewMode, stringNames, onPlay,
+  root, type, voicing, viewMode, stringNames, leftHanded, onPlay, onDetail,
 }: {
   root: RootNote;
   type: ChordType;
   voicing: ChordVoicing;
   viewMode: 'fretboard' | 'tab';
   stringNames: string[];
+  leftHanded: boolean;
   onPlay: (frets: Frets) => void;
+  onDetail: () => void;
 }) {
   const [lit, setLit] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -213,11 +228,20 @@ function ChordCard({
       >
         {fav ? '★' : '☆'}
       </button>
+      <button
+        className="absolute bottom-1 right-1.5 text-[#7070a0] hover:text-[#8eaaff] transition-colors duration-150 leading-none"
+        style={{ fontSize: '1.1rem' }}
+        onClick={e => { e.stopPropagation(); onDetail(); }}
+        aria-label="View chord details"
+        tabIndex={0}
+      >
+        ⓘ
+      </button>
       <div className="text-[1.05rem] font-bold text-[#8eaaff] text-center">
         {chordName(root, type)}
       </div>
       {viewMode === 'fretboard'
-        ? <FretboardDiagram voicing={voicing} stringNames={stringNames} />
+        ? <FretboardDiagram voicing={voicing} stringNames={stringNames} leftHanded={leftHanded} />
         : <TabView voicing={voicing} stringNames={stringNames} />
       }
     </div>
@@ -229,6 +253,131 @@ const FAV_FILTER_CLS =
   'border border-[#505270] bg-[#1e1f2c] text-[#aaa] ' +
   'hover:bg-[#1e1f2c] hover:border-[#ffca28] hover:text-[#ffca28] ' +
   'data-[state=on]:border-[#ffca28] data-[state=on]:bg-[#252018] data-[state=on]:text-[#ffca28]';
+
+// ── ChordDetailDialog ────────────────────────────────────────────────────────
+
+const COMMON_SCALE_MODES = new Set([
+  'major', 'minor', 'pentatonic_major', 'pentatonic_minor',
+  'blues', 'harmonic_minor', 'melodic_minor',
+]);
+
+const DIFFICULTY_STYLES: Record<string, string> = {
+  beginner:     'bg-[#1a3a1a] text-[#4caf50] border-[#2a5a2a]',
+  intermediate: 'bg-[#3a2e0a] text-[#ffc107] border-[#5a4a10]',
+  advanced:     'bg-[#3a1010] text-[#ef5350] border-[#5a2020]',
+};
+
+function ChordDetailDialog({
+  root, type, voicing, stringNames, leftHanded, open, onClose, onPlay,
+}: {
+  root: RootNote;
+  type: ChordType;
+  voicing: ChordVoicing;
+  stringNames: string[];
+  leftHanded: boolean;
+  open: boolean;
+  onClose: () => void;
+  onPlay: (frets: Frets) => void;
+}) {
+  const difficulty = useMemo(() => computeVoicingDifficulty(voicing), [voicing]);
+
+  const scales = useMemo(() => {
+    const all = suggestScales([{ root, type }]);
+    return {
+      common: all.filter((s) => COMMON_SCALE_MODES.has(s.mode)).slice(0, 8),
+      modes:  all.filter((s) => !COMMON_SCALE_MODES.has(s.mode)).slice(0, 8),
+    };
+  }, [root, type]);
+
+  const progressions = useMemo(() => suggestProgressionsForChord(root, type), [root, type]);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="bg-[#1a1b2e] border-[#505270] text-[#ccd6ff] max-w-[480px] max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-[#8eaaff] text-xl">{chordName(root, type)}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Chord details: diagram, difficulty, scales, and common progressions
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-5 pt-1">
+          {/* Diagram + play + difficulty */}
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0 w-[160px]">
+              <FretboardDiagram voicing={voicing} stringNames={stringNames} leftHanded={leftHanded} />
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                className="px-3 py-1.5 text-[0.82rem] font-semibold rounded-md border border-[#5b7fff] bg-[#252850] text-[#8eaaff] hover:bg-[#2e3060] transition-colors"
+                onClick={() => onPlay(voicing.frets)}
+              >
+                Play
+              </button>
+              <span className={[
+                'px-2 py-0.5 text-[0.72rem] font-bold rounded border text-center',
+                DIFFICULTY_STYLES[difficulty] ?? '',
+              ].join(' ')}>
+                {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
+              </span>
+            </div>
+          </div>
+
+          {/* Scale suggestions */}
+          {(scales.common.length > 0 || scales.modes.length > 0) && (
+            <div className="flex flex-col gap-2">
+              <div className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8]">Fits these scales</div>
+              {scales.common.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {scales.common.map((s) => (
+                    <span key={s.label} className="px-2 py-0.5 text-[0.75rem] rounded bg-[#1e1f2c] border border-[#505270] text-[#aab0d0]">
+                      {s.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {scales.modes.length > 0 && (
+                <details>
+                  <summary className="text-[0.75rem] text-[#7070a0] cursor-pointer hover:text-[#aaa] select-none">
+                    + {scales.modes.length} modal scale{scales.modes.length > 1 ? 's' : ''}
+                  </summary>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {scales.modes.map((s) => (
+                      <span key={s.label} className="px-2 py-0.5 text-[0.75rem] rounded bg-[#1e1f2c] border border-[#505270] text-[#aab0d0]">
+                        {s.label}
+                      </span>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+
+          {/* Progression suggestions */}
+          {progressions.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8]">Common progressions</div>
+              <div className="flex flex-col gap-2">
+                {progressions.map((p, idx) => (
+                  <div key={idx} className="flex flex-col gap-0.5">
+                    <div className="text-[0.7rem] text-[#7070a0]">{p.name}</div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {p.chords.map((c, ci) => (
+                        <span key={ci} className="px-2 py-0.5 text-[0.78rem] font-semibold rounded bg-[#1e1f2c] border border-[#505270] text-[#8eaaff]">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // ── ChordsPage ───────────────────────────────────────────────────────────────
 export function ChordsPage() {
@@ -251,6 +400,12 @@ export function ChordsPage() {
     localStorage.getItem('chords-tuningId') ?? DEFAULT_TUNING_ID
   );
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [leftHanded, setLeftHanded] = useState(() =>
+    localStorage.getItem('chords-leftHanded') === 'true'
+  );
+  const [detailChord, setDetailChord] = useState<{
+    root: RootNote; type: ChordType; voicing: ChordVoicing;
+  } | null>(null);
   const { isFavorite } = useFavorites();
   const audioCtxRef = useRef<AudioContext | null>(null);
 
@@ -259,6 +414,7 @@ export function ChordsPage() {
   useEffect(() => { localStorage.setItem('chords-viewMode', viewMode); }, [viewMode]);
   useEffect(() => { localStorage.setItem('chords-stringCount', String(stringCount)); }, [stringCount]);
   useEffect(() => { localStorage.setItem('chords-tuningId', tuningId); }, [tuningId]);
+  useEffect(() => { localStorage.setItem('chords-leftHanded', String(leftHanded)); }, [leftHanded]);
 
   const activeTuning = useMemo(() => {
     const t = getTuningById(tuningId);
@@ -354,7 +510,7 @@ export function ChordsPage() {
         </ToggleGroup>
       </div>
 
-      {/* Favorites filter */}
+      {/* Show options */}
       <div className="flex flex-wrap items-center gap-1">
         <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8] mr-1">Show</span>
         <ToggleGroup
@@ -364,6 +520,14 @@ export function ChordsPage() {
           className="flex flex-wrap justify-start gap-1"
         >
           <ToggleGroupItem value="favorites" className={FAV_FILTER_CLS}>★ Favorites</ToggleGroupItem>
+        </ToggleGroup>
+        <ToggleGroup
+          type="single"
+          value={leftHanded ? 'lh' : ''}
+          onValueChange={v => setLeftHanded(v === 'lh')}
+          className="flex flex-wrap justify-start gap-1"
+        >
+          <ToggleGroupItem value="lh" className={FILTER_ITEM_CLS}>Left-handed</ToggleGroupItem>
         </ToggleGroup>
       </div>
 
@@ -397,10 +561,25 @@ export function ChordsPage() {
             voicing={entry.voicings[0]}
             viewMode={viewMode}
             stringNames={activeTuning.stringNames}
+            leftHanded={leftHanded}
             onPlay={playChord}
+            onDetail={() => setDetailChord({ root: entry.root, type: entry.type, voicing: entry.voicings[0] })}
           />
         ))}
       </div>
+
+      {detailChord && (
+        <ChordDetailDialog
+          root={detailChord.root}
+          type={detailChord.type}
+          voicing={detailChord.voicing}
+          stringNames={activeTuning.stringNames}
+          leftHanded={leftHanded}
+          open={!!detailChord}
+          onClose={() => setDetailChord(null)}
+          onPlay={playChord}
+        />
+      )}
     </main>
   );
 }
