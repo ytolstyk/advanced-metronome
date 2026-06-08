@@ -14,6 +14,7 @@ import { PianoKeyboard } from "../components/PianoKeyboard/PianoKeyboard";
 import { GenerateDrumsModal } from "../components/GenerateDrumsModal/GenerateDrumsModal";
 import type { DrumStyle } from "../drumPatterns";
 import { drumToClickTrackPieces } from "../utils/drumToClickTrack";
+import { mutatePattern, applyPatternRandomness } from "../utils/patternUtils";
 import { INSTRUMENT_IDS } from "../constants";
 import type { Measure, Pattern } from "../types";
 import "../App.css";
@@ -71,7 +72,7 @@ export function DrumMachinePage() {
     dispatch({ type: "RESTORE_STATE", state: prev });
   }, []);
 
-  const handleGenerate = useCallback((style: DrumStyle) => {
+  const handleGenerate = useCallback((style: DrumStyle, randomness: number) => {
     const measures = stateRef.current.config.measures;
     // Only force stepsPerBeat for styles that require triplets (3) or quarter beats (4).
     // For straight (1) or half-beat (2) styles, preserve the measure's existing stepsPerBeat.
@@ -84,13 +85,13 @@ export function DrumMachinePage() {
           : Math.max(m.timeSignature.stepsPerBeat ?? 1, style.stepsPerBeat),
       },
     }));
+    const totalSteps = newMeasures.reduce(
+      (sum, m) => sum + m.timeSignature.beats * (m.timeSignature.stepsPerBeat ?? 1),
+      0,
+    );
     // Generate pattern for each measure, accumulating offsets
     const pattern = {} as Pattern;
     for (const id of INSTRUMENT_IDS) {
-      const totalSteps = newMeasures.reduce(
-        (sum, m) => sum + m.timeSignature.beats * (m.timeSignature.stepsPerBeat ?? 1),
-        0,
-      );
       pattern[id] = new Array(totalSteps).fill(false);
     }
     let offset = 0;
@@ -112,8 +113,15 @@ export function DrumMachinePage() {
       }
       offset += measureSteps;
     }
-    dispatchWithHistory({ type: 'APPLY_GENERATED_DRUMS', measures: newMeasures, pattern });
+    const finalPattern = applyPatternRandomness(pattern, totalSteps, randomness);
+    dispatchWithHistory({ type: 'APPLY_GENERATED_DRUMS', measures: newMeasures, pattern: finalPattern });
     setShowGenerateModal(false);
+  }, [dispatchWithHistory]);
+
+  const handleMutate = useCallback(() => {
+    const { pattern, config } = stateRef.current;
+    const mutated = mutatePattern(pattern, config.measures);
+    dispatchWithHistory({ type: 'APPLY_GENERATED_DRUMS', measures: config.measures, pattern: mutated });
   }, [dispatchWithHistory]);
 
   const handleExportToClickTrack = useCallback(() => {
@@ -287,6 +295,16 @@ export function DrumMachinePage() {
       <div className="drum-extra-row">
         <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setShowGenerateModal(true)}>
           Generate Drums
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1 text-xs"
+          onClick={handleMutate}
+          disabled={!hasPattern || state.isPlaying}
+          title="Randomly shift 1–2 hits per instrument to add subtle variation"
+        >
+          Mutate
         </Button>
         <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setShowExportConfirm(true)}>
           Export to Click Track
