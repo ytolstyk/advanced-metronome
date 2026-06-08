@@ -59,3 +59,12 @@ export const SCALE_INTERVALS: Record<ScaleMode, number[]> = {
 };
 
 export { NOTE_NAMES } from './noteColors';
+
+export const SCALE_PENTATONIC_SUBSET: Partial<Record<ScaleMode, number[]>> = {
+  major:       [0, 2, 4, 7, 9],
+  lydian:      [0, 2, 4, 7, 9],
+  mixolydian:  [0, 2, 4, 7, 9],
+  minor:       [0, 3, 5, 7, 10],
+  dorian:      [0, 3, 5, 7, 10],
+  phrygian:    [0, 3, 5, 7, 10],
+};

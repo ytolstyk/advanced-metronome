@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTapTempo } from "../hooks/useTapTempo";
 import { useSearchParams } from "react-router-dom";
 import { useAuthenticator } from "@aws-amplify/ui-react";
@@ -9,7 +9,10 @@ import {
   SCALE_LABELS,
   SCALE_MODES,
   NOTE_NAMES,
+  SCALE_PENTATONIC_SUBSET,
 } from "../data/scales";
+import { computeCAGEDShapes } from "../data/caged";
+import { INTERVAL_NAMES } from "../data/intervals";
 import { ROOT_NOTES } from "../data/chords";
 import type { RootNote } from "../data/chords";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -36,6 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { pluckString } from "@/audio/pluckString";
+import { cn } from "@/lib/utils";
 
 // ── Fretboard constants ──────────────────────────────────────────────────────
 // Standard tuning: low E → high e (index 0 = low E)
@@ -61,12 +65,26 @@ const SVG_H = TOP_PAD + (NUM_STRINGS - 1) * STRING_H + BOTTOM_PAD;
 const SINGLE_DOT_FRETS = new Set([3, 5, 7, 9, 15, 17, 19, 21]);
 const DOUBLE_DOT_FRETS = new Set([12, 24]);
 
-// ── Shared toggle style ──────────────────────────────────────────────────────
-const FILTER_ITEM_CLS =
-  "h-auto px-3 py-1 text-[0.82rem] font-semibold rounded-md " +
-  "border border-[#505270] bg-[#1e1f2c] text-[#aaa] " +
-  "hover:bg-[#1e1f2c] hover:border-[#7070a0] hover:text-[#ddd] " +
-  "data-[state=on]:border-[#5b7fff] data-[state=on]:bg-[#252850] data-[state=on]:text-[#8eaaff]";
+// ── Shared toggle styles ─────────────────────────────────────────────────────
+const BASE_TOGGLE = "px-3 py-1 text-[0.82rem] font-semibold rounded-md border";
+const ACTIVE_CLS  = "border-[#5b7fff] bg-[#252850] text-[#8eaaff]";
+const INACTIVE_CLS = "border-[#505270] bg-[#1e1f2c] text-[#aaa] hover:border-[#7070a0] hover:text-[#ddd]";
+const DISABLED_CLS = "border-[#333350] bg-[#161622] text-[#555570] cursor-not-allowed";
+
+const FILTER_ITEM_CLS = cn(
+  "h-auto", BASE_TOGGLE, INACTIVE_CLS,
+  "hover:bg-[#1e1f2c]",
+  "data-[state=on]:border-[#5b7fff] data-[state=on]:bg-[#252850] data-[state=on]:text-[#8eaaff]",
+);
+
+function toggleCls(active: boolean, disabled = false): string {
+  return cn(BASE_TOGGLE, disabled ? DISABLED_CLS : cn("transition-colors", active ? ACTIVE_CLS : INACTIVE_CLS));
+}
+
+const DEGREE_LABELS: Record<number, string> = {
+  0: 'R', 1: '♭2', 2: '2', 3: '♭3', 4: '3', 5: '4',
+  6: '♭5', 7: '5', 8: '♭6', 9: '6', 10: '♭7', 11: '7',
+};
 
 // ── Fretboard SVG ────────────────────────────────────────────────────────────
 function fretX(fret: number): number {
@@ -85,11 +103,48 @@ interface FretboardProps {
   onNoteClick: (midiNote: number, label: string, dotKey: string) => void;
   highlightedDotKey?: string | null;
   practiceMode?: boolean;
+  showDegrees?: boolean;
+  showCaged?: boolean;
+  pentatonicSet?: Set<number> | null;
 }
 
-function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practiceMode }: FretboardProps) {
-  // Build note dots
+function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practiceMode, showDegrees, showCaged, pentatonicSet }: FretboardProps) {
+  const [hoveredDotKey, setHoveredDotKey] = useState<string | null>(null);
+
+  // Build CAGED bands
+  const cagedBands: React.ReactNode[] = [];
+  if (showCaged) {
+    const shapes = computeCAGEDShapes(rootPc);
+    const bandY1 = TOP_PAD - STRING_H / 2;
+    const bandH = (NUM_STRINGS - 1) * STRING_H + STRING_H;
+    for (const shape of shapes) {
+      const frets = shape.notes.map((n) => n.fret);
+      const minFret = Math.min(...frets);
+      const maxFret = Math.max(...frets);
+      const x1 = minFret === 0 ? LEFT_PAD : fretX(minFret) - FRET_W / 2;
+      const x2 = fretX(maxFret) + FRET_W / 2;
+      const midX = (x1 + x2) / 2;
+      cagedBands.push(
+        <g key={`caged-${shape.name}`}>
+          <rect
+            x={x1} y={bandY1} width={x2 - x1} height={bandH}
+            fill={shape.color} opacity={0.09} rx="4"
+          />
+          <text
+            x={midX} y={TOP_PAD - 8} textAnchor="middle"
+            fontSize="9" fontWeight="700" fill={shape.color} opacity={0.65}
+          >
+            {shape.name}
+          </text>
+        </g>,
+      );
+    }
+  }
+
+  // Build note dots — also derive tooltip data for the hovered dot during this same pass
+  // (stale tooltip disappears automatically when the hovered key leaves the current scale)
   const noteDots: React.ReactNode[] = [];
+  let hoveredDot: { cx: number; cy: number; interval: number; noteName: string } | null = null;
 
   for (let svgStr = 0; svgStr < NUM_STRINGS; svgStr++) {
     // svgStr 0 = high e (string index 5 in OPEN_MIDI), 5 = low E (string index 0)
@@ -113,12 +168,19 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
       const fill = isHighlighted ? "#22dd88" : isRoot ? "#5b7fff" : "#2a2a4c";
       const stroke = isHighlighted ? "#66ffbb" : isRoot ? "#8eaaff" : "#6060a0";
       const noteName = NOTE_NAMES[pc];
+      const isPentatonicDimmed = pentatonicSet != null && !pentatonicSet.has(interval);
+      const dotOpacity = isPentatonicDimmed ? 0.28 : 1;
+      const displayLabel = showDegrees ? DEGREE_LABELS[interval] : noteName;
+
+      if (dotKey === hoveredDotKey) hoveredDot = { cx, cy, interval, noteName };
 
       noteDots.push(
         <g
           key={dotKey}
           onClick={() => onNoteClick(midiNote, noteName, dotKey)}
-          style={{ cursor: practiceMode ? "crosshair" : "pointer" }}
+          onMouseEnter={() => setHoveredDotKey(dotKey)}
+          onMouseLeave={() => setHoveredDotKey(null)}
+          style={{ cursor: practiceMode ? "crosshair" : "pointer", opacity: dotOpacity }}
           role="button"
           aria-label={`${noteName} on ${STRING_NAMES_TOP[svgStr]} string fret ${fret}`}
         >
@@ -140,11 +202,35 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
             fill="white"
             style={{ pointerEvents: "none", userSelect: "none" }}
           >
-            {noteName}
+            {displayLabel}
           </text>
         </g>,
       );
     }
+  }
+
+  // Hover tooltip
+  let tooltipEl: React.ReactNode = null;
+  if (hoveredDot != null) {
+    const tooltipLabel = `${hoveredDot.noteName} — ${INTERVAL_NAMES[hoveredDot.interval]}`;
+    const tw = Math.max(tooltipLabel.length * 6.5 + 16, 80);
+    const th = 20;
+    const tx = Math.max(4, Math.min(hoveredDot.cx - tw / 2, SVG_W - tw - 4));
+    const tyAbove = hoveredDot.cy - CIRCLE_R - th - 6;
+    const ty = tyAbove < 2 ? hoveredDot.cy + CIRCLE_R + 6 : tyAbove;
+    tooltipEl = (
+      <g pointerEvents="none">
+        <rect x={tx} y={ty} width={tw} height={th} rx="4"
+          fill="#1a1b2e" stroke="#5b7fff" strokeWidth="1" />
+        <text
+          x={tx + tw / 2} y={ty + th / 2}
+          textAnchor="middle" dominantBaseline="central"
+          fontSize="11" fill="#c8ccff"
+        >
+          {tooltipLabel}
+        </text>
+      </g>
+    );
   }
 
   // Fret position markers (dots below strings)
@@ -260,9 +346,11 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
         </text>
       ))}
 
+      {cagedBands}
       {fretLabels}
       {markers}
       {noteDots}
+      {tooltipEl}
     </svg>
   );
 }
@@ -293,6 +381,15 @@ export function ScalesPage() {
       return JSON.parse(localStorage.getItem('scales-practiceNotes') ?? '[]') as PracticeNote[];
     } catch { return []; }
   });
+  const [showDegrees, setShowDegrees] = useState(
+    () => localStorage.getItem('scales-showDegrees') === 'true'
+  );
+  const [showCaged, setShowCaged] = useState(
+    () => localStorage.getItem('scales-showCaged') === 'true'
+  );
+  const [showPentatonic, setShowPentatonic] = useState(
+    () => localStorage.getItem('scales-showPentatonic') === 'true'
+  );
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(() => {
     const n = Number(localStorage.getItem('scales-bpm'));
@@ -361,6 +458,9 @@ export function ScalesPage() {
   useEffect(() => { localStorage.setItem('scales-bpm', String(bpm)); }, [bpm]);
   useEffect(() => { localStorage.setItem('scales-practiceMode', String(practiceMode)); }, [practiceMode]);
   useEffect(() => { localStorage.setItem('scales-practiceNotes', JSON.stringify(practiceNotes)); }, [practiceNotes]);
+  useEffect(() => { localStorage.setItem('scales-showDegrees', String(showDegrees)); }, [showDegrees]);
+  useEffect(() => { localStorage.setItem('scales-showCaged', String(showCaged)); }, [showCaged]);
+  useEffect(() => { localStorage.setItem('scales-showPentatonic', String(showPentatonic)); }, [showPentatonic]);
 
   // Cleanup on unmount
   useEffect(() => () => {
@@ -371,7 +471,12 @@ export function ScalesPage() {
   }, []);
 
   const rootPc = ROOT_NOTES.indexOf(selectedKey);
-  const intervals = new Set(SCALE_INTERVALS[selectedMode]);
+  const intervals = useMemo(() => new Set(SCALE_INTERVALS[selectedMode]), [selectedMode]);
+  const pentatonicSubset = SCALE_PENTATONIC_SUBSET[selectedMode];
+  const pentatonicSet = useMemo(
+    () => showPentatonic && pentatonicSubset ? new Set(pentatonicSubset) : null,
+    [showPentatonic, pentatonicSubset],
+  );
 
   function getOrCreateAudioCtx(): AudioContext {
     if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
@@ -593,6 +698,26 @@ export function ScalesPage() {
         </ToggleGroup>
       </div>
 
+      {/* Display options */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8] mr-1">
+          Display
+        </span>
+        <button onClick={() => setShowDegrees((v) => !v)} className={toggleCls(showDegrees)}>
+          Degree Labels
+        </button>
+        <button onClick={() => setShowCaged((v) => !v)} className={toggleCls(showCaged)}>
+          CAGED Overlay
+        </button>
+        <button
+          onClick={() => setShowPentatonic((v) => !v)}
+          disabled={!pentatonicSubset}
+          className={toggleCls(showPentatonic, !pentatonicSubset)}
+        >
+          Pentatonic Subset
+        </button>
+      </div>
+
       {/* Legend */}
       <div className="flex items-center gap-4 text-[0.75rem] text-[#777799]">
         <span className="flex items-center gap-1.5">
@@ -646,6 +771,9 @@ export function ScalesPage() {
           onNoteClick={handleNoteClick}
           highlightedDotKey={highlightedDotKey}
           practiceMode={practiceMode}
+          showDegrees={showDegrees}
+          showCaged={showCaged}
+          pentatonicSet={pentatonicSet}
         />
       </div>
 
