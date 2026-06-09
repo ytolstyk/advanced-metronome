@@ -70,6 +70,14 @@
   margin: 0 auto;
 }
 
+.welcome-category {
+  margin-bottom: 2.5rem;
+}
+
+.welcome-category:last-child {
+  margin-bottom: 0;
+}
+
 .welcome-grid-label {
   font-size: 0.7rem;
   font-weight: 700;

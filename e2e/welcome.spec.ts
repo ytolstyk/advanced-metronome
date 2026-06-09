@@ -9,9 +9,9 @@ test.describe('WelcomePage', () => {
     await expect(page.getByRole('heading', { name: 'Drumma Llama' })).toBeVisible();
   });
 
-  test('renders 16 feature cards', async ({ page }) => {
+  test('renders 17 feature cards', async ({ page }) => {
     const cards = page.locator('button.welcome-card');
-    await expect(cards).toHaveCount(16);
+    await expect(cards).toHaveCount(17);
   });
 
   test('clicking "Drum Machine" card navigates to /drums', async ({ page }) => {

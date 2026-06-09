@@ -4,127 +4,147 @@ import "./WelcomePage.css";
 
 const BG_IMAGES = ["/drummallama.jpg", "/drummallama2.jpg"];
 
-const FEATURES = [
+const CATEGORIES = [
   {
-    icon: "🥁",
-    title: "Drum Machine",
-    desc: "Build beat patterns with a full 7-instrument grid",
-    route: "/drums",
-    color: "#6366f1",
+    name: "Rhythm",
+    features: [
+      {
+        icon: "🥁",
+        title: "Drum Machine",
+        desc: "Build beat patterns with a full 7-instrument grid",
+        route: "/drums",
+        color: "#6366f1",
+      },
+      {
+        icon: "🎵",
+        title: "Metronome",
+        desc: "Simple and advanced metronome with pendulum visualization",
+        route: "/metronome",
+        color: "#6ee7b7",
+      },
+      {
+        icon: "🎯",
+        title: "Click Track",
+        desc: "Custom metronome with subdivisions and speed control",
+        route: "/click-track",
+        color: "#f59e0b",
+      },
+    ],
   },
   {
-    icon: "🎵",
-    title: "Metronome",
-    desc: "Simple and advanced metronome with pendulum visualization",
-    route: "/metronome",
-    color: "#6ee7b7",
+    name: "Theory",
+    features: [
+      {
+        icon: "🎹",
+        title: "Chords",
+        desc: "Chord reference and player for guitar & piano",
+        route: "/chords",
+        color: "#3b82f6",
+      },
+      {
+        icon: "🎶",
+        title: "Chord Progression",
+        desc: "Chain chords, detect the key, and get scale suggestions",
+        route: "/chord-progression",
+        color: "#5b7fff",
+      },
+      {
+        icon: "🎼",
+        title: "Scales",
+        desc: "Explore scales across all keys and modes",
+        route: "/scales",
+        color: "#8b5cf6",
+      },
+      {
+        icon: "🧩",
+        title: "CAGED System",
+        desc: "Visualize the 5 major chord shapes tiling the fretboard for any root",
+        route: "/caged",
+        color: "#14b8a6",
+      },
+      {
+        icon: "⭕",
+        title: "Circle of 5ths",
+        desc: "Visual key relationships and chord families",
+        route: "/circle",
+        color: "#ec4899",
+      },
+      {
+        icon: "🎸",
+        title: "Arpeggio Library",
+        desc: "CAGED arpeggio shapes across all keys with sweep playback",
+        route: "/arpeggios",
+        color: "#7c3aed",
+      },
+    ],
   },
   {
-    icon: "🎯",
-    title: "Click Track",
-    desc: "Custom metronome with subdivisions and speed control",
-    route: "/click-track",
-    color: "#f59e0b",
+    name: "Learning",
+    features: [
+      {
+        icon: "📚",
+        title: "Lessons",
+        desc: "Structured guitar lessons with progress tracking",
+        route: "/lessons",
+        color: "#f97316",
+      },
+      {
+        icon: "👂",
+        title: "Ear Training",
+        desc: "Train your ears to recognize intervals, chords, and scales by sound",
+        route: "/ear-training",
+        color: "#a855f7",
+      },
+      {
+        icon: "🎵",
+        title: "Interval Trainer",
+        desc: "Find intervals on the fretboard and build your ear for music theory",
+        route: "/interval-trainer",
+        color: "#8b5cf6",
+      },
+      {
+        icon: "🎯",
+        title: "Fret Memorizer",
+        desc: "Quiz yourself on note positions across the fretboard",
+        route: "/fret-memorizer",
+        color: "#06b6d4",
+      },
+      {
+        icon: "🎸",
+        title: "Tuner",
+        desc: "Chromatic tuner using McLeod pitch detection",
+        route: "/tuner",
+        color: "#10b981",
+      },
+    ],
   },
   {
-    icon: "🎸",
-    title: "Tuner",
-    desc: "Chromatic tuner using McLeod pitch detection",
-    route: "/tuner",
-    color: "#10b981",
+    name: "Composition",
+    features: [
+      {
+        icon: "🎸",
+        title: "Tab Editor",
+        desc: "Write and play back guitar tabs with full notation",
+        route: "/tab-editor",
+        color: "#84cc16",
+      },
+      {
+        icon: "📖",
+        title: "Tab Library",
+        desc: "Browse and play guitar tabs shared by the community",
+        route: "/tabs",
+        color: "#f59e0b",
+      },
+      {
+        icon: "📅",
+        title: "Practice Tracker",
+        desc: "Log sessions, track streaks, and see which tools you've neglected",
+        route: "/practice",
+        color: "#22d3ee",
+      },
+    ],
   },
-  {
-    icon: "🎹",
-    title: "Chords",
-    desc: "Chord reference and player for guitar & piano",
-    route: "/chords",
-    color: "#3b82f6",
-  },
-  {
-    icon: "🎶",
-    title: "Chord Progression",
-    desc: "Chain chords, detect the key, and get scale suggestions",
-    route: "/chord-progression",
-    color: "#5b7fff",
-  },
-  {
-    icon: "🎼",
-    title: "Scales",
-    desc: "Explore scales across all keys and modes",
-    route: "/scales",
-    color: "#8b5cf6",
-  },
-  {
-    icon: "🧩",
-    title: "CAGED System",
-    desc: "Visualize the 5 major chord shapes tiling the fretboard for any root",
-    route: "/caged",
-    color: "#14b8a6",
-  },
-  {
-    icon: "⭕",
-    title: "Circle of 5ths",
-    desc: "Visual key relationships and chord families",
-    route: "/circle",
-    color: "#ec4899",
-  },
-  {
-    icon: "📚",
-    title: "Lessons",
-    desc: "Structured guitar lessons with progress tracking",
-    route: "/lessons",
-    color: "#f97316",
-  },
-  {
-    icon: "🎯",
-    title: "Fret Memorizer",
-    desc: "Quiz yourself on note positions across the fretboard",
-    route: "/fret-memorizer",
-    color: "#06b6d4",
-  },
-  {
-    icon: "👂",
-    title: "Ear Training",
-    desc: "Train your ears to recognize intervals, chords, and scales by sound",
-    route: "/ear-training",
-    color: "#a855f7",
-  },
-  {
-    icon: "🎸",
-    title: "Tab Editor",
-    desc: "Write and play back guitar tabs with full notation",
-    route: "/tab-editor",
-    color: "#84cc16",
-  },
-  {
-    icon: "📖",
-    title: "Tab Library",
-    desc: "Browse and play guitar tabs shared by the community",
-    route: "/tabs",
-    color: "#f59e0b",
-  },
-  {
-    icon: "📅",
-    title: "Practice Tracker",
-    desc: "Log sessions, track streaks, and see which tools you've neglected",
-    route: "/practice",
-    color: "#22d3ee",
-  },
-  {
-    icon: "🎵",
-    title: "Interval Trainer",
-    desc: "Find intervals on the fretboard and build your ear for music theory",
-    route: "/interval-trainer",
-    color: "#8b5cf6",
-  },
-  {
-    icon: "🎸",
-    title: "Arpeggio Library",
-    desc: "CAGED arpeggio shapes across all keys with sweep playback",
-    route: "/arpeggios",
-    color: "#7c3aed",
-  },
-] as const;
+];
 
 export function WelcomePage() {
   const navigate = useNavigate();
@@ -145,27 +165,32 @@ export function WelcomePage() {
         <div className="welcome-hero-content">
           <h1 className="welcome-title">Drumma Llama</h1>
           <p className="welcome-tagline">
-            Beat tools for musicians — free, in-browser, no install
+            Everything a guitarist needs — free, in-browser, no install
           </p>
         </div>
       </div>
 
       <section className="welcome-grid-section">
-        <div className="welcome-grid">
-          {FEATURES.map((f) => (
-            <button
-              key={f.route}
-              className="welcome-card"
-              style={{ "--card-color": f.color } as React.CSSProperties}
-              onClick={() => navigate(f.route)}
-            >
-              <span className="welcome-card-icon">{f.icon}</span>
-              <span className="welcome-card-title">{f.title}</span>
-              <span className="welcome-card-desc">{f.desc}</span>
-              <span className="welcome-card-arrow">Open →</span>
-            </button>
-          ))}
-        </div>
+        {CATEGORIES.map((cat) => (
+          <div key={cat.name} className="welcome-category">
+            <p className="welcome-grid-label">{cat.name}</p>
+            <div className="welcome-grid">
+              {cat.features.map((f) => (
+                <button
+                  key={f.route}
+                  className="welcome-card"
+                  style={{ "--card-color": f.color } as React.CSSProperties}
+                  onClick={() => navigate(f.route)}
+                >
+                  <span className="welcome-card-icon">{f.icon}</span>
+                  <span className="welcome-card-title">{f.title}</span>
+                  <span className="welcome-card-desc">{f.desc}</span>
+                  <span className="welcome-card-arrow">Open →</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </section>
     </div>
   );
