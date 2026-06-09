@@ -11,20 +11,25 @@ import './FretMemorizerPage.css';
 
 // ── Fretboard constants ────────────────────────────────────────────────────
 const NUM_FRETS = 24;
-const FRET_W = 64;
+const MIN_FRET_W = 32;
+const MAX_FRET_W = 64;
 const STRING_H = 40;
 const NUT_X = 40;
 const LEFT_PAD = 8;
 const RIGHT_PAD = 24;
 const TOP_PAD = 40;
 const BOTTOM_PAD = 40;
-const CIRCLE_R = 14;
-const SVG_W = LEFT_PAD + NUT_X + NUM_FRETS * FRET_W + RIGHT_PAD;
 const SINGLE_DOT_FRETS = new Set([3, 5, 7, 9, 15, 17, 19, 21]);
 const DOUBLE_DOT_FRETS = new Set([12, 24]);
 
-function fretX(fret: number) {
-  return LEFT_PAD + NUT_X + fret * FRET_W;
+function computeFretW(containerWidth: number): number {
+  if (containerWidth <= 0) return MAX_FRET_W;
+  const available = containerWidth - LEFT_PAD - NUT_X - RIGHT_PAD;
+  return Math.max(MIN_FRET_W, Math.min(MAX_FRET_W, Math.floor(available / NUM_FRETS)));
+}
+
+function fretX(fret: number, fretW: number) {
+  return LEFT_PAD + NUT_X + fret * fretW;
 }
 function stringY(svgStr: number) {
   return TOP_PAD + svgStr * STRING_H;
@@ -140,6 +145,8 @@ interface FretboardProps {
   onFretClick: (svgStr: number, fret: number, midiNote: number, noteName: string) => void;
   noteFill: Record<string, string>;
   noteStroke: Record<string, string>;
+  fretW: number;
+  circleR: number;
 }
 
 function Fretboard({
@@ -147,14 +154,16 @@ function Fretboard({
   highlightedKey, revealedKey,
   gamePhase, targetSvgStr, answerReveal,
   onFretClick, noteFill, noteStroke,
+  fretW, circleR,
 }: FretboardProps) {
+  const svgW = LEFT_PAD + NUT_X + NUM_FRETS * fretW + RIGHT_PAD;
   const height = svgH(numStrings);
   const markerY = TOP_PAD + (numStrings - 1) * STRING_H + 24;
 
   // Fret position markers
   const markers: React.ReactNode[] = [];
   for (let fret = 1; fret <= NUM_FRETS; fret++) {
-    const cx = fretX(fret) - FRET_W / 2;
+    const cx = fretX(fret, fretW) - fretW / 2;
     if (SINGLE_DOT_FRETS.has(fret)) {
       markers.push(<circle key={`m${fret}`} cx={cx} cy={markerY} r={4} fill="#6060a0" />);
     } else if (DOUBLE_DOT_FRETS.has(fret)) {
@@ -169,7 +178,7 @@ function Fretboard({
   const fretLabels: React.ReactNode[] = [];
   for (let fret = 1; fret <= NUM_FRETS; fret++) {
     fretLabels.push(
-      <text key={`fl${fret}`} x={fretX(fret) - FRET_W / 2} y={TOP_PAD - 24}
+      <text key={`fl${fret}`} x={fretX(fret, fretW) - fretW / 2} y={TOP_PAD - 24}
         textAnchor="middle" dominantBaseline="middle" fontSize="13" fill="#8888bb">
         {fret}
       </text>,
@@ -189,7 +198,7 @@ function Fretboard({
       const dotKey = `${svgStr}-${fret}`;
       const cx = fret === 0
         ? LEFT_PAD + NUT_X / 2
-        : fretX(fret) - FRET_W / 2;
+        : fretX(fret, fretW) - fretW / 2;
 
       const isHighlighted = dotKey === highlightedKey;
       const isRevealed = dotKey === revealedKey;
@@ -243,9 +252,9 @@ function Fretboard({
           aria-label={`${noteName} on ${stringNames[svgStr]} string fret ${fret}`}
         >
           {/* Hit area — always covers full circle */}
-          <circle cx={cx} cy={cy} r={CIRCLE_R + 4} fill="transparent" />
+          <circle cx={cx} cy={cy} r={circleR + 4} fill="transparent" />
           <circle
-            cx={cx} cy={cy} r={CIRCLE_R}
+            cx={cx} cy={cy} r={circleR}
             fill={fill} stroke={stroke} strokeWidth="1.5"
             opacity={opacity}
           />
@@ -264,12 +273,12 @@ function Fretboard({
   }
 
   return (
-    <svg viewBox={`0 0 ${SVG_W} ${height}`} width={SVG_W} height={height} aria-label="Guitar fretboard">
+    <svg viewBox={`0 0 ${svgW} ${height}`} width={svgW} height={height} aria-label="Guitar fretboard">
       {/* String lines */}
       {Array.from({ length: numStrings }, (_, i) => (
         <line
           key={`str${i}`}
-          x1={LEFT_PAD} y1={stringY(i)} x2={SVG_W - RIGHT_PAD} y2={stringY(i)}
+          x1={LEFT_PAD} y1={stringY(i)} x2={svgW - RIGHT_PAD} y2={stringY(i)}
           stroke={gamePhase === 'playing' && i === targetSvgStr ? '#5b7fff' : '#444466'}
           strokeWidth={i === 0 ? 0.8 : i === numStrings - 1 ? 1.8 : 1 + i * 0.2}
           className={gamePhase === 'playing' && i === targetSvgStr ? 'fm-string-glow' : undefined}
@@ -287,8 +296,8 @@ function Fretboard({
       {Array.from({ length: NUM_FRETS }, (_, i) => (
         <line
           key={`fret${i}`}
-          x1={fretX(i + 1)} y1={TOP_PAD - 2}
-          x2={fretX(i + 1)} y2={TOP_PAD + (numStrings - 1) * STRING_H + 2}
+          x1={fretX(i + 1, fretW)} y1={TOP_PAD - 2}
+          x2={fretX(i + 1, fretW)} y2={TOP_PAD + (numStrings - 1) * STRING_H + 2}
           stroke="#333355" strokeWidth="1"
         />
       ))}
@@ -324,6 +333,25 @@ const TOGGLE_CLS =
 export function FretMemorizerPage() {
   const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
   const { noteFill, noteStroke } = useNoteColors();
+
+  // ── Responsive fretboard sizing ──────────────────────────────────────────
+  const fretboardContainerRef = useRef<HTMLDivElement>(null);
+  const [fretboardWidth, setFretboardWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = fretboardContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0].contentBoxSize?.[0]?.inlineSize
+        ?? entries[0].contentRect.width;
+      setFretboardWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const fretW = fretboardWidth !== null ? computeFretW(fretboardWidth) : null;
+  const circleR = fretW !== null ? Math.max(10, Math.floor(fretW * 0.22)) : 0;
 
   // ── Guitar config ────────────────────────────────────────────────────────
   const [stringCount, setStringCount] = useState<StringCount>(() => {
@@ -986,22 +1014,26 @@ export function FretMemorizerPage() {
 
       {/* ── Fretboard ─────────────────────────────────────────────────────── */}
       {gamePhase !== 'result' && (
-        <div className="overflow-x-auto rounded-xl border border-[#333355] bg-[#0d0d18] p-3">
-          <Fretboard
-            openMidi={openMidi}
-            numStrings={stringCount}
-            stringNames={stringNames}
-            showNotes={showNotes}
-            focusedSvgStrings={focusedSvgStrings}
-            highlightedKey={highlightedKey}
-            revealedKey={revealedKey}
-            gamePhase={gamePhase}
-            targetSvgStr={question?.targetSvgStr ?? null}
-            answerReveal={answerReveal}
-            onFretClick={handleFretClick}
-            noteFill={noteFill}
-            noteStroke={noteStroke}
-          />
+        <div ref={fretboardContainerRef} className="overflow-x-auto rounded-xl border border-[#333355] bg-[#0d0d18] p-3">
+          {fretW !== null && (
+            <Fretboard
+              openMidi={openMidi}
+              numStrings={stringCount}
+              stringNames={stringNames}
+              showNotes={showNotes}
+              focusedSvgStrings={focusedSvgStrings}
+              highlightedKey={highlightedKey}
+              revealedKey={revealedKey}
+              gamePhase={gamePhase}
+              targetSvgStr={question?.targetSvgStr ?? null}
+              answerReveal={answerReveal}
+              onFretClick={handleFretClick}
+              noteFill={noteFill}
+              noteStroke={noteStroke}
+              fretW={fretW}
+              circleR={circleR}
+            />
+          )}
         </div>
       )}
 

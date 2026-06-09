@@ -43,7 +43,7 @@ function strumChord(ctx: AudioContext, frets: Frets, openMidi: number[]) {
 
 // ── Shared ToggleGroupItem className ────────────────────────────────────────
 const FILTER_ITEM_CLS =
-  'h-auto px-3 py-1 text-[0.82rem] font-semibold rounded-md ' +
+  'h-auto px-3 py-2 min-h-[40px] text-[0.82rem] font-semibold rounded-md ' +
   'border border-[#505270] bg-[#1e1f2c] text-[#aaa] ' +
   'hover:bg-[#1e1f2c] hover:border-[#7070a0] hover:text-[#ddd] ' +
   'data-[state=on]:border-[#5b7fff] data-[state=on]:bg-[#252850] data-[state=on]:text-[#8eaaff]';
@@ -467,7 +467,7 @@ export function ChordsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8]">Tuning</span>
         <Select value={tuningId} onValueChange={setTuningId}>
-          <SelectTrigger className="w-[220px] bg-[#1e1f2c] border-[#505270] text-[#aaa] text-[0.82rem]">
+          <SelectTrigger className="w-full sm:w-[220px] bg-[#1e1f2c] border-[#505270] text-[#aaa] text-[0.82rem]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="bg-[#1e1f2c] border-[#505270]">

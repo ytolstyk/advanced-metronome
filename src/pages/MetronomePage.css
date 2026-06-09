@@ -27,7 +27,8 @@
 
 .metronome-mode-btn {
   flex: 1;
-  padding: 0.55rem 0;
+  padding: 0.75rem 0;
+  min-height: 44px;
   font-size: 0.85rem;
   font-weight: 500;
   background: transparent;
@@ -193,7 +194,8 @@
 
 .metronome-sub-btn {
   flex: 1;
-  padding: 0.45rem 0.25rem;
+  padding: 0.625rem 0.25rem;
+  min-height: 40px;
   font-size: 0.78rem;
   background: transparent;
   border: none;
@@ -249,7 +251,9 @@
   border: none;
   cursor: pointer;
   color: #444;
-  padding: 2px 4px;
+  padding: 10px 12px;
+  min-height: 44px;
+  min-width: 44px;
   border-radius: 4px;
   font-size: 0.8rem;
   transition: color 0.12s;
@@ -408,6 +412,13 @@
   transition: background 0.1s, border-color 0.1s, color 0.1s;
   border: 1px solid transparent;
   line-height: 1;
+  position: relative;
+}
+
+.accent-btn::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
 }
 
 .accent-btn-accent {
