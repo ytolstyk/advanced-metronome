@@ -1,10 +1,12 @@
-import { accentClick, beatClick, subClick, countdownClick } from './clickSynth';
+import { accentClick, beatClick, subClick, countdownClick, ghostClick } from './clickSynth';
 import { subsPerBeat } from './clickMath';
 import type { SubdivisionLabel } from './clickMath';
 export type { SubdivisionLabel } from './clickMath';
 
 /** Click-track time signature: classical numerator/denominator (e.g. 4/4, 6/8). */
 export interface ClickTimeSignature { numerator: number; denominator: number }
+
+export type AccentLevel = 'accent' | 'normal' | 'ghost';
 
 export interface TrackPiece {
   id: string;
@@ -20,6 +22,8 @@ export interface TrackPiece {
   rampMode?: 'linear' | 'stepped';
   rampStepSize?: number;
   rampStepMeasures?: number;
+  // Per-beat accent levels (length = numerator). Defaults: beat 0 = accent, rest = normal.
+  accentPattern?: AccentLevel[];
 }
 
 /** Returns the effective BPM for a specific repetition (measure) within a piece. */
@@ -164,6 +168,13 @@ export class ClickTrackEngine {
     this.isPaused = false;
   }
 
+  destroy(): void {
+    this.stop();
+    void this.ctx?.close();
+    this.ctx = null;
+    this.masterGain = null;
+  }
+
   updateSpeed(multiplier: number): void {
     this.speedMultiplier = multiplier;
   }
@@ -245,12 +256,24 @@ export class ClickTrackEngine {
     const pi = this.pieceIndex;
     const rep = this.repetition;
     const delay = (t - ctx.currentTime) * 1000;
+
+    // Notify new measure start
     if (subTickInMeasure === 0) {
-      accentClick(ctx, dest, t);
-      // Notify on each new measure (beat 0, sub 0)
       setTimeout(() => { this.onProgress?.(pi, rep); }, Math.max(0, delay));
-    } else if (this.subIndex % Math.max(1, Math.round(subs)) === 0) {
-      beatClick(ctx, dest, t);
+    }
+
+    // Derive beat index and accent level for this sub-tick
+    const beatNum = piece.subdivision === 'whole'
+      ? 0
+      : Math.min(numerator - 1, Math.floor(subTickInMeasure / subs));
+    const accentLvl: AccentLevel = piece.accentPattern?.[beatNum]
+      ?? (subTickInMeasure === 0 ? 'accent' : 'normal');
+    const isOnBeat = this.subIndex % Math.max(1, Math.round(subs)) === 0;
+
+    if (isOnBeat) {
+      if (accentLvl === 'accent') accentClick(ctx, dest, t);
+      else if (accentLvl === 'ghost') ghostClick(ctx, dest, t);
+      else beatClick(ctx, dest, t);
     } else {
       subClick(ctx, dest, t);
     }

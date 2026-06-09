@@ -24,6 +24,7 @@ const mockStart = vi.fn()
 const mockStop = vi.fn()
 const mockPause = vi.fn()
 const mockResume = vi.fn()
+const mockDestroy = vi.fn()
 
 vi.mock('@/audio/ClickTrackEngine', () => {
   class ClickTrackEngine {
@@ -31,6 +32,7 @@ vi.mock('@/audio/ClickTrackEngine', () => {
     stop = mockStop
     pause = mockPause
     resume = mockResume
+    destroy = mockDestroy
   }
   return { ClickTrackEngine }
 })

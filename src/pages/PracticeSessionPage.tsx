@@ -559,7 +559,11 @@ export function PracticeSessionPage() {
                       {TOOL_META[tool].short}
                     </button>
                     <a
-                      href={TOOL_META[tool].route}
+                      href={
+                        tool === 'metronome' && state.activeSession?.goal.targetBpm
+                          ? `${TOOL_META[tool].route}?bpm=${state.activeSession.goal.targetBpm}`
+                          : TOOL_META[tool].route
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[0.6rem] text-[#555] hover:text-[#888] no-underline"

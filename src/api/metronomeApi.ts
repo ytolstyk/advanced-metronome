@@ -15,6 +15,10 @@ export interface MetronomePersistedState {
   denominator: number;
   subdivision: string;
   measures: unknown[];
+  accentPattern?: unknown[];
+  polyDiv1?: number;
+  polyDiv2?: number;
+  polyBpm?: number;
 }
 
 export async function loadMetronomePrefs(): Promise<MetronomePersistedState | null> {

@@ -12,6 +12,7 @@ export const TOOL_META: Record<ToolId, { label: string; route: string; short: st
   'ear-training':      { label: 'Ear Training',       route: '/ear-training',      short: 'Ears' },
   'chord-progression': { label: 'Chord Progression',  route: '/chord-progression', short: 'Chords+' },
   caged:               { label: 'CAGED System',       route: '/caged',             short: 'CAGED' },
+  metronome:           { label: 'Metronome',          route: '/metronome',         short: 'Metro' },
 };
 
 export const NUDGE_DAYS = 5;

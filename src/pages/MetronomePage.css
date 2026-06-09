@@ -369,3 +369,204 @@
   height: 2rem;
   min-height: 2rem;
 }
+
+/* ── Ghost beat dot ── */
+.beat-dot.ghost {
+  background: #333;
+  transform: scale(0.85);
+  opacity: 0.5;
+}
+
+/* ── Accent strip ── */
+.accent-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+}
+
+.accent-strip-label {
+  font-size: 0.65rem;
+  color: #555;
+  min-width: 50px;
+  white-space: nowrap;
+}
+
+.accent-strip-beats {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.accent-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+.accent-btn-accent {
+  background: #6ee7b7;
+  border-color: #6ee7b7;
+  color: #0a0a0a;
+}
+
+.accent-btn-normal {
+  background: #1e1e1e;
+  border-color: #2a2a2a;
+  color: #888;
+}
+
+.accent-btn-ghost {
+  background: #111;
+  border-color: #1e1e1e;
+  color: #444;
+}
+
+.accent-btn:hover {
+  opacity: 0.8;
+}
+
+/* ── Polyrhythm ── */
+.metronome-poly-pair {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.metronome-poly-pair > * {
+  flex: 1;
+}
+
+.metronome-poly-over {
+  color: #555;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  flex: none !important;
+}
+
+.metronome-poly-label {
+  font-size: 1rem;
+  color: #666;
+  text-align: center;
+  margin: 0;
+  padding-bottom: 0.25rem;
+}
+
+.metronome-poly-div1 { color: #6ee7b7; font-weight: 700; }
+.metronome-poly-div2 { color: #f0f0f0; font-weight: 700; }
+
+/* ── Preset header actions ── */
+.metronome-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.metronome-preset-btn {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.metronome-preset-btn:hover {
+  border-color: #444;
+  color: #aaa;
+}
+
+/* ── Preset list (library dialog) ── */
+.metronome-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.metronome-preset-empty {
+  color: #555;
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 1rem 0;
+  margin: 0;
+}
+
+.metronome-preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.metronome-preset-item:last-child {
+  border-bottom: none;
+}
+
+.metronome-preset-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.metronome-preset-name {
+  font-size: 0.85rem;
+  color: #f0f0f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metronome-preset-meta {
+  font-size: 0.65rem;
+  color: #555;
+}
+
+.metronome-preset-item-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+/* ── Practice BPM banner ── */
+.metronome-practice-banner {
+  background: #0d1f0d;
+  border: 1px solid #1a3a1a;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.78rem;
+  color: #6ee7b7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.metronome-practice-banner button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #3a6a3a;
+  font-size: 0.7rem;
+  padding: 2px 4px;
+  line-height: 1;
+  border-radius: 3px;
+  transition: color 0.12s;
+}
+
+.metronome-practice-banner button:hover {
+  color: #6ee7b7;
+}

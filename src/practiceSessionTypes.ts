@@ -9,7 +9,8 @@ export type ToolId =
   | 'tab-editor'
   | 'ear-training'
   | 'chord-progression'
-  | 'caged';
+  | 'caged'
+  | 'metronome';
 
 export interface SessionGoal {
   durationMinutes?: number;

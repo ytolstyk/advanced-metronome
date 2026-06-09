@@ -37,6 +37,19 @@ export function subClick(ctx: AudioContext, dest: AudioNode, time: number): void
   osc.stop(time + 0.01);
 }
 
+export function ghostClick(ctx: AudioContext, dest: AudioNode, time: number): void {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(dest);
+  osc.frequency.value = 700;
+  osc.type = 'sine';
+  gain.gain.setValueAtTime(0.15, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.008);
+  osc.start(time);
+  osc.stop(time + 0.012);
+}
+
 export function countdownClick(ctx: AudioContext, dest: AudioNode, time: number): void {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();

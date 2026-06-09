@@ -119,6 +119,13 @@ const schema = a.schema({
     stateJson: a.string().required(),
   }).authorization(allow => [allow.owner()]),
 
+  // Named metronome presets — many records per user
+  MetronomePreset: a.model({
+    name: a.string().required(),
+    savedAt: a.integer().required(),
+    stateJson: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
+
   // Interval trainer game scores — one record per completed session
   IntervalTrainerScore: a.model({
     score: a.integer().required(),
