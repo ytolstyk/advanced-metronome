@@ -113,8 +113,8 @@ export const CHORD_TYPES: ChordType[] = [
   "5",
 ];
 
-function chordName(root: RootNote, type: ChordType): string {
-  const label = CHORD_TYPE_LABELS[type];
+function chordName(root: RootNote, type: ChordType | string): string {
+  const label: string | undefined = (CHORD_TYPE_LABELS as Record<string, string>)[type];
   if (type === "major") return `${root} Major`;
   if (type === "minor") return `${root}m`;
   if (type === "maj7") return `${root}maj7`;
@@ -134,7 +134,7 @@ function chordName(root: RootNote, type: ChordType): string {
   if (type === "add4") return `${root}add4`;
   if (type === "add7") return `${root}add7`;
   if (type === "5") return `${root}5`;
-  return `${root}${label}`;
+  return `${root}${label ?? type}`;
 }
 export { chordName };
 
@@ -293,7 +293,7 @@ const STANDARD_6_OPEN_MIDI = [40, 45, 50, 55, 59, 64];
 // After transposing frets, detect whether a barre makes sense:
 // a barre at fret F from string S1 to S2 requires that every string in [S1,S2]
 // is either muted or fretted at F or higher (no lower non-muted fret in the range).
-function detectBarre(frets: number[]): Barre | undefined {
+export function detectBarre(frets: number[]): Barre | undefined {
   const uniqueFrets = [...new Set(frets.filter((f) => f > 0))];
   let best: Barre | undefined;
   let bestSpan = 1;

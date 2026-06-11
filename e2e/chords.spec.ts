@@ -49,3 +49,26 @@ test.describe('ChordsPage', () => {
     await expect(page.getByText(/No favorites yet/)).toBeVisible();
   });
 });
+
+test.describe('ChordsPage - custom chords (unauthenticated)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/chords');
+    await page.evaluate(() => localStorage.removeItem('custom-chords-v1'));
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('Community toggle is hidden when not signed in', async ({ page }) => {
+    await expect(page.getByRole('radio', { name: /community/i })).toHaveCount(0);
+  });
+
+  test('Create Chord button opens modal with sign-in prompt instead of save button', async ({ page }) => {
+    await page.getByRole('button', { name: '+ Create Chord' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: 'Create Custom Chord' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'C', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('combobox')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Save Chord' })).toHaveCount(0);
+    await expect(dialog.getByText('Sign in to save')).toBeVisible();
+  });
+});

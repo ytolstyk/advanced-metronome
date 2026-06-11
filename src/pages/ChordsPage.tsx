@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import type { RootNote, ChordType, ChordVoicing } from '../data/chords';
+import { useAuthenticator } from '@aws-amplify/ui-react';
+import type { RootNote, ChordType, ChordVoicing, ChordEntry } from '../data/chords';
 import type { Frets } from '../data/chords';
 import { useFavorites } from '../hooks/useFavorites';
 import {
@@ -13,11 +14,20 @@ import {
   getChordDatabase,
   computeVoicingDifficulty,
 } from '../data/chords';
+import type { CustomChordRecord, CreateCustomChordParams } from '../api/customChordsApi';
+import {
+  loadMyCustomChords,
+  loadCommunityChords,
+  createCustomChord,
+  deleteCustomChord,
+} from '../api/customChordsApi';
 import { suggestScales, suggestProgressionsForChord } from '../utils/chordTheory';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { pluckString } from '@/audio/pluckString';
+import { ChordCreatorModal } from '../components/ChordCreatorModal';
+import { cn } from '@/lib/utils';
 
 // ── SVG constants ───────────────────────────────────────────────────────────
 const SVG_H = 140;
@@ -182,6 +192,7 @@ function TabView({ voicing, stringNames }: { voicing: ChordVoicing; stringNames:
 // ── ChordCard ────────────────────────────────────────────────────────────────
 function ChordCard({
   root, type, voicing, viewMode, stringNames, leftHanded, onPlay, onDetail,
+  badge, authorName, onDelete,
 }: {
   root: RootNote;
   type: ChordType;
@@ -191,6 +202,9 @@ function ChordCard({
   leftHanded: boolean;
   onPlay: (frets: Frets) => void;
   onDetail: () => void;
+  badge?: 'my-chord' | 'community';
+  authorName?: string;
+  onDelete?: () => void;
 }) {
   const [lit, setLit] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -208,19 +222,19 @@ function ChordCard({
       tabIndex={0}
       onClick={handleClick}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }}
-      className={[
+      className={cn(
         'relative bg-[#1e1f2c] border rounded-xl p-3.5 flex flex-col items-center gap-2.5',
         'cursor-pointer select-none transition-colors duration-150',
         lit
           ? 'border-[#5b7fff] bg-[#252850]'
           : 'border-[#505270] hover:border-[#7070a0] hover:bg-[#23243a]',
-      ].join(' ')}
+      )}
     >
       <button
-        className={[
+        className={cn(
           'absolute top-1 right-1 leading-none p-1.5 transition-colors duration-150',
           fav ? 'text-[#ffca28]' : 'text-[#505270] hover:text-[#ffca28]',
-        ].join(' ')}
+        )}
         style={{ fontSize: '1.5rem' }}
         onClick={e => { e.stopPropagation(); toggleFavorite(root, type); }}
         aria-label={fav ? 'Remove from favorites' : 'Add to favorites'}
@@ -228,6 +242,28 @@ function ChordCard({
       >
         {fav ? '★' : '☆'}
       </button>
+
+      {/* Badge: My Chord */}
+      {badge === 'my-chord' && (
+        <span className="absolute top-8 left-1.5 text-[0.6rem] font-bold px-1.5 py-0.5 rounded bg-[#1a3a1a] text-[#4caf50] border border-[#2a5a2a] leading-none pointer-events-none">
+          My Chord
+        </span>
+      )}
+
+      {/* Badge: Community */}
+      {badge === 'community' && (
+        <div className="absolute top-8 left-1.5 flex flex-col gap-0.5 pointer-events-none max-w-[70px]">
+          <span className="text-[0.6rem] font-bold px-1.5 py-0.5 rounded bg-[#1a2a3a] text-[#4fc3c3] border border-[#1a4a5a] leading-none">
+            Community
+          </span>
+          {authorName && (
+            <span className="text-[0.58rem] text-[#7070a0] px-1.5 truncate">
+              {authorName}
+            </span>
+          )}
+        </div>
+      )}
+
       <button
         className="absolute bottom-1 right-1.5 text-[#7070a0] hover:text-[#8eaaff] transition-colors duration-150 leading-none"
         style={{ fontSize: '1.1rem' }}
@@ -237,6 +273,19 @@ function ChordCard({
       >
         ⓘ
       </button>
+
+      {/* Delete button (own custom chords only) */}
+      {onDelete && (
+        <button
+          className="absolute bottom-1 left-1.5 text-[#505270] hover:text-[#ef5350] transition-colors duration-150 leading-none p-0.5 text-[1rem]"
+          onClick={e => { e.stopPropagation(); onDelete(); }}
+          aria-label="Delete custom chord"
+          tabIndex={0}
+        >
+          ✕
+        </button>
+      )}
+
       <div className="text-[1.05rem] font-bold text-[#8eaaff] text-center">
         {chordName(root, type)}
       </div>
@@ -249,7 +298,7 @@ function ChordCard({
 }
 
 const FAV_FILTER_CLS =
-  'h-auto px-3 py-1 text-[0.82rem] font-semibold rounded-md ' +
+  'h-auto px-3 py-2 min-h-[40px] text-[0.82rem] font-semibold rounded-md ' +
   'border border-[#505270] bg-[#1e1f2c] text-[#aaa] ' +
   'hover:bg-[#1e1f2c] hover:border-[#ffca28] hover:text-[#ffca28] ' +
   'data-[state=on]:border-[#ffca28] data-[state=on]:bg-[#252018] data-[state=on]:text-[#ffca28]';
@@ -314,10 +363,10 @@ function ChordDetailDialog({
               >
                 Play
               </button>
-              <span className={[
+              <span className={cn(
                 'px-2 py-0.5 text-[0.72rem] font-bold rounded border text-center',
-                DIFFICULTY_STYLES[difficulty] ?? '',
-              ].join(' ')}>
+                DIFFICULTY_STYLES[difficulty],
+              )}>
                 {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
               </span>
             </div>
@@ -379,8 +428,16 @@ function ChordDetailDialog({
   );
 }
 
+// ── DisplayItem type ─────────────────────────────────────────────────────────
+type DisplayItem =
+  | { kind: 'system'; entry: ChordEntry }
+  | { kind: 'own'; record: CustomChordRecord }
+  | { kind: 'community'; record: CustomChordRecord };
+
 // ── ChordsPage ───────────────────────────────────────────────────────────────
 export function ChordsPage() {
+  const { authStatus } = useAuthenticator(ctx => [ctx.authStatus]);
+
   const [selectedKey, setSelectedKey] = useState<RootNote | 'all'>(() => {
     const saved = localStorage.getItem('chords-selectedKey');
     return (saved as RootNote | 'all') || 'all';
@@ -406,6 +463,14 @@ export function ChordsPage() {
   const [detailChord, setDetailChord] = useState<{
     root: RootNote; type: ChordType; voicing: ChordVoicing;
   } | null>(null);
+
+  // Custom chord state
+  const [myCustomChords, setMyCustomChords] = useState<CustomChordRecord[]>([]);
+  const [communityChords, setCommunityChords] = useState<CustomChordRecord[]>([]);
+  const [chordSource, setChordSource] = useState<'library' | 'user' | 'both'>('library');
+  const [showCreator, setShowCreator] = useState(false);
+  const [creatorKey, setCreatorKey] = useState(0);
+
   const { isFavorite } = useFavorites();
   const audioCtxRef = useRef<AudioContext | null>(null);
 
@@ -415,6 +480,21 @@ export function ChordsPage() {
   useEffect(() => { localStorage.setItem('chords-stringCount', String(stringCount)); }, [stringCount]);
   useEffect(() => { localStorage.setItem('chords-tuningId', tuningId); }, [tuningId]);
   useEffect(() => { localStorage.setItem('chords-leftHanded', String(leftHanded)); }, [leftHanded]);
+
+  // Load own custom chords on mount and on auth change
+  useEffect(() => {
+    void loadMyCustomChords().then(setMyCustomChords);
+  }, [authStatus]);
+
+  // Load community chords when a user-inclusive source is selected
+  useEffect(() => {
+    if ((chordSource !== 'user' && chordSource !== 'both') || authStatus !== 'authenticated') return;
+    let cancelled = false;
+    void loadCommunityChords(stringCount, tuningId).then(data => {
+      if (!cancelled) setCommunityChords(data);
+    });
+    return () => { cancelled = true; };
+  }, [chordSource, authStatus, stringCount, tuningId]);
 
   const activeTuning = useMemo(() => {
     const t = getTuningById(tuningId);
@@ -439,14 +519,65 @@ export function ChordsPage() {
     strumChord(ctx, frets, activeTuning.openMidi);
   }, [activeTuning]);
 
-  const filtered = useMemo(() =>
-    activeChordDb.filter(e =>
-      (selectedKey === 'all' || e.root === selectedKey) &&
-      (selectedType === 'all' || e.type === selectedType) &&
-      (!showFavoritesOnly || isFavorite(e.root, e.type))
-    ),
-    [activeChordDb, selectedKey, selectedType, showFavoritesOnly, isFavorite]
-  );
+  const handleCreateChord = useCallback(async (params: CreateCustomChordParams) => {
+    setShowCreator(false);
+    const record = await createCustomChord(params);
+    setMyCustomChords(prev => [...prev, record]);
+    setChordSource('user');
+  }, []);
+
+  const handleDeleteCustomChord = useCallback((id: string) => {
+    setMyCustomChords(prev => prev.filter(c => c.id !== id));
+    setCommunityChords(prev => prev.filter(c => c.id !== id));
+    void deleteCustomChord(id);
+  }, []);
+
+  const filteredItems = useMemo((): DisplayItem[] => {
+    const typeMatches = (type: string) =>
+      selectedType === 'all' ||
+      type === selectedType ||
+      type === CHORD_TYPE_LABELS[selectedType as keyof typeof CHORD_TYPE_LABELS];
+
+    const showSystem = chordSource === 'library' || chordSource === 'both';
+    const showOwn = chordSource === 'user' || chordSource === 'both';
+    const showCommunity = showOwn && authStatus === 'authenticated';
+
+    const systemItems: DisplayItem[] = showSystem
+      ? activeChordDb
+          .filter(e =>
+            (selectedKey === 'all' || e.root === selectedKey) &&
+            (selectedType === 'all' || e.type === selectedType) &&
+            (!showFavoritesOnly || isFavorite(e.root, e.type))
+          )
+          .map(entry => ({ kind: 'system' as const, entry }))
+      : [];
+
+    const ownItems: DisplayItem[] = showOwn
+      ? myCustomChords
+          .filter(c =>
+            c.tuningId === tuningId &&
+            (selectedKey === 'all' || c.root === selectedKey) &&
+            typeMatches(c.type)
+          )
+          .map(r => ({ kind: 'own' as const, record: r }))
+      : [];
+
+    const ownIds = new Set(myCustomChords.map(c => c.id));
+    const communityItems: DisplayItem[] = showCommunity
+      ? communityChords
+          .filter(c =>
+            (selectedKey === 'all' || c.root === selectedKey) &&
+            typeMatches(c.type) &&
+            !ownIds.has(c.id)
+          )
+          .map(r => ({ kind: 'community' as const, record: r }))
+      : [];
+
+    return [...systemItems, ...ownItems, ...communityItems];
+  }, [
+    activeChordDb, selectedKey, selectedType, showFavoritesOnly, isFavorite,
+    myCustomChords, communityChords, chordSource, authStatus, tuningId,
+  ]);
 
   return (
     <main className="flex flex-col gap-4 px-4 pt-6 pb-12 max-w-[1100px] mx-auto" aria-label="Chord library">
@@ -510,25 +641,44 @@ export function ChordsPage() {
         </ToggleGroup>
       </div>
 
-      {/* Show options */}
-      <div className="flex flex-wrap items-center gap-1">
-        <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8] mr-1">Show</span>
-        <ToggleGroup
-          type="single"
-          value={showFavoritesOnly ? 'favorites' : ''}
-          onValueChange={v => setShowFavoritesOnly(v === 'favorites')}
-          className="flex flex-wrap justify-start gap-1"
+      {/* Show options + Create Chord */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8] mr-1">Show</span>
+          <ToggleGroup
+            type="single"
+            value={showFavoritesOnly ? 'favorites' : ''}
+            onValueChange={v => setShowFavoritesOnly(v === 'favorites')}
+            className="flex flex-wrap justify-start gap-1"
+          >
+            <ToggleGroupItem value="favorites" className={FAV_FILTER_CLS}>★ Favorites</ToggleGroupItem>
+          </ToggleGroup>
+          <ToggleGroup
+            type="single"
+            value={leftHanded ? 'lh' : ''}
+            onValueChange={v => setLeftHanded(v === 'lh')}
+            className="flex flex-wrap justify-start gap-1"
+          >
+            <ToggleGroupItem value="lh" className={FILTER_ITEM_CLS}>Left-handed</ToggleGroupItem>
+          </ToggleGroup>
+          <ToggleGroup
+            type="single"
+            value={chordSource}
+            onValueChange={v => { if (v) setChordSource(v as 'library' | 'user' | 'both'); }}
+            className="flex flex-wrap justify-start gap-1"
+          >
+            <ToggleGroupItem value="library" className={FILTER_ITEM_CLS}>Built-in</ToggleGroupItem>
+            <ToggleGroupItem value="user" className={FILTER_ITEM_CLS}>Custom</ToggleGroupItem>
+            <ToggleGroupItem value="both" className={FILTER_ITEM_CLS}>Both</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+        <button
+          type="button"
+          className="h-auto px-3 py-2 text-[0.82rem] font-semibold rounded-md border border-[#4caf50] bg-[#1a3a1a] text-[#4caf50] hover:bg-[#1e4a1e] flex items-center gap-1.5 transition-colors whitespace-nowrap"
+          onClick={() => { setCreatorKey(k => k + 1); setShowCreator(true); }}
         >
-          <ToggleGroupItem value="favorites" className={FAV_FILTER_CLS}>★ Favorites</ToggleGroupItem>
-        </ToggleGroup>
-        <ToggleGroup
-          type="single"
-          value={leftHanded ? 'lh' : ''}
-          onValueChange={v => setLeftHanded(v === 'lh')}
-          className="flex flex-wrap justify-start gap-1"
-        >
-          <ToggleGroupItem value="lh" className={FILTER_ITEM_CLS}>Left-handed</ToggleGroupItem>
-        </ToggleGroup>
+          + Create Chord
+        </button>
       </div>
 
       {/* View toggle */}
@@ -546,26 +696,55 @@ export function ChordsPage() {
 
       {/* Grid */}
       <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(180px,1fr))]">
-        {filtered.length === 0 && (
+        {filteredItems.length === 0 && (
           <div className="col-span-full text-center text-[#999] py-10">
             {showFavoritesOnly
               ? 'No favorites yet. Click ☆ on any chord to save it.'
               : 'No chords found.'}
           </div>
         )}
-        {filtered.map(entry => (
-          <ChordCard
-            key={`${entry.root}-${entry.type}`}
-            root={entry.root}
-            type={entry.type}
-            voicing={entry.voicings[0]}
-            viewMode={viewMode}
-            stringNames={activeTuning.stringNames}
-            leftHanded={leftHanded}
-            onPlay={playChord}
-            onDetail={() => setDetailChord({ root: entry.root, type: entry.type, voicing: entry.voicings[0] })}
-          />
-        ))}
+        {filteredItems.map(item => {
+          if (item.kind === 'system') {
+            return (
+              <ChordCard
+                key={`sys-${item.entry.root}-${item.entry.type}`}
+                root={item.entry.root}
+                type={item.entry.type}
+                voicing={item.entry.voicings[0]}
+                viewMode={viewMode}
+                stringNames={activeTuning.stringNames}
+                leftHanded={leftHanded}
+                onPlay={playChord}
+                onDetail={() => setDetailChord({
+                  root: item.entry.root,
+                  type: item.entry.type,
+                  voicing: item.entry.voicings[0],
+                })}
+              />
+            );
+          }
+          const { record } = item;
+          return (
+            <ChordCard
+              key={`${item.kind}-${record.id}`}
+              root={record.root}
+              type={record.type as ChordType}
+              voicing={record.voicing}
+              viewMode={viewMode}
+              stringNames={activeTuning.stringNames}
+              leftHanded={leftHanded}
+              onPlay={playChord}
+              onDetail={() => setDetailChord({
+                root: record.root,
+                type: record.type as ChordType,
+                voicing: record.voicing,
+              })}
+              badge={item.kind === 'own' ? 'my-chord' : 'community'}
+              authorName={record.authorName}
+              onDelete={item.kind === 'own' ? () => handleDeleteCustomChord(record.id) : undefined}
+            />
+          );
+        })}
       </div>
 
       {detailChord && (
@@ -580,6 +759,18 @@ export function ChordsPage() {
           onPlay={playChord}
         />
       )}
+
+      <ChordCreatorModal
+        key={creatorKey}
+        open={showCreator}
+        stringCount={activeTuning.stringCount}
+        tuningId={activeTuning.id}
+        stringNames={activeTuning.stringNames}
+        isAuthenticated={authStatus === 'authenticated'}
+        onSave={params => { void handleCreateChord(params); }}
+        onPlay={playChord}
+        onClose={() => setShowCreator(false)}
+      />
     </main>
   );
 }

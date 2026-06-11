@@ -139,6 +139,24 @@ const schema = a.schema({
     completedAt: a.string().required(),
   }).authorization(allow => [allow.owner()]),
 
+  // User-created custom chord voicings — private or shared with the community
+  UserCustomChord: a.model({
+    root:        a.string().required(),
+    type:        a.string().required(),
+    name:        a.string(),
+    fretsJson:   a.string().required(),
+    barreJson:   a.string(),
+    startFret:   a.integer(),
+    isPublic:    a.boolean().required(),
+    authorName:  a.string(),
+    stringCount: a.integer().required(),
+    tuningId:    a.string().required(),
+    createdAt:   a.string().required(),
+  }).authorization(allow => [
+    allow.owner(),
+    allow.authenticated().to(['read']),
+  ]),
+
   // Practice session records — one record per completed practice session
   PracticeSession: a.model({
     goalDurationMinutes: a.integer(),
