@@ -11,8 +11,8 @@ let cachedId: string | null = null;
 export interface ChordProgressionPersistedState {
   slots: unknown[];
   bpm: number;
-  beatsPerChord: number;
   instrument: string;
+  selectedKey?: { root: string; mode: 'major' | 'minor' } | null;
 }
 
 export async function loadChordProgression(): Promise<ChordProgressionPersistedState | null> {

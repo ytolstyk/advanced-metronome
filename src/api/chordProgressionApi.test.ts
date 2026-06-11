@@ -31,7 +31,6 @@ function makeState(overrides: Partial<ChordProgressionPersistedState> = {}): Cho
   return {
     slots: [],
     bpm: 120,
-    beatsPerChord: 4,
     instrument: 'guitar',
     ...overrides,
   };
@@ -131,7 +130,7 @@ describe('loadChordProgression (authenticated)', () => {
   });
 
   it('returns parsed value from cloud records', async () => {
-    const state = makeState({ bpm: 100, beatsPerChord: 8 });
+    const state = makeState({ bpm: 100 });
     mockChordProgressionModel.list.mockResolvedValue({
       data: [{ id: 'cloud-id-load', stateJson: JSON.stringify(state) }],
     });

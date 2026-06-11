@@ -65,6 +65,13 @@
   min-width: 36px;
 }
 
+.cp-controls-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .cp-play-btn {
   display: flex;
   align-items: center;
@@ -104,6 +111,33 @@
   color: #88f0a0;
 }
 
+.cp-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #1a1b2e;
+  border: 1px solid #353650;
+  color: #8888b8;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+
+.cp-action-btn:hover:not(:disabled) {
+  background: #252a4a;
+  border-color: #5b7fff;
+  color: #c0c8ff;
+}
+
+.cp-action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .cp-control-group {
   display: flex;
   flex-direction: column;
@@ -130,13 +164,13 @@
   border: 1px solid #2a2b40;
   transition: border-color 0.15s, background 0.15s;
   user-select: none;
-  min-height: 96px;
+  min-height: 108px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 10px 8px;
+  gap: 3px;
+  padding: 10px 8px 28px;
 }
 
 .cp-slot-card:hover {
@@ -163,6 +197,17 @@
   background: #141b30;
   border-color: #5b7fff;
   box-shadow: 0 0 0 1px #5b7fff44;
+}
+
+.cp-slot-card--selected {
+  background: #141f24;
+  border-color: #4fc3c3;
+  box-shadow: 0 0 0 1px #4fc3c344;
+}
+
+.cp-slot-card--drag-over {
+  border-color: #ffca28;
+  background: #201e0a;
 }
 
 .cp-slot-num {
@@ -195,6 +240,49 @@
   color: #444466;
 }
 
+.cp-slot-beats {
+  position: absolute;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cp-slot-beats-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: #1a1b2e;
+  border: 1px solid #353650;
+  color: #7070a0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s;
+  padding: 0;
+}
+
+.cp-slot-beats-btn:hover:not(:disabled) {
+  background: #252a4a;
+  color: #c0c8ff;
+}
+
+.cp-slot-beats-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.cp-slot-beats-num {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #7070a0;
+  min-width: 20px;
+  text-align: center;
+}
+
 .cp-slot-clear {
   position: absolute;
   top: 5px;
@@ -223,6 +311,101 @@
   color: #cc6666;
 }
 
+/* ── Chord bank ─────────────────────────────────────────────── */
+.cp-bank {
+  padding: 14px 16px;
+  background: #131318;
+  border: 1px solid #2a2b40;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cp-bank-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-bank-hint {
+  font-size: 0.75rem;
+  color: #4fc3c3;
+  font-weight: 600;
+  flex: 1;
+}
+
+.cp-bank-toggle {
+  background: transparent;
+  border: none;
+  color: #555580;
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+  transition: color 0.1s;
+}
+
+.cp-bank-toggle:hover {
+  color: #8888b8;
+}
+
+.cp-bank-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cp-bank-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 5px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.cp-bank-chord {
+  background: #1a1b2e;
+  border: 1px solid #353650;
+  border-radius: 6px;
+  color: #a0a8d8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 5px 4px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cp-bank-chord:hover {
+  background: #252a4a;
+  border-color: #4c5aff;
+  color: #c0c8ff;
+}
+
+.cp-bank-chord--assignable {
+  border-color: #2a3a3a;
+}
+
+.cp-bank-chord--assignable:hover {
+  background: #1a2a2a;
+  border-color: #4fc3c3;
+  color: #4fc3c3;
+}
+
+.cp-bank-empty {
+  grid-column: 1 / -1;
+  color: #555580;
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 12px;
+}
+
 /* ── Theory bar ─────────────────────────────────────────────── */
 .cp-theory-bar {
   display: flex;
@@ -235,22 +418,71 @@
   border-radius: 10px;
 }
 
-.cp-key-badge {
+.cp-key-selector {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  min-width: 200px;
 }
 
-.cp-key-value {
-  font-size: 1rem;
+.cp-key-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cp-key-root-select {
+  background: #1a1b2e;
+  border: 1px solid #353650;
+  border-radius: 6px;
+  color: #c0c8ff;
+  font-size: 0.85rem;
+  padding: 5px 8px;
+  outline: none;
+  cursor: pointer;
+  min-width: 56px;
+}
+
+.cp-key-root-select:focus {
+  border-color: #5b7fff;
+}
+
+.cp-key-detect-btn {
+  background: #1c2a50;
+  border: 1px solid #4c5aff;
+  border-radius: 6px;
+  color: #8eaaff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.cp-key-detect-btn:hover {
+  background: #253060;
+}
+
+.cp-key-label {
+  font-size: 0.88rem;
   font-weight: 700;
   color: #8eaaff;
 }
 
-.cp-key-empty {
-  font-size: 0.82rem;
+.cp-key-clear-btn {
+  background: transparent;
+  border: none;
   color: #555580;
-  font-style: italic;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.1s;
+}
+
+.cp-key-clear-btn:hover {
+  color: #cc6666;
 }
 
 .cp-rn-input-group {
@@ -313,6 +545,27 @@
   cursor: not-allowed;
 }
 
+.cp-rn-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cp-rn-overwrite-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: #8888b8;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cp-rn-overwrite-label input[type='checkbox'] {
+  accent-color: #5b7fff;
+}
+
 .cp-rn-hint {
   font-size: 0.7rem;
   color: #555580;
@@ -372,141 +625,4 @@
 
 .cp-scales-more:hover {
   color: #8eaaff;
-}
-
-/* ── Inline chord picker (Dialog) ───────────────────────────── */
-.cp-picker-dialog {
-  background: #13141f;
-  border: 1px solid #2a2b40;
-  border-radius: 12px;
-  max-width: 600px;
-  width: 95vw;
-  max-height: 85vh;
-  overflow-y: auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.cp-picker-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #8eaaff;
-  margin: 0;
-}
-
-.cp-picker-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.cp-picker-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #7070a0;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.cp-picker-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
-  gap: 6px;
-  max-height: 240px;
-  overflow-y: auto;
-  padding: 2px;
-}
-
-.cp-picker-card {
-  background: #1a1b2e;
-  border: 1px solid #353650;
-  border-radius: 6px;
-  color: #a0a8d8;
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 6px 4px;
-  cursor: pointer;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
-  text-align: center;
-}
-
-.cp-picker-card:hover {
-  background: #252a4a;
-  border-color: #4c5aff;
-  color: #c0c8ff;
-}
-
-.cp-picker-card--selected {
-  background: #1a2a3a;
-  border-color: #4fc3c3;
-  color: #4fc3c3;
-}
-
-.cp-picker-empty {
-  grid-column: 1 / -1;
-  color: #555580;
-  font-size: 0.85rem;
-  text-align: center;
-  padding: 16px;
-}
-
-.cp-picker-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-top: 8px;
-  border-top: 1px solid #2a2b40;
-  gap: 8px;
-}
-
-.cp-picker-btn {
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  padding: 6px 16px;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
-}
-
-.cp-picker-btn--clear {
-  background: transparent;
-  border-color: #553a3a;
-  color: #cc6666;
-  margin-right: auto;
-}
-
-.cp-picker-btn--clear:hover {
-  background: #2a1a1a;
-  border-color: #cc6666;
-}
-
-.cp-picker-btn--cancel {
-  background: transparent;
-  border-color: #353650;
-  color: #8888b0;
-}
-
-.cp-picker-btn--cancel:hover {
-  background: #1a1b2e;
-  border-color: #555580;
-}
-
-.cp-picker-btn--apply {
-  background: #252a4a;
-  border-color: #4c5aff;
-  color: #8eaaff;
-}
-
-.cp-picker-btn--apply:hover:not(:disabled) {
-  background: #2a3060;
-  border-color: #5b7fff;
-  color: #aec8ff;
-}
-
-.cp-picker-btn--apply:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
