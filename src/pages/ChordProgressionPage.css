@@ -31,8 +31,8 @@
   gap: 16px;
   flex-wrap: wrap;
   padding: 14px 16px;
-  background: #131318;
-  border: 1px solid #2a2b40;
+  background: #16172a;
+  border: 1px solid #383a58;
   border-radius: 10px;
 }
 
@@ -47,7 +47,7 @@
 .cp-label {
   font-size: 0.7rem;
   font-weight: 600;
-  color: #7070a0;
+  color: #9090c0;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -61,7 +61,7 @@
 .cp-bpm-val {
   font-size: 0.92rem;
   font-weight: 700;
-  color: #c0c8ff;
+  color: #d0d8ff;
   min-width: 36px;
 }
 
@@ -118,9 +118,9 @@
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: #1a1b2e;
-  border: 1px solid #353650;
-  color: #8888b8;
+  background: #1e2038;
+  border: 1px solid #4a4c70;
+  color: #a0a8d8;
   cursor: pointer;
   font-size: 1rem;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
@@ -130,7 +130,7 @@
 .cp-action-btn:hover:not(:disabled) {
   background: #252a4a;
   border-color: #5b7fff;
-  color: #c0c8ff;
+  color: #d0d8ff;
 }
 
 .cp-action-btn:disabled {
@@ -161,7 +161,7 @@
   position: relative;
   border-radius: 10px;
   cursor: pointer;
-  border: 1px solid #2a2b40;
+  border: 1px solid #3a3c58;
   transition: border-color 0.15s, background 0.15s;
   user-select: none;
   min-height: 108px;
@@ -174,29 +174,31 @@
 }
 
 .cp-slot-card:hover {
-  border-color: #4c5aff;
+  border-color: #6070ff;
 }
 
 .cp-slot-card--empty {
-  background: #111118;
+  background: #14141e;
   border-style: dashed;
-  color: #444466;
+  border-color: #3a3c58;
+  color: #5555aa;
 }
 
 .cp-slot-card--empty:hover {
-  color: #6666aa;
-  background: #14141e;
+  color: #7777cc;
+  background: #18182a;
+  border-color: #5050a0;
 }
 
 .cp-slot-card--filled {
-  background: #13141f;
-  border-color: #353650;
+  background: #1a1c30;
+  border-color: #484a6e;
 }
 
 .cp-slot-card--active {
-  background: #141b30;
-  border-color: #5b7fff;
-  box-shadow: 0 0 0 1px #5b7fff44;
+  background: #161f3a;
+  border-color: #6080ff;
+  box-shadow: 0 0 0 1px #6080ff44;
 }
 
 .cp-slot-card--selected {
@@ -216,13 +218,13 @@
   left: 8px;
   font-size: 0.6rem;
   font-weight: 600;
-  color: #444466;
+  color: #7070aa;
 }
 
 .cp-slot-rn {
   font-size: 0.72rem;
   font-weight: 700;
-  color: #5b7fff;
+  color: #7b9fff;
   letter-spacing: 0.02em;
   min-height: 1em;
 }
@@ -230,14 +232,14 @@
 .cp-slot-name {
   font-size: 1rem;
   font-weight: 700;
-  color: #dde2ff;
+  color: #eef0ff;
   letter-spacing: -0.01em;
 }
 
 .cp-slot-plus {
   font-size: 1.5rem;
   line-height: 1;
-  color: #444466;
+  color: #5555aa;
 }
 
 .cp-slot-beats {
@@ -252,9 +254,9 @@
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  background: #1a1b2e;
-  border: 1px solid #353650;
-  color: #7070a0;
+  background: #1e2038;
+  border: 1px solid #484a6e;
+  color: #9090c0;
   cursor: pointer;
   font-size: 0.85rem;
   line-height: 1;
@@ -267,7 +269,7 @@
 
 .cp-slot-beats-btn:hover:not(:disabled) {
   background: #252a4a;
-  color: #c0c8ff;
+  color: #d0d8ff;
 }
 
 .cp-slot-beats-btn:disabled {
@@ -278,7 +280,7 @@
 .cp-slot-beats-num {
   font-size: 0.68rem;
   font-weight: 600;
-  color: #7070a0;
+  color: #9090c0;
   min-width: 20px;
   text-align: center;
 }
@@ -292,7 +294,7 @@
   border-radius: 50%;
   background: transparent;
   border: none;
-  color: #555580;
+  color: #7070a0;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -314,8 +316,8 @@
 /* ── Chord bank ─────────────────────────────────────────────── */
 .cp-bank {
   padding: 14px 16px;
-  background: #131318;
-  border: 1px solid #2a2b40;
+  background: #16172a;
+  border: 1px solid #383a58;
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -338,7 +340,7 @@
 .cp-bank-toggle {
   background: transparent;
   border: none;
-  color: #555580;
+  color: #7070a0;
   cursor: pointer;
   font-size: 0.7rem;
   padding: 2px 6px;
@@ -348,7 +350,7 @@
 }
 
 .cp-bank-toggle:hover {
-  color: #8888b8;
+  color: #a0a8d8;
 }
 
 .cp-bank-filters {
@@ -367,10 +369,10 @@
 }
 
 .cp-bank-chord {
-  background: #1a1b2e;
-  border: 1px solid #353650;
+  background: #1e2038;
+  border: 1px solid #484a6e;
   border-radius: 6px;
-  color: #a0a8d8;
+  color: #c0c8f0;
   font-size: 0.75rem;
   font-weight: 600;
   padding: 5px 4px;
@@ -384,12 +386,12 @@
 
 .cp-bank-chord:hover {
   background: #252a4a;
-  border-color: #4c5aff;
-  color: #c0c8ff;
+  border-color: #6070ff;
+  color: #e0e8ff;
 }
 
 .cp-bank-chord--assignable {
-  border-color: #2a3a3a;
+  border-color: #384a4a;
 }
 
 .cp-bank-chord--assignable:hover {
@@ -400,7 +402,7 @@
 
 .cp-bank-empty {
   grid-column: 1 / -1;
-  color: #555580;
+  color: #7070a0;
   font-size: 0.82rem;
   text-align: center;
   padding: 12px;
@@ -413,8 +415,8 @@
   gap: 16px;
   flex-wrap: wrap;
   padding: 14px 16px;
-  background: #131318;
-  border: 1px solid #2a2b40;
+  background: #16172a;
+  border: 1px solid #383a58;
   border-radius: 10px;
 }
 
@@ -433,10 +435,10 @@
 }
 
 .cp-key-root-select {
-  background: #1a1b2e;
-  border: 1px solid #353650;
+  background: #1e2038;
+  border: 1px solid #484a6e;
   border-radius: 6px;
-  color: #c0c8ff;
+  color: #d0d8ff;
   font-size: 0.85rem;
   padding: 5px 8px;
   outline: none;
@@ -445,14 +447,14 @@
 }
 
 .cp-key-root-select:focus {
-  border-color: #5b7fff;
+  border-color: #6080ff;
 }
 
 .cp-key-detect-btn {
   background: #1c2a50;
-  border: 1px solid #4c5aff;
+  border: 1px solid #5060d0;
   border-radius: 6px;
-  color: #8eaaff;
+  color: #a0b8ff;
   font-size: 0.78rem;
   font-weight: 600;
   padding: 5px 10px;
@@ -467,13 +469,13 @@
 .cp-key-label {
   font-size: 0.88rem;
   font-weight: 700;
-  color: #8eaaff;
+  color: #a0b8ff;
 }
 
 .cp-key-clear-btn {
   background: transparent;
   border: none;
-  color: #555580;
+  color: #7070a0;
   cursor: pointer;
   font-size: 0.8rem;
   padding: 2px 6px;
@@ -500,10 +502,10 @@
 
 .cp-rn-input {
   flex: 1;
-  background: #1a1b2e;
-  border: 1px solid #353650;
+  background: #1e2038;
+  border: 1px solid #484a6e;
   border-radius: 6px;
-  color: #c0c8ff;
+  color: #d0d8ff;
   font-size: 0.85rem;
   padding: 6px 10px;
   outline: none;
@@ -511,11 +513,11 @@
 }
 
 .cp-rn-input::placeholder {
-  color: #444466;
+  color: #5555aa;
 }
 
 .cp-rn-input:focus {
-  border-color: #5b7fff;
+  border-color: #6080ff;
 }
 
 .cp-rn-input:disabled {
@@ -525,9 +527,9 @@
 
 .cp-rn-apply-btn {
   background: #1c2a50;
-  border: 1px solid #4c5aff;
+  border: 1px solid #5060d0;
   border-radius: 6px;
-  color: #8eaaff;
+  color: #a0b8ff;
   font-size: 0.82rem;
   font-weight: 600;
   padding: 6px 12px;
@@ -557,7 +559,7 @@
   align-items: center;
   gap: 5px;
   font-size: 0.72rem;
-  color: #8888b8;
+  color: #a0a8d8;
   cursor: pointer;
   user-select: none;
 }
@@ -568,14 +570,14 @@
 
 .cp-rn-hint {
   font-size: 0.7rem;
-  color: #555580;
+  color: #7070a0;
 }
 
 /* ── Scale suggestions ──────────────────────────────────────── */
 .cp-scales {
   padding: 14px 16px;
-  background: #131318;
-  border: 1px solid #2a2b40;
+  background: #16172a;
+  border: 1px solid #383a58;
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -585,7 +587,7 @@
 .cp-scales-title {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #7070a0;
+  color: #9090c0;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin: 0;
@@ -598,10 +600,10 @@
 }
 
 .cp-scale-chip {
-  background: #1a1b2e;
-  border: 1px solid #353650;
+  background: #1e2038;
+  border: 1px solid #484a6e;
   border-radius: 20px;
-  color: #8888b8;
+  color: #a0a8d8;
   font-size: 0.78rem;
   font-weight: 500;
   padding: 3px 10px;
@@ -609,14 +611,14 @@
 
 .cp-scales-empty {
   font-size: 0.82rem;
-  color: #444466;
+  color: #7070a0;
   font-style: italic;
 }
 
 .cp-scales-more {
   background: transparent;
   border: none;
-  color: #5b7fff;
+  color: #6080ff;
   font-size: 0.78rem;
   cursor: pointer;
   padding: 0;
