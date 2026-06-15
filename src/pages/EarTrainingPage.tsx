@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
 import { cn } from '../lib/utils';
@@ -18,6 +18,7 @@ import {
   playScale,
 } from '../audio/earTrainingSynths';
 import { useExercise, type GameMode } from '../hooks/useExercise';
+import { useExerciseAudio } from '../hooks/useExerciseAudio';
 import {
   generateIntervalQuestion,
   generateChordQuestion,
@@ -31,6 +32,10 @@ function formatTime(s: number): string {
   const m = Math.floor(s / 60);
   const sec = s % 60;
   return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function indefiniteArticle(label: string): string {
+  return /^[aeiou]/i.test(label) ? 'an' : 'a';
 }
 
 const TOGGLE_CLS =
@@ -60,7 +65,7 @@ export function EarTrainingPage() {
   const [activeTab, setActiveTab] = useState<Tab>('intervals');
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  function getOrCreateCtx(): AudioContext {
+  const getOrCreateCtx = useCallback((): AudioContext => {
     if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
       audioCtxRef.current = new AudioContext();
     }
@@ -68,7 +73,7 @@ export function EarTrainingPage() {
       void audioCtxRef.current.resume();
     }
     return audioCtxRef.current;
-  }
+  }, []);
 
   const TAB_CLS = (tab: Tab) =>
     cn(
@@ -122,7 +127,6 @@ function QuestionBanner({
   feedback,
   score,
   wrongAnswers,
-  questionsAnswered,
   elapsedSeconds,
   gameMode,
   onStop,
@@ -131,14 +135,12 @@ function QuestionBanner({
   feedback: 'correct' | 'wrong' | null;
   score: number;
   wrongAnswers: number;
-  questionsAnswered: number;
   elapsedSeconds: number;
   gameMode: GameMode;
   onStop: () => void;
   onPlayAgain: () => void;
 }) {
   const limit = gameMode === 'infinite' ? null : parseInt(gameMode, 10);
-  void questionsAnswered;
 
   return (
     <div
@@ -201,7 +203,7 @@ function QuestionBanner({
 function ResultScreen({
   score,
   wrongAnswers,
-  questionsAnswered,
+  skipped,
   elapsedSeconds,
   scoreSaved,
   stoppedEarly,
@@ -211,7 +213,7 @@ function ResultScreen({
 }: {
   score: number;
   wrongAnswers: number;
-  questionsAnswered: number;
+  skipped: number;
   elapsedSeconds: number;
   scoreSaved: boolean;
   stoppedEarly: boolean;
@@ -219,12 +221,13 @@ function ResultScreen({
   onPlayAgain: () => void;
   onChangeSettings: () => void;
 }) {
+  const answered = score + wrongAnswers;
   return (
     <div className="rounded-xl border border-[#3a3a60] bg-[#0b0b16] px-6 py-6 flex flex-col gap-4 max-w-md mx-auto w-full">
       <div className="text-lg font-bold text-[#d0d0f0]">
         {stoppedEarly ? 'Stopped Early' : 'Game Over'}
       </div>
-      <div className="grid grid-cols-3 gap-4 text-center">
+      <div className="flex flex-wrap justify-center gap-6 text-center">
         <div>
           <div className="text-[0.65rem] font-bold uppercase tracking-wider text-[#8080b8] mb-1">Correct</div>
           <div className="text-3xl font-bold text-[#22dd88]">{score}</div>
@@ -233,14 +236,20 @@ function ResultScreen({
           <div className="text-[0.65rem] font-bold uppercase tracking-wider text-[#8080b8] mb-1">Wrong</div>
           <div className="text-3xl font-bold text-[#ff7777]">{wrongAnswers}</div>
         </div>
+        {skipped > 0 && (
+          <div>
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-[#8080b8] mb-1">Skipped</div>
+            <div className="text-3xl font-bold text-[#8888b8]">{skipped}</div>
+          </div>
+        )}
         <div>
           <div className="text-[0.65rem] font-bold uppercase tracking-wider text-[#8080b8] mb-1">Time</div>
           <div className="text-3xl font-bold tabular-nums text-[#aaaacc]">{formatTime(elapsedSeconds)}</div>
         </div>
       </div>
-      {questionsAnswered > 0 && (
+      {answered > 0 && (
         <div className="text-center text-[0.82rem] text-[#8888b8]">
-          {Math.round((score / questionsAnswered) * 100)}% accuracy over {questionsAnswered} question{questionsAnswered !== 1 ? 's' : ''}
+          {Math.round((score / answered) * 100)}% accuracy on {answered} answered{skipped > 0 ? `, ${skipped} skipped` : ''}
         </div>
       )}
       {authStatus === 'authenticated' && !stoppedEarly && (
@@ -266,6 +275,38 @@ function ResultScreen({
   );
 }
 
+// ── Shared playing-phase sub-components ───────────────────────────────────
+
+function RevealStrip({ label, onPlayAgain }: { label: string; onPlayAgain: () => void }) {
+  return (
+    <div className="flex items-center gap-3 px-1">
+      <span className="text-sm text-[#22dd88] font-semibold">
+        That was {indefiniteArticle(label)} {label}
+      </span>
+      <button
+        onClick={onPlayAgain}
+        className="text-[0.78rem] text-[#8888b8] hover:text-[#aaaacc] transition-colors"
+      >
+        ♪ Play again
+      </button>
+    </div>
+  );
+}
+
+function SkipButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+  return (
+    <div className="flex justify-center">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className="text-[0.78rem] text-[#8080b8] hover:text-[#aaaacc] disabled:opacity-40 disabled:cursor-not-allowed transition-colors py-1 px-2"
+      >
+        Skip →
+      </button>
+    </div>
+  );
+}
+
 // ── Answer button styling helper ───────────────────────────────────────────
 
 function answerBtnCls(
@@ -281,7 +322,7 @@ function answerBtnCls(
     return 'border-[#dd4444] bg-[#1a0808] text-[#ff7777] et-feedback-wrong';
   }
   if (answerReveal && isCorrect && !isGuessed) {
-    return 'border-[#e09020] bg-[#1a1000] text-[#ffd060]';
+    return 'border-[#22dd88] bg-[#081a10] text-[#22dd88]';
   }
   return 'border-[#505270] bg-[#1e1f2c] text-[#aaa] hover:border-[#7070a0] hover:text-[#ddd]';
 }
@@ -305,7 +346,6 @@ function IntervalsExercise({ getCtx }: { getCtx: () => AudioContext }) {
   });
 
   const [guessState, setGuessState] = useState<{ key: string; guess: IntervalName } | null>(null);
-  const stopCurrentSoundRef = useRef<() => void>(() => {});
 
   useEffect(() => { lsSet('earTraining.intervals.gameMode', gameMode); }, [gameMode]);
   useEffect(() => { lsSet('earTraining.intervals.range', range); }, [range]);
@@ -336,48 +376,39 @@ function IntervalsExercise({ getCtx }: { getCtx: () => AudioContext }) {
     buildSavePayload: buildPayload,
   });
 
+  type IntervalQ = NonNullable<(typeof exercise)['question']>;
+  const intervalPlayFn = useCallback(
+    (ctx: AudioContext, q: IntervalQ) => playInterval(ctx, q.rootMidi, q.semitones, q.actualDirection),
+    [],
+  );
+  const audio = useExerciseAudio(exercise.question, exercise.gamePhase, getCtx, intervalPlayFn);
+
   // Derived: ignore guess if it's for a different question (avoids useEffect-based reset)
   const userGuess = guessState !== null && guessState.key === exercise.question?.key ? guessState.guess : null;
 
-  const prevQuestionKey = useRef<string | null>(null);
-  useEffect(() => {
-    if (exercise.question && exercise.question.key !== prevQuestionKey.current && exercise.gamePhase === 'playing') {
-      prevQuestionKey.current = exercise.question.key;
-      stopCurrentSoundRef.current();
-      const ctx = getCtx();
-      stopCurrentSoundRef.current = playInterval(ctx, exercise.question.rootMidi, exercise.question.semitones, exercise.question.actualDirection);
-    }
-    if (exercise.gamePhase !== 'playing') {
-      prevQuestionKey.current = null;
-      stopCurrentSoundRef.current();
-      stopCurrentSoundRef.current = () => {};
-    }
-  }, [exercise.question, exercise.gamePhase, getCtx]);
-
-  function playCurrentQuestion() {
-    if (!exercise.question) return;
-    stopCurrentSoundRef.current();
-    const ctx = getCtx();
-    stopCurrentSoundRef.current = playInterval(ctx, exercise.question.rootMidi, exercise.question.semitones, exercise.question.actualDirection);
-  }
+  const answerOptions = useMemo(
+    () => INTERVAL_NAMES.filter((n) => INTERVAL_SEMITONES[n] <= INTERVAL_RANGE_MAX[range]),
+    [range],
+  );
 
   function onAnswer(name: IntervalName) {
     if (!exercise.question) return;
-    stopCurrentSoundRef.current();
-    stopCurrentSoundRef.current = () => {};
+    audio.stopCurrentSound();
     setGuessState({ key: exercise.question.key, guess: name });
     exercise.handleAnswer(name === exercise.question.intervalName);
   }
 
-  const maxSemitones = INTERVAL_RANGE_MAX[range];
-  const answerOptions = INTERVAL_NAMES.filter((n) => INTERVAL_SEMITONES[n] <= maxSemitones);
+  function onSkip() {
+    audio.stopCurrentSound();
+    exercise.handleSkip();
+  }
 
   if (exercise.gamePhase === 'result') {
     return (
       <ResultScreen
         score={exercise.score}
         wrongAnswers={exercise.wrongAnswers}
-        questionsAnswered={exercise.questionsAnswered}
+        skipped={exercise.skipped}
         elapsedSeconds={exercise.elapsedSeconds}
         scoreSaved={exercise.scoreSaved}
         stoppedEarly={exercise.stoppedEarly}
@@ -431,18 +462,18 @@ function IntervalsExercise({ getCtx }: { getCtx: () => AudioContext }) {
             feedback={exercise.feedback}
             score={exercise.score}
             wrongAnswers={exercise.wrongAnswers}
-            questionsAnswered={exercise.questionsAnswered}
+
             elapsedSeconds={exercise.elapsedSeconds}
             gameMode={gameMode}
             onStop={exercise.stopGame}
-            onPlayAgain={playCurrentQuestion}
+            onPlayAgain={audio.playCurrentQuestion}
           />
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
             {answerOptions.map((name) => (
               <button
                 key={name}
                 onClick={() => onAnswer(name)}
-                disabled={exercise.processingRef.current}
+                disabled={exercise.isProcessing}
                 className={cn(
                   'px-3 py-2.5 text-[0.82rem] font-semibold rounded-md border transition-colors',
                   answerBtnCls(
@@ -457,6 +488,13 @@ function IntervalsExercise({ getCtx }: { getCtx: () => AudioContext }) {
               </button>
             ))}
           </div>
+          {exercise.answerReveal && exercise.question && (
+            <RevealStrip
+              label={exercise.question.intervalName}
+              onPlayAgain={() => { audio.playCurrentQuestion(); exercise.resetRevealTimer(); }}
+            />
+          )}
+          <SkipButton onClick={onSkip} disabled={exercise.isProcessing} />
         </>
       )}
     </div>
@@ -484,7 +522,6 @@ function ChordsExercise({ getCtx }: { getCtx: () => AudioContext }) {
   });
 
   const [guessState, setGuessState] = useState<{ key: string; guess: ChordType } | null>(null);
-  const stopCurrentSoundRef = useRef<() => void>(() => {});
 
   useEffect(() => { lsSet('earTraining.chords.gameMode', gameMode); }, [gameMode]);
   useEffect(() => { lsSet('earTraining.chords.enabledTypes', JSON.stringify([...enabledTypes])); }, [enabledTypes]);
@@ -514,29 +551,16 @@ function ChordsExercise({ getCtx }: { getCtx: () => AudioContext }) {
     buildSavePayload: buildPayload,
   });
 
+  type ChordQ = NonNullable<(typeof exercise)['question']>;
+  const chordPlayFn = useCallback(
+    (ctx: AudioContext, q: ChordQ) => playEarTrainingChord(ctx, q.root, q.type),
+    [],
+  );
+  const audio = useExerciseAudio(exercise.question, exercise.gamePhase, getCtx, chordPlayFn);
+
   const userGuess = guessState !== null && guessState.key === exercise.question?.key ? guessState.guess : null;
 
-  const prevQuestionKey = useRef<string | null>(null);
-  useEffect(() => {
-    if (exercise.question && exercise.question.key !== prevQuestionKey.current && exercise.gamePhase === 'playing') {
-      prevQuestionKey.current = exercise.question.key;
-      stopCurrentSoundRef.current();
-      const ctx = getCtx();
-      stopCurrentSoundRef.current = playEarTrainingChord(ctx, exercise.question.root, exercise.question.type);
-    }
-    if (exercise.gamePhase !== 'playing') {
-      prevQuestionKey.current = null;
-      stopCurrentSoundRef.current();
-      stopCurrentSoundRef.current = () => {};
-    }
-  }, [exercise.question, exercise.gamePhase, getCtx]);
-
-  function playCurrentQuestion() {
-    if (!exercise.question) return;
-    stopCurrentSoundRef.current();
-    const ctx = getCtx();
-    stopCurrentSoundRef.current = playEarTrainingChord(ctx, exercise.question.root, exercise.question.type);
-  }
+  const answerOptions = useMemo(() => [...enabledTypes], [enabledTypes]);
 
   function toggleType(type: ChordType) {
     setEnabledTypes((prev) => {
@@ -552,10 +576,14 @@ function ChordsExercise({ getCtx }: { getCtx: () => AudioContext }) {
 
   function onAnswer(type: ChordType) {
     if (!exercise.question) return;
-    stopCurrentSoundRef.current();
-    stopCurrentSoundRef.current = () => {};
+    audio.stopCurrentSound();
     setGuessState({ key: exercise.question.key, guess: type });
     exercise.handleAnswer(type === exercise.question.type);
+  }
+
+  function onSkip() {
+    audio.stopCurrentSound();
+    exercise.handleSkip();
   }
 
   if (exercise.gamePhase === 'result') {
@@ -563,7 +591,7 @@ function ChordsExercise({ getCtx }: { getCtx: () => AudioContext }) {
       <ResultScreen
         score={exercise.score}
         wrongAnswers={exercise.wrongAnswers}
-        questionsAnswered={exercise.questionsAnswered}
+        skipped={exercise.skipped}
         elapsedSeconds={exercise.elapsedSeconds}
         scoreSaved={exercise.scoreSaved}
         stoppedEarly={exercise.stoppedEarly}
@@ -573,8 +601,6 @@ function ChordsExercise({ getCtx }: { getCtx: () => AudioContext }) {
       />
     );
   }
-
-  const answerOptions = [...enabledTypes];
 
   return (
     <div className="flex flex-col gap-4">
@@ -620,18 +646,18 @@ function ChordsExercise({ getCtx }: { getCtx: () => AudioContext }) {
             feedback={exercise.feedback}
             score={exercise.score}
             wrongAnswers={exercise.wrongAnswers}
-            questionsAnswered={exercise.questionsAnswered}
+
             elapsedSeconds={exercise.elapsedSeconds}
             gameMode={gameMode}
             onStop={exercise.stopGame}
-            onPlayAgain={playCurrentQuestion}
+            onPlayAgain={audio.playCurrentQuestion}
           />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {answerOptions.map((type) => (
               <button
                 key={type}
                 onClick={() => onAnswer(type)}
-                disabled={exercise.processingRef.current}
+                disabled={exercise.isProcessing}
                 className={cn(
                   'px-3 py-2.5 text-[0.82rem] font-semibold rounded-md border transition-colors',
                   answerBtnCls(
@@ -646,6 +672,13 @@ function ChordsExercise({ getCtx }: { getCtx: () => AudioContext }) {
               </button>
             ))}
           </div>
+          {exercise.answerReveal && exercise.question && (
+            <RevealStrip
+              label={CHORD_TYPE_LABELS[exercise.question.type]}
+              onPlayAgain={() => { audio.playCurrentQuestion(); exercise.resetRevealTimer(); }}
+            />
+          )}
+          <SkipButton onClick={onSkip} disabled={exercise.isProcessing} />
         </>
       )}
     </div>
@@ -673,7 +706,6 @@ function ScalesExercise({ getCtx }: { getCtx: () => AudioContext }) {
   });
 
   const [guessState, setGuessState] = useState<{ key: string; guess: ScaleMode } | null>(null);
-  const stopCurrentSoundRef = useRef<() => void>(() => {});
 
   useEffect(() => { lsSet('earTraining.scales.gameMode', gameMode); }, [gameMode]);
   useEffect(() => { lsSet('earTraining.scales.enabledModes', JSON.stringify([...enabledModes])); }, [enabledModes]);
@@ -703,29 +735,16 @@ function ScalesExercise({ getCtx }: { getCtx: () => AudioContext }) {
     buildSavePayload: buildPayload,
   });
 
+  type ScaleQ = NonNullable<(typeof exercise)['question']>;
+  const scalePlayFn = useCallback(
+    (ctx: AudioContext, q: ScaleQ) => playScale(ctx, q.rootMidi, q.mode),
+    [],
+  );
+  const audio = useExerciseAudio(exercise.question, exercise.gamePhase, getCtx, scalePlayFn);
+
   const userGuess = guessState !== null && guessState.key === exercise.question?.key ? guessState.guess : null;
 
-  const prevQuestionKey = useRef<string | null>(null);
-  useEffect(() => {
-    if (exercise.question && exercise.question.key !== prevQuestionKey.current && exercise.gamePhase === 'playing') {
-      prevQuestionKey.current = exercise.question.key;
-      stopCurrentSoundRef.current();
-      const ctx = getCtx();
-      stopCurrentSoundRef.current = playScale(ctx, exercise.question.rootMidi, exercise.question.mode);
-    }
-    if (exercise.gamePhase !== 'playing') {
-      prevQuestionKey.current = null;
-      stopCurrentSoundRef.current();
-      stopCurrentSoundRef.current = () => {};
-    }
-  }, [exercise.question, exercise.gamePhase, getCtx]);
-
-  function playCurrentQuestion() {
-    if (!exercise.question) return;
-    stopCurrentSoundRef.current();
-    const ctx = getCtx();
-    stopCurrentSoundRef.current = playScale(ctx, exercise.question.rootMidi, exercise.question.mode);
-  }
+  const answerOptions = useMemo(() => [...enabledModes], [enabledModes]);
 
   function toggleMode(mode: ScaleMode) {
     setEnabledModes((prev) => {
@@ -741,10 +760,14 @@ function ScalesExercise({ getCtx }: { getCtx: () => AudioContext }) {
 
   function onAnswer(mode: ScaleMode) {
     if (!exercise.question) return;
-    stopCurrentSoundRef.current();
-    stopCurrentSoundRef.current = () => {};
+    audio.stopCurrentSound();
     setGuessState({ key: exercise.question.key, guess: mode });
     exercise.handleAnswer(mode === exercise.question.mode);
+  }
+
+  function onSkip() {
+    audio.stopCurrentSound();
+    exercise.handleSkip();
   }
 
   if (exercise.gamePhase === 'result') {
@@ -752,7 +775,7 @@ function ScalesExercise({ getCtx }: { getCtx: () => AudioContext }) {
       <ResultScreen
         score={exercise.score}
         wrongAnswers={exercise.wrongAnswers}
-        questionsAnswered={exercise.questionsAnswered}
+        skipped={exercise.skipped}
         elapsedSeconds={exercise.elapsedSeconds}
         scoreSaved={exercise.scoreSaved}
         stoppedEarly={exercise.stoppedEarly}
@@ -762,8 +785,6 @@ function ScalesExercise({ getCtx }: { getCtx: () => AudioContext }) {
       />
     );
   }
-
-  const answerOptions = [...enabledModes];
 
   return (
     <div className="flex flex-col gap-4">
@@ -809,18 +830,18 @@ function ScalesExercise({ getCtx }: { getCtx: () => AudioContext }) {
             feedback={exercise.feedback}
             score={exercise.score}
             wrongAnswers={exercise.wrongAnswers}
-            questionsAnswered={exercise.questionsAnswered}
+
             elapsedSeconds={exercise.elapsedSeconds}
             gameMode={gameMode}
             onStop={exercise.stopGame}
-            onPlayAgain={playCurrentQuestion}
+            onPlayAgain={audio.playCurrentQuestion}
           />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {answerOptions.map((mode) => (
               <button
                 key={mode}
                 onClick={() => onAnswer(mode)}
-                disabled={exercise.processingRef.current}
+                disabled={exercise.isProcessing}
                 className={cn(
                   'px-3 py-2.5 text-[0.82rem] font-semibold rounded-md border transition-colors',
                   answerBtnCls(
@@ -835,6 +856,13 @@ function ScalesExercise({ getCtx }: { getCtx: () => AudioContext }) {
               </button>
             ))}
           </div>
+          {exercise.answerReveal && exercise.question && (
+            <RevealStrip
+              label={SCALE_LABELS[exercise.question.mode]}
+              onPlayAgain={() => { audio.playCurrentQuestion(); exercise.resetRevealTimer(); }}
+            />
+          )}
+          <SkipButton onClick={onSkip} disabled={exercise.isProcessing} />
         </>
       )}
     </div>

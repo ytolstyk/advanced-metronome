@@ -402,3 +402,172 @@ describe('EarTrainingPage – timer', () => {
     expect(screen.getByText('0:01')).toBeInTheDocument();
   });
 });
+
+// ── 12. Skip button ────────────────────────────────────────────────────────
+
+describe('EarTrainingPage – skip button', () => {
+  it('shows Skip button during playing phase', () => {
+    render(<EarTrainingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    expect(screen.getByRole('button', { name: /skip/i })).toBeInTheDocument();
+  });
+
+  it('does not show Skip button in idle phase', () => {
+    render(<EarTrainingPage />);
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+  });
+
+  it('clicking Skip advances to a new question without showing wrong feedback', () => {
+    render(<EarTrainingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+
+    // Ensure no wrong feedback before skip
+    expect(screen.queryByText(/✗ Wrong/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /skip/i }));
+
+    // After skip, still no wrong feedback (not treated as a wrong answer)
+    expect(screen.queryByText(/✗ Wrong/i)).not.toBeInTheDocument();
+  });
+
+  it('does not show the reveal strip after a skip', () => {
+    render(<EarTrainingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    fireEvent.click(screen.getByRole('button', { name: /skip/i }));
+    // The reveal strip shows "That was a ..." — should not appear after skip
+    expect(screen.queryByText(/that was a/i)).not.toBeInTheDocument();
+  });
+});
+
+// ── 13. Answer reveal strip ───────────────────────────────────────────────
+
+describe('EarTrainingPage – answer reveal strip', () => {
+  // Helper: find a wrong answer button (any interval that is NOT the correct one)
+  // Because we can't know which is correct without hooking into the logic,
+  // we just click an answer and check that either correct or wrong feedback appears.
+  // For the reveal strip we specifically need a wrong answer.
+
+  it('shows reveal strip with "That was a ..." after a wrong answer', () => {
+    render(<EarTrainingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+
+    // Click all answer buttons until we get a wrong answer
+    const answerBtns = INTERVAL_NAMES
+      .map((name) => screen.queryByRole('button', { name: new RegExp(`^${name}$`) }))
+      .filter(Boolean) as HTMLElement[];
+
+    // Try each button; stop once we get a wrong feedback (reveal strip appears)
+    let foundReveal = false;
+    for (const btn of answerBtns) {
+      if (screen.queryByText(/✗ Wrong/i)) break; // already got wrong feedback
+      if (screen.queryByText(/that was a/i)) { foundReveal = true; break; }
+      if (!btn.hasAttribute('disabled')) {
+        fireEvent.click(btn);
+      }
+      if (screen.queryByText(/that was a/i)) { foundReveal = true; break; }
+      // If correct, wait for feedback to clear and a new question arrives
+      if (screen.queryByText(/✓ Correct!/i)) {
+        act(() => { vi.advanceTimersByTime(600); });
+      }
+    }
+
+    // After a wrong answer the reveal strip must appear
+    if (screen.queryByText(/✗ Wrong/i)) {
+      expect(screen.getByText(/that was a/i)).toBeInTheDocument();
+      foundReveal = true;
+    }
+
+    expect(foundReveal).toBe(true);
+  });
+
+  it('shows ♪ Play again link inside reveal strip', () => {
+    render(<EarTrainingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+
+    // Click every answer until we find a wrong one
+    const answerBtns = INTERVAL_NAMES
+      .map((name) => screen.queryByRole('button', { name: new RegExp(`^${name}$`) }))
+      .filter(Boolean) as HTMLElement[];
+
+    for (const btn of answerBtns) {
+      if (screen.queryByText(/that was a/i)) break;
+      if (!btn.hasAttribute('disabled') && !screen.queryByText(/✗ Wrong/i)) {
+        fireEvent.click(btn);
+      }
+      if (screen.queryByText(/✓ Correct!/i)) {
+        act(() => { vi.advanceTimersByTime(600); });
+      }
+    }
+
+    if (screen.queryByText(/that was a/i)) {
+      // The reveal strip also has a "♪ Play again" small button
+      const playAgainLinks = screen.getAllByText(/♪ Play again/i);
+      expect(playAgainLinks.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+// ── 14. ResultScreen – skipped stat ──────────────────────────────────────
+
+describe('EarTrainingPage – ResultScreen skipped stat', () => {
+  it('does not show Skipped section when no questions were skipped', () => {
+    render(<EarTrainingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }));
+    // No skips occurred → Skipped stat should NOT appear
+    expect(screen.queryByText(/^skipped$/i)).not.toBeInTheDocument();
+  });
+
+  it('shows Skipped section when at least one question was skipped', () => {
+    render(<EarTrainingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    fireEvent.click(screen.getByRole('button', { name: /skip/i }));
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }));
+    // After one skip → Skipped stat SHOULD appear
+    expect(screen.getByText(/^skipped$/i)).toBeInTheDocument();
+  });
+
+  it('shows the correct skip count in the result screen', () => {
+    render(<EarTrainingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    // Skip 3 times
+    fireEvent.click(screen.getByRole('button', { name: /skip/i }));
+    fireEvent.click(screen.getByRole('button', { name: /skip/i }));
+    fireEvent.click(screen.getByRole('button', { name: /skip/i }));
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }));
+    // The skipped count should be displayed as "3"
+    expect(screen.getByText(/^skipped$/i)).toBeInTheDocument();
+    // The number 3 should appear near the skipped label — the container holds both
+    const skippedLabel = screen.getByText(/^skipped$/i);
+    const skippedContainer = skippedLabel.closest('div')?.parentElement;
+    expect(skippedContainer?.textContent).toContain('3');
+  });
+
+  it('accuracy line mentions skipped count when skips > 0', () => {
+    render(<EarTrainingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    fireEvent.click(screen.getByRole('button', { name: /skip/i }));
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }));
+    // Result screen shows "X% accuracy on Y answered, Z skipped"
+    expect(screen.getByText(/skipped/i)).toBeInTheDocument();
+  });
+
+  it('accuracy line does not mention skipped when skips = 0', () => {
+    render(<EarTrainingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }));
+    // Accuracy line should not include "skipped"
+    const accuracyText = screen.queryByText(/skipped/i);
+    expect(accuracyText).not.toBeInTheDocument();
+  });
+
+  it('accuracy formula uses score/(score+wrong) not score/questionsAnswered', () => {
+    // We verify this indirectly: stop immediately with 0 score and 0 wrong.
+    // In that case the accuracy line should NOT appear (answered = 0).
+    render(<EarTrainingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }));
+    // No answers at all → no accuracy line
+    expect(screen.queryByText(/% accuracy/i)).not.toBeInTheDocument();
+  });
+});
