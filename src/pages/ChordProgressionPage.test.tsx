@@ -7,7 +7,37 @@
  * via loadSavedState (which reads from localStorage).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { RootNote, ChordType } from '../data/chords';
+
+// ── Mocks required to safely import ChordProgressionPage.tsx for resolveDisplayedSlot ──
+vi.mock('@aws-amplify/ui-react', () => ({
+  useAuthenticator: () => ({ authStatus: 'unauthenticated' }),
+  Authenticator: { Provider: ({ children }: { children: React.ReactNode }) => children },
+}));
+vi.mock('@/api/chordProgressionApi', () => ({
+  loadChordProgression: vi.fn().mockResolvedValue(null),
+  saveChordProgression: vi.fn().mockResolvedValue(undefined),
+  CHORD_PROGRESSION_LS_KEY: 'chord-progression-v1',
+}));
+
+// ── Mocks for full-component render tests (ChordSlotCard ref forwarding) ──────
+// chordSynths is the page's audio layer (playGuitarChord/playPianoChord/playPadChord);
+// stub the three play functions so chord preview clicks don't try to synthesize
+// real audio nodes, while keeping other exports (e.g. CHORD_INTERVALS) intact.
+vi.mock('../audio/chordSynths', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../audio/chordSynths')>();
+  return {
+    ...actual,
+    playGuitarChord: vi.fn(),
+    playPianoChord: vi.fn(),
+    playPadChord: vi.fn(),
+  };
+});
+
+import { resolveDisplayedSlot, ChordProgressionPage } from './ChordProgressionPage';
+import { FavoritesProvider } from '../context/FavoritesContext';
 
 // ── Mirror of the private types (must match ChordProgressionPage.tsx exactly) ─
 
@@ -39,7 +69,8 @@ type ProgressionAction =
   | { type: 'SET_SLOT_BEATS'; index: number; beats: number }
   | { type: 'SET_SELECTED_KEY'; key: { root: RootNote; mode: 'major' | 'minor' } | null }
   | { type: 'APPLY_SLOTS'; slots: (ProgressionSlot | null)[] }
-  | { type: 'REORDER_SLOTS'; from: number; to: number };
+  | { type: 'REORDER_SLOTS'; from: number; to: number }
+  | { type: 'CLEAR_ALL' };
 
 const SLOT_COUNT = 8;
 
@@ -76,6 +107,13 @@ function progressionReducer(state: ProgressionState, action: ProgressionAction):
       slots.splice(action.to, 0, item);
       return { ...state, slots };
     }
+    case 'CLEAR_ALL':
+      return {
+        ...state,
+        slots: new Array<ProgressionSlot | null>(SLOT_COUNT).fill(null),
+        activeSlotIndex: 0,
+        currentSlotIndex: -1,
+      };
     default:
       return state;
   }
@@ -423,6 +461,43 @@ describe('progressionReducer – REORDER_SLOTS', () => {
   });
 });
 
+describe('progressionReducer – CLEAR_ALL', () => {
+  it('resets all 8 slots to null', () => {
+    const slots: (ProgressionSlot | null)[] = [
+      makeSlot('C', 'major'), makeSlot('G', 'major'), null, null, null, null, null, null,
+    ];
+    const state = stateWithSlots(slots);
+    const next = progressionReducer(state, { type: 'CLEAR_ALL' });
+    expect(next.slots).toHaveLength(8);
+    expect(next.slots.every((s) => s === null)).toBe(true);
+  });
+
+  it('sets activeSlotIndex to 0', () => {
+    const state: ProgressionState = { ...initialState, activeSlotIndex: 5 };
+    const next = progressionReducer(state, { type: 'CLEAR_ALL' });
+    expect(next.activeSlotIndex).toBe(0);
+  });
+
+  it('resets currentSlotIndex to -1', () => {
+    const state: ProgressionState = { ...initialState, currentSlotIndex: 3 };
+    const next = progressionReducer(state, { type: 'CLEAR_ALL' });
+    expect(next.currentSlotIndex).toBe(-1);
+  });
+
+  it('does not change bpm or instrument', () => {
+    const state: ProgressionState = { ...initialState, bpm: 160, instrument: 'piano' };
+    const next = progressionReducer(state, { type: 'CLEAR_ALL' });
+    expect(next.bpm).toBe(160);
+    expect(next.instrument).toBe('piano');
+  });
+
+  it('returns a new slots array (immutable update)', () => {
+    const state = stateWithSlots([makeSlot('C', 'major'), null, null, null, null, null, null, null]);
+    const next = progressionReducer(state, { type: 'CLEAR_ALL' });
+    expect(next.slots).not.toBe(state.slots);
+  });
+});
+
 describe('progressionReducer – state immutability', () => {
   it('each action returns a new state object', () => {
     const next = progressionReducer(initialState, { type: 'SET_BPM', bpm: 100 });
@@ -640,6 +715,57 @@ describe('progressionReducer – selectedKey round-trip', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// resolveDisplayedSlot (real exported function — imported directly, not mirrored)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('resolveDisplayedSlot', () => {
+  const slots: (ProgressionSlot | null)[] = [
+    makeSlot('C', 'major'),
+    makeSlot('G', 'major'),
+    null,
+    makeSlot('D', 'minor'),
+    null, null, null, null,
+  ];
+
+  it('while playing, returns the slot at currentSlotIndex', () => {
+    const result = resolveDisplayedSlot(true, 1, slots, null);
+    expect(result).toEqual({ root: 'G', type: 'major', beats: 4 });
+  });
+
+  it('while playing with currentSlotIndex -1, returns null', () => {
+    const result = resolveDisplayedSlot(true, -1, slots, { kind: 'viewedSlot', index: 0 });
+    expect(result).toBeNull();
+  });
+
+  it('while playing, ignores the preview source', () => {
+    const lastPlayed = makeSlot('A', 'minor');
+    const result = resolveDisplayedSlot(true, 3, slots, { kind: 'lastPlayed', chord: lastPlayed });
+    expect(result).toEqual({ root: 'D', type: 'minor', beats: 4 });
+  });
+
+  it('when idle, returns the slot at a viewedSlot preview source if set', () => {
+    const result = resolveDisplayedSlot(false, -1, slots, { kind: 'viewedSlot', index: 3 });
+    expect(result).toEqual({ root: 'D', type: 'minor', beats: 4 });
+  });
+
+  it('when idle and the viewedSlot index points at a null slot, returns null', () => {
+    const result = resolveDisplayedSlot(false, -1, slots, { kind: 'viewedSlot', index: 2 });
+    expect(result).toBeNull();
+  });
+
+  it('when idle and the preview source is a lastPlayed snapshot, returns the snapshot', () => {
+    const lastPlayed = makeSlot('A', 'minor');
+    const result = resolveDisplayedSlot(false, -1, slots, { kind: 'lastPlayed', chord: lastPlayed });
+    expect(result).toEqual(lastPlayed);
+  });
+
+  it('when idle with no preview source set, returns null', () => {
+    const result = resolveDisplayedSlot(false, -1, slots, null);
+    expect(result).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // localStorage mock (needed for any test that might call loadSavedState indirectly)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -649,4 +775,88 @@ beforeEach(() => {
   const store: Record<string, string> = {};
   vi.spyOn(Storage.prototype, 'getItem').mockImplementation((k: string) => store[k] ?? null);
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation((k: string, v: string) => { store[k] = v; });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Full-component render tests: ChordSlotCard forwardRef + Clear All focus restore
+//
+// ChordProgressionPage converted ChordSlotCard from a `cardRef` prop to
+// React.forwardRef so slot 1's DOM node can be focused after "Clear All" is
+// confirmed (the dialog's onCloseAutoFocus is disabled, so the page must move
+// focus manually). These tests render the real page to verify the forwarded
+// ref actually resolves to a focusable DOM node and that focus lands there.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('ChordProgressionPage — ChordSlotCard ref forwarding + Clear All', () => {
+  class FakeGainNode {
+    gain = { value: 1, setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() };
+    connect = vi.fn();
+  }
+
+  class FakeAudioContext {
+    currentTime = 0;
+    state: 'running' | 'suspended' | 'closed' = 'running';
+    destination = {};
+    createGain() {
+      return new FakeGainNode() as unknown as GainNode;
+    }
+    resume() {
+      return Promise.resolve();
+    }
+    close() {
+      this.state = 'closed';
+      return Promise.resolve();
+    }
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+  });
+
+  function renderPage() {
+    return render(
+      <MemoryRouter>
+        <FavoritesProvider>
+          <ChordProgressionPage />
+        </FavoritesProvider>
+      </MemoryRouter>,
+    );
+  }
+
+  function getSlotCards(container: HTMLElement): HTMLElement[] {
+    return Array.from(container.querySelectorAll<HTMLElement>('.cp-slot-card'));
+  }
+
+  it('forwards the ref so slot 1 renders as a focusable DOM node', () => {
+    const { container } = renderPage();
+    const slotCards = getSlotCards(container);
+    expect(slotCards).toHaveLength(8);
+    // Slot 1 is the only ChordSlotCard that receives the forwarded ref; if
+    // forwardRef were broken (e.g. reverted to a plain function component
+    // without forwardRef), the node would not be reachable/focusable via
+    // ref.current.focus() — exercised in the next test.
+    expect(slotCards[0]).toHaveAttribute('tabIndex', '0');
+  });
+
+  it('moves focus to slot 1 after confirming Clear All', async () => {
+    const { container } = renderPage();
+
+    // Select slot 1 as the active slot, then assign a chord to it from the
+    // bank so "Clear All" becomes enabled (it's disabled while every slot is empty).
+    fireEvent.click(getSlotCards(container)[0]);
+    fireEvent.click(screen.getByText('C Major'));
+
+    const clearAllButton = screen.getByRole('button', { name: 'Clear All' });
+    expect(clearAllButton).toBeEnabled();
+    fireEvent.click(clearAllButton);
+
+    const dialog = await screen.findByRole('dialog');
+    const confirmButton = within(dialog).getByRole('button', { name: 'Clear All' });
+    fireEvent.click(confirmButton);
+
+    // The page schedules the focus move via requestAnimationFrame.
+    await waitFor(() => {
+      expect(getSlotCards(container)[0]).toHaveFocus();
+    });
+  });
 });

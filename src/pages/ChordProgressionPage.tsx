@@ -1,4 +1,4 @@
-import { useReducer, useMemo, useRef, useEffect, useCallback, useState } from 'react';
+import { useReducer, useMemo, useRef, useEffect, useCallback, useState, forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import {
@@ -13,6 +13,8 @@ import {
   CHORD_TYPES,
   ROOT_NOTES,
   chordName,
+  getTuningById,
+  DEFAULT_TUNING_ID,
 } from '../data/chords';
 import { playGuitarChord, playPianoChord, playPadChord } from '../audio/chordSynths';
 import type { ChordSlot, DetectedKey } from '../utils/chordTheory';
@@ -26,9 +28,19 @@ import { useFavorites } from '../hooks/useFavorites';
 import { cn } from '@/lib/utils';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Slider } from '@/components/ui/slider';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { exportChordProgression } from '../audio/exportChordProgression';
 import { chordProgressionToTabTrack } from '../utils/chordProgressionToTab';
 import { saveTabTrack } from '../tabEditorState';
+import { FretboardDiagram } from '../components/FretboardDiagram/FretboardDiagram';
 import './ChordProgressionPage.css';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -60,13 +72,15 @@ type ProgressionAction =
   | { type: 'SET_SELECTED_KEY'; key: DetectedKey | null }
   | { type: 'APPLY_SLOTS'; slots: (ProgressionSlot | null)[] }
   | { type: 'REORDER_SLOTS'; from: number; to: number }
-  | { type: 'ASSIGN_CHORD_TO_ACTIVE_SLOT'; root: RootNote; chordType: ChordType };
+  | { type: 'ASSIGN_CHORD_TO_ACTIVE_SLOT'; root: RootNote; chordType: ChordType }
+  | { type: 'CLEAR_ALL' };
 
 const SLOT_COUNT = 8;
 const LOOKAHEAD = 0.1;
 const SCHEDULER_INTERVAL_MS = 25;
 // Short gain ramp between chords prevents click/pop while sounding instantaneous
 const CHORD_FADE = 0.015;
+const STANDARD_TUNING_STRING_NAMES = getTuningById(DEFAULT_TUNING_ID).stringNames;
 
 const initialState: ProgressionState = {
   slots: new Array<ProgressionSlot | null>(SLOT_COUNT).fill(null),
@@ -166,6 +180,13 @@ function progressionReducer(state: ProgressionState, action: ProgressionAction):
       const nextEmpty = findNextEmptySlot(slots, state.activeSlotIndex);
       return { ...state, slots, activeSlotIndex: nextEmpty };
     }
+    case 'CLEAR_ALL':
+      return {
+        ...state,
+        slots: new Array<ProgressionSlot | null>(SLOT_COUNT).fill(null),
+        activeSlotIndex: 0,
+        currentSlotIndex: -1,
+      };
     default:
       return state;
   }
@@ -191,6 +212,27 @@ function findNextEmptySlot(slots: (ProgressionSlot | null)[], afterIndex: number
     const idx = (afterIndex + i) % slots.length;
     if (slots[idx] === null) return idx;
   }
+  return null;
+}
+
+// What the fretboard preview panel shows when not playing: either a live index into
+// `slots` (hover/click — follows edits to that slot) or a frozen chord snapshot (the
+// last chord that actually sounded, captured right before playback stopped).
+export type PreviewSource =
+  | { kind: 'viewedSlot'; index: number }
+  | { kind: 'lastPlayed'; chord: ProgressionSlot }
+  | null;
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function resolveDisplayedSlot(
+  isPlaying: boolean,
+  currentSlotIndex: number,
+  slots: (ProgressionSlot | null)[],
+  previewSource: PreviewSource,
+): ProgressionSlot | null {
+  if (isPlaying) return currentSlotIndex >= 0 ? slots[currentSlotIndex] : null;
+  if (previewSource?.kind === 'viewedSlot') return slots[previewSource.index] ?? null;
+  if (previewSource?.kind === 'lastPlayed') return previewSource.chord;
   return null;
 }
 
@@ -376,9 +418,10 @@ interface SlotCardProps {
   onDragOver: (e: React.DragEvent, index: number) => void;
   onDrop: (e: React.DragEvent) => void;
   onDragEnd: () => void;
+  onHoverChord: (index: number) => void;
 }
 
-function ChordSlotCard({
+const ChordSlotCard = forwardRef<HTMLDivElement, SlotCardProps>(function ChordSlotCard({
   index,
   chord,
   romanNumeral,
@@ -392,9 +435,11 @@ function ChordSlotCard({
   onDragOver,
   onDrop,
   onDragEnd,
-}: SlotCardProps) {
+  onHoverChord,
+}, ref) {
   return (
     <div
+      ref={ref}
       className={cn(
         'cp-slot-card',
         !chord && 'cp-slot-card--empty',
@@ -407,6 +452,8 @@ function ChordSlotCard({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onSelect(index)}
+      onMouseEnter={() => { if (chord) onHoverChord(index); }}
+      onFocus={() => { if (chord) onHoverChord(index); }}
       draggable
       onDragStart={() => onDragStart(index)}
       onDragOver={(e) => onDragOver(e, index)}
@@ -452,7 +499,7 @@ function ChordSlotCard({
       )}
     </div>
   );
-}
+});
 
 // ── TheoryBar ────────────────────────────────────────────────────────────────
 
@@ -461,9 +508,13 @@ interface TheoryBarProps {
   onSetKey: (key: DetectedKey | null) => void;
   onDetectKey: () => void;
   onApplyRomanInput: (value: string, overwriteAll: boolean) => void;
+  hasSlots: boolean;
+  onClearAllClick: () => void;
 }
 
-function TheoryBar({ selectedKey, onSetKey, onDetectKey, onApplyRomanInput }: TheoryBarProps) {
+function TheoryBar({
+  selectedKey, onSetKey, onDetectKey, onApplyRomanInput, hasSlots, onClearAllClick,
+}: TheoryBarProps) {
   const [inputValue, setInputValue] = useState('');
   const [overwriteAll, setOverwriteAll] = useState(false);
 
@@ -482,7 +533,18 @@ function TheoryBar({ selectedKey, onSetKey, onDetectKey, onApplyRomanInput }: Th
   return (
     <div className="cp-theory-bar">
       <div className="cp-key-selector">
-        <span className="cp-label">Key</span>
+        <div className="cp-key-selector-header">
+          <span className="cp-label">Key</span>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="h-auto px-2 py-0.5 text-[0.72rem]"
+            onClick={onClearAllClick}
+            disabled={!hasSlots}
+          >
+            Clear All
+          </Button>
+        </div>
         <div className="cp-key-row">
           <select
             className="cp-key-root-select"
@@ -588,11 +650,17 @@ export function ChordProgressionPage() {
   const bpmRef = useRef(state.bpm);
   const instrumentRef = useRef(state.instrument);
   const isPlayingRef = useRef(false);
+  const lastPlayedChordRef = useRef<ProgressionSlot | null>(null);
 
   // Drag-drop refs
   const dragIndex = useRef<number | null>(null);
   const dragOverIndex = useRef<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  // Fretboard preview tracking
+  const [previewSource, setPreviewSource] = useState<PreviewSource>(null);
+  const [isClearAllOpen, setIsClearAllOpen] = useState(false);
+  const firstSlotRef = useRef<HTMLDivElement>(null);
 
   // Sync refs with state
   useEffect(() => { bpmRef.current = state.bpm; }, [state.bpm]);
@@ -618,6 +686,9 @@ export function ChordProgressionPage() {
     audioCtxRef.current?.close().catch(() => undefined);
     audioCtxRef.current = null;
     masterGainRef.current = null;
+    if (lastPlayedChordRef.current) {
+      setPreviewSource({ kind: 'lastPlayed', chord: lastPlayedChordRef.current });
+    }
     dispatch({ type: 'SET_PLAYING', isPlaying: false });
     dispatch({ type: 'SET_CURRENT_SLOT', index: -1 });
   }, []);
@@ -725,6 +796,7 @@ export function ChordProgressionPage() {
       setTimeout(() => {
         if (isPlayingRef.current) {
           dispatch({ type: 'SET_CURRENT_SLOT', index: realIdx });
+          lastPlayedChordRef.current = slot;
         }
       }, Math.max(0, (scheduledTime - ctx.currentTime) * 1000));
 
@@ -748,6 +820,7 @@ export function ChordProgressionPage() {
     isPlayingRef.current = true;
     activeChordGainRef.current = null;
 
+    setPreviewSource(null);
     dispatch({ type: 'SET_PLAYING', isPlaying: true });
     dispatch({ type: 'SET_ACTIVE_SLOT', index: null });
     scheduleNextChord();
@@ -774,15 +847,24 @@ export function ChordProgressionPage() {
   const handleSlotSelect = useCallback(
     (index: number) => {
       dispatch({ type: 'SET_ACTIVE_SLOT', index: state.activeSlotIndex === index ? null : index });
+      if (state.slots[index]) setPreviewSource({ kind: 'viewedSlot', index });
     },
-    [state.activeSlotIndex],
+    [state.activeSlotIndex, state.slots],
   );
+
+  const handleSlotHover = useCallback((index: number) => {
+    if (dragIndex.current === null) setPreviewSource({ kind: 'viewedSlot', index });
+  }, []);
 
   const handleClearSlot = useCallback(
     (index: number) => {
       if (state.isPlaying) stopPlayback();
       dispatch({ type: 'SET_SLOT', index, chord: null });
       if (state.activeSlotIndex === index) dispatch({ type: 'SET_ACTIVE_SLOT', index: null });
+      setPreviewSource((prev) => {
+        const isViewingClearedSlot = prev?.kind === 'viewedSlot' && prev.index === index;
+        return isViewingClearedSlot ? null : prev;
+      });
     },
     [state.isPlaying, state.activeSlotIndex, stopPlayback],
   );
@@ -850,6 +932,7 @@ export function ChordProgressionPage() {
     const to = dragOverIndex.current;
     if (from !== null && to !== null && from !== to) {
       dispatch({ type: 'REORDER_SLOTS', from, to });
+      setPreviewSource(null);
     }
     dragIndex.current = null;
     dragOverIndex.current = null;
@@ -883,7 +966,30 @@ export function ChordProgressionPage() {
     navigate('/tab-editor');
   }, [state.slots, state.bpm, navigate]);
 
+  const handleConfirmClearAll = useCallback(() => {
+    if (state.isPlaying) stopPlayback();
+    dispatch({ type: 'CLEAR_ALL' });
+    setPreviewSource(null);
+    setIsClearAllOpen(false);
+    requestAnimationFrame(() => firstSlotRef.current?.focus());
+  }, [state.isPlaying, stopPlayback]);
+
   const hasSlots = state.slots.some(Boolean);
+
+  const displayedSlot = resolveDisplayedSlot(
+    state.isPlaying,
+    state.currentSlotIndex,
+    state.slots,
+    previewSource,
+  );
+
+  const displayedVoicing = useMemo(() => {
+    if (!displayedSlot) return null;
+    const voicing = CHORD_DATABASE.find(
+      (e) => e.root === displayedSlot.root && e.type === displayedSlot.type,
+    )?.voicings[0];
+    return voicing ? { voicing, root: displayedSlot.root, type: displayedSlot.type } : null;
+  }, [displayedSlot]);
 
   return (
     <div className="cp-page">
@@ -960,6 +1066,25 @@ export function ChordProgressionPage() {
           </div>
         </div>
 
+        {/* Fretboard Preview */}
+        <div className="cp-fretboard-preview">
+          <span className="sr-only" aria-live="polite">
+            {displayedVoicing ? `Previewing ${chordName(displayedVoicing.root, displayedVoicing.type)}` : ''}
+          </span>
+          {displayedVoicing ? (
+            <div className="cp-fretboard-preview-diagram">
+              <FretboardDiagram
+                voicing={displayedVoicing.voicing}
+                stringNames={STANDARD_TUNING_STRING_NAMES}
+              />
+            </div>
+          ) : (
+            <span className="cp-fretboard-preview-empty">
+              {state.isPlaying ? 'Playing…' : 'Click or hover a chord to preview it here'}
+            </span>
+          )}
+        </div>
+
         {/* Slot Grid */}
         <div className="cp-slot-grid">
           {state.slots.map((chord, i) => (
@@ -978,6 +1103,8 @@ export function ChordProgressionPage() {
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               onDragEnd={handleDragEnd}
+              onHoverChord={handleSlotHover}
+              ref={i === 0 ? firstSlotRef : undefined}
             />
           ))}
         </div>
@@ -991,11 +1118,35 @@ export function ChordProgressionPage() {
           onSetKey={(key) => dispatch({ type: 'SET_SELECTED_KEY', key })}
           onDetectKey={handleDetectKey}
           onApplyRomanInput={handleApplyRomanInput}
+          hasSlots={hasSlots}
+          onClearAllClick={() => setIsClearAllOpen(true)}
         />
 
         {/* Scale Suggestions */}
         <ScaleSuggestions slots={state.slots} />
       </div>
+
+      <Dialog open={isClearAllOpen} onOpenChange={setIsClearAllOpen}>
+        <DialogContent
+          className="bg-[#1a1b2e] border-[#505270] text-[#ccd6ff]"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-[#8eaaff]">Clear all chords?</DialogTitle>
+            <DialogDescription className="text-[#aab0d0]">
+              This removes all 8 chords from the progression. This can't be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsClearAllOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmClearAll}>
+              Clear All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

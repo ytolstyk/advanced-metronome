@@ -3,6 +3,7 @@ import { useAuthenticator } from '@aws-amplify/ui-react';
 import type { RootNote, ChordType, ChordVoicing, ChordEntry } from '../data/chords';
 import type { Frets } from '../data/chords';
 import { useFavorites } from '../hooks/useFavorites';
+import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import {
   CHORD_TYPE_LABELS,
   CHORD_TYPES,
@@ -27,20 +28,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { pluckString } from '@/audio/pluckString';
 import { ChordCreatorModal } from '../components/ChordCreatorModal';
+import { FretboardDiagram } from '../components/FretboardDiagram/FretboardDiagram';
 import { cn } from '@/lib/utils';
-
-// ── SVG constants ───────────────────────────────────────────────────────────
-const SVG_H = 140;
-const STRING_X_START = 14;
-const STRING_SPACING = 14.4;
-const FRET_Y_START = 18;
-const FRET_SPACING = 21;
-const FRETS_SHOWN = 5;
-const NUT_Y = FRET_Y_START;
-
-function dotY(fretNum: number, visibleStart: number): number {
-  return FRET_Y_START + (fretNum - visibleStart) * FRET_SPACING + FRET_SPACING / 2;
-}
 
 function strumChord(ctx: AudioContext, frets: Frets, openMidi: number[]) {
   const now = ctx.currentTime;
@@ -57,117 +46,6 @@ const FILTER_ITEM_CLS =
   'border border-[#505270] bg-[#1e1f2c] text-[#aaa] ' +
   'hover:bg-[#1e1f2c] hover:border-[#7070a0] hover:text-[#ddd] ' +
   'data-[state=on]:border-[#5b7fff] data-[state=on]:bg-[#252850] data-[state=on]:text-[#8eaaff]';
-
-// ── FretboardDiagram ────────────────────────────────────────────────────────
-function FretboardDiagram({
-  voicing, stringNames, leftHanded,
-}: {
-  voicing: ChordVoicing;
-  stringNames: string[];
-  leftHanded?: boolean;
-}) {
-  const { frets, barre, startFret = 1 } = voicing;
-  const visibleStart = startFret;
-  const isOpenPosition = startFret <= 1;
-  const numStrings = frets.length;
-  const svgWidth = STRING_X_START + (numStrings - 1) * STRING_SPACING + 18 + STRING_X_START;
-
-  const sx = (i: number) => leftHanded
-    ? STRING_X_START + (numStrings - 1 - i) * STRING_SPACING
-    : STRING_X_START + i * STRING_SPACING;
-
-  const stringLines = frets.map((_, i) => (
-    <line
-      key={`s${i}`}
-      x1={sx(i)} y1={FRET_Y_START}
-      x2={sx(i)} y2={FRET_Y_START + FRET_SPACING * FRETS_SHOWN}
-      stroke="#888" strokeWidth="1"
-    />
-  ));
-
-  const fretLines = Array.from({ length: FRETS_SHOWN + 1 }, (_, f) => {
-    const y = FRET_Y_START + f * FRET_SPACING;
-    const isNut = f === 0 && isOpenPosition;
-    return (
-      <line
-        key={`f${f}`}
-        x1={sx(0)} y1={y}
-        x2={sx(numStrings - 1)} y2={y}
-        stroke={isNut ? '#eee' : '#888'}
-        strokeWidth={isNut ? 3 : 1}
-      />
-    );
-  });
-
-  const markers = frets.map((fret, i) => {
-    if (fret === 0) {
-      return (
-        <text key={`m${i}`} x={sx(i)} y={NUT_Y - 4}
-          textAnchor="middle" fontSize="14" fill="#bbb">○</text>
-      );
-    }
-    if (fret === -1) {
-      return (
-        <text key={`m${i}`} x={sx(i)} y={NUT_Y - 4}
-          textAnchor="middle" fontSize="14" fill="#999">×</text>
-      );
-    }
-    return null;
-  });
-
-  const barreEl = barre ? (() => {
-    const x1 = sx(barre.fromString - 1);
-    const x2 = sx(barre.toString - 1);
-    const y = dotY(barre.fret, visibleStart);
-    return (
-      <rect
-        key="barre"
-        x={Math.min(x1, x2) - 5.5} y={y - 5.5}
-        width={Math.abs(x2 - x1) + 11} height={11}
-        rx="5.5" fill="#5b7fff" opacity="0.9"
-      />
-    );
-  })() : null;
-
-  const dots = frets.map((fret, i) => {
-    if (fret <= 0) return null;
-    if (barre && fret === barre.fret && i >= barre.fromString - 1 && i <= barre.toString - 1) {
-      return null;
-    }
-    return <circle key={`d${i}`} cx={sx(i)} cy={dotY(fret, visibleStart)} r={5.5} fill="#5b7fff" />;
-  });
-
-  const fretLabel = !isOpenPosition ? (
-    <text
-      x={leftHanded ? 2 : svgWidth - 2}
-      y={FRET_Y_START + FRET_SPACING / 2}
-      textAnchor={leftHanded ? 'start' : 'end'}
-      fontSize="14" fill="#bbb" dominantBaseline="middle"
-    >
-      {startFret}fr
-    </text>
-  ) : null;
-
-  const STRING_LABEL_Y = FRET_Y_START + FRET_SPACING * FRETS_SHOWN + 12;
-  const stringLabels = frets.map((_, i) => (
-    <text key={`n${i}`} x={sx(i)} y={STRING_LABEL_Y}
-      textAnchor="middle" fontSize="9" fill="#666">
-      {stringNames[i]}
-    </text>
-  ));
-
-  return (
-    <svg viewBox={`0 0 ${svgWidth} ${SVG_H}`} className="w-full max-w-[180px]" aria-hidden="true">
-      {stringLines}
-      {fretLines}
-      {markers}
-      {barreEl}
-      {dots}
-      {fretLabel}
-      {stringLabels}
-    </svg>
-  );
-}
 
 // ── TabView ─────────────────────────────────────────────────────────────────
 function TabView({ voicing, stringNames }: { voicing: ChordVoicing; stringNames: string[] }) {
@@ -206,14 +84,13 @@ function ChordCard({
   authorName?: string;
   onDelete?: () => void;
 }) {
-  const [lit, setLit] = useState(false);
+  const [lit, triggerLit] = useFlashHighlight();
   const { isFavorite, toggleFavorite } = useFavorites();
   const fav = isFavorite(root, type);
 
   function handleClick() {
     onPlay(voicing.frets);
-    setLit(true);
-    setTimeout(() => setLit(false), 400);
+    triggerLit();
   }
 
   return (

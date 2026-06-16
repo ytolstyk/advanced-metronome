@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect, memo } from 'react';
 import type { RootNote } from '../data/chords';
 import { ROOT_NOTES } from '../data/chords';
 import type { ArpeggioQuality, ArpeggioShape, CagedShape } from '../data/arpeggios';
@@ -13,119 +13,16 @@ import type { SweepDirection } from '../audio/arpeggioSynths';
 import { playArpeggio } from '../audio/arpeggioSynths';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Slider } from '@/components/ui/slider';
+import { FretboardDiagram } from '../components/FretboardDiagram/FretboardDiagram';
+import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { cn } from '@/lib/utils';
-
-// ── SVG constants (same as ChordsPage) ──────────────────────────────────────
-const SVG_H = 140;
-const STRING_X_START = 14;
-const STRING_SPACING = 14.4;
-const FRET_Y_START = 18;
-const FRET_SPACING = 21;
-const FRETS_SHOWN = 5;
-const NUT_Y = FRET_Y_START;
-
-function stringX(idx: number): number {
-  return STRING_X_START + idx * STRING_SPACING;
-}
-
-function dotY(fretNum: number, visibleStart: number): number {
-  return FRET_Y_START + (fretNum - visibleStart) * FRET_SPACING + FRET_SPACING / 2;
-}
-
-// ── FretboardDiagram ─────────────────────────────────────────────────────────
-function FretboardDiagram({ shape }: { shape: ArpeggioShape }) {
-  const { frets, barre, startFret = 1 } = shape;
-  const visibleStart = startFret;
-  const isOpenPosition = startFret <= 1;
-  const numStrings = frets.length;
-  const svgWidth = STRING_X_START + (numStrings - 1) * STRING_SPACING + 18 + STRING_X_START;
-
-  const stringLines = frets.map((_, i) => (
-    <line
-      key={`s${i}`}
-      x1={stringX(i)} y1={FRET_Y_START}
-      x2={stringX(i)} y2={FRET_Y_START + FRET_SPACING * FRETS_SHOWN}
-      stroke="#888" strokeWidth="1"
-    />
-  ));
-
-  const fretLines = Array.from({ length: FRETS_SHOWN + 1 }, (_, f) => {
-    const y = FRET_Y_START + f * FRET_SPACING;
-    const isNut = f === 0 && isOpenPosition;
-    return (
-      <line
-        key={`f${f}`}
-        x1={stringX(0)} y1={y}
-        x2={stringX(numStrings - 1)} y2={y}
-        stroke={isNut ? '#eee' : '#888'}
-        strokeWidth={isNut ? 3 : 1}
-      />
-    );
-  });
-
-  const markers = frets.map((fret, i) => {
-    if (fret === 0) {
-      return (
-        <text key={`m${i}`} x={stringX(i)} y={NUT_Y - 4}
-          textAnchor="middle" fontSize="14" fill="#bbb">○</text>
-      );
-    }
-    if (fret === -1) {
-      return (
-        <text key={`m${i}`} x={stringX(i)} y={NUT_Y - 4}
-          textAnchor="middle" fontSize="14" fill="#999">×</text>
-      );
-    }
-    return null;
-  });
-
-  const barreEl = barre ? (() => {
-    const x1 = stringX(barre.fromString - 1);
-    const x2 = stringX(barre.toString - 1);
-    const y = dotY(barre.fret, visibleStart);
-    return (
-      <rect
-        key="barre"
-        x={Math.min(x1, x2) - 5.5} y={y - 5.5}
-        width={Math.abs(x2 - x1) + 11} height={11}
-        rx="5.5" fill="#7c3aed" opacity="0.9"
-      />
-    );
-  })() : null;
-
-  const dots = frets.map((fret, i) => {
-    if (fret <= 0) return null;
-    if (barre && fret === barre.fret && i >= barre.fromString - 1 && i <= barre.toString - 1) {
-      return null;
-    }
-    return <circle key={`d${i}`} cx={stringX(i)} cy={dotY(fret, visibleStart)} r={5.5} fill="#7c3aed" />;
-  });
-
-  const fretLabel = !isOpenPosition ? (
-    <text x={svgWidth - 2} y={FRET_Y_START + FRET_SPACING / 2}
-      textAnchor="end" fontSize="14" fill="#bbb" dominantBaseline="middle">
-      {startFret}fr
-    </text>
-  ) : null;
-
-  return (
-    <svg viewBox={`0 0 ${svgWidth} ${SVG_H}`} className="w-full max-w-[180px]" aria-hidden="true">
-      {stringLines}
-      {fretLines}
-      {markers}
-      {barreEl}
-      {dots}
-      {fretLabel}
-    </svg>
-  );
-}
 
 // ── ArpeggioCard ─────────────────────────────────────────────────────────────
 const CAGED_LABEL: Record<CagedShape, string> = {
   C: 'C shape', A: 'A shape', G: 'G shape', E: 'E shape', D: 'D shape',
 };
 
-function ArpeggioCard({
+const ArpeggioCard = memo(function ArpeggioCard({
   root, quality, shape, onPlay,
 }: {
   root: RootNote;
@@ -133,15 +30,11 @@ function ArpeggioCard({
   shape: ArpeggioShape;
   onPlay: (frets: number[]) => void;
 }) {
-  const [lit, setLit] = useState(false);
-  const litTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => { if (litTimerRef.current) clearTimeout(litTimerRef.current); }, []);
+  const [lit, triggerLit] = useFlashHighlight();
 
   function handleClick() {
     onPlay(shape.frets);
-    setLit(true);
-    litTimerRef.current = setTimeout(() => setLit(false), 400);
+    triggerLit();
   }
 
   return (
@@ -164,10 +57,10 @@ function ArpeggioCard({
       <div className="text-[0.72rem] font-semibold text-[#7070a0] uppercase tracking-wide">
         {CAGED_LABEL[shape.caged]}
       </div>
-      <FretboardDiagram shape={shape} />
+      <FretboardDiagram voicing={shape} color="#7c3aed" />
     </div>
   );
-}
+});
 
 // ── Shared toggle class ───────────────────────────────────────────────────────
 const FILTER_ITEM_CLS =
