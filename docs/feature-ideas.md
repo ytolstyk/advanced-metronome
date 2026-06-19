@@ -1,6 +1,6 @@
 # Feature Ideas
 
-Surveyed the full codebase on 2026-06-03. Updated 2026-06-14 to reflect everything shipped since then.
+Surveyed the full codebase on 2026-06-03. Updated 2026-06-19 to reflect everything shipped since then.
 
 ---
 
@@ -31,37 +31,39 @@ All items below were shipped and are reflected in the codebase.
 | Chord Progression: Send to Tab Editor        | Converts chord progression to a `TabTrack` and saves it for editing in `/tab-editor`                    |
 | Custom User-Built Chords                     | Interactive fretboard editor in Chord Library; custom chords persist to cloud                           |
 | Tab Editor: Alternate Tuning Playback        | `TabPlaybackEngine` uses `openMidi[]` for per-string pitch, so non-standard tunings play correctly      |
+| Ear Training: Skip + Answer Reveal           | Skip button (neutral, tracked separately), correct answer highlighted green + "Play again" for 1.5 s   |
+| Chord Progression: Clear All + Fretboard Diagram | Clear All with Radix Dialog confirmation; `FretboardDiagram` above the currently-playing slot      |
 
 ---
 
 ## Priority Ranking (open items)
 
+Sorted by impact/effort ratio. Low-effort / High-impact items first; High-effort items regardless of impact last.
+
 | #   | Feature                                             | Effort | Impact |
 | --- | --------------------------------------------------- | ------ | ------ |
-| 1   | Ear Training: Skip + Answer Reveal                  | Low    | High   |
-| 2   | Chord Progression: Clear All + Fretboard Diagram    | Low    | Medium |
-| 3   | Tuner: Hold Mode                                    | Low    | Medium |
-| 4   | Fret Memorizer: Stats & Progression UI              | Medium | High   |
-| 5   | CAGED: Next Shape Shortcut                          | Low    | Low    |
-| 6   | Click Track: Keyboard Segment Reordering            | Low    | Low    |
-| 7   | Chord Library: Scale Suggestions                    | Medium | High   |
+| 1   | AI: Chord Progression Suggester                     | Low    | High   |
+| 2   | AI: Practice Plan Generator                         | Low    | High   |
+| 3   | Fret Memorizer: Stats & Progression UI              | Medium | High   |
+| 4   | Chord Library: Scale Suggestions                    | Medium | High   |
+| 5   | AI: YouTube Drum Pattern Extraction                 | Medium | High   |
+| 6   | AI: YouTube Chord Progression Detection             | Medium | High   |
+| 7   | AI: Tab Import from Image                           | Medium | High   |
 | 8   | Chord Progression: Voicing Explorer                 | Medium | High   |
-| 9   | Practice Session: Tags / Categories                 | Low    | Medium |
-| 10  | Drum Machine: Per-Instrument Swing                  | Medium | Medium |
-| 11  | Tab Editor: MusicXML Export                         | Medium | High   |
-| 12  | Tab Editor: Minimap                                 | Medium | Medium |
-| 13  | Capo Calculator                                     | Medium | Medium |
-| 14  | Rhythm Tap Trainer                                  | Medium | Medium |
-| 15  | Song Arranger                                       | High   | High   |
-| 16  | Tab Editor: MIDI Input                              | High   | High   |
-| 17  | AI: Chord Progression Suggester                     | Low    | High   |
-| 18  | AI: Practice Plan Generator                         | Low    | High   |
-| 19  | AI: YouTube Drum Pattern Extraction                 | Medium | High   |
-| 20  | AI: YouTube Chord Progression Detection             | Medium | High   |
-| 21  | AI: Tab Import from Image                           | Medium | High   |
+| 9   | Tab Editor: MusicXML Export                         | Medium | High   |
+| 10  | Tuner: Hold Mode                                    | Low    | Medium |
+| 11  | Practice Session: Tags / Categories                 | Low    | Medium |
+| 12  | AI: Key Change Detector                             | Low    | Medium |
+| 13  | Tab Editor: Minimap                                 | Medium | Medium |
+| 14  | Drum Machine: Per-Instrument Swing                  | Medium | Medium |
+| 15  | AI: Progress Coach Weekly Insights                  | Medium | Medium |
+| 16  | Capo Calculator                                     | Medium | Medium |
+| 17  | Rhythm Tap Trainer                                  | Medium | Medium |
+| 18  | CAGED: Next Shape Shortcut                          | Low    | Low    |
+| 19  | Click Track: Keyboard Segment Reordering            | Low    | Low    |
+| 20  | Song Arranger                                       | High   | High   |
+| 21  | Tab Editor: MIDI Input                              | High   | High   |
 | 22  | AI: Hum-to-Tab Transcription                        | High   | High   |
-| 23  | AI: Progress Coach Weekly Insights                  | Medium | Medium |
-| 24  | AI: Key Change Detector                             | Low    | Medium |
 
 ---
 
