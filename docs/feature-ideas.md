@@ -54,6 +54,14 @@ All items below were shipped and are reflected in the codebase.
 | 14  | Rhythm Tap Trainer                                  | Medium | Medium |
 | 15  | Song Arranger                                       | High   | High   |
 | 16  | Tab Editor: MIDI Input                              | High   | High   |
+| 17  | AI: Chord Progression Suggester                     | Low    | High   |
+| 18  | AI: Practice Plan Generator                         | Low    | High   |
+| 19  | AI: YouTube Drum Pattern Extraction                 | Medium | High   |
+| 20  | AI: YouTube Chord Progression Detection             | Medium | High   |
+| 21  | AI: Tab Import from Image                           | Medium | High   |
+| 22  | AI: Hum-to-Tab Transcription                        | High   | High   |
+| 23  | AI: Progress Coach Weekly Insights                  | Medium | Medium |
+| 24  | AI: Key Change Detector                             | Low    | Medium |
 
 ---
 
@@ -306,6 +314,508 @@ During playback the BPM is shown in a small input field that's hard to read at a
 - Fade back to the standard controls layout when playback is stopped
 - In advanced mode, show the BPM of the currently-playing measure (it can change per measure)
 - Also update the document `<title>` to `"120 BPM — Metronome"` during playback so users can glance at the browser tab
+
+---
+
+## AI / Gemini Integration
+
+All features in this section use the Gemini API via the `@google/generative-ai` npm package. Use **Gemini 2.0 Flash** for latency-sensitive interactions (< 2 s expected), **Gemini 2.5 Pro** for complex multi-step analysis where a few extra seconds are acceptable. All AI calls must be gated behind Amplify auth (sign-in required) to prevent anonymous abuse of the API key. Every call must use `responseMimeType: "application/json"` with an explicit schema so the response can be parsed directly into the app's types without fragile string manipulation. Results that are expensive to generate (audio analysis, image parsing) should be cached keyed by a hash of the input so re-analyzing the same content is instant and free.
+
+**YouTube audio pipeline** (shared by all YouTube-based features): a serverless function (AWS Lambda or Vercel Edge) receives the URL, calls `yt-dlp --extract-audio --audio-format mp3 --audio-quality 5` to get a compressed audio file, uploads it to the Gemini Files API (`model.uploadFile`), then passes the file URI in the Gemini prompt. The function returns structured JSON; the client never touches yt-dlp directly. Gate the endpoint behind the same Amplify JWT used elsewhere in `src/api/`.
+
+---
+
+### YouTube: Drum Pattern Extraction
+
+Learning a drum groove from a YouTube video currently means pausing, rewinding, and tediously transcribing each hit by ear — a process that takes beginners 30+ minutes for a single bar. This feature eliminates that workflow entirely.
+
+**User flow:**
+- An "Import from YouTube" button appears in the drum machine toolbar
+- User pastes a YouTube URL and optionally sets a time range (start/end in mm:ss) to focus on a specific section
+- A loading state shows while the serverless function fetches and analyzes the audio (typically 5–15 s)
+- Gemini's audio model is prompted to return a JSON array of hit events: `{ instrument: "kick"|"snare"|"hihat"|"openhat"|"clap"|"rim"|"tom", beat: number, subdivision: number }`
+- The app quantizes hits to the nearest subdivision slot in the current `Pattern` grid and shows a diff preview — which cells will be filled vs. the current pattern — so the user can accept or reject per instrument row
+- Confidence score (0–1) is shown per instrument; rows below 0.5 are flagged with a warning icon
+
+**Implementation:**
+- New `src/api/aiApi.ts` module; `extractDrumPattern(url, startSec, endSec)` hits the Lambda endpoint and returns `{ pattern: Pattern, confidence: Record<InstrumentId, number> }`
+- Quantization logic: take the hit's timestamp offset within the excerpt, divide by the beat duration at the detected BPM, round to the nearest subdivision index; clamp to the pattern length
+- The diff preview reuses the existing `DrumGrid` component with a "proposed" prop layer rendered in a distinct color (e.g., teal) over the current pattern
+- Structural change (measure count, subdivision) does not auto-apply — if the detected groove requires a different subdivision, ask the user before applying
+
+---
+
+### YouTube: Chord Progression Detection
+
+Figuring out the chords in a song is the most common theory exercise guitarists do by ear, but for beginners it can be impenetrable. Feeding a YouTube clip to Gemini converts a 20-minute ear-training session into a 10-second operation.
+
+**User flow:**
+- "Detect from YouTube" button in the Chord Progression Builder toolbar (next to the existing key selector)
+- User pastes a URL and an optional time range; the request goes to the same serverless pipeline as the drum extractor
+- Gemini returns a JSON array of `{ root: string, quality: string, startBeat: number }` objects (e.g., `[{ root: "A", quality: "minor", startBeat: 0 }, { root: "F", quality: "major", startBeat: 2 }]`)
+- The app maps root+quality pairs to the existing `CHORD_DATABASE` entries in `src/audio/chordSynths.ts`, filling the 8 slots in order; if more than 8 chords are detected, show a scrollable list and let the user pick which 8 to use
+- Key detection and Roman numeral labels run automatically via `chordTheory.ts` after the slots are filled, same as when the user picks chords manually
+- If a detected quality doesn't exist in `CHORD_DATABASE` (e.g., `maj9`), fall back to the closest available quality and note the substitution
+
+**Implementation:**
+- Reuses the YouTube audio pipeline; add a `detectChordProgression(url, startSec, endSec)` function to `src/api/aiApi.ts`
+- The chord mapping step does a case-insensitive lookup of `quality` strings against the keys of `CHORD_DATABASE`; build a normalizer map (`"minor" → "m"`, `"dominant7" → "7"`, etc.) to handle Gemini's verbose quality names
+- Show a 3-slot confirmation dialog (detected key, detected BPM, slot preview) before writing to the progression state so the user can back out
+
+---
+
+### YouTube: BPM + Time Signature Detection
+
+Before building anything in the app — a drum pattern, a click track, a chord progression — the user needs to know the song's tempo. Finding this manually means tap-tempo-ing along with headphones or using a separate app.
+
+**User flow:**
+- Accessible from the metronome page, drum machine toolbar, and click track toolbar via a small "Detect BPM" icon button
+- User pastes a YouTube URL; Gemini analyzes the pulse and returns `{ bpm: number, timeSignature: { numerator: number, denominator: number }, confidence: number }`
+- The detected BPM (clamped to 40–300 per `src/constants.ts`) is shown with a "Apply" button alongside the current BPM value so the user can compare before committing
+- If confidence < 0.7, show a warning: "Tempo is ambiguous — common in live recordings with drift"
+- Also offers "half-time" and "double-time" alternatives (detected BPM ÷ 2 and × 2) since Gemini may detect the subdivisions rather than the beat
+
+**Implementation:**
+- `detectTempo(url, startSec?, endSec?)` in `src/api/aiApi.ts`; short clips (10–30 s) are sufficient for BPM detection so default the range to the first 30 s of the video if not specified
+- On the metronome page, clicking "Apply" dispatches to the same BPM state used by `ClickTrackEngine`; on the drum machine, it calls `dispatch({ type: 'SET_BPM', bpm })` in `src/state.ts`
+
+---
+
+### YouTube: Scale / Mode Detection
+
+A guitarist listening to a solo wants to know "what scale is this in so I can jam along?" — but scale identification requires music theory knowledge that beginners don't yet have.
+
+**User flow:**
+- "Detect Scale" button on the Scales page alongside the existing root + mode dropdowns
+- User pastes a YouTube URL pointing to a melodic passage (solo, riff, bass line); Gemini analyzes the pitch content and returns `{ root: string, mode: string, confidence: number, alternates: Array<{ root, mode }> }`
+- The root and mode dropdowns on the Scales page update automatically; the fretboard SVG redraws with the detected scale's dot positions
+- Up to 3 alternate interpretations are shown as chips (e.g., "also fits Dorian") — clicking one switches the fretboard to that mode
+
+**Implementation:**
+- `detectScale(url, startSec?, endSec?)` in `src/api/aiApi.ts`; map Gemini's mode string (`"natural minor"`, `"mixolydian"`, etc.) to the `ScaleMode` type already used by the Scales page
+- If the detected root isn't a valid note name, normalize enharmonic equivalents (`"Db" → "C#"`)
+
+---
+
+### YouTube: Arpeggio Shape Identification
+
+When a guitarist watches a sweep-picking video and wants to replicate the shape, identifying which CAGED arpeggio shape is being played requires both visual pattern recognition and music theory — a two-skill hurdle.
+
+**User flow:**
+- "Identify Arpeggio" button on the Arpeggios page, next to the quality/shape filter
+- User pastes a YouTube URL; Gemini analyzes the melodic contour and string transitions to identify the arpeggio quality and likely CAGED shape
+- Returns `{ quality: ArpeggioQuality, cagedShape: "C"|"A"|"G"|"E"|"D", rootFret: number, confidence: number }`
+- The Arpeggios page filters to the identified quality and highlights the detected shape; playback auto-loads so the user can hear the comparison immediately
+
+**Implementation:**
+- `identifyArpeggio(url, startSec?, endSec?)` in `src/api/aiApi.ts`; map quality string to `ArpeggioQuality` from `src/data/arpeggios.ts`
+- If `rootFret` is out of range for any shape in the database, show the closest shape and note "detected at fret X — showing nearest available voicing"
+
+---
+
+### Tab Import from Image / Screenshot
+
+Guitarists routinely photograph printed tab books, screenshot PDF tabs, or snap handwritten charts on paper. Today there's no path from those images into the tab editor. This closes that gap.
+
+**User flow:**
+- "Import from image" button in the Tab Editor toolbar (alongside the existing Guitar Pro import)
+- User uploads a PNG/JPG (drag-and-drop or file picker); the image is sent directly to Gemini Vision (no audio pipeline needed — Gemini's multimodal API accepts images inline)
+- Gemini parses the tab notation and returns a structured JSON representation matching the app's `TabTrack` / `Measure` / `Beat` / `TabNote` model
+- A preview dialog shows the parsed result in the tab editor's SVG canvas before committing; the user can click "Import" or "Cancel"
+- Errors (illegible fret numbers, ambiguous rhythms) are flagged per measure in the preview with yellow warning icons; the user can manually fix those measures after importing
+
+**Implementation:**
+- `importTabFromImage(base64Image: string)` in `src/api/aiApi.ts`; pass the image as an inline `inlineData` part in the Gemini request (no Files API upload needed for images under 20 MB)
+- The Gemini prompt must include the full JSON schema of `TabTrack` in the system instruction so the model knows what structure to output
+- Duration inference from tab images is inherently lossy (standard ASCII tab omits rhythm); default all beats to `"quarter"` and set a flag `durationInferred: true` so the UI can highlight those beats for the user to correct
+- Reuse the existing `parseGP` error handling pattern in the tab editor toolbar for the import preview dialog
+
+---
+
+### "Describe This Tab" — Natural Language Summary
+
+When a guitarist finishes a tab and wants to share it — with a teacher, a band member, or in the Tab Library description — they have to write the description themselves. Gemini can do it better and faster.
+
+**User flow:**
+- "Describe" button in the Tab Editor toolbar; also auto-triggered as a pre-fill step in the publish flow
+- Sends the serialized `TabTrack` (title, BPM, time sig, measure count, all beat/note/modifier data) to Gemini as a structured JSON prompt
+- Returns a 2–4 sentence natural language description: "This is a 16-bar instrumental piece in E minor at 140 BPM. It opens with a repeating palm-muted riff on strings 5–6, builds through a hammer-on lead melody on string 1, and resolves with a natural harmonic chord. Suitable for intermediate players; the main challenge is the legato run in measures 9–12."
+- The description appears in a text area the user can edit before copying or inserting into the publish modal
+
+**Implementation:**
+- `describeTab(track: TabTrack)` in `src/api/aiApi.ts`; the input is the full serialized track (already serializable since it's persisted to localStorage)
+- Compress the prompt by summarizing note content statistically (e.g., "measures 1–4: repeated 16th-note pattern on strings 5–6, frets 0–3") rather than sending every beat verbatim — keeps token count manageable for long tabs
+- In the publish modal (`TabEditorPage.tsx`), add a "Generate description" icon button next to the description text area that calls this function and fills the field
+
+---
+
+### Tab Difficulty Estimator
+
+The Tab Library has no difficulty metadata, so a beginner browsing tabs has no way to know whether a piece is within their reach before spending 10 minutes trying to play it.
+
+**User flow:**
+- Difficulty is auto-computed when a tab is published; also available as a manual "Estimate difficulty" button in the Tab Editor toolbar for unpublished tabs
+- Gemini receives the tab's technique inventory (modifier counts: bends, hammer-ons, pull-offs, palm mutes, harmonics, sweeps), max fret stretch, average BPM, and total note density
+- Returns `{ rating: "Beginner"|"Intermediate"|"Advanced"|"Expert", rationale: string }` — e.g., "Advanced — sweep arpeggios at 180 BPM across a 4-fret stretch require significant right-hand precision"
+- The rating is stored alongside the published tab in `amplify/data/resource` schema and displayed as a badge in `TabLibraryCard` and on the `PublishedTabViewPage`
+
+**Implementation:**
+- `estimateDifficulty(track: TabTrack)` in `src/api/aiApi.ts`; extract the summary statistics client-side before sending (no need to send the full note data — technique counts are sufficient)
+- Update the Amplify data schema to add a `difficulty` field to the published tab type
+- Add the badge to `TabLibraryCard` (`src/components/TabLibrary/TabLibraryCard.tsx`) using the same styling as existing quality/tag chips
+
+---
+
+### AI Tab Completion / Autocomplete
+
+Composing tab is often blocked by "I have a great riff but don't know where to go next." Gemini can suggest a continuation in the same style, breaking creative block without replacing the human decision.
+
+**User flow:**
+- "Suggest next measure" button appears when the cursor is at the last beat of any measure
+- Gemini receives the preceding 2–4 measures (serialized as JSON) and is asked to generate one measure that continues naturally in the same style and key
+- The suggested measure appears in the tab canvas as a "ghost" overlay (lighter color, dotted border) rather than being inserted directly
+- Three navigation buttons appear: "Accept", "Try another", "Dismiss"; accepting inserts the ghost beats into the measure as real beats
+- "Try another" re-calls the API with `temperature: 1.2` to get a different suggestion
+
+**Implementation:**
+- `suggestNextMeasure(precedingMeasures: Measure[], track: TabTrack)` in `src/api/aiApi.ts`; include global BPM, time sig, tuning, and string count in the system prompt so Gemini's output stays within playable range for the instrument
+- The ghost overlay is a new rendering mode in `TabMeasureSvg` — add an optional `ghost?: boolean` prop that applies reduced opacity and a dashed SVG stroke to all note elements
+- Validate the returned fret numbers (0–24) and beat durations before inserting; discard and re-request if the response fails schema validation
+
+---
+
+### Tab Style Classifier
+
+Users browsing the Tab Library can't filter by genre. A guitarist looking for blues tabs has to scroll through everything. Auto-classification makes the library searchable without requiring manual tagging by authors.
+
+**User flow:**
+- Style classification runs automatically when a tab is published (same batch request as the difficulty estimator above — combine both in a single Gemini call to save a round trip)
+- Returns `{ genre: string, subgenre?: string, techniques: string[] }` — e.g., `{ genre: "Blues", subgenre: "Chicago Blues", techniques: ["string bending", "vibrato", "blues scale"] }`
+- The genre tag appears in `TabLibraryCard` as a colored pill; the Tab Library gains a genre filter dropdown
+- On the individual tab view (`PublishedTabViewPage`), the technique list is shown as chips below the tab title, giving readers a quick preview of what skills the piece exercises
+
+**Implementation:**
+- Bundle with `estimateDifficulty` in a single `analyzeTab(track: TabTrack)` function that returns `{ difficulty, genre, subgenre, techniques }`; one Gemini call, two results, same cost as separate calls but half the latency
+- Add `genre`, `subgenre`, `techniques` fields to the Amplify published tab schema alongside `difficulty`
+- The genre filter in `TabLibraryPage` uses the same Radix `Select` component pattern as other filters on the page
+
+---
+
+### Practice Plan Generator
+
+A beginner who wants to "get better at guitar" has no idea what to practice or in what order. A structured plan removes the paralysis — and grounding it in the tools already in the app means the user can follow the plan without leaving.
+
+**User flow:**
+- New "Generate Plan" flow on the Practice Session Tracker's setup screen, below the manual goal fields
+- A short form: current skill level (Beginner / Intermediate / Advanced), primary goal (free text, e.g., "learn sweep picking at 140 BPM"), available time per day (5 / 10 / 20 / 30+ min), and which days of the week
+- Gemini generates a 4-week structured plan: each week has daily sessions, each session has a goal object matching `PracticeSession` fields (duration, target BPM, skill focus, which tools to open)
+- The plan is rendered as a week-by-week accordion; tapping any session's "Start" button pre-fills the Practice Session goal form and navigates there
+
+**Implementation:**
+- `generatePracticePlan(input: PlanInput)` in `src/api/aiApi.ts`; the response schema is `{ weeks: Array<{ sessions: Array<{ durationMin: number, targetBpm?: number, skillFocus: string, tools: string[] }> }> }`
+- Persist the generated plan to localStorage (and cloud if authenticated) via a new `src/api/practicePlanApi.ts` — same dual-persistence pattern as every other API module in the project
+- The "tools" field maps to app route names (`"/metronome"`, `"/ear-training"`, etc.); render each as a clickable chip that opens the linked page in a new tab or panel
+- Add a "Regenerate" button so users can get a fresh plan if the first one doesn't fit their style
+
+---
+
+### Progress Coach — Weekly Insights
+
+The Practice Session history view shows raw data (session count, total time, streaks) but doesn't interpret it. Most users won't analyze their own data; a coaching summary turns numbers into action.
+
+**User flow:**
+- A "Weekly Insights" card appears at the top of the Practice Session history view at the start of each week (or on demand via a "Get insights" button)
+- Gemini receives the last 4 weeks of session data: durations, skill focus tags, target BPM values, and streak history
+- Returns a coaching note of 3–5 bullet points: what went well, where there's a plateau, and one concrete suggestion for the coming week
+- Example: "You practiced 5 of 7 days — great consistency. Your average session length dropped from 25 to 12 minutes mid-week; shorter sessions are fine but try to hit 20+ min at least twice. You haven't opened Ear Training in 2 weeks — even 10 minutes of interval drills would complement your speed work."
+- The coaching card is dismissible and non-blocking; it doesn't gate any other functionality
+
+**Implementation:**
+- `generateWeeklyInsights(sessions: PracticeSession[])` in `src/api/aiApi.ts`; send only the last 28 days of data (filter in the client before the API call) to keep the prompt compact
+- The insights response is a `{ bullets: string[], generatedAt: string }` object cached in localStorage with a TTL of 7 days so the same week's data doesn't trigger repeated API calls
+- Render the coaching card above the weekly calendar in `PracticeSessionPage.tsx` using the same `StorageErrorBanner` visual pattern — a dismissible card with an icon and close button
+
+---
+
+### Ear Training Difficulty Calibration
+
+The ear training game has a fixed difficulty tier system but no memory of which specific intervals or chord types an individual user struggles with. A user who has mastered P4 but struggles with m7 is still shown P4 questions at the same rate.
+
+**User flow:**
+- After any completed round, a "Personalized focus" chip appears below the score with a brief insight: "You're getting P5 right 95% of the time but m7 only 40% — focusing on that next"
+- Clicking the chip opens a small panel with a per-item accuracy breakdown and a toggle: "Use adaptive weighting"
+- When adaptive weighting is on, Gemini's recommendation (returned as `{ weights: Record<string, number> }`) biases the question pool — weak items appear more often, mastered items less often — without changing which items are in the pool
+- The weighting update runs after every 10 questions; each update is a lightweight API call (just accuracy statistics, no audio)
+
+**Implementation:**
+- `calibrateEarTraining(history: AnswerRecord[])` in `src/api/aiApi.ts`; `AnswerRecord` is `{ item: string, correct: boolean, timestamp: number }` — already capturable from the `useExercise` hook's existing `wrongAnswers` state
+- The returned weights are applied in `earTrainingLogic.ts` when building the question pool; higher-weight items appear multiple times in the shuffled array before deduplication
+- Weights persist to localStorage per user so calibration survives a page reload; cloud sync is not required (this is session-quality data, not high-value)
+
+---
+
+### Lesson Content Q&A
+
+Static lesson text can't answer follow-up questions. A student reading "barre chords are played by flattening one finger across all strings" may have 5 questions that the text doesn't address — and currently has to leave the app to search.
+
+**User flow:**
+- A "Ask a question" text input appears at the bottom of each lesson step in `LessonPage.tsx`
+- Gemini receives the full lesson step text as the system context and the user's question as the user turn
+- The response appears inline below the question as a collapsible card; questions and answers accumulate in the step view so the user can scroll back through them
+- Responses are scoped to music theory and guitar technique — if the question is off-topic, Gemini politely declines and suggests rephrasing
+
+**Implementation:**
+- `askLessonQuestion(lessonStepContent: string, question: string)` in `src/api/aiApi.ts`; the system prompt includes the lesson text and a constraint: "Answer only questions about music theory, guitar technique, and the concepts covered in this lesson"
+- Render Q&A pairs as an `<details>`/`<summary>` accordion below each step in `LessonPage.tsx` — progressively disclosed so they don't crowd the lesson layout
+- Cap at 5 questions per lesson step per session (tracked in component state) to avoid runaway API usage
+
+---
+
+### Custom Lesson Builder Assistant
+
+Writing a lesson in `BuildLessonPage` currently requires the author to structure everything from scratch. This is high enough friction that only technically confident users will create lessons, limiting the community content pool.
+
+**User flow:**
+- A "Draft with AI" button in `BuildLessonPage` opens a modal with a single text input: "Describe the concept you want to teach"
+- User types something like "pentatonic minor scale in 5 positions across the neck, for intermediate players" and hits "Draft"
+- Gemini returns a full lesson outline: module title, learning objectives, 4–8 step breakdown (each with title, body text, and a suggested tab/chord example), and prerequisite knowledge
+- The draft is imported into the lesson builder's existing form fields, where the author edits, reorders, and refines before saving
+- A "Regenerate" option resubmits the same description with a different seed for variety
+
+**Implementation:**
+- `draftLesson(description: string)` in `src/api/aiApi.ts`; response schema mirrors the `Lesson` type from `src/data/lessons.ts`
+- The draft is imported into `BuildLessonPage` state via an `importDraft` action — same reducer pattern used for everything else
+- Flag all AI-drafted content with `aiDrafted: true` in lesson metadata so admins can review before publishing; show a small "AI-assisted draft" badge in the lesson builder that disappears after the author edits the step
+
+---
+
+### Chord Progression Suggester
+
+A blank Chord Progression Builder is intimidating — most users don't know where to start. Giving them a single-sentence prompt to get a playable progression dramatically lowers the barrier to experimentation.
+
+**User flow:**
+- A "Suggest progression" button in the Chord Progression Builder toolbar (smaller, secondary to the existing chord picker)
+- A compact popover opens with a single free-text field: "Describe a mood, genre, or starting point" — placeholder: "e.g. dark jazz, uplifting pop, Radiohead-style"
+- Gemini returns 3 progression options, each with Roman numeral labels and a brief description: "i – VI – III – VII (natural minor): a melancholic, cinematic feel"
+- Clicking one option fills the 8 slots via the existing slot state; Roman numeral labels and key detection run automatically via `chordTheory.ts`
+- If the user's Amplify auth is active, the last 5 generated progressions are saved to localStorage so they can revisit them without re-generating
+
+**Implementation:**
+- `suggestChordProgressions(prompt: string)` in `src/api/aiApi.ts`; response is `{ progressions: Array<{ chords: Array<{ root: string, quality: string }>, description: string }> }`
+- Map returned root+quality pairs to `CHORD_DATABASE` entries using the same normalizer from the YouTube chord detection feature — share the normalization utility
+- The 3-option UI uses a Radix `RadioGroup` inside a `Popover` (both already available in `src/components/ui/`); selecting an option and clicking "Use this" closes the popover and fills the slots
+
+---
+
+### Click Track Pacing from Song Description
+
+Building a click track for a complex song (multiple tempo changes, time signature shifts, a breakdown, a double-time section) requires knowing the song's structure in advance and manually entering each segment. This feature inverts that: describe the structure, get the segments.
+
+**User flow:**
+- "Build from description" button in the Click Track toolbar
+- User types a natural language description: "Intro at 90 BPM in 4/4 for 4 bars, verse at 110 BPM, chorus doubles to 220 BPM, breakdown in 7/8 at 95 BPM for 8 bars, then back to verse"
+- Gemini parses the description and returns a `TrackPiece[]` array with each segment's `bpm`, `timeSignature`, `subdivision`, and `repeatCount` filled in
+- A preview list shows the proposed segments before they're written to the Click Track state; user can edit individual fields inline in the preview before committing
+
+**Implementation:**
+- `buildClickTrackFromDescription(description: string)` in `src/api/aiApi.ts`; response schema is `{ segments: TrackPiece[] }` matching the `TrackPiece` type from `ClickTrackPage.tsx`
+- BPM values are clamped to 40–300 on the client side after parsing; time signature denominators are constrained to `[2, 4, 8, 16]`
+- The preview renders using the existing segment row component from `ClickTrackPage` in read-only mode; "Import" replaces the current segment list, "Append" adds to it
+
+---
+
+### Drum Fill Suggester
+
+Drum fills are the hardest part of a pattern to compose by ear — they need to resolve back to beat 1 and match the groove's style and tempo. Most drum machine users loop the same 4-bar pattern indefinitely because they don't know how to vary it.
+
+**User flow:**
+- Right-click (or long-press) any measure row in the drum machine → "Suggest fill for this bar" context menu item
+- Gemini receives the current 4-bar pattern (all 7 instruments), the BPM, and the target bar number, and returns a single-bar `Pattern` object designed to work as a fill resolving into the downbeat of the next bar
+- The fill is shown in a side-by-side preview: current bar on the left, suggested fill on the right, using the existing `DrumGrid` renderer
+- "Accept" swaps that bar's data into the pattern; "Try again" re-requests with higher temperature; "Cancel" leaves the pattern unchanged
+
+**Implementation:**
+- `suggestDrumFill(currentPattern: Pattern, measures: number, bpm: number, targetMeasure: number)` in `src/api/aiApi.ts`; response is a single `Pattern` record (same shape as `src/types.ts`'s `Pattern` type)
+- This feature requires sending more data than most (the full pattern grid) — compress by sending the boolean arrays as run-length encoded strings before base64 to keep the prompt compact
+- The preview uses a read-only `DrumGrid` instance with `interactive={false}`; add that prop to the component if it doesn't already exist
+
+---
+
+### Song Section Labeler
+
+A long tab or click track has no inherent structure — every measure looks identical in the UI. Adding structural labels (Intro, Verse, Chorus) makes navigation dramatically easier, especially when a piece is 40+ measures.
+
+**User flow:**
+- "Label sections" button in the Tab Editor toolbar and the Click Track toolbar
+- Gemini analyzes the content — in the tab editor, it looks at pattern repetition, technique changes, and dynamic markers; in the click track, it looks at BPM and time signature transitions
+- Returns `{ labels: Array<{ measureStart: number, measureEnd: number, label: "Intro"|"Verse"|"Chorus"|"Bridge"|"Solo"|"Outro"|"Breakdown" }> }`
+- Labels appear as color-coded horizontal banners spanning their measure range above the tab canvas or click track timeline; clicking a banner scrolls to that section
+
+**Implementation:**
+- `labelSongSections(track: TabTrack | TrackPiece[])` in `src/api/aiApi.ts`; overloaded for both input types
+- Render section labels in `TabSvgCanvas` as a thin colored strip above the measure headers, using the existing measure-position coordinate system in `tabSvgConstants.ts`
+- In the Click Track, render labels as colored background fills behind the segment rows (same approach as the existing `color` field on `TrackPiece` but spanning a range)
+- Labels are persisted as an optional `sectionLabels` field on `TabTrack` and the click track's saved state
+
+---
+
+### Lyric / Rhythm Alignment Tool
+
+Songwriters writing original music often have lyrics before they have a tempo or rhythm grid. Figuring out the natural rhythmic feel of a lyric — which syllables land on the beat, where the bars fall — requires either musical experience or a lot of trial and error.
+
+**User flow:**
+- New tool accessible from the Click Track page: "Rhythm from lyrics" button in the toolbar
+- User pastes a verse or chorus of lyrics into a text area
+- Gemini analyzes syllable count, natural speech stress, and poetic meter, then returns `{ bpm: number, timeSignature: { numerator, denominator }, syllableBeatMap: Array<{ word: string, syllable: string, beat: number, subdivision: number }> }`
+- The app shows the lyrics annotated with beat positions (color-coded per beat) and previews a click track segment at the suggested BPM so the user can hear the rhythm before committing
+- "Apply to Click Track" creates a new segment with the detected time sig and BPM
+
+**Implementation:**
+- `alignLyricsToRhythm(lyrics: string)` in `src/api/aiApi.ts`; this is a text-only Gemini call (no audio), so it's fast and cheap
+- The annotated lyrics display uses a `<span>` per syllable with `data-beat` and `data-subdivision` attributes; beats are highlighted with the same color scheme as the `BeatCell` component
+- The BPM suggestion is advisory — show a slider so the user can nudge it ±20 BPM before creating the segment
+
+---
+
+### CAGED Shape Explanation
+
+The CAGED visualizer shows the shapes but doesn't explain them. Students often know which shapes exist but don't understand why they work, how to connect them, or what scale tones they emphasize — so they memorize patterns without internalizing the theory.
+
+**User flow:**
+- A "Explain this shape" button appears in the CAGED page's shape info panel (already exists as a sidebar) when a shape is active
+- Gemini receives the current root note, CAGED shape name, and the computed fret positions from `computeCAGEDShapes` in `src/data/caged.ts`
+- Returns a 3–5 sentence explanation: which scale degrees are under which fingers, how this shape connects to the adjacent shape (ascending and descending the neck), and a practical tip ("the G-shape is often used for lead playing because the root sits under the ring finger, freeing the pinky for extensions")
+- The explanation appears in a collapsible panel below the shape info; collapses by default to not crowd the visualizer
+
+**Implementation:**
+- `explainCAGEDShape(root: string, shape: string, fretPositions: number[])` in `src/api/aiApi.ts`
+- The explanation is cached in a `Map<string, string>` keyed by `"${root}-${shape}"` in component state — the same root+shape combination always gets the same explanation, so one API call per combination per session is enough
+- Render the explanation in a `<details>` element in `CAGEDPage.tsx` with the shape name as the `<summary>` label
+
+---
+
+### Circle of Fifths Walkthrough
+
+The Circle of Fifths page currently displays the circle and lets users click a key, but it doesn't teach what the circle means or how to use it. A student who doesn't already know music theory gets limited value from it.
+
+**User flow:**
+- "Explain this key" button appears in the Circle of Fifths key detail panel when a key is selected
+- Gemini receives the selected key (root + major/minor) and returns: (1) the key signature (sharps/flats), (2) the diatonic chords as Roman numerals with names, (3) two common modulation targets and how to pivot, (4) a famous song example in that key
+- The walkthrough is displayed as a structured panel with four collapsible sections, so the user can drill into whichever aspect interests them
+- "Show in Chord Progression" button pre-fills the Chord Progression Builder with the key's I–IV–V–I as a starting point
+
+**Implementation:**
+- `explainKey(root: string, mode: "major"|"minor")` in `src/api/aiApi.ts`; response schema has four labeled sections for predictable rendering
+- Cache per key (42 combinations total — 7 roots × 3 accidentals × 2 modes) in localStorage so each explanation is generated once and reused
+- The "Show in Chord Progression" deep link uses the existing URL parameter approach for pre-filling the progression builder
+
+---
+
+### Interval Trainer Hint Engine
+
+Wrong answers in the Interval Trainer are currently silent — the player just sees a red flash and moves on. For intervals the player repeatedly misses, a memorable mnemonic dramatically accelerates learning by giving the ear something to hook onto.
+
+**User flow:**
+- After a wrong answer, a "Need a hint?" link appears below the correct answer reveal (which is already planned in the "Skip + Answer Reveal" feature above)
+- Clicking it calls Gemini, which returns a short mnemonic: a well-known song whose opening melodic interval matches the one the player missed
+- Example: "A minor 3rd sounds like the first two notes of 'Smoke on the Water' (D–F). Try humming it before your next attempt."
+- The hint is cached per interval pair and shown immediately on subsequent misses without a new API call
+- A "Hint library" tab in the Ear Training page eventually accumulates all generated mnemonics so the user can review them outside of game mode
+
+**Implementation:**
+- `getIntervalMnemonic(intervalName: string)` in `src/api/aiApi.ts`; since there are at most ~14 distinct intervals (P1 through P8 including enharmonics), pre-generate and cache all 14 on first use in a single batch call
+- Store the full mnemonic table in localStorage keyed by interval name; subsequent sessions never need an API call for this feature
+- Render the hint as a small `Tooltip` or inline card in the `IntervalTrainerPage` answer reveal phase
+
+---
+
+### Hum-to-Tab Transcription
+
+The hardest part of tab writing is often transferring a melody that exists only in the composer's head into notation. Humming into the mic and getting tab output bypasses the fret-finding step entirely.
+
+**User flow:**
+- "Hum to tab" button in the Tab Editor toolbar — only visible when a microphone is available
+- A recording modal opens: a large "Record" button and a waveform display (using `AnalyserNode` from the existing tuner pipeline)
+- User records 2–30 seconds of humming, singing, or whistling; the recording is converted to a WAV blob client-side
+- The WAV is sent to Gemini's audio model, which transcribes the melody to `{ notes: Array<{ midi: number, durationBeats: number }> }`
+- The app maps MIDI numbers to the closest fret positions on the current tuning (`openMidi[]` from `TabTrack`) and inserts the result as a new measure in the tab editor
+- Fret mapping prefers lower positions on lower strings (matching idiomatic guitar playing) over higher frets on higher strings
+
+**Implementation:**
+- Recording: reuse the `getUserMedia` + `AnalyserNode` setup from `TunerPage.tsx`; add a `MediaRecorder` around it to capture the audio stream as a WebM/WAV blob
+- `transcribeMelody(audioBlob: Blob)` in `src/api/aiApi.ts`; upload via the Gemini Files API (not inline, since mic audio can be >20 MB for long recordings)
+- Fret mapping: for each MIDI note, iterate the `openMidi[]` array and find the string where `fret = midi - openMidi[string]` is in 0–24 range; prefer the string with the lowest resulting fret (open strings and low positions sound more natural)
+- Duration quantization: snap returned `durationBeats` to the nearest `DurationValue` using the existing duration ladder in `tabEditorState.ts`
+- Show a "Review transcription" step (the same ghost-overlay pattern as tab autocomplete) before committing to the measure
+
+---
+
+### Key Change Detector in Chord Progressions
+
+Users building progressions longer than 4–8 chords often modulate without realizing it, or deliberately borrow chords from parallel modes. The existing `chordTheory.ts` key detection only assigns a single key to the whole progression — it doesn't flag the moment the harmony shifts.
+
+**User flow:**
+- "Analyze harmony" button in the Chord Progression Builder toolbar (runs after the progression is fully built)
+- Gemini receives the full slot sequence as Roman numerals and identifies: (1) the primary key, (2) any pivot chords or modal borrowing, (3) if a secondary key is established, where it starts
+- Returns `{ primaryKey: string, annotations: Array<{ slotIndex: number, label: string, explanation: string }> }` — e.g., `{ slotIndex: 3, label: "bVII", explanation: "Borrowed from Mixolydian — common in rock and Britpop" }`
+- Annotations appear as small badges below the chord slots; hovering one shows the explanation in a tooltip
+- This feature works with the existing 8-slot model and doesn't require longer progressions, though it's most useful for complex ones
+
+**Implementation:**
+- `analyzeHarmony(chords: Array<{ root: string, quality: string }>)` in `src/api/aiApi.ts`; this is a pure text call (no audio), fast and cheap
+- The annotation badges use the existing chord slot component in `ChordProgressionPage.tsx` — add an optional `annotation?: string` prop to the slot renderer
+- The `chordTheory.ts` module's existing `detectKey` function already runs on every progression change; this feature supplements it with per-chord annotation rather than replacing it
+
+---
+
+### Auto-Generated Tab Description for Publishing
+
+The publish modal for the Tab Library currently has an empty description field that most users skip, resulting in a library of tabs with no useful metadata. Auto-generating the description removes the blank-field friction entirely.
+
+**User flow:**
+- When the user opens the publish modal in the Tab Editor, the description field auto-populates with an AI-generated summary (uses the same `describeTab` function from the "Describe This Tab" feature)
+- The auto-generated text is shown with a subtle "AI-assisted" chip next to it; the user can edit or clear it entirely
+- If the user has already typed a description before opening the modal, the auto-fill is suppressed — never overwrite user-written content
+- The publish flow otherwise unchanged; AI-generated descriptions are stored identically to user-written ones
+
+**Implementation:**
+- Trigger `describeTab(track)` when the publish modal opens (`onOpenChange` in the Radix `Dialog`); show a skeleton loader in the description field while the call is in flight
+- Cache the result in component state so re-opening the modal doesn't re-trigger the API call during the same session
+
+---
+
+### Tag Generator for Tab Library
+
+The Tab Library has no tagging or filtering system. Every published tab is a flat list — there's no way to find "blues fingerpicking in drop D" without scrolling through everything.
+
+**User flow:**
+- Tags are auto-generated at publish time alongside the difficulty rating and genre classification (combine all three in the single `analyzeTab` call described in the Tab Difficulty Estimator section)
+- Gemini returns 3–6 suggested tags drawn from a controlled vocabulary: genre, key, tuning, primary technique, difficulty, mood
+- Tags appear as editable chips in the publish modal; the user can remove any auto-generated tag or add custom ones from a free-text input
+- The Tab Library page gains a tag filter: a multi-select chip bar above the tab list; selecting tags narrows results (AND logic)
+- Tags are stored in the Amplify schema alongside the published tab; the `TabLibraryPage` query filters by tags server-side
+
+**Implementation:**
+- The tag controlled vocabulary is defined as a TypeScript const in `src/api/aiApi.ts` and passed to Gemini in the system prompt to constrain its output — prevents hallucinated tags like "Jimi Hendrix style" that can't be filtered
+- The editable chip input in the publish modal uses a `combobox` pattern (type to filter the controlled vocabulary + add custom); this is the only new UI component needed
+- Filter chips in `TabLibraryPage` match the same Tailwind color scheme as the existing difficulty badges
+
+---
+
+### "Similar Tabs" Recommendation
+
+A user who finishes a published tab has no path to discover related material. The Tab Library is a dead end after the current tab. Similar-tabs recommendations convert a one-and-done view into a session.
+
+**User flow:**
+- A "You might also like" section appears at the bottom of `PublishedTabViewPage`, below the alphaTab renderer
+- When the page loads, Gemini receives the current tab's metadata (genre, tags, difficulty, key, techniques, BPM) and a list of other published tab summaries (title, genre, tags, difficulty — not the full note data)
+- Returns 3 recommended tab IDs with a one-line reason for each: "Similar blues fingerpicking style in the same key"
+- Each recommendation renders as a `TabLibraryCard` (reuse existing component); clicking navigates to that tab's view page
+
+**Implementation:**
+- `findSimilarTabs(currentTab: PublishedTabSummary, allTabs: PublishedTabSummary[])` in `src/api/aiApi.ts`; pass only summary metadata, not full note data — keeps the prompt small even with hundreds of tabs
+- If the total number of tabs is large (> 50), pre-filter to the same genre before sending to Gemini so the context stays manageable
+- Cache recommendations per tab ID in localStorage (7-day TTL) so every view of the same tab doesn't incur an API call
 
 ---
 
