@@ -211,6 +211,160 @@
   color: #888;
 }
 
+/* ── Plan Generator ──────────────────────────────────────────────────────── */
+
+.ps-plan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.ps-plan-header .ps-section-title {
+  margin-bottom: 0;
+}
+
+.ps-plan-toggle-btn {
+  font-size: 0.7rem;
+  color: #555;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.1s;
+}
+
+.ps-plan-toggle-btn:hover {
+  color: #999;
+}
+
+.ps-plan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ps-plan-form-row {
+  margin-bottom: 0.875rem;
+}
+
+.ps-plan-weeks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.ps-plan-week {
+  border: 1px solid #222;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ps-plan-week-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.875rem;
+  background: #181818;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #c0c0c0;
+  transition: background 0.1s;
+}
+
+.ps-plan-week-header:hover {
+  background: #1e1e1e;
+}
+
+.ps-plan-week-meta {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: #555;
+  flex: 1;
+}
+
+.ps-plan-week-chevron {
+  font-size: 0.6rem;
+  color: #444;
+}
+
+.ps-plan-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ps-plan-session {
+  padding: 0.7rem 0.875rem;
+  border-top: 1px solid #1a1a1a;
+}
+
+.ps-plan-session-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.ps-plan-session-focus {
+  font-size: 0.82rem;
+  color: #d8d8d8;
+  line-height: 1.35;
+  flex: 1;
+}
+
+.ps-plan-start-btn {
+  flex-shrink: 0;
+  font-size: 0.7rem !important;
+  height: 1.6rem !important;
+  padding: 0 0.6rem !important;
+}
+
+.ps-plan-session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-bottom: 0.4rem;
+}
+
+.ps-plan-chip {
+  font-size: 0.68rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  background: #1e1e1e;
+  border: 1px solid #2a2a2a;
+  color: #777;
+  font-variant-numeric: tabular-nums;
+}
+
+.ps-plan-session-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.ps-plan-tool-chip {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: #0f1f3d;
+  border: 1px solid #1a3a6b;
+  color: #6b9ddb;
+  text-decoration: none;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.ps-plan-tool-chip:hover {
+  background: #162b55;
+  border-color: #2563eb;
+  color: #93c5fd;
+}
+
 @media (max-width: 480px) {
   .ps-timer {
     font-size: 3rem;

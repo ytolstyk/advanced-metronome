@@ -1,5 +1,6 @@
 import { a, defineData, type ClientSchema } from '@aws-amplify/backend';
 import { geminiSuggestFunction } from '../functions/gemini-suggest/resource';
+import { geminiPlanFunction } from '../functions/gemini-plan/resource';
 
 const schema = a.schema({
   // One record per user — auto-saved on every change
@@ -176,6 +177,24 @@ const schema = a.schema({
     .returns(a.string())
     .authorization(allow => [allow.authenticated()])
     .handler(a.handler.function(geminiSuggestFunction)),
+
+  generatePracticePlan: a.query()
+    .arguments({
+      skillLevel:    a.string().required(),
+      goal:          a.string().required(),
+      dailyMinutes:  a.integer().required(),
+      daysOfWeekJson: a.string().required(),
+    })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(geminiPlanFunction)),
+
+  // Generated practice plan — one record per user (latest plan wins)
+  UserPracticePlan: a.model({
+    inputJson: a.string().required(),
+    planJson:  a.string().required(),
+    generatedAt: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

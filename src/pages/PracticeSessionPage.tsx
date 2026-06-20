@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useCallback, useMemo } from 'react';
+import { useReducer, useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,11 +12,19 @@ import {
   savePracticeSession,
   loadPracticeSessions,
 } from '@/api/practiceSessionApi';
+import {
+  generatePracticePlan,
+  savePracticePlan,
+  loadSavedPlan,
+} from '@/api/practicePlanApi';
 import type {
   ToolId,
   SessionGoal,
   ActiveSession,
   CompletedSession,
+  SkillLevel,
+  PlanSession,
+  PracticePlan,
 } from '../practiceSessionTypes';
 import {
   TOOL_META,
@@ -51,6 +59,8 @@ interface PageState {
   history: CompletedSession[];
   historyLoaded: boolean;
   lastCompleted: CompletedSession | null;
+  currentPlan: PracticePlan | null;
+  planLoaded: boolean;
 }
 
 type PageAction =
@@ -58,6 +68,9 @@ type PageAction =
   | { type: 'SET_GOAL_BPM'; raw: string }
   | { type: 'SET_GOAL_SKILL'; text: string }
   | { type: 'TOGGLE_GOAL_TOOL'; tool: ToolId }
+  | { type: 'APPLY_PLAN_SESSION'; session: PlanSession }
+  | { type: 'PLAN_LOADED'; plan: PracticePlan | null }
+  | { type: 'PLAN_GENERATED'; plan: PracticePlan }
   | { type: 'START_SESSION'; session: ActiveSession }
   | { type: 'RESUME_SESSION'; session: ActiveSession; initialElapsed: number }
   | { type: 'DISCARD_ACTIVE' }
@@ -83,6 +96,8 @@ function initialState(): PageState {
     history: [],
     historyLoaded: false,
     lastCompleted: null,
+    currentPlan: null,
+    planLoaded: false,
   };
 }
 
@@ -103,6 +118,18 @@ function reducer(state: PageState, action: PageAction): PageState {
           : [...state.goalTools, action.tool],
       };
     }
+    case 'APPLY_PLAN_SESSION':
+      return {
+        ...state,
+        goalDurationMinutes: action.session.durationMin,
+        goalBpmRaw: action.session.targetBpm ? String(action.session.targetBpm) : '',
+        goalSkillFocus: action.session.skillFocus,
+        goalTools: action.session.tools,
+      };
+    case 'PLAN_LOADED':
+      return { ...state, currentPlan: action.plan, planLoaded: true };
+    case 'PLAN_GENERATED':
+      return { ...state, currentPlan: action.plan, planLoaded: true };
     case 'START_SESSION':
       return {
         ...state,
@@ -169,7 +196,13 @@ function reducer(state: PageState, action: PageAction): PageState {
     case 'HISTORY_LOADED':
       return { ...state, history: action.sessions, historyLoaded: true };
     case 'RESET':
-      return { ...initialState(), history: state.history, historyLoaded: state.historyLoaded };
+      return {
+        ...initialState(),
+        history: state.history,
+        historyLoaded: state.historyLoaded,
+        currentPlan: state.currentPlan,
+        planLoaded: state.planLoaded,
+      };
     default:
       return state;
   }
@@ -272,12 +305,233 @@ function SessionHistoryList({ sessions }: { sessions: CompletedSession[] }) {
   );
 }
 
+// ── Plan Generator ─────────────────────────────────────────────────────────
+
+const SKILL_LEVELS: SkillLevel[] = ['Beginner', 'Intermediate', 'Advanced'];
+// 60 is intentionally included; all values render from the same map
+const DAILY_MINUTE_PRESETS = [5, 10, 20, 30, 60] as const;
+const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+function PlanGeneratorSection({
+  plan,
+  onPlanGenerated,
+  onApply,
+}: {
+  plan: PracticePlan | null;
+  onPlanGenerated: (plan: PracticePlan) => void;
+  onApply: (session: PlanSession) => void;
+}) {
+  const [formVisible, setFormVisible] = useState(!plan);
+  const [skillLevel, setSkillLevel] = useState<SkillLevel>('Intermediate');
+  const [goal, setGoal] = useState('');
+  const [dailyMinutes, setDailyMinutes] = useState(20);
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedWeek, setExpandedWeek] = useState<number>(0);
+
+  // One-shot: when a saved plan first arrives (async cloud load), auto-collapse to plan view.
+  // A ref prevents re-collapsing if the user has intentionally opened the form via "Regenerate".
+  const didReceivePlan = useRef(!!plan);
+  useEffect(() => {
+    if (plan && !didReceivePlan.current) {
+      didReceivePlan.current = true;
+      setFormVisible(false);
+    }
+  }, [plan]);
+
+  function toggleDay(day: number) {
+    setDaysOfWeek(prev =>
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day],
+    );
+  }
+
+  async function handleGenerate() {
+    setGenerating(true);
+    setError(null);
+    try {
+      const newPlan = await generatePracticePlan({ skillLevel, goal, dailyMinutes, daysOfWeek });
+      // Notify the parent immediately so the plan is in the reducer's state
+      onPlanGenerated(newPlan);
+      setFormVisible(false);
+      setExpandedWeek(0);
+      // Persist in the background — don't block the UI on the cloud round-trip
+      savePracticePlan(newPlan).catch(() => {});
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to generate plan.');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <div className="ps-section">
+      <div className="ps-plan-header">
+        <div className="ps-section-title">AI Practice Plan</div>
+        {plan && (
+          <button
+            className="ps-plan-toggle-btn"
+            onClick={() => setFormVisible(v => !v)}
+          >
+            {formVisible ? 'View plan' : 'Regenerate'}
+          </button>
+        )}
+      </div>
+
+      {formVisible && (
+        <div className="ps-plan-form">
+          <div className="ps-plan-form-row">
+            <Label className="text-[#888] text-xs mb-1.5 block">Skill level</Label>
+            <ToggleGroup
+              type="single"
+              value={skillLevel}
+              onValueChange={v => { if (v) setSkillLevel(v as SkillLevel); }}
+              className="flex-wrap"
+            >
+              {SKILL_LEVELS.map(lvl => (
+                <ToggleGroupItem key={lvl} value={lvl} className="text-xs px-3">
+                  {lvl}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+
+          <div className="ps-plan-form-row">
+            <Label htmlFor="ps-plan-goal" className="text-[#888] text-xs mb-1 block">
+              Primary goal
+            </Label>
+            <Input
+              id="ps-plan-goal"
+              type="text"
+              placeholder="e.g. learn sweep picking at 140 BPM"
+              value={goal}
+              onChange={e => setGoal(e.target.value)}
+              maxLength={300}
+              className="bg-[#0d0d0d] border-[#2a2a2a] text-[#e0e0e0] text-sm h-8"
+            />
+          </div>
+
+          <div className="ps-plan-form-row">
+            <Label className="text-[#888] text-xs mb-1.5 block">Time per session</Label>
+            <ToggleGroup
+              type="single"
+              value={String(dailyMinutes)}
+              onValueChange={v => { if (v) setDailyMinutes(Number(v)); }}
+              className="flex-wrap"
+            >
+              {DAILY_MINUTE_PRESETS.map(m => (
+                <ToggleGroupItem key={m} value={String(m)} className="text-xs px-3">
+                  {m}m
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+
+          <div className="ps-plan-form-row">
+            <Label className="text-[#888] text-xs mb-1.5 block">Practice days</Label>
+            <div className="flex gap-1">
+              {DAY_LABELS.map((label, idx) => (
+                <button
+                  key={label}
+                  onClick={() => toggleDay(idx)}
+                  className={cn(
+                    'w-8 h-8 rounded text-xs border transition-colors duration-100',
+                    daysOfWeek.includes(idx)
+                      ? 'bg-[#1d4ed8] border-[#2563eb] text-white'
+                      : 'bg-transparent border-[#333] text-[#666] hover:border-[#555] hover:text-[#999]',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && <p className="text-xs text-[#ef4444] mt-1">{error}</p>}
+
+          <Button
+            size="sm"
+            onClick={handleGenerate}
+            disabled={generating || !goal.trim() || daysOfWeek.length === 0}
+            className="mt-2"
+          >
+            {generating ? 'Generating…' : plan ? 'Regenerate Plan' : 'Generate Plan'}
+          </Button>
+        </div>
+      )}
+
+      {plan && !formVisible && (
+        <div className="ps-plan-weeks">
+          <p className="text-xs text-[#555] mb-3">
+            {plan.weeks.length}-week plan for <span className="text-[#888]">{plan.input.goal}</span>
+          </p>
+          {plan.weeks.map((week, wi) => (
+            <div key={wi} className="ps-plan-week">
+              <button
+                className="ps-plan-week-header"
+                onClick={() => setExpandedWeek(expandedWeek === wi ? -1 : wi)}
+              >
+                <span>Week {wi + 1}</span>
+                <span className="ps-plan-week-meta">
+                  {week.sessions.length} session{week.sessions.length !== 1 ? 's' : ''}
+                </span>
+                <span className="ps-plan-week-chevron">{expandedWeek === wi ? '▲' : '▼'}</span>
+              </button>
+
+              {expandedWeek === wi && (
+                <div className="ps-plan-sessions">
+                  {week.sessions.map((session, si) => (
+                    <div key={si} className="ps-plan-session">
+                      <div className="ps-plan-session-top">
+                        <span className="ps-plan-session-focus">{session.skillFocus}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="ps-plan-start-btn"
+                          onClick={() => onApply(session)}
+                        >
+                          Use
+                        </Button>
+                      </div>
+                      <div className="ps-plan-session-meta">
+                        <span className="ps-plan-chip">{session.durationMin}m</span>
+                        {session.targetBpm && (
+                          <span className="ps-plan-chip">{session.targetBpm} BPM</span>
+                        )}
+                      </div>
+                      {session.tools.length > 0 && (
+                        <div className="ps-plan-session-tools">
+                          {session.tools.map(tool => (
+                            <a
+                              key={tool}
+                              href={TOOL_META[tool].route}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ps-plan-tool-chip"
+                            >
+                              {TOOL_META[tool].short}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────
 
 export function PracticeSessionPage() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
 
-  // On mount: restore any in-progress session + load history
+  // On mount: restore any in-progress session, load history, and load saved plan
   useEffect(() => {
     const active = loadActiveSession();
     if (active) {
@@ -289,6 +543,10 @@ export function PracticeSessionPage() {
     loadPracticeSessions()
       .then(sessions => dispatch({ type: 'HISTORY_LOADED', sessions }))
       .catch(() => dispatch({ type: 'HISTORY_LOADED', sessions: [] }));
+
+    loadSavedPlan()
+      .then(plan => dispatch({ type: 'PLAN_LOADED', plan }))
+      .catch(() => dispatch({ type: 'PLAN_LOADED', plan: null }));
   }, []);
 
   // Persist active session to localStorage after every tick/change
@@ -369,9 +627,19 @@ export function PracticeSessionPage() {
     dispatch({ type: 'SWITCH_TOOL', tool, nowIso: new Date().toISOString() });
   }
 
-  const streak = useMemo(() => computeStreak(state.history), [state.history]);
+  const handleApplyPlanSession = useCallback(
+    (session: PlanSession) => dispatch({ type: 'APPLY_PLAN_SESSION', session }),
+    [],
+  );
+
+  const handlePlanGenerated = useCallback(
+    (plan: PracticePlan) => dispatch({ type: 'PLAN_GENERATED', plan }),
+    [],
+  );
+
+  const streak   = useMemo(() => computeStreak(state.history), [state.history]);
   const calendar = useMemo(() => computeWeeklyCalendar(state.history), [state.history]);
-  const nudges = useMemo(() => computeNudges(state.history), [state.history]);
+  const nudges   = useMemo(() => computeNudges(state.history), [state.history]);
   const activeGoalTools = state.activeSession?.goal.tools ?? [];
 
   return (
@@ -501,6 +769,14 @@ export function PracticeSessionPage() {
 
           <Button onClick={startSession}>Start Session</Button>
         </div>
+      )}
+
+      {state.phase === 'setup' && (
+        <PlanGeneratorSection
+          plan={state.currentPlan}
+          onPlanGenerated={handlePlanGenerated}
+          onApply={handleApplyPlanSession}
+        />
       )}
 
       {/* ── Active Phase ── */}

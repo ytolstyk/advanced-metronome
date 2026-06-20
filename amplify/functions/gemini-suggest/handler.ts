@@ -3,7 +3,7 @@ import type { Schema } from '@google/generative-ai';
 import type { AppSyncResolverHandler } from 'aws-lambda';
 
 const SUGGESTION_COUNT = 3;
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-3.5-flash';
 const MAX_PROMPT_LENGTH = 500;
 
 const ROOT_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;

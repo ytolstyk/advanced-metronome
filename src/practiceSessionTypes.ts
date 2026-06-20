@@ -38,3 +38,30 @@ export interface CompletedSession {
   toolTimes: Partial<Record<ToolId, number>>;
   notes: string;
 }
+
+export type SkillLevel = 'Beginner' | 'Intermediate' | 'Advanced';
+
+export interface PlanInput {
+  skillLevel: SkillLevel;
+  goal: string;
+  dailyMinutes: number;
+  daysOfWeek: number[]; // 0=Sun … 6=Sat
+}
+
+export interface PlanSession {
+  durationMin: number;
+  targetBpm?: number;
+  skillFocus: string;
+  tools: ToolId[];
+}
+
+export interface PlanWeek {
+  sessions: PlanSession[];
+}
+
+export interface PracticePlan {
+  id: string;
+  input: PlanInput;
+  weeks: PlanWeek[];
+  generatedAt: string;
+}
