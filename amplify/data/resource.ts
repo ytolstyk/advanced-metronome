@@ -1,4 +1,5 @@
 import { a, defineData, type ClientSchema } from '@aws-amplify/backend';
+import { geminiSuggestFunction } from '../functions/gemini-suggest/resource';
 
 const schema = a.schema({
   // One record per user — auto-saved on every change
@@ -169,6 +170,12 @@ const schema = a.schema({
     startedAt: a.string().required(),
     completedAt: a.string().required(),
   }).authorization(allow => [allow.owner()]),
+
+  suggestChordProgressions: a.query()
+    .arguments({ prompt: a.string().required() })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(geminiSuggestFunction)),
 });
 
 export type Schema = ClientSchema<typeof schema>;

@@ -1,4 +1,4 @@
-import { useReducer, useMemo, useRef, useEffect, useCallback, useState, forwardRef } from 'react';
+import { useReducer, useMemo, useRef, useEffect, useCallback, useState, forwardRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import {
@@ -41,7 +41,13 @@ import { exportChordProgression } from '../audio/exportChordProgression';
 import { chordProgressionToTabTrack } from '../utils/chordProgressionToTab';
 import { saveTabTrack } from '../tabEditorState';
 import { FretboardDiagram } from '../components/FretboardDiagram/FretboardDiagram';
+import { suggestChordProgressions, SUGGESTION_COUNT } from '../api/aiApi';
+import type { SuggestedProgression } from '../api/aiApi';
+import { loadFromStorage, saveToStorage } from '../api/storageUtils';
 import './ChordProgressionPage.css';
+
+// O(1) chord lookup used by the fretboard preview — avoids an O(n) scan on every render
+const CHORD_DATABASE_INDEX = new Map(CHORD_DATABASE.map((e) => [`${e.root}|${e.type}`, e]));
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -421,7 +427,7 @@ interface SlotCardProps {
   onHoverChord: (index: number) => void;
 }
 
-const ChordSlotCard = forwardRef<HTMLDivElement, SlotCardProps>(function ChordSlotCard({
+const ChordSlotCard = memo(forwardRef<HTMLDivElement, SlotCardProps>(function ChordSlotCard({
   index,
   chord,
   romanNumeral,
@@ -499,7 +505,7 @@ const ChordSlotCard = forwardRef<HTMLDivElement, SlotCardProps>(function ChordSl
       )}
     </div>
   );
-});
+}));
 
 // ── TheoryBar ────────────────────────────────────────────────────────────────
 
@@ -629,6 +635,221 @@ function TheoryBar({
   );
 }
 
+// ── AI Suggestion Dialog ─────────────────────────────────────────────────────
+
+const SUGGEST_CACHE_KEY = 'cp-ai-suggestion-cache';
+const SUGGEST_CACHE_MAX = 5;
+const SUGGEST_DESC_MAX_LEN = 200;
+
+interface SuggestionCacheEntry {
+  prompt: string;
+  progressions: SuggestedProgression[];
+  generatedAt: number;
+}
+
+function validateCacheEntry(raw: unknown): SuggestionCacheEntry | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const e = raw as Record<string, unknown>;
+  if (typeof e.prompt !== 'string' || typeof e.generatedAt !== 'number' || !Array.isArray(e.progressions)) return null;
+  const progressions = (e.progressions as unknown[]).map((p): SuggestedProgression | null => {
+    if (!p || typeof p !== 'object') return null;
+    const prog = p as Record<string, unknown>;
+    if (!Array.isArray(prog.chords) || typeof prog.description !== 'string') return null;
+    const chords = (prog.chords as unknown[]).map((c): ChordSlot | null => {
+      if (!c || typeof c !== 'object') return null;
+      const chord = c as Record<string, unknown>;
+      const root = typeof chord.root === 'string' ? ROOT_NOTES.find((r) => r === chord.root) : undefined;
+      const type = typeof chord.type === 'string' ? CHORD_TYPES.find((t) => t === chord.type) : undefined;
+      if (!root || !type) return null;
+      return { root, type };
+    }).filter((c): c is ChordSlot => c !== null);
+    if (chords.length === 0) return null;
+    return { chords, description: String(prog.description).slice(0, SUGGEST_DESC_MAX_LEN) };
+  }).filter((p): p is SuggestedProgression => p !== null);
+  if (progressions.length === 0) return null;
+  return { prompt: String(e.prompt).slice(0, 500), progressions, generatedAt: e.generatedAt };
+}
+
+interface SuggestDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onApply: (chords: ChordSlot[]) => void;
+}
+
+function SuggestProgressionDialog({ open, onOpenChange, onApply }: SuggestDialogProps) {
+  const [prompt, setPrompt] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [progressions, setProgressions] = useState<SuggestedProgression[] | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [cache, setCache] = useState<SuggestionCacheEntry[]>([]);
+
+  useEffect(() => {
+    if (open) {
+      const raw = loadFromStorage<unknown[]>(SUGGEST_CACHE_KEY, []);
+      setCache(raw.map(validateCacheEntry).filter((e): e is SuggestionCacheEntry => e !== null));
+    }
+  }, [open]);
+
+  const handleGenerate = async () => {
+    const trimmed = prompt.trim();
+    if (!trimmed) return;
+
+    // Serve from cache if available — no network call needed
+    const hit = cache.find((e) => e.prompt === trimmed);
+    if (hit) {
+      setProgressions(hit.progressions);
+      setSelectedIdx(0);
+      setError(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setProgressions(null);
+    try {
+      const results = await suggestChordProgressions(trimmed);
+      setProgressions(results);
+      setSelectedIdx(0);
+      const entry: SuggestionCacheEntry = { prompt: trimmed, progressions: results, generatedAt: Date.now() };
+      setCache((prev) => {
+        const updated = [entry, ...prev.filter((e) => e.prompt !== trimmed)].slice(0, SUGGEST_CACHE_MAX);
+        saveToStorage(SUGGEST_CACHE_KEY, updated);
+        return updated;
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      // Only show messages from our own code; Gemini client errors may contain internal metadata
+      const safeMsg = msg.startsWith('Prompt must be') || msg === 'AI suggestions are unavailable.'
+        ? msg
+        : 'AI suggestions are unavailable. Please try again.';
+      setError(safeMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApply = () => {
+    if (!progressions) return;
+    onApply(progressions[selectedIdx].chords);
+    onOpenChange(false);
+  };
+
+  const loadCacheEntry = (entry: SuggestionCacheEntry) => {
+    setPrompt(entry.prompt);
+    setProgressions(entry.progressions);
+    setSelectedIdx(0);
+    setError(null);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="bg-[#1a1b2e] border-[#505270] text-[#ccd6ff] max-w-lg"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle className="text-[#8eaaff]">Suggest a Progression</DialogTitle>
+          <DialogDescription className="text-[#aab0d0]">
+            Describe a mood, genre, or starting point and get {SUGGESTION_COUNT} progression ideas.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-2">
+            <input
+              className="cp-rn-input flex-1"
+              placeholder="e.g. dark jazz, uplifting pop, Radiohead-style"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !loading) void handleGenerate(); }}
+              disabled={loading}
+              autoFocus
+            />
+            <button
+              className="cp-rn-apply-btn"
+              onClick={() => void handleGenerate()}
+              disabled={loading || !prompt.trim()}
+            >
+              {loading ? '…' : 'Generate'}
+            </button>
+          </div>
+
+          {!progressions && cache.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className="cp-label">Recent</span>
+              <div className="flex flex-wrap gap-2">
+                {cache.map((entry) => (
+                  <button
+                    key={entry.generatedAt}
+                    className="cp-ai-cache-chip"
+                    onClick={() => loadCacheEntry(entry)}
+                  >
+                    {entry.prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="text-[#ff8080] text-sm bg-[#2a1a1a] border border-[#5a2020] rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          {loading && (
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: SUGGESTION_COUNT }, (_, i) => (
+                <div key={i} className="cp-ai-card cp-ai-card--skeleton" />
+              ))}
+            </div>
+          )}
+
+          {progressions && (
+            <div className="flex flex-col gap-2">
+              {progressions.map((prog, progIdx) => (
+                <button
+                  key={prog.description}
+                  className={cn('cp-ai-card', selectedIdx === progIdx && 'cp-ai-card--selected')}
+                  onClick={() => setSelectedIdx(progIdx)}
+                >
+                  <div className="cp-ai-card-chords">
+                    {prog.chords.map((c, chordIdx) => (
+                      <span key={`${c.root}-${c.type}-${chordIdx}`} className="cp-ai-chord-chip">
+                        {chordName(c.root, c.type)}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="cp-ai-card-desc">{prog.description}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            className="border-[#505270] text-[#aab0d0] hover:bg-[#252540] hover:text-[#ccd6ff]"
+          >
+            Cancel
+          </Button>
+          {progressions && (
+            <Button
+              onClick={handleApply}
+              className="bg-[#5b7fff] hover:bg-[#7090ff] text-white border-0"
+            >
+              Use this
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export function ChordProgressionPage() {
@@ -646,6 +867,10 @@ export function ChordProgressionPage() {
   const nextChordTimeRef = useRef(0);
   const nextSlotIndexRef = useRef(0);
   const filledSlotsRef = useRef<ProgressionSlot[]>([]);
+  // Pre-computed mapping from filled-slot position → real slot index; avoids O(n) scan in scheduler
+  const filledSlotRealIndexRef = useRef<number[]>([]);
+  // Tracks pending SET_CURRENT_SLOT timeouts so they can be cancelled on stop
+  const pendingTimerIdsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const slotsRef = useRef(state.slots);
   const bpmRef = useRef(state.bpm);
   const instrumentRef = useRef(state.instrument);
@@ -660,16 +885,22 @@ export function ChordProgressionPage() {
   // Fretboard preview tracking
   const [previewSource, setPreviewSource] = useState<PreviewSource>(null);
   const [isClearAllOpen, setIsClearAllOpen] = useState(false);
+  const [isSuggestOpen, setIsSuggestOpen] = useState(false);
   const firstSlotRef = useRef<HTMLDivElement>(null);
 
-  // Sync refs with state
+  // Sync refs with state so callbacks stay stable (empty dep arrays)
+  const activeSlotIndexRef = useRef(state.activeSlotIndex);
   useEffect(() => { bpmRef.current = state.bpm; }, [state.bpm]);
   useEffect(() => { instrumentRef.current = state.instrument; }, [state.instrument]);
   useEffect(() => { slotsRef.current = state.slots; }, [state.slots]);
+  useEffect(() => { activeSlotIndexRef.current = state.activeSlotIndex; }, [state.activeSlotIndex]);
 
   useEffect(() => {
-    const filled = state.slots.filter((s): s is ProgressionSlot => s !== null);
+    const filled: ProgressionSlot[] = [];
+    const realIndices: number[] = [];
+    state.slots.forEach((s, i) => { if (s !== null) { filled.push(s); realIndices.push(i); } });
     filledSlotsRef.current = filled;
+    filledSlotRealIndexRef.current = realIndices;
     if (filled.length > 0) {
       nextSlotIndexRef.current = nextSlotIndexRef.current % filled.length;
     }
@@ -680,6 +911,9 @@ export function ChordProgressionPage() {
       clearInterval(schedulerTimerRef.current);
       schedulerTimerRef.current = null;
     }
+    // Cancel all pending SET_CURRENT_SLOT timers to prevent stale dispatches after stop
+    pendingTimerIdsRef.current.forEach(clearTimeout);
+    pendingTimerIdsRef.current.clear();
     isPlayingRef.current = false;
     activeChordGainRef.current = null;
     // Close the context to kill all oscillators immediately (piano/pad can sustain 4–6s)
@@ -769,20 +1003,15 @@ export function ChordProgressionPage() {
       const scheduledTime = nextChordTimeRef.current;
       const chordDuration = (60 / bpmRef.current) * slot.beats;
 
-      let realIdx = -1;
-      let count = 0;
-      for (let i = 0; i < slotsRef.current.length; i++) {
-        if (slotsRef.current[i] !== null) {
-          if (count === slotIdx) { realIdx = i; break; }
-          count++;
-        }
-      }
+      const realIdx = filledSlotRealIndexRef.current[slotIdx] ?? -1;
 
-      // Fade out the previous chord's gain bus at the transition point
+      // Fade out the previous chord's gain bus and disconnect it so it can be GC'd
       if (activeChordGainRef.current) {
         const prev = activeChordGainRef.current;
         prev.gain.setValueAtTime(1, scheduledTime);
         prev.gain.linearRampToValueAtTime(0, scheduledTime + CHORD_FADE);
+        const disconnectMs = Math.max(0, (scheduledTime + CHORD_FADE + 0.05 - ctx.currentTime) * 1000);
+        setTimeout(() => { try { prev.disconnect(); } catch { /* context already closed */ } }, disconnectMs);
       }
 
       // Each chord routes through its own gain node so previous chords can be cut cleanly
@@ -793,12 +1022,14 @@ export function ChordProgressionPage() {
       playChordInstrument(ctx, chordGain, slot.root, slot.type, scheduledTime, instrumentRef.current);
       activeChordGainRef.current = chordGain;
 
-      setTimeout(() => {
+      const tid = setTimeout(() => {
+        pendingTimerIdsRef.current.delete(tid);
         if (isPlayingRef.current) {
           dispatch({ type: 'SET_CURRENT_SLOT', index: realIdx });
           lastPlayedChordRef.current = slot;
         }
       }, Math.max(0, (scheduledTime - ctx.currentTime) * 1000));
+      pendingTimerIdsRef.current.add(tid);
 
       nextChordTimeRef.current += chordDuration;
       nextSlotIndexRef.current = (slotIdx + 1) % filled.length;
@@ -806,11 +1037,11 @@ export function ChordProgressionPage() {
   }, []);
 
   const handlePlayStop = useCallback(() => {
-    if (state.isPlaying) {
+    if (isPlayingRef.current) {
       stopPlayback();
       return;
     }
-    const filled = state.slots.filter((s): s is ProgressionSlot => s !== null);
+    const filled = slotsRef.current.filter((s): s is ProgressionSlot => s !== null);
     if (filled.length === 0) return;
 
     const { ctx } = getAudio();
@@ -825,7 +1056,7 @@ export function ChordProgressionPage() {
     dispatch({ type: 'SET_ACTIVE_SLOT', index: null });
     scheduleNextChord();
     schedulerTimerRef.current = setInterval(scheduleNextChord, SCHEDULER_INTERVAL_MS);
-  }, [state.isPlaying, state.slots, getAudio, scheduleNextChord, stopPlayback]);
+  }, [getAudio, scheduleNextChord, stopPlayback]);
 
   useEffect(() => {
     return () => {
@@ -843,31 +1074,26 @@ export function ChordProgressionPage() {
     [getAudio],
   );
 
-  // Slot interaction
-  const handleSlotSelect = useCallback(
-    (index: number) => {
-      dispatch({ type: 'SET_ACTIVE_SLOT', index: state.activeSlotIndex === index ? null : index });
-      if (state.slots[index]) setPreviewSource({ kind: 'viewedSlot', index });
-    },
-    [state.activeSlotIndex, state.slots],
-  );
+  // Slot interaction — reads active slot and playing state through refs so these callbacks
+  // have empty dep arrays and don't cause ChordSlotCard memo to break on every playback tick
+  const handleSlotSelect = useCallback((index: number) => {
+    dispatch({ type: 'SET_ACTIVE_SLOT', index: activeSlotIndexRef.current === index ? null : index });
+    if (slotsRef.current[index]) setPreviewSource({ kind: 'viewedSlot', index });
+  }, []);
 
   const handleSlotHover = useCallback((index: number) => {
     if (dragIndex.current === null) setPreviewSource({ kind: 'viewedSlot', index });
   }, []);
 
-  const handleClearSlot = useCallback(
-    (index: number) => {
-      if (state.isPlaying) stopPlayback();
-      dispatch({ type: 'SET_SLOT', index, chord: null });
-      if (state.activeSlotIndex === index) dispatch({ type: 'SET_ACTIVE_SLOT', index: null });
-      setPreviewSource((prev) => {
-        const isViewingClearedSlot = prev?.kind === 'viewedSlot' && prev.index === index;
-        return isViewingClearedSlot ? null : prev;
-      });
-    },
-    [state.isPlaying, state.activeSlotIndex, stopPlayback],
-  );
+  const handleClearSlot = useCallback((index: number) => {
+    if (isPlayingRef.current) stopPlayback();
+    dispatch({ type: 'SET_SLOT', index, chord: null });
+    if (activeSlotIndexRef.current === index) dispatch({ type: 'SET_ACTIVE_SLOT', index: null });
+    setPreviewSource((prev) => {
+      const isViewingClearedSlot = prev?.kind === 'viewedSlot' && prev.index === index;
+      return isViewingClearedSlot ? null : prev;
+    });
+  }, [stopPlayback]);
 
   const handleBeatsChange = useCallback((index: number, beats: number) => {
     dispatch({ type: 'SET_SLOT_BEATS', index, beats });
@@ -974,20 +1200,32 @@ export function ChordProgressionPage() {
     requestAnimationFrame(() => firstSlotRef.current?.focus());
   }, [state.isPlaying, stopPlayback]);
 
-  const hasSlots = state.slots.some(Boolean);
+  const handleApplySuggestion = useCallback((chords: ChordSlot[]) => {
+    if (state.isPlaying) stopPlayback();
+    const filled = chords.slice(0, SLOT_COUNT).map(
+      (c): ProgressionSlot => ({ root: c.root, type: c.type, beats: 4 }),
+    );
+    const slots: (ProgressionSlot | null)[] = [
+      ...filled,
+      ...Array<null>(SLOT_COUNT - filled.length).fill(null),
+    ];
+    dispatch({ type: 'APPLY_SLOTS', slots });
+    const detected = detectKey(slots);
+    if (detected) dispatch({ type: 'SET_SELECTED_KEY', key: detected });
+    setPreviewSource(null);
+  }, [state.isPlaying, stopPlayback]);
 
-  const displayedSlot = resolveDisplayedSlot(
-    state.isPlaying,
-    state.currentSlotIndex,
-    state.slots,
-    previewSource,
+  const hasSlots = useMemo(() => state.slots.some(Boolean), [state.slots]);
+
+  const displayedSlot = useMemo(
+    () => resolveDisplayedSlot(state.isPlaying, state.currentSlotIndex, state.slots, previewSource),
+    [state.isPlaying, state.currentSlotIndex, state.slots, previewSource],
   );
 
   const displayedVoicing = useMemo(() => {
     if (!displayedSlot) return null;
-    const voicing = CHORD_DATABASE.find(
-      (e) => e.root === displayedSlot.root && e.type === displayedSlot.type,
-    )?.voicings[0];
+    const entry = CHORD_DATABASE_INDEX.get(`${displayedSlot.root}|${displayedSlot.type}`);
+    const voicing = entry?.voicings[0];
     return voicing ? { voicing, root: displayedSlot.root, type: displayedSlot.type } : null;
   }, [displayedSlot]);
 
@@ -1037,6 +1275,14 @@ export function ChordProgressionPage() {
           </div>
 
           <div className="cp-controls-actions">
+            <button
+              className="cp-ai-suggest-btn"
+              onClick={() => setIsSuggestOpen(true)}
+              disabled={authStatus !== 'authenticated'}
+              title={authStatus !== 'authenticated' ? 'Sign in to use AI suggestions' : 'Suggest a chord progression using AI'}
+            >
+              ✦ Suggest
+            </button>
             <button
               className={cn('cp-play-btn', state.isPlaying && 'cp-play-btn--playing')}
               onClick={handlePlayStop}
@@ -1125,6 +1371,12 @@ export function ChordProgressionPage() {
         {/* Scale Suggestions */}
         <ScaleSuggestions slots={state.slots} />
       </div>
+
+      <SuggestProgressionDialog
+        open={isSuggestOpen}
+        onOpenChange={setIsSuggestOpen}
+        onApply={handleApplySuggestion}
+      />
 
       <Dialog open={isClearAllOpen} onOpenChange={setIsClearAllOpen}>
         <DialogContent
