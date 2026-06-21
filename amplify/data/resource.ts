@@ -94,6 +94,12 @@ const schema = a.schema({
     completedAt: a.string().required(),
   }).authorization(allow => [allow.owner()]),
 
+  // Fret memorizer per-note accuracy — one record per user, updated on each answer
+  FretMemorizerProgress: a.model({
+    noteAccuracy: a.string().required(), // JSON-encoded NoteAccMap
+    updatedAt: a.string().required(),
+  }).authorization(allow => [allow.owner()]),
+
   // Ear training game scores — one record per completed session
   EarTrainingScore: a.model({
     exerciseType: a.string().required(),
