@@ -1,5 +1,5 @@
 import { useReducer, useMemo, useRef, useEffect, useCallback, useState, forwardRef, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import {
   loadChordProgression,
@@ -17,7 +17,7 @@ import {
   DEFAULT_TUNING_ID,
 } from '../data/chords';
 import { playGuitarChord, playPianoChord, playPadChord } from '../audio/chordSynths';
-import type { ChordSlot, DetectedKey } from '../utils/chordTheory';
+import type { ChordSlot, DetectedKey, ProgressionSlot } from '../utils/chordTheory';
 import {
   detectKey,
   toRomanNumeral,
@@ -52,10 +52,6 @@ const CHORD_DATABASE_INDEX = new Map(CHORD_DATABASE.map((e) => [`${e.root}|${e.t
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type InstrumentType = 'guitar' | 'piano' | 'pad';
-
-interface ProgressionSlot extends ChordSlot {
-  beats: number;
-}
 
 interface ProgressionState {
   slots: (ProgressionSlot | null)[];
@@ -856,7 +852,14 @@ export function ChordProgressionPage() {
   const [state, dispatch] = useReducer(progressionReducer, undefined, loadSavedState);
   const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
   const navigate = useNavigate();
+  const location = useLocation();
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Capture incoming navigation state once at mount — useRef prevents re-read on every render
+  const incomingSlots = useRef(
+    (location.state as { slots?: ProgressionSlot[] } | null)?.slots ?? null
+  ).current;
+  const hasIncomingRef = useRef(false);
   const [isExporting, setIsExporting] = useState(false);
 
   // Audio refs
@@ -927,9 +930,25 @@ export function ChordProgressionPage() {
     dispatch({ type: 'SET_CURRENT_SLOT', index: -1 });
   }, []);
 
-  // Load from cloud on auth change
+  // Effect A: apply incoming navigation state from chord library immediately (runs before Effect B)
   useEffect(() => {
+    if (!incomingSlots) return;
+    hasIncomingRef.current = true;
+    dispatch({ type: 'APPLY_SLOTS', slots: incomingSlots });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Effect B: load from cloud on auth change.
+  // `cancelled` prevents Strict Mode's second promise from clearing hasIncomingRef
+  // and overwriting incoming slots (same pattern as ChordsPage.tsx community-chord load).
+  useEffect(() => {
+    let cancelled = false;
     void loadChordProgression().then((loaded) => {
+      if (cancelled) return;
+      if (hasIncomingRef.current) {
+        hasIncomingRef.current = false; // reset so subsequent auth changes load cloud normally
+        return;
+      }
       if (!loaded) return;
       stopPlayback();
       const raw = loaded as unknown as Record<string, unknown>;
@@ -947,6 +966,7 @@ export function ChordProgressionPage() {
         }
       }
     });
+    return () => { cancelled = true; };
   }, [authStatus, stopPlayback]);
 
   // Persist (debounced)

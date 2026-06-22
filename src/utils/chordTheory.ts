@@ -167,9 +167,12 @@ export function suggestScales(slots: (ChordSlot | null)[]): ScaleSuggestion[] {
 
 // ── Progression suggestions ────────────────────────────────────────────────
 
+export type ProgressionSlot = ChordSlot & { beats: number };
+
 export interface ProgressionSuggestion {
   name: string;
   chords: string[];
+  slots: ChordSlot[];
 }
 
 type ProgContext = 'major' | 'minor';
@@ -223,6 +226,17 @@ function resolveNumeral(numeral: string, keyRoot: RootNote, context: ProgContext
   return note + suffix;
 }
 
+function resolveNumeralSlot(numeral: string, keyRoot: RootNote, context: ProgContext): ChordSlot | null {
+  const info = NUMERAL_INFO[context][numeral];
+  if (!info) return null;
+  const scaleOffsets = context === 'major' ? SCALE_INTERVALS['major'] : SCALE_INTERVALS['minor'];
+  const keyPc = ROOT_NOTE_TO_PC[keyRoot];
+  const notePc = (keyPc + scaleOffsets[info.degree]) % 12;
+  const root = ROOT_NOTES[notePc];
+  const type: ChordType = info.quality === 'minor' ? 'minor' : info.quality === 'dim' ? 'dim' : 'major';
+  return { root, type };
+}
+
 export function suggestProgressionsForChord(root: RootNote, type: ChordType): ProgressionSuggestion[] {
   const quality = simplifyQuality(type);
   if (quality === 'other') return [];
@@ -255,8 +269,12 @@ export function suggestProgressionsForChord(root: RootNote, type: ChordType): Pr
           if (seen.has(dedupeKey)) continue;
           seen.add(dedupeKey);
 
+          const slots = template.pattern
+            .map((n) => resolveNumeralSlot(n, keyRoot, context))
+            .filter((s): s is ChordSlot => s !== null);
+
           const keyLabel = context === 'major' ? `${keyRoot} major` : `${keyRoot} minor`;
-          results.push({ name: `${template.name} in ${keyLabel}`, chords });
+          results.push({ name: `${template.name} in ${keyLabel}`, chords, slots });
 
           if (results.length >= 8) return results;
         }

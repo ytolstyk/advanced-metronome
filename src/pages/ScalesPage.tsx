@@ -405,21 +405,34 @@ export function ScalesPage() {
 
   // Load shared state from URL on mount
   useEffect(() => {
+    // Deep-link from chord library scale pills: ?root=C&mode=major
+    const rootParam = searchParams.get('root');
+    const modeParam = searchParams.get('mode');
+    if (rootParam && (ROOT_NOTES as readonly string[]).includes(rootParam))
+      setSelectedKey(rootParam as RootNote);
+    if (modeParam && (SCALE_MODES as readonly string[]).includes(modeParam))
+      setSelectedMode(modeParam as ScaleMode);
+
+    // Share link: ?scaleshare=<encoded>
     const encoded = searchParams.get('scaleshare');
-    if (!encoded) return;
-    const payload = decodeScaleShare(encoded);
-    if (payload) {
-      if (ROOT_NOTES.includes(payload.key as RootNote)) setSelectedKey(payload.key as RootNote);
-      if (SCALE_MODES.includes(payload.mode as ScaleMode)) setSelectedMode(payload.mode as ScaleMode);
-      const bpmVal = payload.bpm;
-      if (bpmVal >= 40 && bpmVal <= 400) setBpm(bpmVal);
-      if (payload.notes && payload.notes.length > 0) {
-        setPracticeNotes(payload.notes);
-        setPracticeMode(true);
-        noteIdCounter.current = payload.notes.reduce((max, n) => Math.max(max, n.id + 1), 0);
+    if (encoded) {
+      const payload = decodeScaleShare(encoded);
+      if (payload) {
+        if (ROOT_NOTES.includes(payload.key as RootNote)) setSelectedKey(payload.key as RootNote);
+        if (SCALE_MODES.includes(payload.mode as ScaleMode)) setSelectedMode(payload.mode as ScaleMode);
+        const bpmVal = payload.bpm;
+        if (bpmVal >= 40 && bpmVal <= 400) setBpm(bpmVal);
+        if (payload.notes && payload.notes.length > 0) {
+          setPracticeNotes(payload.notes);
+          setPracticeMode(true);
+          noteIdCounter.current = payload.notes.reduce((max, n) => Math.max(max, n.id + 1), 0);
+        }
       }
     }
-    setSearchParams({}, { replace: true });
+
+    if (searchParams.toString()) {
+      setSearchParams({}, { replace: true });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

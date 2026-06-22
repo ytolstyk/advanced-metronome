@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import type { RootNote, ChordType, ChordVoicing, ChordEntry } from '../data/chords';
 import type { Frets } from '../data/chords';
@@ -22,6 +23,7 @@ import {
   createCustomChord,
   deleteCustomChord,
 } from '../api/customChordsApi';
+import type { ProgressionSlot } from '../utils/chordTheory';
 import { suggestScales, suggestProgressionsForChord } from '../utils/chordTheory';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -205,13 +207,20 @@ function ChordDetailDialog({
   onClose: () => void;
   onPlay: (frets: Frets) => void;
 }) {
+  const navigate = useNavigate();
   const difficulty = useMemo(() => computeVoicingDifficulty(voicing), [voicing]);
 
   const scales = useMemo(() => {
     const all = suggestScales([{ root, type }]);
+    // Same-root scales first; explicit three-way compare avoids the subtraction trap
+    const sorted = [...all].sort((a, b) => {
+      if (a.root === root && b.root !== root) return -1;
+      if (a.root !== root && b.root === root) return 1;
+      return 0;
+    });
     return {
-      common: all.filter((s) => COMMON_SCALE_MODES.has(s.mode)).slice(0, 8),
-      modes:  all.filter((s) => !COMMON_SCALE_MODES.has(s.mode)).slice(0, 8),
+      common: sorted.filter((s) => COMMON_SCALE_MODES.has(s.mode)).slice(0, 6),
+      modes:  sorted.filter((s) => !COMMON_SCALE_MODES.has(s.mode)).slice(0, 4),
     };
   }, [root, type]);
 
@@ -256,9 +265,13 @@ function ChordDetailDialog({
               {scales.common.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {scales.common.map((s) => (
-                    <span key={s.label} className="px-2 py-0.5 text-[0.75rem] rounded bg-[#1e1f2c] border border-[#505270] text-[#aab0d0]">
+                    <button
+                      key={s.label}
+                      onClick={() => navigate(`/scales?root=${s.root}&mode=${s.mode}`)}
+                      className="px-2 py-0.5 text-[0.75rem] rounded bg-[#1e1f2c] border border-[#505270] text-[#aab0d0] hover:border-[#8eaaff] hover:text-white cursor-pointer transition-colors"
+                    >
                       {s.label}
-                    </span>
+                    </button>
                   ))}
                 </div>
               )}
@@ -269,9 +282,13 @@ function ChordDetailDialog({
                   </summary>
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
                     {scales.modes.map((s) => (
-                      <span key={s.label} className="px-2 py-0.5 text-[0.75rem] rounded bg-[#1e1f2c] border border-[#505270] text-[#aab0d0]">
+                      <button
+                        key={s.label}
+                        onClick={() => navigate(`/scales?root=${s.root}&mode=${s.mode}`)}
+                        className="px-2 py-0.5 text-[0.75rem] rounded bg-[#1e1f2c] border border-[#505270] text-[#aab0d0] hover:border-[#8eaaff] hover:text-white cursor-pointer transition-colors"
+                      >
                         {s.label}
-                      </span>
+                      </button>
                     ))}
                   </div>
                 </details>
@@ -285,7 +302,14 @@ function ChordDetailDialog({
               <div className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8]">Common progressions</div>
               <div className="flex flex-col gap-2">
                 {progressions.map((p, idx) => (
-                  <div key={idx} className="flex flex-col gap-0.5">
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      const slots: ProgressionSlot[] = p.slots.map(s => ({ ...s, beats: 4 }));
+                      navigate('/chord-progression', { state: { slots } });
+                    }}
+                    className="flex flex-col gap-0.5 w-full text-left rounded px-2 py-1.5 hover:bg-[#1e2040] cursor-pointer transition-colors"
+                  >
                     <div className="text-[0.7rem] text-[#7070a0]">{p.name}</div>
                     <div className="flex gap-1.5 flex-wrap">
                       {p.chords.map((c, ci) => (
@@ -294,7 +318,7 @@ function ChordDetailDialog({
                         </span>
                       ))}
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
