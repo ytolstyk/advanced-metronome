@@ -12,6 +12,7 @@
  * Component-level tests (phase transitions visible in the DOM) verify the
  * integration between the reducer and the rendered UI.
  */
+import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { ActiveSession, CompletedSession, ToolId, SessionGoal } from '../practiceSessionTypes';
@@ -26,6 +27,17 @@ import type { CalendarDay } from '../practiceSessionUtils';
 import { PracticeSessionPage } from './PracticeSessionPage';
 
 // ── Mock dependencies ──────────────────────────────────────────────────────
+
+vi.mock('@aws-amplify/ui-react', () => ({
+  useAuthenticator: () => ({ authStatus: 'unauthenticated' }),
+  Authenticator: { Provider: ({ children }: { children: React.ReactNode }) => children },
+}));
+
+vi.mock('@/api/practicePlanApi', () => ({
+  generatePracticePlan: vi.fn(),
+  savePracticePlan: vi.fn().mockResolvedValue(undefined),
+  loadSavedPlan: vi.fn().mockResolvedValue(null),
+}));
 
 vi.mock('@/api/practiceSessionApi', () => ({
   saveActiveSession: vi.fn(),

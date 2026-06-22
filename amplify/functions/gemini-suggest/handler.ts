@@ -88,7 +88,8 @@ Rules:
 // so we serialize the progression array as a JSON string. The client re-parses and
 // validates each field against the canonical ROOT_NOTES / CHORD_TYPES sets.
 export const handler: AppSyncResolverHandler<{ prompt: string }, string | null> = async (event) => {
-  const { prompt } = event.arguments;
+  // Strip newlines before interpolation to prevent prompt injection
+  const prompt = (event.arguments.prompt ?? '').replace(/[\r\n]+/g, ' ').trim();
 
   if (!prompt || prompt.length > MAX_PROMPT_LENGTH) {
     throw new Error(`Prompt must be 1–${MAX_PROMPT_LENGTH} characters.`);

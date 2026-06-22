@@ -1,6 +1,7 @@
 import { useReducer, useMemo, useRef, useEffect, useCallback, useState, forwardRef, memo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthenticator } from '@aws-amplify/ui-react';
+import { AuthSignInDialog } from '@/components/AuthGate/AuthGate';
 import {
   loadChordProgression,
   saveChordProgression,
@@ -889,6 +890,7 @@ export function ChordProgressionPage() {
   const [previewSource, setPreviewSource] = useState<PreviewSource>(null);
   const [isClearAllOpen, setIsClearAllOpen] = useState(false);
   const [isSuggestOpen, setIsSuggestOpen] = useState(false);
+  const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const firstSlotRef = useRef<HTMLDivElement>(null);
 
   // Sync refs with state so callbacks stay stable (empty dep arrays)
@@ -1297,9 +1299,8 @@ export function ChordProgressionPage() {
           <div className="cp-controls-actions">
             <button
               className="cp-ai-suggest-btn"
-              onClick={() => setIsSuggestOpen(true)}
-              disabled={authStatus !== 'authenticated'}
-              title={authStatus !== 'authenticated' ? 'Sign in to use AI suggestions' : 'Suggest a chord progression using AI'}
+              onClick={() => authStatus === 'authenticated' ? setIsSuggestOpen(true) : setIsAuthPromptOpen(true)}
+              title="Suggest a chord progression using AI"
             >
               ✦ Suggest
             </button>
@@ -1397,6 +1398,8 @@ export function ChordProgressionPage() {
         onOpenChange={setIsSuggestOpen}
         onApply={handleApplySuggestion}
       />
+
+      <AuthSignInDialog open={isAuthPromptOpen} onOpenChange={setIsAuthPromptOpen} />
 
       <Dialog open={isClearAllOpen} onOpenChange={setIsClearAllOpen}>
         <DialogContent

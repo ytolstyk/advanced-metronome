@@ -1,0 +1,41 @@
+/* ── AuthSignInDialog sizing ────────────────────────────────────────── */
+/* Mirrors .auth-dialog-content in AuthModal.css (AuthModal.css is NOT imported
+   here — AuthModal is always in the Nav tree so its global styles load first) */
+.auth-dialog-content {
+  padding: 0;
+  max-width: 100%;
+}
+
+@media (min-width: 640px) {
+  .auth-dialog-content {
+    max-width: min(520px, calc(100vw - 2rem));
+  }
+}
+
+/* ── AuthGate: section lock banner ──────────────────────────────────── */
+.auth-gate-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.5rem;
+  border: 1px dashed #3a3a60;
+  background: #0d0d18;
+  color: #8080b8;
+  font-size: 0.8125rem;
+}
+
+.auth-gate-banner svg {
+  color: #5b5b90;
+  flex-shrink: 0;
+}
+
+.auth-gate-banner-message {
+  flex: 1;
+}
+
+/* Inline variant — fits inside flex toolbars alongside other buttons */
+.auth-gate-banner--inline {
+  padding: 0.3rem 0.75rem;
+  gap: 0.5rem;
+}

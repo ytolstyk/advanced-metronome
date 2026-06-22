@@ -1,8 +1,10 @@
 import { useReducer, useEffect, useCallback, useMemo, useState, useRef } from 'react';
+import { useAuthenticator } from '@aws-amplify/ui-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AuthGate } from '@/components/AuthGate/AuthGate';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { usePracticeTimer } from '@/hooks/usePracticeTimer';
 import {
@@ -530,6 +532,7 @@ function PlanGeneratorSection({
 
 export function PracticeSessionPage() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
 
   // On mount: restore any in-progress session, load history, and load saved plan
   useEffect(() => {
@@ -772,11 +775,18 @@ export function PracticeSessionPage() {
       )}
 
       {state.phase === 'setup' && (
-        <PlanGeneratorSection
-          plan={state.currentPlan}
-          onPlanGenerated={handlePlanGenerated}
-          onApply={handleApplyPlanSession}
-        />
+        authStatus === 'authenticated' ? (
+          <PlanGeneratorSection
+            plan={state.currentPlan}
+            onPlanGenerated={handlePlanGenerated}
+            onApply={handleApplyPlanSession}
+          />
+        ) : (
+          <div className="ps-section">
+            <div className="ps-section-title">AI Practice Plan</div>
+            <AuthGate message="Sign in to generate an AI-powered 4-week practice plan" />
+          </div>
+        )
       )}
 
       {/* ── Active Phase ── */}

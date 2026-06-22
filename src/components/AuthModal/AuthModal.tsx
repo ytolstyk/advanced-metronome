@@ -71,7 +71,9 @@ export function AuthModal() {
             <VisuallyHidden.Root>
               <DialogTitle>Sign in or create an account</DialogTitle>
             </VisuallyHidden.Root>
-            <Authenticator />
+            {/* Mount only when the dialog is open — avoids booting the
+                Amplify state machine and hub subscription when not needed */}
+            {open && <Authenticator />}
           </>
         )}
       </DialogContent>

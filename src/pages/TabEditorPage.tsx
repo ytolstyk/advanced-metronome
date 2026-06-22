@@ -29,6 +29,7 @@ import {
   type AlphaTabPreviewHandle,
 } from '../components/TabEditor'
 import { useAuthenticator } from '@aws-amplify/ui-react'
+import { AuthSignInDialog } from '@/components/AuthGate/AuthGate'
 import {
   loadCloudTabTracks,
   saveCloudTabTrack,
@@ -223,6 +224,13 @@ export function TabEditorPage() {
   const alphaTabPreviewRef = useRef<AlphaTabPreviewHandle>(null)
 
   const { authStatus } = useAuthenticator(ctx => [ctx.authStatus])
+  const [authPromptOpen, setAuthPromptOpen] = useState(false)
+  // Stable fallback for auth-gated toolbar actions: shows sign-in prompt when unauthenticated
+  const openAuthPrompt = useCallback(() => setAuthPromptOpen(true), [])
+  const withAuth = useCallback(
+    (fn: () => void) => authStatus === 'authenticated' ? fn : openAuthPrompt,
+    [authStatus, openAuthPrompt],
+  )
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -803,12 +811,12 @@ export function TabEditorPage() {
               track={state.track}
               dispatch={dispatch}
               isDirty={isDirty}
-              onSave={authStatus === 'authenticated' ? handleSaveClick : undefined}
-              onSaveCopy={authStatus === 'authenticated' ? handleSaveCopyClick : undefined}
-              onLoad={authStatus === 'authenticated' ? () => void openLoadDialog() : undefined}
-              onPublish={authStatus === 'authenticated' ? handlePublishClick : undefined}
-              onUpdatePublished={authStatus === 'authenticated' && publishedTabId ? handlePublishClick : undefined}
-              onUnpublish={authStatus === 'authenticated' && publishedTabId ? () => void handleUnpublish() : undefined}
+              onSave={withAuth(handleSaveClick)}
+              onSaveCopy={withAuth(handleSaveCopyClick)}
+              onLoad={withAuth(() => void openLoadDialog())}
+              onPublish={withAuth(handlePublishClick)}
+              onUpdatePublished={publishedTabId ? withAuth(handlePublishClick) : undefined}
+              onUnpublish={publishedTabId ? withAuth(() => void handleUnpublish()) : undefined}
               publishedTabId={publishedTabId}
               onImport={handleImportClick}
               onExport={() => setExportDialogOpen(true)}
@@ -971,6 +979,8 @@ export function TabEditorPage() {
         track={state.track}
         onClose={() => setExportDialogOpen(false)}
       />
+
+      <AuthSignInDialog open={authPromptOpen} onOpenChange={setAuthPromptOpen} />
 
       {/* Overflow dialog */}
       {overflow && (

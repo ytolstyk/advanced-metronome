@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GripVertical, Play, Pause, Square, Pencil, Trash2, Copy, Plus, Download, RotateCcw, Cloud, ChevronDown, FolderOpen, Share2 } from 'lucide-react';
-import { useAuthenticator } from '@aws-amplify/ui-react';
+import { AuthGate } from '@/components/AuthGate/AuthGate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -400,8 +400,6 @@ export function ClickTrackPage() {
   // Loop ramp state
   const [loopRampDraft, setLoopRampDraft] = useState({ startPercent: 70, endPercent: 100, stepPercent: 5 });
   const [currentLoopPass, setCurrentLoopPass] = useState<number | null>(null);
-
-  const { authStatus } = useAuthenticator(ctx => [ctx.authStatus]);
 
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [savedTracks, setSavedTracks] = useState<CloudClickTrack[]>([]);
@@ -982,7 +980,7 @@ export function ClickTrackPage() {
           >
             <Share2 size={13} /> {shareCopied ? 'Copied!' : 'Share'}
           </Button>
-          {authStatus === 'authenticated' && (
+          <AuthGate message="Sign in to save and load click tracks" inline>
             <>
               <Button
                 size="sm" variant="outline"
@@ -1000,7 +998,7 @@ export function ClickTrackPage() {
                 <Cloud size={13} /> Save to Cloud
               </Button>
             </>
-          )}
+          </AuthGate>
         </div>
       </div>
 

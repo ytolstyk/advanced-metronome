@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTapTempo } from "../hooks/useTapTempo";
 import { useSearchParams } from "react-router-dom";
 import { useAuthenticator } from "@aws-amplify/ui-react";
+import { AuthGate } from "@/components/AuthGate/AuthGate";
 import { decodeScaleShare, buildScaleShareUrl } from "../shareUtils";
 import type { ScaleMode } from "../data/scales";
 import {
@@ -931,8 +932,8 @@ export function ScalesPage() {
             </button>
           </div>
 
-          {/* ── Save / Load (authenticated only) ─────────────────────────── */}
-          {authStatus === 'authenticated' && (
+          {/* ── Save / Load ──────────────────────────────────────────────── */}
+          <AuthGate message="Sign in to save and load scale tracks" inline>
             <div className="border-t border-[#272744] px-4 py-3 flex flex-wrap items-center gap-2">
               <span className="text-[0.68rem] font-bold uppercase tracking-wider text-[#8080b8] shrink-0 mr-1">
                 Track
@@ -1002,7 +1003,7 @@ export function ScalesPage() {
                 </button>
               )}
             </div>
-          )}
+          </AuthGate>
         </div>
       )}
 
