@@ -299,6 +299,15 @@ All API modules in `src/api/` follow this shape:
 
 When adding a new page with user state, create a corresponding `src/api/<feature>Api.ts` that implements both paths. Do not leave state ephemeral.
 
+## Auth gating
+
+**Cloud save/load and AI features must always be gated behind authentication.** This is a non-negotiable requirement:
+
+- Any feature that reads from or writes to the cloud (AWS Amplify) must first check `isAuthenticated()` and must not attempt the cloud call if the user is not signed in.
+- Any AI-powered feature (Gemini, Claude, or any other LLM call) must require the user to be signed in before the feature is accessible or invoked.
+- The UI must reflect this: show the `AuthModal` (or a sign-in prompt) when an unauthenticated user attempts to use a gated feature. Never silently skip a cloud/AI call without telling the user why.
+- localStorage-only operations (offline state persistence) are always allowed for unauthenticated users and must never be blocked.
+
 ## Common patterns
 
 **Modal pattern** — use Radix `Dialog` with `DialogTrigger` + `DialogContent` + `DialogHeader` + `DialogTitle`. Never build custom overlay/modal from scratch.
