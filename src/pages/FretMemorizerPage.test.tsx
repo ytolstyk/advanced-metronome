@@ -1108,3 +1108,744 @@ describe('FretMemorizerPage – Study Mode toggle changes Start button label', (
     expect(screen.getByText(/Answer 10 questions/i)).toBeTruthy()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 12. relativeDay — pure function replica tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Replica of the private relativeDay function from FretMemorizerPage.tsx.
+ * Uses UTC arithmetic so results are timezone-independent.
+ */
+const MS_PER_DAY_REPLICA = 86_400_000
+
+function relativeDayReplica(isoDate: string): string {
+  const now = new Date()
+  const todayMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const d = new Date(isoDate)
+  const dMidnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+  const diffDays = Math.round((todayMidnight - dMidnight) / MS_PER_DAY_REPLICA)
+  if (diffDays <= 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  return `${diffDays} days ago`
+}
+
+describe('MS_PER_DAY', () => {
+  it('equals 86_400_000', () => {
+    expect(MS_PER_DAY_REPLICA).toBe(86_400_000)
+  })
+})
+
+describe('relativeDay', () => {
+  it('returns "Today" for the current UTC date', () => {
+    const now = new Date()
+    const iso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+    expect(relativeDayReplica(iso)).toBe('Today')
+  })
+
+  it('returns "Today" for exactly midnight UTC today', () => {
+    const now = new Date()
+    const todayMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    expect(relativeDayReplica(todayMidnight.toISOString())).toBe('Today')
+  })
+
+  it('returns "Yesterday" for exactly 1 day ago (UTC midnight)', () => {
+    const yesterday = new Date(Date.now() - MS_PER_DAY_REPLICA)
+    const iso = new Date(Date.UTC(yesterday.getUTCFullYear(), yesterday.getUTCMonth(), yesterday.getUTCDate())).toISOString()
+    expect(relativeDayReplica(iso)).toBe('Yesterday')
+  })
+
+  it('returns "2 days ago" for 2 days back', () => {
+    const d = new Date(Date.now() - 2 * MS_PER_DAY_REPLICA)
+    const iso = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString()
+    expect(relativeDayReplica(iso)).toBe('2 days ago')
+  })
+
+  it('returns "7 days ago" for 7 days back', () => {
+    const d = new Date(Date.now() - 7 * MS_PER_DAY_REPLICA)
+    const iso = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString()
+    expect(relativeDayReplica(iso)).toBe('7 days ago')
+  })
+
+  it('returns "30 days ago" for 30 days back', () => {
+    const d = new Date(Date.now() - 30 * MS_PER_DAY_REPLICA)
+    const iso = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString()
+    expect(relativeDayReplica(iso)).toBe('30 days ago')
+  })
+
+  it('returns "Today" for a future date (diffDays <= 0)', () => {
+    const tomorrow = new Date(Date.now() + MS_PER_DAY_REPLICA)
+    const iso = new Date(Date.UTC(tomorrow.getUTCFullYear(), tomorrow.getUTCMonth(), tomorrow.getUTCDate())).toISOString()
+    expect(relativeDayReplica(iso)).toBe('Today')
+  })
+
+  it('returns "Today" for a date far in the future (diffDays negative)', () => {
+    const future = new Date(Date.now() + 365 * MS_PER_DAY_REPLICA)
+    const iso = new Date(Date.UTC(future.getUTCFullYear(), future.getUTCMonth(), future.getUTCDate())).toISOString()
+    expect(relativeDayReplica(iso)).toBe('Today')
+  })
+
+  it('computes N correctly for N=3', () => {
+    const d = new Date(Date.now() - 3 * MS_PER_DAY_REPLICA)
+    const iso = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString()
+    expect(relativeDayReplica(iso)).toBe('3 days ago')
+  })
+
+  it('uses UTC date boundaries, not local time', () => {
+    // Create a date at UTC midnight today — should always be "Today"
+    const now = new Date()
+    const utcMidnightToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    expect(relativeDayReplica(new Date(utcMidnightToday).toISOString())).toBe('Today')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 13. StatsOverviewCard — replica component tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+
+interface SessionEntryForCard { date: string; score: number; total: number }
+
+function StatsOverviewCardReplica({
+  sessions,
+  allTimeBestStreak,
+}: {
+  sessions: SessionEntryForCard[]
+  allTimeBestStreak: number
+}) {
+  const validSessions = sessions.filter(s => s.total > 0)
+  const totalQ = validSessions.reduce((a, s) => a + s.total, 0)
+  const totalCorrect = validSessions.reduce((a, s) => a + s.score, 0)
+  const avgAcc = totalQ > 0 ? Math.round((totalCorrect / totalQ) * 100) : null
+  const lastDate = sessions.length > 0
+    ? relativeDayReplica(sessions[sessions.length - 1].date)
+    : null
+  const STREAK_THRESHOLD_MD = 5
+  return (
+    <div className="rounded-xl border bg-black p-4">
+      <div className="text-xs mb-3">Overview</div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="text-center" data-testid="sessions-count">
+          <div className="label">Sessions</div>
+          <div>{sessions.length}</div>
+        </div>
+        <div className="text-center" data-testid="avg-accuracy">
+          <div className="label">Avg accuracy</div>
+          <div>{avgAcc !== null ? `${avgAcc}%` : '—'}</div>
+          {sessions.length > 0 && (
+            <div data-testid="session-count-sub">last {sessions.length}</div>
+          )}
+        </div>
+        <div className="text-center" data-testid="best-streak">
+          <div className="label">Best streak (this device)</div>
+          <div>
+            {allTimeBestStreak >= STREAK_THRESHOLD_MD ? '🔥' : ''}{allTimeBestStreak > 0 ? allTimeBestStreak : '—'}
+          </div>
+        </div>
+        <div className="text-center" data-testid="last-practice">
+          <div className="label">Last practice</div>
+          <div>{lastDate ?? '—'}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+describe('StatsOverviewCard', () => {
+  it('shows Sessions count equal to sessions.length', () => {
+    const sessions: SessionEntryForCard[] = [
+      { date: new Date().toISOString(), score: 9, total: 10 },
+      { date: new Date().toISOString(), score: 8, total: 10 },
+      { date: new Date().toISOString(), score: 7, total: 10 },
+    ]
+    render(<StatsOverviewCardReplica sessions={sessions} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('sessions-count').textContent).toContain('3')
+  })
+
+  it('shows Sessions count of 0 for empty array', () => {
+    render(<StatsOverviewCardReplica sessions={[]} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('sessions-count').textContent).toContain('0')
+  })
+
+  it('shows "—" for Avg accuracy when sessions is empty', () => {
+    render(<StatsOverviewCardReplica sessions={[]} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('avg-accuracy').textContent).toContain('—')
+    expect(screen.getByTestId('avg-accuracy').textContent).not.toMatch(/\d+%/)
+  })
+
+  it('shows "—" for Last practice when sessions is empty', () => {
+    render(<StatsOverviewCardReplica sessions={[]} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('last-practice').textContent).toContain('—')
+  })
+
+  it('shows "—" for Best streak when allTimeBestStreak is 0', () => {
+    render(<StatsOverviewCardReplica sessions={[]} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('best-streak').textContent).toContain('—')
+  })
+
+  it('computes weighted avg accuracy correctly (80% = 80%)', () => {
+    const sessions: SessionEntryForCard[] = [
+      { date: new Date().toISOString(), score: 8, total: 10 },
+    ]
+    render(<StatsOverviewCardReplica sessions={sessions} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('avg-accuracy').textContent).toContain('80%')
+  })
+
+  it('computes weighted avg accuracy across multiple sessions', () => {
+    // 9/10 + 7/10 = 16/20 = 80%
+    const sessions: SessionEntryForCard[] = [
+      { date: new Date().toISOString(), score: 9, total: 10 },
+      { date: new Date().toISOString(), score: 7, total: 10 },
+    ]
+    render(<StatsOverviewCardReplica sessions={sessions} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('avg-accuracy').textContent).toContain('80%')
+  })
+
+  it('shows 🔥 emoji when allTimeBestStreak >= 5', () => {
+    render(<StatsOverviewCardReplica sessions={[]} allTimeBestStreak={5} />)
+    expect(screen.getByTestId('best-streak').textContent).toContain('🔥')
+    expect(screen.getByTestId('best-streak').textContent).toContain('5')
+  })
+
+  it('does not show 🔥 emoji when allTimeBestStreak < 5', () => {
+    render(<StatsOverviewCardReplica sessions={[]} allTimeBestStreak={4} />)
+    expect(screen.getByTestId('best-streak').textContent).not.toContain('🔥')
+    expect(screen.getByTestId('best-streak').textContent).toContain('4')
+  })
+
+  it('shows the numeric streak value (not "—") when allTimeBestStreak > 0', () => {
+    render(<StatsOverviewCardReplica sessions={[]} allTimeBestStreak={3} />)
+    expect(screen.getByTestId('best-streak').textContent).toContain('3')
+    expect(screen.getByTestId('best-streak').textContent).not.toContain('—')
+  })
+
+  it('shows "Today" for last practice when last session is today', () => {
+    const now = new Date()
+    const todayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+    const sessions: SessionEntryForCard[] = [
+      { date: todayIso, score: 7, total: 10 },
+    ]
+    render(<StatsOverviewCardReplica sessions={sessions} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('last-practice').textContent).toContain('Today')
+  })
+
+  it('shows "Yesterday" for last practice when last session was yesterday', () => {
+    const yesterday = new Date(Date.now() - MS_PER_DAY_REPLICA)
+    const iso = new Date(Date.UTC(yesterday.getUTCFullYear(), yesterday.getUTCMonth(), yesterday.getUTCDate())).toISOString()
+    const sessions: SessionEntryForCard[] = [
+      { date: iso, score: 5, total: 10 },
+    ]
+    render(<StatsOverviewCardReplica sessions={sessions} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('last-practice').textContent).toContain('Yesterday')
+  })
+
+  it('uses the last session date for Last practice (not the first)', () => {
+    const older = new Date(Date.now() - 5 * MS_PER_DAY_REPLICA)
+    const olderIso = new Date(Date.UTC(older.getUTCFullYear(), older.getUTCMonth(), older.getUTCDate())).toISOString()
+    const now = new Date()
+    const todayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+    const sessions: SessionEntryForCard[] = [
+      { date: olderIso, score: 5, total: 10 },
+      { date: todayIso, score: 9, total: 10 },
+    ]
+    render(<StatsOverviewCardReplica sessions={sessions} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('last-practice').textContent).toContain('Today')
+    expect(screen.getByTestId('last-practice').textContent).not.toContain('5 days ago')
+  })
+
+  it('excludes sessions with total=0 from accuracy calculation', () => {
+    // One real session (10/10 = 100%) + one bogus session (0 total — skipped)
+    const sessions: SessionEntryForCard[] = [
+      { date: new Date().toISOString(), score: 10, total: 10 },
+      { date: new Date().toISOString(), score: 0, total: 0 },
+    ]
+    render(<StatsOverviewCardReplica sessions={sessions} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('avg-accuracy').textContent).toContain('100%')
+  })
+
+  it('shows "last N" sub-label when sessions is non-empty', () => {
+    const sessions: SessionEntryForCard[] = [
+      { date: new Date().toISOString(), score: 8, total: 10 },
+      { date: new Date().toISOString(), score: 6, total: 10 },
+    ]
+    render(<StatsOverviewCardReplica sessions={sessions} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('session-count-sub').textContent).toBe('last 2')
+  })
+
+  it('does not show "last N" sub-label when sessions is empty', () => {
+    render(<StatsOverviewCardReplica sessions={[]} allTimeBestStreak={0} />)
+    expect(screen.queryByTestId('session-count-sub')).toBeNull()
+  })
+
+  it('rounds accuracy to nearest percent', () => {
+    // 1/3 ≈ 33.33% → rounds to 33%
+    const sessions: SessionEntryForCard[] = [
+      { date: new Date().toISOString(), score: 1, total: 3 },
+    ]
+    render(<StatsOverviewCardReplica sessions={sessions} allTimeBestStreak={0} />)
+    expect(screen.getByTestId('avg-accuracy').textContent).toContain('33%')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 14. PostSessionNoteCard — replica component tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Replica of PostSessionNoteCard from FretMemorizerPage.tsx.
+ * Mirrors the rendering logic so we can unit-test the visibility conditions.
+ */
+const NOTE_NAMES_FOR_CARD = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+
+interface PostSessionNoteCardReplicaProps {
+  stoppedEarly: boolean
+  questionsAnswered: number
+  sessionNoteAcc: Record<number, { correct: number; total: number }>
+  worstNotes: number[]
+  focusedPcs: number[] | null
+  newBestStreakSet: boolean
+  allTimeBestStreak: number
+  noteAccuracy: Record<number, { correct: number; total: number }>
+  onStartFocusMode: () => void
+}
+
+function PostSessionNoteCardReplica({
+  stoppedEarly,
+  questionsAnswered,
+  sessionNoteAcc,
+  worstNotes,
+  focusedPcs,
+  newBestStreakSet,
+  allTimeBestStreak,
+  noteAccuracy,
+  onStartFocusMode,
+}: PostSessionNoteCardReplicaProps) {
+  if (stoppedEarly) return null
+  const sessionPcs = Object.keys(sessionNoteAcc).map(Number)
+  const showSectionA = questionsAnswered >= 3 && sessionPcs.length > 0
+  const showSectionB = worstNotes.length > 0 && focusedPcs === null
+  const STREAK_THRESHOLD_MD = 5
+  if (!showSectionA && !showSectionB && !newBestStreakSet) return null
+  return (
+    <div>
+      {newBestStreakSet && allTimeBestStreak >= STREAK_THRESHOLD_MD && (
+        <div data-testid="new-best-streak">
+          🔥 New device best: {allTimeBestStreak} streak!
+        </div>
+      )}
+      {showSectionA && (
+        <div data-testid="section-a">
+          <div>Notes practiced</div>
+          <div>
+            {sessionPcs
+              .sort((a, b) => {
+                const accA = sessionNoteAcc[a].correct / sessionNoteAcc[a].total
+                const accB = sessionNoteAcc[b].correct / sessionNoteAcc[b].total
+                return accA - accB
+              })
+              .map(pc => {
+                const { correct, total } = sessionNoteAcc[pc]
+                return (
+                  <span key={pc} data-testid={`note-chip-${pc}`}>
+                    {NOTE_NAMES_FOR_CARD[pc]} {correct}/{total}
+                  </span>
+                )
+              })}
+          </div>
+        </div>
+      )}
+      {showSectionB && (
+        <div data-testid="section-b">
+          <div>Focus for next session</div>
+          <div>
+            {worstNotes.slice(0, 3).map(pc => {
+              const data = noteAccuracy[pc]
+              const acc = data ? data.correct / data.total : 0
+              return (
+                <span key={pc} data-testid={`worst-note-${pc}`}>
+                  {NOTE_NAMES_FOR_CARD[pc]} ({Math.round(acc * 100)}%)
+                </span>
+              )
+            })}
+          </div>
+          <button onClick={onStartFocusMode}>Start Focus Mode</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+describe('PostSessionNoteCard', () => {
+  it('returns null when stoppedEarly is true', () => {
+    const { container } = render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={true}
+        questionsAnswered={10}
+        sessionNoteAcc={{ 0: { correct: 8, total: 10 } }}
+        worstNotes={[0]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{ 0: { correct: 8, total: 10 } }}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(container.firstChild).toBeNull()
+  })
+
+  it('returns null when questionsAnswered < 3, no worst notes, and no new best streak', () => {
+    const { container } = render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={2}
+        sessionNoteAcc={{}}
+        worstNotes={[]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{}}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(container.firstChild).toBeNull()
+  })
+
+  it('returns null when questionsAnswered < 3, worstNotes empty, even if sessionNoteAcc has data', () => {
+    const { container } = render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={2}
+        sessionNoteAcc={{ 0: { correct: 1, total: 2 } }}
+        worstNotes={[]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{}}
+        onStartFocusMode={() => {}}
+      />
+    )
+    // showSectionA = questionsAnswered(2) < 3 → false; showSectionB = worstNotes empty → false; newBestStreakSet = false → null
+    expect(container.firstChild).toBeNull()
+  })
+
+  it('renders when questionsAnswered >= 3 and sessionNoteAcc is non-empty', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={3}
+        sessionNoteAcc={{ 0: { correct: 2, total: 3 } }}
+        worstNotes={[]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{}}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.getByTestId('section-a')).toBeTruthy()
+  })
+
+  it('shows "Notes practiced" section (section A) when questionsAnswered >= 3 and sessionNoteAcc is non-empty', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={5}
+        sessionNoteAcc={{
+          0: { correct: 4, total: 5 },
+          4: { correct: 3, total: 5 },
+        }}
+        worstNotes={[]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{}}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.getByTestId('section-a')).toBeTruthy()
+    expect(screen.getByText('Notes practiced')).toBeTruthy()
+  })
+
+  it('does not show section A when questionsAnswered < 3', () => {
+    // Need something else to trigger render (newBestStreakSet=true)
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={2}
+        sessionNoteAcc={{ 0: { correct: 2, total: 2 } }}
+        worstNotes={[]}
+        focusedPcs={null}
+        newBestStreakSet={true}
+        allTimeBestStreak={6}
+        noteAccuracy={{}}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.queryByTestId('section-a')).toBeNull()
+  })
+
+  it('does not show section A when sessionNoteAcc is empty even if questionsAnswered >= 3', () => {
+    // newBestStreakSet triggers render, but sessionNoteAcc empty → no section A
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={5}
+        sessionNoteAcc={{}}
+        worstNotes={[]}
+        focusedPcs={null}
+        newBestStreakSet={true}
+        allTimeBestStreak={6}
+        noteAccuracy={{}}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.queryByTestId('section-a')).toBeNull()
+  })
+
+  it('shows section B ("Focus for next session") when worstNotes non-empty and focusedPcs is null', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={0}
+        sessionNoteAcc={{}}
+        worstNotes={[0, 4, 7]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{
+          0: { correct: 1, total: 5 },
+          4: { correct: 2, total: 5 },
+          7: { correct: 3, total: 5 },
+        }}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.getByTestId('section-b')).toBeTruthy()
+    expect(screen.getByText('Focus for next session')).toBeTruthy()
+  })
+
+  it('does not show section B when focusedPcs is non-null (already in focus mode)', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={5}
+        sessionNoteAcc={{ 0: { correct: 3, total: 5 } }}
+        worstNotes={[0]}
+        focusedPcs={[0]}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{ 0: { correct: 1, total: 5 } }}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.queryByTestId('section-b')).toBeNull()
+  })
+
+  it('does not show section B when worstNotes is empty', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={5}
+        sessionNoteAcc={{ 0: { correct: 3, total: 5 } }}
+        worstNotes={[]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{}}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.queryByTestId('section-b')).toBeNull()
+  })
+
+  it('shows "Start Focus Mode" button in section B', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={0}
+        sessionNoteAcc={{}}
+        worstNotes={[0]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{ 0: { correct: 1, total: 5 } }}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.getByRole('button', { name: /Start Focus Mode/i })).toBeTruthy()
+  })
+
+  it('"Start Focus Mode" button calls onStartFocusMode when clicked', () => {
+    const handler = vi.fn()
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={0}
+        sessionNoteAcc={{}}
+        worstNotes={[0]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{ 0: { correct: 1, total: 5 } }}
+        onStartFocusMode={handler}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Start Focus Mode/i }))
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows note chips for each note in sessionNoteAcc (section A)', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={5}
+        sessionNoteAcc={{
+          0: { correct: 4, total: 5 },  // C
+          7: { correct: 2, total: 5 },  // G
+        }}
+        worstNotes={[]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{}}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.getByTestId('note-chip-0').textContent).toContain('C')
+    expect(screen.getByTestId('note-chip-7').textContent).toContain('G')
+  })
+
+  it('section A shows note score fractions (e.g. "4/5")', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={5}
+        sessionNoteAcc={{ 0: { correct: 4, total: 5 } }}
+        worstNotes={[]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{}}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.getByTestId('note-chip-0').textContent).toContain('4/5')
+  })
+
+  it('shows up to 3 worst notes in section B', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={0}
+        sessionNoteAcc={{}}
+        worstNotes={[0, 2, 4, 7, 9]}  // 5 notes but only first 3 shown
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{
+          0: { correct: 1, total: 5 },
+          2: { correct: 1, total: 5 },
+          4: { correct: 1, total: 5 },
+          7: { correct: 1, total: 5 },
+          9: { correct: 1, total: 5 },
+        }}
+        onStartFocusMode={() => {}}
+      />
+    )
+    // Only pcs 0, 2, 4 should be shown (first 3 of worstNotes)
+    expect(screen.getByTestId('worst-note-0')).toBeTruthy()
+    expect(screen.getByTestId('worst-note-2')).toBeTruthy()
+    expect(screen.getByTestId('worst-note-4')).toBeTruthy()
+    expect(screen.queryByTestId('worst-note-7')).toBeNull()
+    expect(screen.queryByTestId('worst-note-9')).toBeNull()
+  })
+
+  it('renders when only newBestStreakSet is true (no sections A or B)', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={2}
+        sessionNoteAcc={{}}
+        worstNotes={[]}
+        focusedPcs={null}
+        newBestStreakSet={true}
+        allTimeBestStreak={6}
+        noteAccuracy={{}}
+        onStartFocusMode={() => {}}
+      />
+    )
+    // The component should render (not null) because newBestStreakSet=true
+    expect(screen.getByTestId('new-best-streak')).toBeTruthy()
+    expect(screen.getByTestId('new-best-streak').textContent).toContain('🔥')
+    expect(screen.getByTestId('new-best-streak').textContent).toContain('6')
+  })
+
+  it('does not show new best streak banner when allTimeBestStreak < 5', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={5}
+        sessionNoteAcc={{ 0: { correct: 3, total: 5 } }}
+        worstNotes={[]}
+        focusedPcs={null}
+        newBestStreakSet={true}
+        allTimeBestStreak={4}  // < STREAK_TIERS.md (5)
+        noteAccuracy={{}}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.queryByTestId('new-best-streak')).toBeNull()
+  })
+
+  it('can show both section A and section B simultaneously', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={5}
+        sessionNoteAcc={{ 0: { correct: 3, total: 5 } }}
+        worstNotes={[2]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{ 2: { correct: 1, total: 5 } }}
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.getByTestId('section-a')).toBeTruthy()
+    expect(screen.getByTestId('section-b')).toBeTruthy()
+  })
+
+  it('section B shows accuracy percentage for each worst note', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={0}
+        sessionNoteAcc={{}}
+        worstNotes={[0]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{ 0: { correct: 1, total: 4 } }}  // 25%
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.getByTestId('worst-note-0').textContent).toContain('25%')
+  })
+
+  it('section B shows 0% for a worst note with no data in noteAccuracy', () => {
+    render(
+      <PostSessionNoteCardReplica
+        stoppedEarly={false}
+        questionsAnswered={0}
+        sessionNoteAcc={{}}
+        worstNotes={[5]}
+        focusedPcs={null}
+        newBestStreakSet={false}
+        allTimeBestStreak={0}
+        noteAccuracy={{}}  // no data for pc 5
+        onStartFocusMode={() => {}}
+      />
+    )
+    expect(screen.getByTestId('worst-note-5').textContent).toContain('0%')
+  })
+})

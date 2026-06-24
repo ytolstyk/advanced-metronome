@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { pluckString } from '@/audio/pluckString';
@@ -142,6 +142,147 @@ function formatTime(secs: number): string {
   const s = secs % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
+
+const MS_PER_DAY = 86_400_000;
+
+function relativeDay(isoDate: string): string {
+  const now = new Date();
+  const todayMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const d = new Date(isoDate);
+  const dMidnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const diffDays = Math.round((todayMidnight - dMidnight) / MS_PER_DAY);
+  if (diffDays <= 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  return `${diffDays} days ago`;
+}
+
+// ── StatsOverviewCard ──────────────────────────────────────────────────────
+const StatsOverviewCard = memo(function StatsOverviewCard({
+  sessions,
+  allTimeBestStreak,
+}: {
+  sessions: SessionEntry[];
+  allTimeBestStreak: number;
+}) {
+  const validSessions = sessions.filter(s => s.total > 0);
+  const totalQ = validSessions.reduce((a, s) => a + s.total, 0);
+  const totalCorrect = validSessions.reduce((a, s) => a + s.score, 0);
+  const avgAcc = totalQ > 0 ? Math.round((totalCorrect / totalQ) * 100) : null;
+  const lastDate = sessions.length > 0
+    ? relativeDay(sessions[sessions.length - 1].date)
+    : null;
+  return (
+    <div className="rounded-xl border border-[#333355] bg-[#0b0b16] p-4">
+      <div className="text-[0.7rem] font-bold uppercase tracking-wider text-[#8080b8] mb-3">Overview</div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="text-center">
+          <div className="text-[0.65rem] font-bold uppercase tracking-wider text-[#606080] mb-0.5">Sessions</div>
+          <div className="text-2xl font-bold tabular-nums text-[#d0d0f0]">{sessions.length}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-[0.65rem] font-bold uppercase tracking-wider text-[#606080] mb-0.5">Avg accuracy</div>
+          <div className="text-2xl font-bold tabular-nums" style={{ color: avgAcc !== null ? accuracyColor(avgAcc / 100) : '#555577' }}>
+            {avgAcc !== null ? `${avgAcc}%` : '—'}
+          </div>
+          {sessions.length > 0 && (
+            <div className="text-[0.6rem] text-[#4a4a6a] mt-0.5">last {sessions.length}</div>
+          )}
+        </div>
+        <div className="text-center">
+          <div className="text-[0.65rem] font-bold uppercase tracking-wider text-[#606080] mb-0.5">Best streak (this device)</div>
+          <div className="text-2xl font-bold tabular-nums" style={{ color: allTimeBestStreak >= STREAK_TIERS.md ? '#ff7700' : '#d0d0f0' }}>
+            {allTimeBestStreak >= STREAK_TIERS.md ? '🔥' : ''}{allTimeBestStreak > 0 ? allTimeBestStreak : '—'}
+          </div>
+        </div>
+        <div className="text-center">
+          <div className="text-[0.65rem] font-bold uppercase tracking-wider text-[#606080] mb-0.5">Last practice</div>
+          <div className="text-xl font-semibold text-[#aaaacc]">{lastDate ?? '—'}</div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ── PostSessionNoteCard ────────────────────────────────────────────────────
+interface PostSessionNoteCardProps {
+  stoppedEarly: boolean;
+  questionsAnswered: number;
+  sessionNoteAcc: Record<number, { correct: number; total: number }>;
+  worstNotes: number[];
+  focusedPcs: number[] | null;
+  newBestStreakSet: boolean;
+  allTimeBestStreak: number;
+  noteAccuracy: NoteAccMap;
+  onStartFocusMode: () => void;
+}
+
+const PostSessionNoteCard = memo(function PostSessionNoteCard({
+  stoppedEarly, questionsAnswered, sessionNoteAcc, worstNotes, focusedPcs,
+  newBestStreakSet, allTimeBestStreak, noteAccuracy, onStartFocusMode,
+}: PostSessionNoteCardProps) {
+  if (stoppedEarly) return null;
+  const sessionPcs = Object.keys(sessionNoteAcc).map(Number);
+  const showSectionA = questionsAnswered >= 3 && sessionPcs.length > 0;
+  const showSectionB = worstNotes.length > 0 && focusedPcs === null;
+  if (!showSectionA && !showSectionB && !newBestStreakSet) return null;
+  return (
+    <div className="flex flex-col gap-3 w-full border-t border-[#2a2a44] pt-3">
+      {newBestStreakSet && allTimeBestStreak >= STREAK_TIERS.md && (
+        <div className="text-center text-[0.82rem] font-bold" style={{ color: STREAK_TIER_COLORS[streakTier(allTimeBestStreak)] }}>
+          🔥 New device best: {allTimeBestStreak} streak!
+        </div>
+      )}
+      {showSectionA && (
+        <div>
+          <div className="text-[0.65rem] font-bold uppercase tracking-wider text-[#8080b8] mb-1.5">Notes practiced</div>
+          <div className="flex flex-wrap gap-1.5">
+            {sessionPcs
+              .sort((a, b) => {
+                const accA = sessionNoteAcc[a].correct / sessionNoteAcc[a].total;
+                const accB = sessionNoteAcc[b].correct / sessionNoteAcc[b].total;
+                return accA - accB;
+              })
+              .map(pc => {
+                const { correct, total } = sessionNoteAcc[pc];
+                const acc = correct / total;
+                return (
+                  <span key={pc} className="flex items-center gap-1 text-[0.7rem] border rounded px-2 py-0.5"
+                    style={{ borderColor: accuracyColor(acc), background: `${accuracyColor(acc)}18`, color: '#d0d0f0' }}>
+                    <svg width="7" height="7" aria-hidden><circle cx="3.5" cy="3.5" r="3" fill={accuracyColor(acc)} /></svg>
+                    {NOTE_NAMES[pc]} {correct}/{total}
+                  </span>
+                );
+              })}
+          </div>
+        </div>
+      )}
+      {showSectionB && (
+        <div>
+          <div className="text-[0.65rem] font-bold uppercase tracking-wider text-[#b8a870] mb-1.5">Focus for next session</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              {worstNotes.slice(0, 3).map(pc => {
+                const data = noteAccuracy[pc];
+                const acc = data ? data.correct / data.total : 0;
+                return (
+                  <span key={pc} className="text-[0.7rem] font-semibold" style={{ color: accuracyColor(acc) }}>
+                    {NOTE_NAMES[pc]} ({Math.round(acc * 100)}%)
+                  </span>
+                );
+              })}
+            </div>
+            <button
+              onClick={onStartFocusMode}
+              className="h-7 px-3 text-[0.72rem] font-semibold rounded border border-[#ddaa44] bg-[#1a1408] text-[#ddaa44] hover:border-[#ffcc66] hover:text-[#ffcc66] transition-colors"
+            >
+              Start Focus Mode
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
 
 // ── SessionChart ───────────────────────────────────────────────────────────
 function SessionChart({ sessions }: { sessions: SessionEntry[] }) {
@@ -401,6 +542,7 @@ const TOGGLE_CLS =
 
 // ── Streak thresholds ──────────────────────────────────────────────────────
 const STREAK_TIERS = { xl: 20, lg: 10, md: 5 } as const;
+const STREAK_TIER_COLORS = { xl: '#ff4400', lg: '#ff7700', md: '#ffaa00', sm: '#ffcc44' } as const;
 
 function streakTier(streak: number): 'xl' | 'lg' | 'md' | 'sm' {
   if (streak >= STREAK_TIERS.xl) return 'xl';
@@ -516,6 +658,14 @@ export function FretMemorizerPage() {
   const [noteAccuracy, setNoteAccuracy] = useState<NoteAccMap>(() => loadNoteAccFromStorage());
   const [sessionHistory, setSessionHistory] = useState<SessionEntry[]>(() => loadSessionHistoryFromStorage());
   const [focusedPcs, setFocusedPcs] = useState<number[] | null>(null);
+  const [sessionNoteAcc, setSessionNoteAcc] = useState<Record<number, { correct: number; total: number }>>({});
+  const [allTimeBestStreak, setAllTimeBestStreak] = useState<number>(() => {
+    const raw = parseInt(localStorage.getItem('fretMem.bestStreak') ?? '0', 10);
+    return Number.isFinite(raw) && raw >= 0 ? raw : 0;
+  });
+  // Mirrors allTimeBestStreak synchronously so endGame can compare without effect-flush race
+  const allTimeBestStreakRef = useRef(allTimeBestStreak);
+  const newBestStreakSetRef = useRef(false);
 
   // Load note accuracy from cloud on mount (overrides localStorage with merged data)
   useEffect(() => {
@@ -555,6 +705,10 @@ export function FretMemorizerPage() {
   useEffect(() => { localStorage.setItem('fretMem.gameMode', gameMode); }, [gameMode]);
   useEffect(() => { localStorage.setItem('fretMem.inputMode', inputMode); }, [inputMode]);
   useEffect(() => { localStorage.setItem('fretMem.studyMode', String(studyMode)); }, [studyMode]);
+  useEffect(() => {
+    allTimeBestStreakRef.current = allTimeBestStreak;
+    localStorage.setItem('fretMem.bestStreak', String(allTimeBestStreak));
+  }, [allTimeBestStreak]);
 
   const micCtxRef = useRef<AudioContext | null>(null);
   const micAnalyserRef = useRef<AnalyserNode | null>(null);
@@ -576,14 +730,9 @@ export function FretMemorizerPage() {
 
   // ── Note accuracy update ──────────────────────────────────────────────────
   const updateNoteAcc = useCallback((pc: number, correct: boolean) => {
-    setNoteAccuracy((prev) => {
+    setNoteAccuracy(prev => {
       const entry = prev[pc] ?? { correct: 0, total: 0 };
-      const next: NoteAccMap = {
-        ...prev,
-        [pc]: { correct: entry.correct + (correct ? 1 : 0), total: entry.total + 1 },
-      };
-      void saveNoteAccuracy(next); // fire-and-forget (localStorage + cloud when auth)
-      return next;
+      return { ...prev, [pc]: { correct: entry.correct + (correct ? 1 : 0), total: entry.total + 1 } };
     });
   }, []);
 
@@ -758,6 +907,10 @@ export function FretMemorizerPage() {
     setBestStreak(finalBest);
     if (finalTotal > 0) pushSessionHistory(finalScore, finalTotal);
 
+    // All-time best streak — read from ref (always current, no effect-flush race)
+    newBestStreakSetRef.current = finalBest > allTimeBestStreakRef.current;
+    if (newBestStreakSetRef.current) setAllTimeBestStreak(finalBest);
+
     if (authStatus === 'authenticated') {
       void saveScore({
         score: finalScore,
@@ -797,6 +950,16 @@ export function FretMemorizerPage() {
     processingRef.current = true;
     clearFeedbackTimers();
     updateNoteAcc(question.targetPc, isCorrect);
+    // Persist accuracy update outside the state updater to avoid Strict Mode double-fire
+    const curEntry = noteAccuracy[question.targetPc] ?? { correct: 0, total: 0 };
+    void saveNoteAccuracy({
+      ...noteAccuracy,
+      [question.targetPc]: { correct: curEntry.correct + (isCorrect ? 1 : 0), total: curEntry.total + 1 },
+    });
+    setSessionNoteAcc(prev => {
+      const e = prev[question.targetPc] ?? { correct: 0, total: 0 };
+      return { ...prev, [question.targetPc]: { correct: e.correct + (isCorrect ? 1 : 0), total: e.total + 1 } };
+    });
 
     if (isCorrect) {
       const nextScore = score + 1;
@@ -892,6 +1055,8 @@ export function FretMemorizerPage() {
     setElapsedSeconds(0); setStreak(0); setBestStreak(0);
     setFeedback(null); setAnswerReveal(null); setHighlightedKey(null);
     setScoreSaved(false); setStoppedEarly(false);
+    setSessionNoteAcc({});
+    newBestStreakSetRef.current = false;
     processingRef.current = false;
     const q = generateQuestion(openMidi, stringCount, [...focusedSvgStrings], null, focusedPcs ?? undefined);
     setQuestion(q);
@@ -907,10 +1072,15 @@ export function FretMemorizerPage() {
     setHighlightedKey(null);
     setAnswerReveal(null);
     setFeedback(null);
+    setStreak(0);
+    setBestStreak(0);
+    setSessionNoteAcc({});
+    newBestStreakSetRef.current = false;
     processingRef.current = false;
   }
 
   function playAgain() {
+    newBestStreakSetRef.current = false;
     setGamePhase('idle');
     setQuestion(null);
     setStreak(0);
@@ -918,12 +1088,17 @@ export function FretMemorizerPage() {
   }
 
   // ── Focus mode ───────────────────────────────────────────────────────────
-  function startFocusMode() {
+  const startFocusMode = useCallback(() => {
     const worst = getWorstNotes(noteAccuracy, 5);
     if (worst.length === 0) return;
     setFocusedPcs(worst);
+    setGamePhase('idle');
+    setQuestion(null);
+    setStreak(0);
+    setBestStreak(0);
+    setStoppedEarly(false);
     setAppView('game');
-  }
+  }, [noteAccuracy]);
 
   // ── Fret click handler ───────────────────────────────────────────────────
   const handleFretClick = useCallback((svgStr: number, fret: number, midiNote: number) => {
@@ -988,7 +1163,10 @@ export function FretMemorizerPage() {
   // ── Derived values ────────────────────────────────────────────────────────
   const limit = gameMode === 'infinite' ? null : parseInt(gameMode, 10);
   const targetStringName = question != null ? stringNames[question.targetSvgStr] : null;
-  const worstNotes = useMemo(() => getWorstNotes(noteAccuracy, 5), [noteAccuracy]);
+  const worstNotes = useMemo(
+    () => gamePhase === 'playing' ? [] : getWorstNotes(noteAccuracy, 5),
+    [noteAccuracy, gamePhase],
+  );
   const isStudyActive = studyPhase !== 'off';
   const studyHighlightKey = studyTarget != null ? `${studyTarget.svgStr}-${studyTarget.fret}` : undefined;
 
@@ -1032,6 +1210,9 @@ export function FretMemorizerPage() {
       {/* ── Stats panel ─────────────────────────────────────────────────── */}
       {appView === 'stats' && (
         <div className="flex flex-col gap-5">
+          {/* Summary card */}
+          <StatsOverviewCard sessions={sessionHistory} allTimeBestStreak={allTimeBestStreak} />
+
           {/* Heatmap — reuses the game fretboard container for sizing (mutually exclusive views) */}
           <div className="rounded-xl border border-[#333355] bg-[#0b0b16] p-4">
             <div className="text-[0.7rem] font-bold uppercase tracking-wider text-[#8080b8] mb-3">
@@ -1482,6 +1663,19 @@ export function FretMemorizerPage() {
                   <span className="text-[#888870]">best streak this session</span>
                 </div>
               )}
+
+              {/* Post-session note performance card — only for completed games */}
+              <PostSessionNoteCard
+                stoppedEarly={stoppedEarly}
+                questionsAnswered={questionsAnswered}
+                sessionNoteAcc={sessionNoteAcc}
+                worstNotes={worstNotes}
+                focusedPcs={focusedPcs}
+                newBestStreakSet={newBestStreakSetRef.current}
+                allTimeBestStreak={allTimeBestStreak}
+                noteAccuracy={noteAccuracy}
+                onStartFocusMode={startFocusMode}
+              />
 
               {authStatus === 'authenticated' && !stoppedEarly && (
                 <div className="text-[0.75rem] text-center text-[#606080]">
