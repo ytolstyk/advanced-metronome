@@ -165,6 +165,18 @@ export function suggestScales(slots: (ChordSlot | null)[]): ScaleSuggestion[] {
   return results;
 }
 
+/** Returns the positional scale degree (I–VII) of `chordRoot` within `suggestion`'s scale,
+ *  or undefined for non-diatonic scales (pentatonic, blues). */
+export function computeScaleDegree(chordRoot: RootNote, suggestion: ScaleSuggestion): string | undefined {
+  const intervals = SCALE_INTERVALS[suggestion.mode];
+  if (intervals.length !== NUMERALS.length) return undefined;
+  const chordRootPc = ROOT_NOTE_TO_PC[chordRoot];
+  const scaleRootPc = ROOT_NOTE_TO_PC[suggestion.root];
+  const offset = (chordRootPc - scaleRootPc + 12) % 12;
+  const degreeIndex = intervals.indexOf(offset);
+  return degreeIndex !== -1 ? NUMERALS[degreeIndex] : undefined;
+}
+
 // ── Progression suggestions ────────────────────────────────────────────────
 
 export type ProgressionSlot = ChordSlot & { beats: number };

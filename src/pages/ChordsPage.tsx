@@ -24,7 +24,7 @@ import {
   deleteCustomChord,
 } from '../api/customChordsApi';
 import type { ProgressionSlot } from '../utils/chordTheory';
-import { suggestScales, suggestProgressionsForChord } from '../utils/chordTheory';
+import { suggestScales, suggestProgressionsForChord, computeScaleDegree } from '../utils/chordTheory';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -264,15 +264,18 @@ function ChordDetailDialog({
               <div className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8]">Fits these scales</div>
               {scales.common.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {scales.common.map((s) => (
-                    <button
-                      key={s.label}
-                      onClick={() => navigate(`/scales?root=${s.root}&mode=${s.mode}`)}
-                      className="px-2 py-0.5 text-[0.75rem] rounded bg-[#1e1f2c] border border-[#505270] text-[#aab0d0] hover:border-[#8eaaff] hover:text-white cursor-pointer transition-colors"
-                    >
-                      {s.label}
-                    </button>
-                  ))}
+                  {scales.common.map((s) => {
+                    const degree = computeScaleDegree(root, s);
+                    return (
+                      <button
+                        key={`${s.root}-${s.mode}`}
+                        onClick={() => navigate(`/scales?root=${s.root}&mode=${s.mode}`)}
+                        className="px-2 py-0.5 text-[0.75rem] rounded bg-[#1e1f2c] border border-[#505270] text-[#aab0d0] hover:border-[#8eaaff] hover:text-white cursor-pointer transition-colors"
+                      >
+                        {degree ? `${s.label} (${degree})` : s.label}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               {scales.modes.length > 0 && (
@@ -281,15 +284,18 @@ function ChordDetailDialog({
                     + {scales.modes.length} modal scale{scales.modes.length > 1 ? 's' : ''}
                   </summary>
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {scales.modes.map((s) => (
-                      <button
-                        key={s.label}
-                        onClick={() => navigate(`/scales?root=${s.root}&mode=${s.mode}`)}
-                        className="px-2 py-0.5 text-[0.75rem] rounded bg-[#1e1f2c] border border-[#505270] text-[#aab0d0] hover:border-[#8eaaff] hover:text-white cursor-pointer transition-colors"
-                      >
-                        {s.label}
-                      </button>
-                    ))}
+                    {scales.modes.map((s) => {
+                      const degree = computeScaleDegree(root, s);
+                      return (
+                        <button
+                          key={`${s.root}-${s.mode}`}
+                          onClick={() => navigate(`/scales?root=${s.root}&mode=${s.mode}`)}
+                          className="px-2 py-0.5 text-[0.75rem] rounded bg-[#1e1f2c] border border-[#505270] text-[#aab0d0] hover:border-[#8eaaff] hover:text-white cursor-pointer transition-colors"
+                        >
+                          {degree ? `${s.label} (${degree})` : s.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </details>
               )}

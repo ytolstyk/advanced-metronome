@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import type { ChordSlot, DetectedKey, ProgressionSuggestion } from './chordTheory';
+import type { ChordSlot, DetectedKey, ProgressionSuggestion, ScaleSuggestion } from './chordTheory';
 import {
   chordPitchClasses,
   detectKey,
   toRomanNumeral,
   suggestScales,
+  computeScaleDegree,
   parseRomanNumeralInput,
   suggestProgressionsForChord,
 } from './chordTheory';
@@ -543,5 +544,37 @@ describe('suggestProgressionsForChord', () => {
   it('result length is at most 8 for A minor', () => {
     const result = suggestProgressionsForChord('A', 'minor');
     expect(result.length).toBeLessThanOrEqual(8);
+  });
+});
+
+// ── computeScaleDegree ───────────────────────────────────────────────────────
+
+describe('computeScaleDegree', () => {
+  const cMajorSuggestions = suggestScales([{ root: 'C', type: 'major' }]);
+  const find = (root: string, mode: string) =>
+    cMajorSuggestions.find((s) => s.root === root && s.mode === mode)!;
+
+  it('C in C major → I, C in G major → IV, C in A Natural Minor → III (spec examples)', () => {
+    expect(computeScaleDegree('C', find('C', 'major'))).toBe('I');
+    expect(computeScaleDegree('C', find('G', 'major'))).toBe('IV');
+    expect(computeScaleDegree('C', find('A', 'minor'))).toBe('III');
+  });
+
+  it('diatonic modal match returns a valid Roman numeral', () => {
+    // G Mixolydian [G A B C D E F] contains C E G — C is degree IV
+    const gMixo = find('G', 'mixolydian');
+    expect(gMixo).toBeDefined();
+    expect(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']).toContain(computeScaleDegree('C', gMixo));
+  });
+
+  it('returns undefined for pentatonic_major (non-7-note scale)', () => {
+    const cPenta = find('C', 'pentatonic_major');
+    expect(cPenta).toBeDefined();
+    expect(computeScaleDegree('C', cPenta)).toBeUndefined();
+  });
+
+  it('returns undefined for blues (non-7-note scale)', () => {
+    const fakeSuggestion: ScaleSuggestion = { root: 'A', mode: 'blues', label: 'A Blues' };
+    expect(computeScaleDegree('C', fakeSuggestion)).toBeUndefined();
   });
 });
