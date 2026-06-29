@@ -1,5 +1,6 @@
 import { useReducer, useEffect, useRef, useCallback, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import { useAuthenticator } from "@aws-amplify/ui-react";
 import { reducer, createInitialState, saveState, validateStoredState } from "./state";
 import type { Action, StorageValidationError } from "./state";
 import type { AppState } from "./types";
@@ -11,6 +12,8 @@ import { DrumGrid } from "./components/DrumGrid/DrumGrid";
 import { TransportControls } from "./components/TransportControls/TransportControls";
 import { PianoKeyboard } from "./components/PianoKeyboard/PianoKeyboard";
 import { GenerateDrumsModal } from "./components/GenerateDrumsModal/GenerateDrumsModal";
+import { DrumPatternImportModal } from "./components/DrumPatternImportModal/DrumPatternImportModal";
+import { AuthSignInDialog } from "./components/AuthGate/AuthGate";
 import type { DrumStyle } from "./drumPatterns";
 import { drumToClickTrackPieces } from "./utils/drumToClickTrack";
 import { INSTRUMENT_IDS } from "./constants";
@@ -115,6 +118,13 @@ function App() {
     setShowGenerateModal(false);
   }, [dispatchWithHistory]);
 
+  const handleImportApply = useCallback((mergedPattern: Pattern, newBpm?: number) => {
+    dispatchWithHistory({ type: 'APPLY_GENERATED_DRUMS', measures: stateRef.current.config.measures, pattern: mergedPattern });
+    if (newBpm !== undefined) {
+      dispatchWithHistory({ type: 'SET_BPM', bpm: Math.round(newBpm) });
+    }
+  }, [dispatchWithHistory]);
+
   const handleExportToClickTrack = useCallback(() => {
     const { config, pattern } = stateRef.current;
     const pieces = drumToClickTrackPieces(config.measures, pattern, config.bpm);
@@ -153,6 +163,8 @@ function App() {
     } catch { /* malformed — ignore */ }
   }, []);
 
+  const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
+
   const [storageError, setStorageError] = useState<StorageValidationError | null>(
     () => validateStoredState(),
   );
@@ -160,6 +172,8 @@ function App() {
   const [showPiano, setShowPiano] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [showExportConfirm, setShowExportConfirm] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showImportAuthPrompt, setShowImportAuthPrompt] = useState(false);
   const [clickImportBanner, setClickImportBanner] = useState<boolean>(() => {
     return sessionStorage.getItem('click-to-drum-import') !== null;
   });
@@ -290,6 +304,15 @@ function App() {
         <button className="drum-action-btn" onClick={() => setShowExportConfirm(true)}>
           Export to Click Track
         </button>
+        <button
+          className="drum-action-btn"
+          onClick={() => {
+            if (authStatus === 'authenticated') setShowImportModal(true);
+            else setShowImportAuthPrompt(true);
+          }}
+        >
+          Import from YouTube
+        </button>
       </div>
       {showExportConfirm && (
         <div className="export-confirm-overlay" onClick={() => setShowExportConfirm(false)}>
@@ -320,6 +343,18 @@ function App() {
         hasExistingPattern={hasPattern}
         onClose={() => setShowGenerateModal(false)}
         onGenerate={handleGenerate}
+      />
+      <DrumPatternImportModal
+        open={showImportModal}
+        currentPattern={pattern}
+        measures={config.measures}
+        currentBpm={config.bpm}
+        onClose={() => setShowImportModal(false)}
+        onApply={handleImportApply}
+      />
+      <AuthSignInDialog
+        open={showImportAuthPrompt}
+        onOpenChange={setShowImportAuthPrompt}
       />
     </main>
   );

@@ -1,0 +1,256 @@
+.drum-import-dialog {
+  max-width: 680px;
+  background: #1a1a2e;
+  border: 1px solid #303050;
+  color: #ccd6ff;
+}
+
+/* ── Form ──────────────────────────────────────────────────────────── */
+.drum-import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 0.5rem;
+}
+
+.drum-import-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.drum-import-field--half {
+  flex: 1;
+}
+
+.drum-import-time-row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.drum-import-field-error {
+  font-size: 0.75rem;
+  color: #f87171;
+  margin: 0;
+}
+
+.input-error {
+  border-color: #f87171 !important;
+}
+
+.drum-import-hint {
+  font-size: 0.75rem;
+  color: #7880a8;
+  margin: 0;
+}
+
+.drum-import-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
+/* ── Loading ────────────────────────────────────────────────────────── */
+.drum-import-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 0;
+  color: #7880a8;
+}
+
+.drum-import-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #303050;
+  border-top-color: #2dd4bf;
+  border-radius: 50%;
+  animation: drum-import-spin 0.8s linear infinite;
+}
+
+@keyframes drum-import-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Error ──────────────────────────────────────────────────────────── */
+.drum-import-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 0;
+  color: #f87171;
+  text-align: center;
+}
+
+.drum-import-error p {
+  margin: 0;
+  max-width: 380px;
+}
+
+/* ── Preview ────────────────────────────────────────────────────────── */
+.drum-import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding-top: 0.25rem;
+}
+
+.drum-import-preview-hint {
+  font-size: 0.75rem;
+  color: #7880a8;
+  margin: 0;
+}
+
+/* Grid: sticky labels + scrollable cells */
+.drum-import-grid-wrapper {
+  display: flex;
+  border: 1px solid #303050;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.drum-import-labels {
+  flex-shrink: 0;
+  width: 160px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #303050;
+}
+
+.drum-import-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 4px 8px;
+  height: 20px;
+  border-bottom: 1px solid #222240;
+}
+
+.drum-import-label-row:last-child {
+  border-bottom: none;
+}
+
+.drum-import-inst-label {
+  font-size: 0.7rem;
+  color: #aab0d0;
+  flex: 1;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.drum-import-checkbox {
+  width: 12px;
+  height: 12px;
+  cursor: pointer;
+  accent-color: #2dd4bf;
+}
+
+.drum-import-warn-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+/* Confidence badge */
+.confidence-badge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.confidence-badge--high {
+  background: #14532d;
+  color: #4ade80;
+}
+
+.confidence-badge--mid {
+  background: #451a03;
+  color: #fb923c;
+}
+
+.confidence-badge--low {
+  background: #450a0a;
+  color: #f87171;
+}
+
+/* Scrollable cell area */
+.drum-import-cells-scroll {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.drum-import-cells-inner {
+  display: flex;
+  flex-direction: column;
+}
+
+.drum-import-cell-row {
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px;
+  height: 20px;
+  align-items: center;
+  border-bottom: 1px solid #222240;
+}
+
+.drum-import-cell-row:last-child {
+  border-bottom: none;
+}
+
+/* ── ProposedBeatCell ────────────────────────────────────────────────── */
+.proposed-beat-cell {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: #252540;
+}
+
+.proposed-beat-cell--current {
+  background: #e0e0e8;
+}
+
+.proposed-beat-cell--proposed {
+  background: rgba(45, 212, 191, 0.6);
+}
+
+.proposed-beat-cell--both {
+  background: #2dd4bf;
+}
+
+/* ── BPM notice ─────────────────────────────────────────────────────── */
+.drum-import-bpm-notice {
+  background: #1e1e38;
+  border: 1px solid #303050;
+  border-radius: 6px;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.drum-import-bpm-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .drum-import-labels {
+    width: 120px;
+  }
+
+  .drum-import-inst-label {
+    font-size: 0.65rem;
+  }
+
+  .proposed-beat-cell {
+    width: 8px;
+    height: 8px;
+  }
+}
