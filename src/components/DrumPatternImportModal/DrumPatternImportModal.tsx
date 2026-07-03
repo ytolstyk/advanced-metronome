@@ -4,8 +4,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { extractDrumPattern } from '@/api/aiApi';
-import type { DrumExtractionResult } from '@/api/aiApi';
+import { extractDrumPattern } from '@/api/drumExtractionApi';
+import type { DrumExtractionResult } from '@/api/drumExtractionApi';
+import { YOUTUBE_VIDEO_ID_RE, getYoutubeUrlError } from '@/utils/youtubeUrl';
+import { parseMmSs } from '@/utils/timeUtils';
 import { quantizeHits } from '@/utils/drumPatternQuantize';
 import { INSTRUMENTS, INSTRUMENT_IDS } from '@/constants';
 import type { InstrumentId, Measure, Pattern } from '@/types';
@@ -23,16 +25,6 @@ interface DrumPatternImportModalProps {
 
 type ModalState = 'idle' | 'loading' | 'preview' | 'error';
 
-function parseMmSs(value: string): number {
-  const parts = value.split(':');
-  if (parts.length === 2) {
-    const m = parseInt(parts[0], 10);
-    const s = parseFloat(parts[1]);
-    if (!isNaN(m) && !isNaN(s)) return m * 60 + s;
-  }
-  const s = parseFloat(value);
-  return isNaN(s) ? 0 : s;
-}
 
 function ConfidenceBadge({ value }: { value: number }) {
   const pct = Math.round(value * 100);
@@ -65,19 +57,12 @@ export function DrumPatternImportModal({
   // Store measures snapshot at extraction time for re-quantization on Apply
   const measuresAtExtraction = useRef<Measure[]>(measures);
 
-  const YOUTUBE_URL_RE = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+$/;
-
   const validateUrl = useCallback((v: string) => {
-    if (!v) { setUrlError(''); return; }
-    if (!YOUTUBE_URL_RE.test(v)) {
-      setUrlError('Enter a valid YouTube URL (e.g. https://youtube.com/watch?v=...)');
-    } else {
-      setUrlError('');
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    setUrlError(getYoutubeUrlError(v));
+  }, []);
 
   const handleExtract = useCallback(async () => {
-    if (!YOUTUBE_URL_RE.test(url)) {
+    if (!YOUTUBE_VIDEO_ID_RE.test(url.trim())) {
       setUrlError('Enter a valid YouTube URL');
       return;
     }
@@ -111,7 +96,7 @@ export function DrumPatternImportModal({
       setErrorMsg(err instanceof Error ? err.message : 'Analysis failed — please try again.');
       setModalState('error');
     }
-  }, [url, startInput, endInput, measures, currentBpm]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [url, startInput, endInput, measures, currentBpm]);
 
   const handleClose = useCallback(() => {
     setModalState('idle');

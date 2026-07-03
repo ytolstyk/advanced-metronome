@@ -1,3 +1,8 @@
+/* Shared form utility — marks an input as invalid (used by multiple modals) */
+.input-error {
+  border-color: #f87171 !important;
+}
+
 .app {
   display: flex;
   flex-direction: column;

@@ -5,5 +5,5 @@ export const geminiSuggestFunction = defineFunction({
   environment: {
     GEMINI_API_KEY: secret('GEMINI_API_KEY'),
   },
-  timeoutSeconds: 30,
+  timeoutSeconds: 28,
 });

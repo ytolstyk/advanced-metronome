@@ -2,6 +2,7 @@ import { a, defineData, type ClientSchema } from '@aws-amplify/backend';
 import { geminiSuggestFunction } from '../functions/gemini-suggest/resource';
 import { geminiPlanFunction } from '../functions/gemini-plan/resource';
 import { geminiDrumsFunction } from '../functions/gemini-drums/resource';
+import { geminiChordsFunction } from '../functions/gemini-chords/resource';
 
 const schema = a.schema({
   // One record per user — auto-saved on every change
@@ -205,6 +206,16 @@ const schema = a.schema({
     .returns(a.string())
     .authorization(allow => [allow.authenticated()])
     .handler(a.handler.function(geminiDrumsFunction)),
+
+  detectChordProgression: a.query()
+    .arguments({
+      url:      a.string().required(),
+      startSec: a.float().required(),
+      endSec:   a.float().required(),
+    })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(geminiChordsFunction)),
 
   // Generated practice plan — one record per user (latest plan wins)
   UserPracticePlan: a.model({

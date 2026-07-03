@@ -34,10 +34,6 @@
   margin: 0;
 }
 
-.input-error {
-  border-color: #f87171 !important;
-}
-
 .drum-import-hint {
   font-size: 0.75rem;
   color: #7880a8;

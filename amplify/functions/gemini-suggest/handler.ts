@@ -1,51 +1,12 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import type { Schema } from '@google/generative-ai';
 import type { AppSyncResolverHandler } from 'aws-lambda';
+import { ROOT_NOTES, normalizeRoot, normalizeQuality } from '../shared/chordNormalizers';
 
 const SUGGESTION_COUNT = 3;
-const GEMINI_MODEL = 'gemini-3.5-flash';
+// Must stay in sync with gemini-chords/handler.ts GEMINI_MODEL (cross-boundary duplication, forced by Lambda deployment)
+const GEMINI_MODEL = 'gemini-2.5-flash';
 const MAX_PROMPT_LENGTH = 500;
-
-const ROOT_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
-
-const ENHARMONIC: Record<string, string> = {
-  Db: 'C#', Eb: 'D#', Gb: 'F#', Ab: 'G#', Bb: 'A#',
-  'D♭': 'C#', 'E♭': 'D#', 'G♭': 'F#', 'A♭': 'G#', 'B♭': 'A#',
-};
-
-function normalizeRoot(raw: string): string | null {
-  const s = raw.trim();
-  if ((ROOT_NOTES as readonly string[]).includes(s)) return s;
-  const mapped = ENHARMONIC[s];
-  return mapped && (ROOT_NOTES as readonly string[]).includes(mapped) ? mapped : null;
-}
-
-const QUALITY_MAP: Record<string, string> = {
-  major: 'major', maj: 'major', M: 'major',
-  minor: 'minor', min: 'minor', m: 'minor',
-  '7': '7', dominant7: '7', dom7: '7', 'dominant 7': '7',
-  maj7: 'maj7', major7: 'maj7', 'major 7': 'maj7',
-  m7: 'm7', minor7: 'm7', 'minor 7': 'm7', min7: 'm7',
-  sus2: 'sus2', suspended2: 'sus2',
-  sus4: 'sus4', suspended4: 'sus4',
-  aug: 'aug', augmented: 'aug',
-  dim: 'dim', diminished: 'dim',
-  dim7: 'dim7', diminished7: 'dim7',
-  m7b5: 'm7b5', 'half-diminished': 'm7b5', 'half diminished': 'm7b5',
-  add9: 'add9', 'add 9': 'add9',
-  add4: 'add4', 'add 4': 'add4',
-  add7: 'add7', 'add 7': 'add7',
-  '6': '6', major6: '6', maj6: '6',
-  m6: 'm6', minor6: 'm6',
-  '9': '9', dominant9: '9', dom9: '9',
-  maj9: 'maj9', major9: 'maj9',
-  '5': '5', power: '5', 'power chord': '5',
-};
-
-function normalizeQuality(raw: string): string {
-  const key = raw.trim();
-  return QUALITY_MAP[key] ?? QUALITY_MAP[key.toLowerCase()] ?? 'major';
-}
 
 const RESPONSE_SCHEMA: Schema = {
   type: SchemaType.OBJECT,
@@ -125,7 +86,9 @@ export const handler: AppSyncResolverHandler<{ prompt: string }, string | null> 
       .map((c) => {
         const root = normalizeRoot(c.root);
         if (!root) return null;
-        return { root, type: normalizeQuality(c.quality) };
+        const type = normalizeQuality(c.quality);
+        if (!type) return null;
+        return { root, type };
       })
       .filter((c): c is { root: string; type: string } => c !== null),
     description: prog.description.slice(0, 200),

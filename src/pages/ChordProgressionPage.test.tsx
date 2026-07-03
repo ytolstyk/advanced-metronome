@@ -22,6 +22,20 @@ vi.mock('@/api/chordProgressionApi', () => ({
   CHORD_PROGRESSION_LS_KEY: 'chord-progression-v1',
 }));
 
+// Stub AI API modules so generateClient is never called during page render.
+vi.mock('@/api/chordSuggestApi', () => ({
+  suggestChordProgressions: vi.fn().mockResolvedValue([]),
+  SUGGESTION_COUNT: 3,
+}));
+vi.mock('@/api/chordDetectionApi', () => ({
+  detectChordProgression: vi.fn().mockResolvedValue({
+    chords: [],
+    detectedBpm: 0,
+    detectedKeyRoot: '',
+    detectedKeyMode: '',
+  }),
+}));
+
 // ── Mocks for full-component render tests (ChordSlotCard ref forwarding) ──────
 // chordSynths is the page's audio layer (playGuitarChord/playPianoChord/playPadChord);
 // stub the three play functions so chord preview clicks don't try to synthesize
@@ -69,6 +83,7 @@ type ProgressionAction =
   | { type: 'SET_SLOT_BEATS'; index: number; beats: number }
   | { type: 'SET_SELECTED_KEY'; key: { root: RootNote; mode: 'major' | 'minor' } | null }
   | { type: 'APPLY_SLOTS'; slots: (ProgressionSlot | null)[] }
+  | { type: 'APPLY_FROM_DETECTION'; slots: (ProgressionSlot | null)[]; bpm?: number }
   | { type: 'REORDER_SLOTS'; from: number; to: number }
   | { type: 'CLEAR_ALL' };
 
@@ -101,6 +116,19 @@ function progressionReducer(state: ProgressionState, action: ProgressionAction):
       return { ...state, selectedKey: action.key };
     case 'APPLY_SLOTS':
       return { ...state, slots: action.slots };
+    case 'APPLY_FROM_DETECTION': {
+      const safeBpm =
+        action.bpm !== undefined && action.bpm >= 40 && action.bpm <= 300
+          ? action.bpm
+          : undefined;
+      return {
+        ...state,
+        slots: action.slots,
+        ...(safeBpm !== undefined ? { bpm: safeBpm } : {}),
+        isPlaying: false,
+        currentSlotIndex: -1,
+      };
+    }
     case 'REORDER_SLOTS': {
       const slots = [...state.slots];
       const [item] = slots.splice(action.from, 1);
@@ -512,6 +540,140 @@ describe('progressionReducer – state immutability', () => {
       chord: makeSlot('A', 'minor'),
     });
     expect(initialState.slots).toEqual(originalSlots);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// progressionReducer – APPLY_FROM_DETECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('progressionReducer – APPLY_FROM_DETECTION', () => {
+  const detectionSlots: (ProgressionSlot | null)[] = [
+    makeSlot('C', 'major'),
+    makeSlot('G', 'major'),
+    null, null, null, null, null, null,
+  ];
+
+  it('applies the detected slots', () => {
+    const next = progressionReducer(initialState, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+    });
+    expect(next.slots).toEqual(detectionSlots);
+  });
+
+  it('resets isPlaying to false', () => {
+    const playing: ProgressionState = { ...initialState, isPlaying: true };
+    const next = progressionReducer(playing, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+    });
+    expect(next.isPlaying).toBe(false);
+  });
+
+  it('resets currentSlotIndex to -1', () => {
+    const active: ProgressionState = { ...initialState, currentSlotIndex: 3 };
+    const next = progressionReducer(active, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+    });
+    expect(next.currentSlotIndex).toBe(-1);
+  });
+
+  it('applies detected BPM when it is exactly 40 (lower bound)', () => {
+    const next = progressionReducer(initialState, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+      bpm: 40,
+    });
+    expect(next.bpm).toBe(40);
+  });
+
+  it('applies detected BPM when it is exactly 300 (upper bound)', () => {
+    const next = progressionReducer(initialState, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+      bpm: 300,
+    });
+    expect(next.bpm).toBe(300);
+  });
+
+  it('applies detected BPM when it is within the valid range', () => {
+    const next = progressionReducer(initialState, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+      bpm: 140,
+    });
+    expect(next.bpm).toBe(140);
+  });
+
+  it('ignores detected BPM when it is below 40', () => {
+    const next = progressionReducer({ ...initialState, bpm: 120 }, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+      bpm: 39,
+    });
+    expect(next.bpm).toBe(120);
+  });
+
+  it('ignores detected BPM when it is 0', () => {
+    const next = progressionReducer({ ...initialState, bpm: 120 }, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+      bpm: 0,
+    });
+    expect(next.bpm).toBe(120);
+  });
+
+  it('ignores detected BPM when it is above 300', () => {
+    const next = progressionReducer({ ...initialState, bpm: 120 }, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+      bpm: 301,
+    });
+    expect(next.bpm).toBe(120);
+  });
+
+  it('does not change BPM when bpm field is undefined', () => {
+    const next = progressionReducer({ ...initialState, bpm: 100 }, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+    });
+    expect(next.bpm).toBe(100);
+  });
+
+  it('preserves instrument from prior state', () => {
+    const withPiano: ProgressionState = { ...initialState, instrument: 'piano' };
+    const next = progressionReducer(withPiano, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+    });
+    expect(next.instrument).toBe('piano');
+  });
+
+  it('preserves activeSlotIndex from prior state', () => {
+    const withActive: ProgressionState = { ...initialState, activeSlotIndex: 5 };
+    const next = progressionReducer(withActive, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+    });
+    expect(next.activeSlotIndex).toBe(5);
+  });
+
+  it('returns a new state object (immutable update)', () => {
+    const next = progressionReducer(initialState, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+    });
+    expect(next).not.toBe(initialState);
+  });
+
+  it('returns a new slots array (immutable update)', () => {
+    const next = progressionReducer(initialState, {
+      type: 'APPLY_FROM_DETECTION',
+      slots: detectionSlots,
+    });
+    expect(next.slots).not.toBe(initialState.slots);
   });
 });
 

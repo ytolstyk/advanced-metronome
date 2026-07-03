@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// vi.hoisted() ensures the mock ref is stable before vi.mock() hoisting runs.
-const { mockSuggestQuery } = vi.hoisted(() => {
+// vi.hoisted() ensures the mock refs are stable before vi.mock() hoisting runs.
+const { mockSuggestQuery, mockDetectQuery } = vi.hoisted(() => {
   const mockSuggestQuery = vi.fn();
-  return { mockSuggestQuery };
+  const mockDetectQuery = vi.fn();
+  return { mockSuggestQuery, mockDetectQuery };
 });
 
 vi.mock('aws-amplify/data', () => ({
   generateClient: vi.fn(() => ({
     queries: {
       suggestChordProgressions: mockSuggestQuery,
+      detectChordProgression: mockDetectQuery,
     },
   })),
 }));
@@ -18,7 +20,12 @@ vi.mock('./authUtils', () => ({
   isAuthenticated: vi.fn(),
 }));
 
-import { suggestChordProgressions, SUGGESTION_COUNT } from './aiApi';
+import {
+  suggestChordProgressions,
+  detectChordProgression,
+  SUGGESTION_COUNT,
+} from './aiApi';
+import { YOUTUBE_URL_RE, YOUTUBE_VIDEO_ID_RE } from '../utils/youtubeUrl';
 import { isAuthenticated } from './authUtils';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -42,6 +49,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(isAuthenticated).mockResolvedValue(true);
   mockSuggestQuery.mockResolvedValue({ data: null, errors: undefined });
+  mockDetectQuery.mockResolvedValue({ data: null, errors: undefined });
 });
 
 // ── Auth guard ─────────────────────────────────────────────────────────────
@@ -401,5 +409,434 @@ describe('suggestChordProgressions — happy path', () => {
 
     expect(result[0].description).toBe('Progression 1');
     expect(result[SUGGESTION_COUNT - 1].description).toBe(`Progression ${SUGGESTION_COUNT}`);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YOUTUBE_URL_RE — strict regex (clean watch URL, no extra params)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('YOUTUBE_URL_RE — strict validation', () => {
+  it('matches a standard https watch URL with www', () => {
+    expect(YOUTUBE_URL_RE.test('https://www.youtube.com/watch?v=dQw4w9WgXcY')).toBe(true);
+  });
+
+  it('matches a standard http watch URL without www', () => {
+    expect(YOUTUBE_URL_RE.test('http://youtube.com/watch?v=dQw4w9WgXcY')).toBe(true);
+  });
+
+  it('matches a video ID that contains hyphens and underscores', () => {
+    expect(YOUTUBE_URL_RE.test('https://www.youtube.com/watch?v=abc-123_XYZ')).toBe(true);
+  });
+
+  it('does NOT match a URL with a timestamp param (?v=...&t=60)', () => {
+    expect(YOUTUBE_URL_RE.test('https://www.youtube.com/watch?v=dQw4w9WgXcY&t=60')).toBe(false);
+  });
+
+  it('does NOT match a URL with a playlist param', () => {
+    expect(YOUTUBE_URL_RE.test('https://www.youtube.com/watch?v=dQw4w9WgXcY&list=PLxxx')).toBe(false);
+  });
+
+  it('does NOT match a short link (youtu.be)', () => {
+    expect(YOUTUBE_URL_RE.test('https://youtu.be/dQw4w9WgXcY')).toBe(false);
+  });
+
+  it('does NOT match a YouTube Shorts URL', () => {
+    expect(YOUTUBE_URL_RE.test('https://www.youtube.com/shorts/dQw4w9WgXcY')).toBe(false);
+  });
+
+  it('does NOT match an empty string', () => {
+    expect(YOUTUBE_URL_RE.test('')).toBe(false);
+  });
+
+  it('does NOT match a non-YouTube URL', () => {
+    expect(YOUTUBE_URL_RE.test('https://vimeo.com/watch?v=123')).toBe(false);
+  });
+
+  it('does NOT match a URL missing the v= parameter', () => {
+    expect(YOUTUBE_URL_RE.test('https://www.youtube.com/watch')).toBe(false);
+  });
+
+  it('does NOT match when ?t= param appears before v=', () => {
+    expect(YOUTUBE_URL_RE.test('https://www.youtube.com/watch?t=60&v=dQw4w9WgXcY')).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YOUTUBE_VIDEO_ID_RE — permissive regex (extracts video ID from any YT URL)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('YOUTUBE_VIDEO_ID_RE — permissive ID extraction', () => {
+  function extractId(url: string): string | null {
+    const match = YOUTUBE_VIDEO_ID_RE.exec(url);
+    return match ? match[1] : null;
+  }
+
+  it('extracts video ID from a standard watch URL', () => {
+    expect(extractId('https://www.youtube.com/watch?v=dQw4w9WgXcY')).toBe('dQw4w9WgXcY');
+  });
+
+  it('extracts video ID from a timestamped watch URL', () => {
+    expect(extractId('https://www.youtube.com/watch?v=dQw4w9WgXcY&t=60')).toBe('dQw4w9WgXcY');
+  });
+
+  it('extracts video ID from a short link (youtu.be)', () => {
+    expect(extractId('https://youtu.be/dQw4w9WgXcY')).toBe('dQw4w9WgXcY');
+  });
+
+  it('extracts video ID from a playlist URL with v= param', () => {
+    expect(extractId('https://www.youtube.com/watch?list=PLxxx&v=dQw4w9WgXcY')).toBe('dQw4w9WgXcY');
+  });
+
+  it('extracts video ID from a URL with t= before v=', () => {
+    expect(extractId('https://www.youtube.com/watch?t=60&v=dQw4w9WgXcY')).toBe('dQw4w9WgXcY');
+  });
+
+  it('returns null for a YouTube Shorts URL (no v= param, not youtu.be)', () => {
+    expect(extractId('https://www.youtube.com/shorts/dQw4w9WgXcY')).toBeNull();
+  });
+
+  it('returns null for a non-YouTube URL', () => {
+    expect(extractId('https://vimeo.com/watch?v=123')).toBeNull();
+  });
+
+  it('returns null for an empty string', () => {
+    expect(extractId('')).toBeNull();
+  });
+
+  it('extracts hyphenated video IDs correctly', () => {
+    expect(extractId('https://www.youtube.com/watch?v=abc-123_XYZ')).toBe('abc-123_XYZ');
+  });
+
+  it('extracts from youtu.be short link without extra params', () => {
+    expect(extractId('https://youtu.be/xyzABC')).toBe('xyzABC');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// detectChordProgression
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VALID_WATCH_URL = 'https://www.youtube.com/watch?v=testVideoId';
+
+function makeChordResponse(overrides?: {
+  status?: string;
+  detectedBpm?: number;
+  detectedKey?: string;
+  chords?: unknown[];
+}): string {
+  return JSON.stringify({
+    status: 'ok',
+    detectedBpm: 120,
+    detectedKey: 'C major',
+    chords: [
+      { root: 'C', type: 'major' },
+      { root: 'G', type: 'major' },
+    ],
+    ...overrides,
+  });
+}
+
+describe('detectChordProgression — auth guard', () => {
+  it('throws when not authenticated', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+
+    await expect(detectChordProgression(VALID_WATCH_URL, 0, 20)).rejects.toThrow(
+      'Sign in to use chord detection.',
+    );
+  });
+
+  it('does not call Amplify when not authenticated', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+
+    await expect(detectChordProgression(VALID_WATCH_URL, 0, 20)).rejects.toThrow();
+    expect(mockDetectQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe('detectChordProgression — URL validation', () => {
+  it('throws for a YouTube Shorts URL', async () => {
+    await expect(
+      detectChordProgression('https://www.youtube.com/shorts/abc123', 0, 20),
+    ).rejects.toThrow('YouTube Shorts links are not supported');
+  });
+
+  it('throws for a URL that has no recognisable video ID', async () => {
+    await expect(
+      detectChordProgression('https://vimeo.com/watch?v=12345', 0, 20),
+    ).rejects.toThrow('Please enter a valid YouTube URL');
+  });
+
+  it('accepts a timestamped URL and normalises it to a clean watch URL', async () => {
+    const timestampedUrl = 'https://www.youtube.com/watch?v=testVideoId&t=60';
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse(),
+      errors: undefined,
+    });
+
+    await detectChordProgression(timestampedUrl, 0, 20);
+
+    expect(mockDetectQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'https://www.youtube.com/watch?v=testVideoId' }),
+    );
+  });
+
+  it('accepts a short link (youtu.be) and normalises it to a clean watch URL', async () => {
+    const shortUrl = 'https://youtu.be/shortLinkId';
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse(),
+      errors: undefined,
+    });
+
+    await detectChordProgression(shortUrl, 0, 20);
+
+    expect(mockDetectQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'https://www.youtube.com/watch?v=shortLinkId' }),
+    );
+  });
+});
+
+describe('detectChordProgression — Amplify error handling', () => {
+  it('throws when Amplify returns a non-empty errors array', async () => {
+    mockDetectQuery.mockResolvedValue({ data: null, errors: [{ message: 'Lambda error' }] });
+
+    await expect(detectChordProgression(VALID_WATCH_URL, 0, 20)).rejects.toThrow(
+      'Analysis failed — please try again.',
+    );
+  });
+
+  it('throws when data is null with no errors', async () => {
+    mockDetectQuery.mockResolvedValue({ data: null, errors: undefined });
+
+    await expect(detectChordProgression(VALID_WATCH_URL, 0, 20)).rejects.toThrow(
+      'No response from analysis service.',
+    );
+  });
+
+  it('throws when data is not valid JSON', async () => {
+    mockDetectQuery.mockResolvedValue({ data: 'not json {{', errors: undefined });
+
+    await expect(detectChordProgression(VALID_WATCH_URL, 0, 20)).rejects.toThrow(
+      'Analysis failed — please try again.',
+    );
+  });
+});
+
+describe('detectChordProgression — non-ok status codes', () => {
+  it('throws the no_chords message for status "no_chords"', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({ status: 'no_chords' }),
+      errors: undefined,
+    });
+
+    await expect(detectChordProgression(VALID_WATCH_URL, 0, 20)).rejects.toThrow(
+      'No chords detected in this section',
+    );
+  });
+
+  it('throws the video_unavailable message for status "video_unavailable"', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({ status: 'video_unavailable' }),
+      errors: undefined,
+    });
+
+    await expect(detectChordProgression(VALID_WATCH_URL, 0, 20)).rejects.toThrow(
+      'Could not access this video',
+    );
+  });
+
+  it('throws the generic error message for status "error"', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({ status: 'error' }),
+      errors: undefined,
+    });
+
+    await expect(detectChordProgression(VALID_WATCH_URL, 0, 20)).rejects.toThrow(
+      'Analysis failed — please try again.',
+    );
+  });
+
+  it('throws the generic error message for an unrecognised status', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({ status: 'unknown_status' }),
+      errors: undefined,
+    });
+
+    await expect(detectChordProgression(VALID_WATCH_URL, 0, 20)).rejects.toThrow(
+      'Analysis failed — please try again.',
+    );
+  });
+});
+
+describe('detectChordProgression — chord validation', () => {
+  it('drops chords with an invalid root', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({
+        chords: [{ root: 'INVALID', type: 'major' }, { root: 'G', type: 'major' }],
+      }),
+      errors: undefined,
+    });
+
+    const result = await detectChordProgression(VALID_WATCH_URL, 0, 20);
+
+    expect(result.chords).toHaveLength(1);
+    expect(result.chords[0]).toMatchObject({ root: 'G', type: 'major' });
+  });
+
+  it('drops chords with an invalid type', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({
+        chords: [{ root: 'C', type: 'BOGUS' }, { root: 'A', type: 'minor' }],
+      }),
+      errors: undefined,
+    });
+
+    const result = await detectChordProgression(VALID_WATCH_URL, 0, 20);
+
+    expect(result.chords).toHaveLength(1);
+    expect(result.chords[0]).toMatchObject({ root: 'A', type: 'minor' });
+  });
+
+  it('throws when all chords are invalid (nothing survives validation)', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({ chords: [{ root: 'XX', type: 'fake' }] }),
+      errors: undefined,
+    });
+
+    await expect(detectChordProgression(VALID_WATCH_URL, 0, 20)).rejects.toThrow(
+      'No recognizable chords',
+    );
+  });
+
+  it('throws when chords array is empty', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({ chords: [] }),
+      errors: undefined,
+    });
+
+    await expect(detectChordProgression(VALID_WATCH_URL, 0, 20)).rejects.toThrow(
+      'No recognizable chords',
+    );
+  });
+
+  it('returns all valid chords without deduplication (dedup is a page-layer concern)', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({
+        chords: [
+          { root: 'C', type: 'major' },
+          { root: 'C', type: 'major' },
+          { root: 'G', type: 'major' },
+        ],
+      }),
+      errors: undefined,
+    });
+
+    const result = await detectChordProgression(VALID_WATCH_URL, 0, 20);
+
+    // API returns raw chords without dedup — caller is responsible for dedup
+    expect(result.chords).toHaveLength(3);
+  });
+
+  it('returns more than 8 chords without truncation (slot-mapping is a page-layer concern)', async () => {
+    const manyChords = [
+      { root: 'C', type: 'major' }, { root: 'G', type: 'major' },
+      { root: 'A', type: 'minor' }, { root: 'F', type: 'major' },
+      { root: 'D', type: 'minor' }, { root: 'E', type: 'minor' },
+      { root: 'B', type: 'minor' }, { root: 'C#', type: 'major' },
+      { root: 'D#', type: 'minor' }, { root: 'G#', type: 'major' },
+    ];
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({ chords: manyChords }),
+      errors: undefined,
+    });
+
+    const result = await detectChordProgression(VALID_WATCH_URL, 0, 20);
+
+    expect(result.chords).toHaveLength(10);
+  });
+});
+
+describe('detectChordProgression — happy path', () => {
+  it('returns chords, detectedBpm, and key fields on success', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({ detectedBpm: 140, detectedKey: 'G major' }),
+      errors: undefined,
+    });
+
+    const result = await detectChordProgression(VALID_WATCH_URL, 0, 20);
+
+    expect(result.detectedBpm).toBe(140);
+    expect(result.detectedKeyRoot).toBe('G');
+    expect(result.detectedKeyMode).toBe('major');
+  });
+
+  it('returns chords in order matching the server response', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse({
+        chords: [{ root: 'C', type: 'major' }, { root: 'G', type: '7' }],
+      }),
+      errors: undefined,
+    });
+
+    const result = await detectChordProgression(VALID_WATCH_URL, 0, 20);
+
+    expect(result.chords[0]).toMatchObject({ root: 'C', type: 'major' });
+    expect(result.chords[1]).toMatchObject({ root: 'G', type: '7' });
+    expect(result.chords).toHaveLength(2);
+  });
+
+  it('passes startSec and endSec to the Amplify query', async () => {
+    mockDetectQuery.mockResolvedValue({
+      data: makeChordResponse(),
+      errors: undefined,
+    });
+
+    await detectChordProgression(VALID_WATCH_URL, 10, 30);
+
+    expect(mockDetectQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ startSec: 10, endSec: 30 }),
+    );
+  });
+
+  it('returns detectedBpm as 0 when detectedBpm is missing from response', async () => {
+    const rawWithoutBpm = JSON.stringify({
+      status: 'ok',
+      detectedKey: 'A minor',
+      chords: [{ root: 'A', type: 'minor' }],
+    });
+    mockDetectQuery.mockResolvedValue({ data: rawWithoutBpm, errors: undefined });
+
+    const result = await detectChordProgression(VALID_WATCH_URL, 0, 20);
+
+    expect(result.detectedBpm).toBe(0);
+  });
+
+  it('returns empty detectedKeyRoot/detectedKeyMode when detectedKey is missing from response', async () => {
+    const rawWithoutKey = JSON.stringify({
+      status: 'ok',
+      detectedBpm: 100,
+      chords: [{ root: 'A', type: 'minor' }],
+    });
+    mockDetectQuery.mockResolvedValue({ data: rawWithoutKey, errors: undefined });
+
+    const result = await detectChordProgression(VALID_WATCH_URL, 0, 20);
+
+    expect(result.detectedKeyRoot).toBe('');
+    expect(result.detectedKeyMode).toBe('');
+  });
+
+  it('rejects an invalid detectedKey from the Lambda (e.g., bad root)', async () => {
+    const rawBadKey = JSON.stringify({
+      status: 'ok',
+      detectedBpm: 100,
+      detectedKey: 'BADROOT major',
+      chords: [{ root: 'A', type: 'minor' }],
+    });
+    mockDetectQuery.mockResolvedValue({ data: rawBadKey, errors: undefined });
+
+    const result = await detectChordProgression(VALID_WATCH_URL, 0, 20);
+
+    expect(result.detectedKeyRoot).toBe('');
+    expect(result.detectedKeyMode).toBe('');
   });
 });

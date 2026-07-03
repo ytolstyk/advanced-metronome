@@ -42,8 +42,10 @@ import { exportChordProgression } from '../audio/exportChordProgression';
 import { chordProgressionToTabTrack } from '../utils/chordProgressionToTab';
 import { saveTabTrack } from '../tabEditorState';
 import { FretboardDiagram } from '../components/FretboardDiagram/FretboardDiagram';
-import { suggestChordProgressions, SUGGESTION_COUNT } from '../api/aiApi';
-import type { SuggestedProgression } from '../api/aiApi';
+import { MIN_BPM, MAX_BPM } from '../constants';
+import { suggestChordProgressions, SUGGESTION_COUNT } from '../api/chordSuggestApi';
+import type { SuggestedProgression } from '../api/chordSuggestApi';
+import { ChordProgressionImportModal } from '../components/ChordProgressionImportModal/ChordProgressionImportModal';
 import { loadFromStorage, saveToStorage } from '../api/storageUtils';
 import './ChordProgressionPage.css';
 
@@ -74,11 +76,13 @@ type ProgressionAction =
   | { type: 'SET_SLOT_BEATS'; index: number; beats: number }
   | { type: 'SET_SELECTED_KEY'; key: DetectedKey | null }
   | { type: 'APPLY_SLOTS'; slots: (ProgressionSlot | null)[] }
+  | { type: 'APPLY_FROM_DETECTION'; slots: (ProgressionSlot | null)[]; bpm?: number }
   | { type: 'REORDER_SLOTS'; from: number; to: number }
   | { type: 'ASSIGN_CHORD_TO_ACTIVE_SLOT'; root: RootNote; chordType: ChordType }
   | { type: 'CLEAR_ALL' };
 
 const SLOT_COUNT = 8;
+const DEFAULT_SLOT_BEATS = 4;
 const LOOKAHEAD = 0.1;
 const SCHEDULER_INTERVAL_MS = 25;
 // Short gain ramp between chords prevents click/pop while sounding instantaneous
@@ -116,7 +120,7 @@ function loadSavedState(): ProgressionState {
     if (!raw) return initialState;
     const saved = JSON.parse(raw) as Record<string, unknown>;
 
-    const oldBeats = typeof saved.beatsPerChord === 'number' ? saved.beatsPerChord : 4;
+    const oldBeats = typeof saved.beatsPerChord === 'number' ? saved.beatsPerChord : DEFAULT_SLOT_BEATS;
     const slots = parseSavedSlots(Array.isArray(saved.slots) ? saved.slots : [], oldBeats);
 
     let selectedKey: DetectedKey | null = null;
@@ -169,6 +173,19 @@ function progressionReducer(state: ProgressionState, action: ProgressionAction):
       return { ...state, selectedKey: action.key };
     case 'APPLY_SLOTS':
       return { ...state, slots: action.slots };
+    case 'APPLY_FROM_DETECTION': {
+      const safeBpm =
+        action.bpm !== undefined && action.bpm >= MIN_BPM && action.bpm <= MAX_BPM
+          ? action.bpm
+          : undefined;
+      return {
+        ...state,
+        slots: action.slots,
+        ...(safeBpm !== undefined ? { bpm: safeBpm } : {}),
+        isPlaying: false,
+        currentSlotIndex: -1,
+      };
+    }
     case 'REORDER_SLOTS': {
       const slots = [...state.slots];
       const [item] = slots.splice(action.from, 1);
@@ -178,7 +195,7 @@ function progressionReducer(state: ProgressionState, action: ProgressionAction):
     case 'ASSIGN_CHORD_TO_ACTIVE_SLOT': {
       if (state.activeSlotIndex === null) return state;
       const slots = [...state.slots];
-      const beats = slots[state.activeSlotIndex]?.beats ?? 4;
+      const beats = slots[state.activeSlotIndex]?.beats ?? DEFAULT_SLOT_BEATS;
       slots[state.activeSlotIndex] = { root: action.root, type: action.chordType, beats };
       const nextEmpty = findNextEmptySlot(slots, state.activeSlotIndex);
       return { ...state, slots, activeSlotIndex: nextEmpty };
@@ -891,6 +908,8 @@ export function ChordProgressionPage() {
   const [isClearAllOpen, setIsClearAllOpen] = useState(false);
   const [isSuggestOpen, setIsSuggestOpen] = useState(false);
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
+  const [isChordImportOpen, setIsChordImportOpen] = useState(false);
+  const [isChordImportAuthPromptOpen, setIsChordImportAuthPromptOpen] = useState(false);
   const firstSlotRef = useRef<HTMLDivElement>(null);
 
   // Sync refs with state so callbacks stay stable (empty dep arrays)
@@ -954,7 +973,7 @@ export function ChordProgressionPage() {
       if (!loaded) return;
       stopPlayback();
       const raw = loaded as unknown as Record<string, unknown>;
-      const fallbackBeats = typeof raw.beatsPerChord === 'number' ? raw.beatsPerChord : 4;
+      const fallbackBeats = typeof raw.beatsPerChord === 'number' ? raw.beatsPerChord : DEFAULT_SLOT_BEATS;
       const slots = parseSavedSlots(Array.isArray(loaded.slots) ? loaded.slots : [], fallbackBeats);
       dispatch({ type: 'APPLY_SLOTS', slots });
       dispatch({ type: 'SET_BPM', bpm: loaded.bpm });
@@ -1139,7 +1158,7 @@ export function ChordProgressionPage() {
       if (overwriteAll) {
         dispatch({
           type: 'APPLY_SLOTS',
-          slots: parsed.map((s) => (s ? { ...s, beats: 4 } : null)),
+          slots: parsed.map((s) => (s ? { ...s, beats: DEFAULT_SLOT_BEATS } : null)),
         });
       } else {
         const result: (ProgressionSlot | null)[] = [...state.slots];
@@ -1147,7 +1166,7 @@ export function ChordProgressionPage() {
         for (let i = 0; i < result.length && chordIdx < parsed.length; i++) {
           if (result[i] === null) {
             const chord = parsed[chordIdx++];
-            result[i] = chord ? { ...chord, beats: 4 } : null;
+            result[i] = chord ? { ...chord, beats: DEFAULT_SLOT_BEATS } : null;
           }
         }
         dispatch({ type: 'APPLY_SLOTS', slots: result });
@@ -1225,7 +1244,7 @@ export function ChordProgressionPage() {
   const handleApplySuggestion = useCallback((chords: ChordSlot[]) => {
     if (state.isPlaying) stopPlayback();
     const filled = chords.slice(0, SLOT_COUNT).map(
-      (c): ProgressionSlot => ({ root: c.root, type: c.type, beats: 4 }),
+      (c): ProgressionSlot => ({ root: c.root, type: c.type, beats: DEFAULT_SLOT_BEATS }),
     );
     const slots: (ProgressionSlot | null)[] = [
       ...filled,
@@ -1236,6 +1255,32 @@ export function ChordProgressionPage() {
     if (detected) dispatch({ type: 'SET_SELECTED_KEY', key: detected });
     setPreviewSource(null);
   }, [state.isPlaying, stopPlayback]);
+
+  const handleChordImportClose = useCallback(() => setIsChordImportOpen(false), []);
+
+  const handleChordImportApply = useCallback(
+    (chords: Array<{ root: RootNote; type: ChordType }>, newBpm?: number) => {
+      if (isPlayingRef.current) stopPlayback();
+      // Collapse consecutive identical chords, then map to ProgressionSlot[]
+      const deduped: typeof chords = [];
+      for (const chord of chords) {
+        const prev = deduped[deduped.length - 1];
+        if (prev && prev.root === chord.root && prev.type === chord.type) continue;
+        deduped.push(chord);
+      }
+      const first = deduped.slice(0, SLOT_COUNT);
+      const slots: (ProgressionSlot | null)[] = [
+        ...first.map(c => ({ root: c.root, type: c.type, beats: DEFAULT_SLOT_BEATS })),
+        ...Array<null>(SLOT_COUNT - first.length).fill(null),
+      ];
+      dispatch({ type: 'APPLY_FROM_DETECTION', slots, bpm: newBpm });
+      const detected = detectKey(slots);
+      if (detected) dispatch({ type: 'SET_SELECTED_KEY', key: detected });
+      setPreviewSource(null);
+      setIsChordImportOpen(false);
+    },
+    [stopPlayback],
+  );
 
   const hasSlots = useMemo(() => state.slots.some(Boolean), [state.slots]);
 
@@ -1303,6 +1348,13 @@ export function ChordProgressionPage() {
               title="Suggest a chord progression using AI"
             >
               ✦ Suggest
+            </button>
+            <button
+              className="cp-ai-suggest-btn"
+              onClick={() => authStatus === 'authenticated' ? setIsChordImportOpen(true) : setIsChordImportAuthPromptOpen(true)}
+              title="Detect chord progression from a YouTube video"
+            >
+              ▶ YouTube
             </button>
             <button
               className={cn('cp-play-btn', state.isPlaying && 'cp-play-btn--playing')}
@@ -1400,6 +1452,15 @@ export function ChordProgressionPage() {
       />
 
       <AuthSignInDialog open={isAuthPromptOpen} onOpenChange={setIsAuthPromptOpen} />
+
+      <ChordProgressionImportModal
+        open={isChordImportOpen}
+        currentBpm={state.bpm}
+        maxSlots={SLOT_COUNT}
+        onClose={handleChordImportClose}
+        onApply={handleChordImportApply}
+      />
+      <AuthSignInDialog open={isChordImportAuthPromptOpen} onOpenChange={setIsChordImportAuthPromptOpen} />
 
       <Dialog open={isClearAllOpen} onOpenChange={setIsClearAllOpen}>
         <DialogContent
