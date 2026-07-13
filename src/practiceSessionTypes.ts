@@ -17,6 +17,7 @@ export interface SessionGoal {
   targetBpm?: number;
   skillFocus?: string;
   tools: ToolId[];
+  tags?: string[];
 }
 
 export interface ActiveSession {

@@ -45,6 +45,7 @@ vi.mock('@/api/practiceSessionApi', () => ({
   clearActiveSession: vi.fn(),
   savePracticeSession: vi.fn().mockResolvedValue(undefined),
   loadPracticeSessions: vi.fn().mockResolvedValue([]),
+  loadCachedPracticeSessions: vi.fn().mockReturnValue([]),
 }));
 
 vi.mock('@/hooks/usePracticeTimer', () => ({
@@ -444,13 +445,20 @@ describe('computeNudges', () => {
   });
 
   it('returns nudge for a tool unused for exactly 5 days', () => {
+    // Use an explicit `now` anchored to noon so `now - sessionDate` is exactly
+    // 5 * 86_400_000 ms, making the floor reliable regardless of time-of-day.
+    const now = new Date();
+    now.setHours(12, 0, 0, 0);
+    const sessionDate = new Date(now);
+    sessionDate.setDate(sessionDate.getDate() - 5);
+
     const sessions = [
       makeCompletedSession({
-        completedAt: daysAgoIso(5),
+        completedAt: sessionDate.toISOString(),
         toolTimes: { drums: 600 },
       }),
     ];
-    const nudges = computeNudges(sessions);
+    const nudges = computeNudges(sessions, now);
     expect(nudges.length).toBeGreaterThan(0);
     expect(nudges[0]).toContain('Drum Machine');
   });
@@ -992,5 +1000,261 @@ describe('PracticeSessionPage component', () => {
     expect(screen.getByText('Unfinished session')).toBeInTheDocument();
     expect(screen.getByText('Resume')).toBeInTheDocument();
     expect(screen.getByText('Discard')).toBeInTheDocument();
+  });
+});
+
+// ── Tag UI component tests ─────────────────────────────────────────────────
+
+describe('PracticeSessionPage – tag chip selection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('clicking a preset tag chip adds active styling to it', async () => {
+    render(<PracticeSessionPage />);
+    const btn = screen.getByRole('button', { name: 'Technique' });
+    // Unselected: transparent background
+    expect(btn.className).toContain('bg-transparent');
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    // Selected: ps-tag-chip-active CSS class
+    expect(btn.className).toContain('ps-tag-chip-active');
+  });
+
+  it('clicking a selected preset tag chip removes active styling', async () => {
+    render(<PracticeSessionPage />);
+    const btn = screen.getByRole('button', { name: 'Theory' });
+    // Select
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    expect(btn.className).toContain('ps-tag-chip-active');
+    // Deselect
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    expect(btn.className).toContain('bg-transparent');
+  });
+
+  it('all five preset tag chips are rendered in the setup phase', () => {
+    render(<PracticeSessionPage />);
+    expect(screen.getByRole('button', { name: 'Technique' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Theory' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Song' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ear Training' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Improvisation' })).toBeInTheDocument();
+  });
+});
+
+describe('PracticeSessionPage – custom tag input', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('pressing Enter in the custom tag input adds a chip and clears the input', async () => {
+    render(<PracticeSessionPage />);
+    const input = screen.getByPlaceholderText('Add custom tag…');
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'Sweep Picking' } });
+    });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' });
+    });
+    // Custom tag chips are rendered with " ×" suffix
+    expect(screen.getByText('Sweep Picking ×')).toBeInTheDocument();
+    expect(input).toHaveValue('');
+  });
+
+  it('clicking the Add button adds a chip and clears the input', async () => {
+    render(<PracticeSessionPage />);
+    const input = screen.getByPlaceholderText('Add custom tag…');
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'Vibrato' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    });
+    expect(screen.getByText('Vibrato ×')).toBeInTheDocument();
+    expect(input).toHaveValue('');
+  });
+
+  it('Add button is disabled when the input is empty', () => {
+    render(<PracticeSessionPage />);
+    const addBtn = screen.getByRole('button', { name: 'Add' });
+    expect(addBtn).toBeDisabled();
+  });
+
+  it('Add button becomes enabled once the input has content', async () => {
+    render(<PracticeSessionPage />);
+    const input = screen.getByPlaceholderText('Add custom tag…');
+    const addBtn = screen.getByRole('button', { name: 'Add' });
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'Legato' } });
+    });
+    expect(addBtn).not.toBeDisabled();
+  });
+
+  it('typing a case-insensitive duplicate of an already-selected tag is rejected', async () => {
+    render(<PracticeSessionPage />);
+    // Select the 'Technique' preset tag first
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Technique' }));
+    });
+    // Try to add 'technique' (lowercase) via the custom input
+    const input = screen.getByPlaceholderText('Add custom tag…');
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'technique' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    });
+    // 'technique' should NOT appear as a custom chip since 'Technique' is already selected
+    expect(screen.queryByText('technique ×')).not.toBeInTheDocument();
+  });
+
+  it('clicking a custom tag chip removes it', async () => {
+    render(<PracticeSessionPage />);
+    const input = screen.getByPlaceholderText('Add custom tag…');
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'Tapping' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    });
+    expect(screen.getByText('Tapping ×')).toBeInTheDocument();
+    // Click the chip button to deselect/remove it
+    await act(async () => {
+      fireEvent.click(screen.getByText('Tapping ×'));
+    });
+    expect(screen.queryByText('Tapping ×')).not.toBeInTheDocument();
+  });
+});
+
+describe('PracticeSessionPage – tags in session summary', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('selected tags appear as chips in the session complete summary', async () => {
+    render(<PracticeSessionPage />);
+
+    // Select the 'Theory' preset tag
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Theory' }));
+    });
+
+    // Start the session
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Start Session' }));
+    });
+
+    // End the session
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'End Session' }));
+    });
+
+    // Session summary is shown
+    expect(screen.getByText('Session complete')).toBeInTheDocument();
+    // The tag should appear in the summary (as a span chip)
+    const theoryElements = screen.getAllByText('Theory');
+    expect(theoryElements.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('PracticeSessionPage – history filter tags', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('filter chip narrows history to sessions with that tag', async () => {
+    const { loadPracticeSessions } = await import('@/api/practiceSessionApi');
+    // Use custom tag names (not preset) to avoid ambiguity with setup form buttons
+    // Use completedAt far in the past so sessions don't appear in the weekly calendar dot,
+    // which would create duplicate text matches for the same duration string.
+    const oldDate = daysAgoIso(20);
+    vi.mocked(loadPracticeSessions).mockResolvedValue([
+      makeCompletedSession({ id: 's1', goal: makeGoal({ tags: ['Jazz'] }), durationSeconds: 1920, completedAt: oldDate, startedAt: oldDate }),    // "32m"
+      makeCompletedSession({ id: 's2', goal: makeGoal({ tags: ['Blues'] }), durationSeconds: 3660, completedAt: oldDate, startedAt: oldDate }),   // "1h 1m"
+    ]);
+
+    render(<PracticeSessionPage />);
+    await act(async () => {}); // wait for history to load
+
+    // Both sessions visible initially
+    expect(screen.getByText('32m')).toBeInTheDocument();
+    expect(screen.getByText('1h 1m')).toBeInTheDocument();
+
+    // Click the 'Jazz' filter chip (a button, unlike the session tag spans)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Jazz' }));
+    });
+
+    // Only the Jazz session (32m) should be visible; Blues (1h 1m) should be hidden
+    expect(screen.getByText('32m')).toBeInTheDocument();
+    expect(screen.queryByText('1h 1m')).not.toBeInTheDocument();
+  });
+
+  it('Clear button restores the full session list', async () => {
+    const { loadPracticeSessions } = await import('@/api/practiceSessionApi');
+    // Use durations that don't collide with the "15m/30m/45m/60m" preset buttons,
+    // and completedAt far in the past to avoid calendar-dot duplicate text.
+    const oldDate = daysAgoIso(20);
+    vi.mocked(loadPracticeSessions).mockResolvedValue([
+      makeCompletedSession({ id: 's1', goal: makeGoal({ tags: ['Funk'] }), durationSeconds: 1020, completedAt: oldDate, startedAt: oldDate }),   // "17m"
+      makeCompletedSession({ id: 's2', goal: makeGoal({ tags: ['Soul'] }), durationSeconds: 2520, completedAt: oldDate, startedAt: oldDate }),  // "42m"
+    ]);
+
+    render(<PracticeSessionPage />);
+    await act(async () => {}); // wait for history to load
+
+    // Activate a filter
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Funk' }));
+    });
+
+    // Only Funk session visible
+    expect(screen.getByText('17m')).toBeInTheDocument();
+    expect(screen.queryByText('42m')).not.toBeInTheDocument();
+
+    // Click Clear to remove the filter
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    });
+
+    // Both sessions visible again
+    expect(screen.getByText('17m')).toBeInTheDocument();
+    expect(screen.getByText('42m')).toBeInTheDocument();
+  });
+
+  it('untagged session count is shown when a filter is active and untagged sessions exist', async () => {
+    const { loadPracticeSessions } = await import('@/api/practiceSessionApi');
+    vi.mocked(loadPracticeSessions).mockResolvedValue([
+      makeCompletedSession({ id: 's1', goal: makeGoal({ tags: ['Classical'] }), durationSeconds: 600 }),
+      makeCompletedSession({ id: 's2', durationSeconds: 300 }),  // untagged (no goal.tags)
+    ]);
+
+    render(<PracticeSessionPage />);
+    await act(async () => {}); // wait for history to load
+
+    // Activate filter on 'Classical'
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Classical' }));
+    });
+
+    // The "N untagged sessions hidden" hint should appear
+    expect(screen.getByText('1 untagged session hidden')).toBeInTheDocument();
+  });
+
+  it('filter bar is not shown when no history sessions have tags', async () => {
+    const { loadPracticeSessions } = await import('@/api/practiceSessionApi');
+    vi.mocked(loadPracticeSessions).mockResolvedValue([
+      makeCompletedSession({ id: 's1', goal: makeGoal({ tags: [] }), durationSeconds: 600 }),
+    ]);
+
+    render(<PracticeSessionPage />);
+    await act(async () => {}); // wait for history to load
+
+    expect(screen.queryByText('Filter:')).not.toBeInTheDocument();
   });
 });

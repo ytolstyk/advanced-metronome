@@ -17,6 +17,23 @@ export const TOOL_META: Record<ToolId, { label: string; route: string; short: st
 
 export const NUDGE_DAYS = 5;
 
+export const PRESET_TAGS: string[] = ['Technique', 'Theory', 'Song', 'Ear Training', 'Improvisation'];
+
+export function computeWeeklyTagBreakdown(
+  sessions: CompletedSession[],
+  weekDateKeys: string[],
+): Record<string, number> {
+  const dateKeySet = new Set(weekDateKeys);
+  const totals: Record<string, number> = {};
+  for (const session of sessions) {
+    if (!dateKeySet.has(formatLocalDate(new Date(session.completedAt)))) continue;
+    for (const tag of session.goal.tags ?? []) {
+      totals[tag] = (totals[tag] ?? 0) + session.durationSeconds;
+    }
+  }
+  return totals;
+}
+
 export function formatLocalDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -67,20 +84,23 @@ export function computeStreak(sessions: CompletedSession[], now = new Date()): n
 }
 
 export function computeWeeklyCalendar(sessions: CompletedSession[], now = new Date()): CalendarDay[] {
+  const byDate = new Map<string, number>();
+  for (const s of sessions) {
+    const key = formatLocalDate(new Date(s.completedAt));
+    byDate.set(key, (byDate.get(key) ?? 0) + s.durationSeconds);
+  }
   const days: CalendarDay[] = [];
   const dayAbbr = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const dateKey = formatLocalDate(d);
-    const daySessions = sessions.filter(
-      s => formatLocalDate(new Date(s.completedAt)) === dateKey,
-    );
+    const durationSeconds = byDate.get(dateKey) ?? 0;
     days.push({
       dateKey,
       dayLabel: dayAbbr[d.getDay()],
-      durationSeconds: daySessions.reduce((acc, s) => acc + s.durationSeconds, 0),
-      hasSession: daySessions.length > 0,
+      durationSeconds,
+      hasSession: durationSeconds > 0,
       isToday: i === 0,
     });
   }

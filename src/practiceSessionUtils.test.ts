@@ -2,12 +2,14 @@ import { describe, it, expect } from 'vitest';
 import type { ToolId } from './practiceSessionTypes';
 import {
   TOOL_META,
+  PRESET_TAGS,
   formatDuration,
   formatLocalDate,
   formatShortDuration,
   computeStreak,
   computeWeeklyCalendar,
   computeNudges,
+  computeWeeklyTagBreakdown,
   NUDGE_DAYS,
 } from './practiceSessionUtils';
 import type { CompletedSession } from './practiceSessionTypes';
@@ -269,5 +271,176 @@ describe('computeNudges', () => {
     ];
     const nudges = computeNudges(sessions, now);
     expect(nudges.length).toBeLessThanOrEqual(3);
+  });
+});
+
+// ── PRESET_TAGS ───────────────────────────────────────────────────────────────
+
+describe('PRESET_TAGS', () => {
+  it('is an array', () => {
+    expect(Array.isArray(PRESET_TAGS)).toBe(true);
+  });
+
+  it('has at least one entry', () => {
+    expect(PRESET_TAGS.length).toBeGreaterThan(0);
+  });
+
+  it('contains only strings', () => {
+    for (const tag of PRESET_TAGS) {
+      expect(typeof tag).toBe('string');
+    }
+  });
+
+  it('has exactly 5 entries', () => {
+    expect(PRESET_TAGS).toHaveLength(5);
+  });
+
+  it('contains all five expected preset tag names', () => {
+    expect(PRESET_TAGS).toContain('Technique');
+    expect(PRESET_TAGS).toContain('Theory');
+    expect(PRESET_TAGS).toContain('Song');
+    expect(PRESET_TAGS).toContain('Ear Training');
+    expect(PRESET_TAGS).toContain('Improvisation');
+  });
+
+  it('has no duplicate entries', () => {
+    const unique = new Set(PRESET_TAGS);
+    expect(unique.size).toBe(PRESET_TAGS.length);
+  });
+});
+
+// ── computeWeeklyTagBreakdown ─────────────────────────────────────────────────
+
+describe('computeWeeklyTagBreakdown', () => {
+  it('returns empty object when sessions list is empty', () => {
+    const now = new Date('2024-03-10T12:00:00Z');
+    const calendar = computeWeeklyCalendar([], now);
+    expect(computeWeeklyTagBreakdown([], calendar.map(d => d.dateKey))).toEqual({});
+  });
+
+  it('returns empty object when no sessions fall within the 7-day window', () => {
+    const now = new Date('2024-03-10T12:00:00Z');
+    const calendar = computeWeeklyCalendar([], now);
+    const oldSession: CompletedSession = {
+      id: 's1',
+      goal: { tools: [], tags: ['Theory'] },
+      startedAt: '2024-02-01T10:00:00.000Z',
+      completedAt: '2024-02-01T10:30:00.000Z',
+      durationSeconds: 1800,
+      toolTimes: {},
+      notes: '',
+    };
+    expect(computeWeeklyTagBreakdown([oldSession], calendar.map(d => d.dateKey))).toEqual({});
+  });
+
+  it('sums durationSeconds per tag for sessions inside the window', () => {
+    const now = new Date(2024, 2, 10, 12, 0, 0); // March 10, 2024 noon local
+    const todayIso = new Date(2024, 2, 10, 10, 0, 0).toISOString();
+    const sessions: CompletedSession[] = [
+      {
+        id: 's1',
+        goal: { tools: [], tags: ['Theory', 'Technique'] },
+        startedAt: todayIso,
+        completedAt: todayIso,
+        durationSeconds: 600,
+        toolTimes: {},
+        notes: '',
+      },
+      {
+        id: 's2',
+        goal: { tools: [], tags: ['Theory'] },
+        startedAt: todayIso,
+        completedAt: todayIso,
+        durationSeconds: 1200,
+        toolTimes: {},
+        notes: '',
+      },
+    ];
+    const calendar = computeWeeklyCalendar(sessions, now);
+    const breakdown = computeWeeklyTagBreakdown(sessions, calendar.map(d => d.dateKey));
+    expect(breakdown['Theory']).toBe(1800);    // 600 + 1200
+    expect(breakdown['Technique']).toBe(600);
+  });
+
+  it('ignores sessions outside the window even when they have matching tags', () => {
+    const now = new Date(2024, 2, 10, 12, 0, 0); // March 10
+    const oldIso = new Date(2024, 1, 8, 10, 0, 0).toISOString();
+    const insideIso = new Date(2024, 2, 10, 10, 0, 0).toISOString();
+    const sessions: CompletedSession[] = [
+      {
+        id: 'inside',
+        goal: { tools: [], tags: ['Song'] },
+        startedAt: insideIso,
+        completedAt: insideIso,
+        durationSeconds: 500,
+        toolTimes: {},
+        notes: '',
+      },
+      {
+        id: 'outside',
+        goal: { tools: [], tags: ['Song'] },
+        startedAt: oldIso,
+        completedAt: oldIso,
+        durationSeconds: 9999,
+        toolTimes: {},
+        notes: '',
+      },
+    ];
+    const calendar = computeWeeklyCalendar(sessions, now);
+    const breakdown = computeWeeklyTagBreakdown(sessions, calendar.map(d => d.dateKey));
+    expect(breakdown['Song']).toBe(500);
+  });
+
+  it('handles sessions with no tags (empty array)', () => {
+    const now = new Date(2024, 2, 10, 12, 0, 0);
+    const todayIso = new Date(2024, 2, 10, 10, 0, 0).toISOString();
+    const sessions: CompletedSession[] = [
+      {
+        id: 's1',
+        goal: { tools: [], tags: [] },
+        startedAt: todayIso,
+        completedAt: todayIso,
+        durationSeconds: 600,
+        toolTimes: {},
+        notes: '',
+      },
+    ];
+    const calendar = computeWeeklyCalendar(sessions, now);
+    expect(computeWeeklyTagBreakdown(sessions, calendar.map(d => d.dateKey))).toEqual({});
+  });
+
+  it('handles sessions with undefined tags gracefully', () => {
+    const now = new Date(2024, 2, 10, 12, 0, 0);
+    const todayIso = new Date(2024, 2, 10, 10, 0, 0).toISOString();
+    const sessions: CompletedSession[] = [
+      {
+        id: 's1',
+        goal: { tools: [] },
+        startedAt: todayIso,
+        completedAt: todayIso,
+        durationSeconds: 600,
+        toolTimes: {},
+        notes: '',
+      },
+    ];
+    const calendar = computeWeeklyCalendar(sessions, now);
+    expect(computeWeeklyTagBreakdown(sessions, calendar.map(d => d.dateKey))).toEqual({});
+  });
+
+  it('session completed at 23:59 local time lands in the correct day bucket', () => {
+    const now = new Date(2024, 2, 10, 12, 0, 0); // March 10 noon local
+    const lateNight = new Date(2024, 2, 10, 23, 59, 0); // March 10 23:59 local
+    const session: CompletedSession = {
+      id: 's-midnight',
+      goal: { tools: [], tags: ['Improvisation'] },
+      startedAt: lateNight.toISOString(),
+      completedAt: lateNight.toISOString(),
+      durationSeconds: 300,
+      toolTimes: {},
+      notes: '',
+    };
+    const calendar = computeWeeklyCalendar([session], now);
+    const breakdown = computeWeeklyTagBreakdown([session], calendar.map(d => d.dateKey));
+    expect(breakdown['Improvisation']).toBe(300);
   });
 });

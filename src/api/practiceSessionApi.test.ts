@@ -1,13 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ActiveSession, CompletedSession } from '../practiceSessionTypes';
 
+// vi.hoisted() ensures mock refs are stable before vi.mock() hoisting runs.
+const { mockCreate, mockList } = vi.hoisted(() => {
+  const mockCreate = vi.fn().mockResolvedValue({});
+  const mockList = vi.fn().mockResolvedValue({ data: [] });
+  return { mockCreate, mockList };
+});
+
 // Mock aws-amplify/data and authUtils before importing the module under test
 vi.mock('aws-amplify/data', () => ({
   generateClient: vi.fn(() => ({
     models: {
       PracticeSession: {
-        create: vi.fn().mockResolvedValue({}),
-        list: vi.fn().mockResolvedValue({ data: [] }),
+        create: mockCreate,
+        list: mockList,
       },
     },
   })),
@@ -17,12 +24,15 @@ vi.mock('./authUtils', () => ({
   isAuthenticated: vi.fn().mockResolvedValue(false),
 }));
 
+import { isAuthenticated } from './authUtils';
+
 import {
   saveActiveSession,
   loadActiveSession,
   clearActiveSession,
   savePracticeSession,
   loadPracticeSessions,
+  loadCachedPracticeSessions,
 } from './practiceSessionApi';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -76,6 +86,10 @@ beforeEach(() => {
     configurable: true,
   });
   vi.clearAllMocks();
+  // Reset mock implementations to safe defaults after clearAllMocks
+  mockCreate.mockResolvedValue({});
+  mockList.mockResolvedValue({ data: [] });
+  vi.mocked(isAuthenticated).mockResolvedValue(false);
 });
 
 // ── saveActiveSession ──────────────────────────────────────────────────────
@@ -221,11 +235,191 @@ describe('loadPracticeSessions', () => {
   });
 
   it('returns empty array when stored value is corrupt and not authenticated', async () => {
-    const { isAuthenticated } = await import('./authUtils');
-    vi.mocked(isAuthenticated).mockResolvedValue(false);
+    const { isAuthenticated: iAuth } = await import('./authUtils');
+    vi.mocked(iAuth).mockResolvedValue(false);
 
     localStorageMock.store['practice-session.history'] = 'bad-json{{{';
     const result = await loadPracticeSessions();
     expect(result).toEqual([]);
+  });
+});
+
+// ── savePracticeSession – tag serialization ────────────────────────────────
+
+// Helper: a minimal PracticeSession cloud record for list() responses.
+function makePracticeSessionRecord(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: 'cloud-session-1',
+    completedAt: '2024-03-10T12:00:00.000Z',
+    startedAt: '2024-03-10T11:00:00.000Z',
+    actualDurationSeconds: 3600,
+    goalDurationMinutes: null,
+    goalBpm: null,
+    goalSkill: null,
+    goalToolsJson: JSON.stringify([]),
+    toolTimesJson: JSON.stringify({}),
+    notes: null,
+    goalTagsJson: JSON.stringify([]),
+    ...overrides,
+  };
+}
+
+describe('savePracticeSession – goalTagsJson serialization', () => {
+  it('serializes tags to goalTagsJson when calling cloud create', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(true);
+
+    const session = makeCompletedSession({
+      goal: { durationMinutes: 30, tools: ['drums'], tags: ['Theory', 'Song'] },
+    });
+    await savePracticeSession(session);
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        goalTagsJson: JSON.stringify(['Theory', 'Song']),
+      }),
+    );
+  });
+
+  it('serializes empty tags array when goal.tags is absent', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(true);
+
+    const session = makeCompletedSession();
+    await savePracticeSession(session);
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        goalTagsJson: JSON.stringify([]),
+      }),
+    );
+  });
+
+  it('serializes empty tags array when goal.tags is explicitly []', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(true);
+
+    const session = makeCompletedSession({
+      goal: { durationMinutes: 30, tools: ['drums'], tags: [] },
+    });
+    await savePracticeSession(session);
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        goalTagsJson: '[]',
+      }),
+    );
+  });
+});
+
+// ── loadPracticeSessions – tag deserialization ────────────────────────────
+
+describe('loadPracticeSessions – goalTagsJson deserialization', () => {
+  it('deserializes a valid tags array from cloud record', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(true);
+    mockList.mockResolvedValue({
+      data: [
+        makePracticeSessionRecord({
+          goalTagsJson: JSON.stringify(['Theory', 'Technique']),
+        }),
+      ],
+    });
+
+    const sessions = await loadPracticeSessions();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].goal.tags).toEqual(['Theory', 'Technique']);
+  });
+
+  it('falls back to [] when goalTagsJson is null', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(true);
+    mockList.mockResolvedValue({
+      data: [makePracticeSessionRecord({ goalTagsJson: null })],
+    });
+
+    const sessions = await loadPracticeSessions();
+    expect(sessions[0].goal.tags).toEqual([]);
+  });
+
+  it('falls back to [] when goalTagsJson is invalid JSON', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(true);
+    mockList.mockResolvedValue({
+      data: [makePracticeSessionRecord({ goalTagsJson: 'not-json{{{' })],
+    });
+
+    const sessions = await loadPracticeSessions();
+    expect(sessions[0].goal.tags).toEqual([]);
+  });
+
+  it('falls back to [] when goalTagsJson parses to a non-array', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(true);
+    mockList.mockResolvedValue({
+      data: [makePracticeSessionRecord({ goalTagsJson: JSON.stringify({ foo: 'bar' }) })],
+    });
+
+    const sessions = await loadPracticeSessions();
+    expect(sessions[0].goal.tags).toEqual([]);
+  });
+
+  it('filters out non-string elements, keeping valid strings', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(true);
+    mockList.mockResolvedValue({
+      data: [
+        makePracticeSessionRecord({
+          goalTagsJson: JSON.stringify(['Theory', 42, null]),
+        }),
+      ],
+    });
+
+    const sessions = await loadPracticeSessions();
+    // Non-string elements (42, null) are silently dropped; valid strings are kept.
+    expect(sessions[0].goal.tags).toEqual(['Theory']);
+  });
+
+  it('returns an empty tags array when goalTagsJson is an empty JSON array', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(true);
+    mockList.mockResolvedValue({
+      data: [makePracticeSessionRecord({ goalTagsJson: '[]' })],
+    });
+
+    const sessions = await loadPracticeSessions();
+    expect(sessions[0].goal.tags).toEqual([]);
+  });
+});
+
+// ── loadCachedPracticeSessions ─────────────────────────────────────────────
+
+describe('loadCachedPracticeSessions', () => {
+  it('returns an empty array when nothing is stored', () => {
+    expect(loadCachedPracticeSessions()).toEqual([]);
+  });
+
+  it('returns the sessions stored in localStorage', () => {
+    const sessions = [
+      makeCompletedSession({ id: 'cached-1' }),
+      makeCompletedSession({ id: 'cached-2' }),
+    ];
+    localStorageMock.store['practice-session.history'] = JSON.stringify(sessions);
+    const result = loadCachedPracticeSessions();
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe('cached-1');
+    expect(result[1].id).toBe('cached-2');
+  });
+
+  it('returns an empty array when the stored value is corrupt JSON', () => {
+    localStorageMock.store['practice-session.history'] = 'bad-json{{{';
+    expect(loadCachedPracticeSessions()).toEqual([]);
+  });
+
+  it('is synchronous — does not return a Promise', () => {
+    const result = loadCachedPracticeSessions();
+    expect(result).not.toBeInstanceOf(Promise);
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it('returns the same data that savePracticeSession wrote to localStorage', async () => {
+    const session = makeCompletedSession({ id: 'round-trip' });
+    await savePracticeSession(session);
+    const cached = loadCachedPracticeSessions();
+    expect(cached).toHaveLength(1);
+    expect(cached[0].id).toBe('round-trip');
   });
 });

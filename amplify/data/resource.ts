@@ -173,6 +173,7 @@ const schema = a.schema({
     goalBpm: a.integer(),
     goalSkill: a.string(),
     goalToolsJson: a.string(),
+    goalTagsJson: a.string(),
     actualDurationSeconds: a.integer().required(),
     toolTimesJson: a.string().required(),
     notes: a.string(),

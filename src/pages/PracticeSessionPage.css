@@ -365,6 +365,64 @@
   color: #93c5fd;
 }
 
+/* ── Tag chips ───────────────────────────────────────────────────────────── */
+
+.ps-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.65rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  background: #1a1030;
+  border: 1px solid #2d1d52;
+  color: #9d7fdb;
+  white-space: nowrap;
+}
+
+button.ps-tag-chip {
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+button.ps-tag-chip:hover {
+  background: #231540;
+  border-color: #4a2d8a;
+  color: #b89fe8;
+}
+
+.ps-tag-chip-active {
+  background: #3b1f8c;
+  border-color: #6d44cf;
+  color: #d4b9ff;
+}
+
+.ps-tag-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 0.75rem;
+}
+
+.ps-tag-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #1e1e1e;
+}
+
+.ps-tag-breakdown-item {
+  font-size: 0.7rem;
+  color: #666;
+}
+
+.ps-tag-breakdown-item strong {
+  color: #9d7fdb;
+  font-weight: 500;
+}
+
 @media (max-width: 480px) {
   .ps-timer {
     font-size: 3rem;
