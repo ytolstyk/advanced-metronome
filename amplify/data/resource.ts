@@ -3,6 +3,7 @@ import { geminiSuggestFunction } from '../functions/gemini-suggest/resource';
 import { geminiPlanFunction } from '../functions/gemini-plan/resource';
 import { geminiDrumsFunction } from '../functions/gemini-drums/resource';
 import { geminiChordsFunction } from '../functions/gemini-chords/resource';
+import { geminiTabsFunction } from '../functions/gemini-tabs/resource';
 
 const schema = a.schema({
   // One record per user — auto-saved on every change
@@ -224,6 +225,26 @@ const schema = a.schema({
     planJson:  a.string().required(),
     generatedAt: a.string().required(),
   }).authorization(allow => [allow.owner()]),
+
+  // Rate-limit record for AI guitar tab transcription — one per user
+  TabTranscriptionUsage: a.model({
+    lastTranscribedAt: a.string().required(), // ISO timestamp
+  }).authorization(allow => [allow.owner()]),
+
+  transcribeGuitarTab: a.query()
+    .arguments({
+      audioBase64:       a.string().required(),
+      mimeType:          a.string().required(),
+      tuningName:        a.string().required(),
+      openMidi:          a.string().required(),
+      stringCount:       a.integer().required(),
+      bpm:               a.integer().required(),
+      timeSigNumerator:  a.integer().required(),
+      timeSigDenominator: a.integer().required(),
+    })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(geminiTabsFunction)),
 });
 
 export type Schema = ClientSchema<typeof schema>;

@@ -779,6 +779,12 @@ export type TabEditorAction =
   | { type: 'TOGGLE_REPEAT_OPEN'; measureIndex: number }
   | { type: 'SET_REPEAT_CLOSE'; measureIndex: number; count: number | null }
   | {
+      type: 'INSERT_MEASURES_AT'
+      measureIndex: number
+      measures: Measure[]
+      masterBars: MasterBar[]
+    }
+  | {
       type: 'IMPORT_TRACK'
       track: TabTrack
       fileBase64: string
@@ -1641,6 +1647,36 @@ function tabEditorReducerInner(
         redoStack: [],
         pendingOverflow: null,
       }
+
+    case 'INSERT_MEASURES_AT': {
+      if (action.measures.length !== action.masterBars.length || action.measures.length === 0) {
+        return state
+      }
+      const s = pushUndo(state)
+      const idx = Math.max(0, Math.min(action.measureIndex, s.track.measures.length))
+
+      const measures = [...s.track.measures]
+      const masterBars = [...s.track.masterBars]
+      measures.splice(idx, 0, ...action.measures)
+      masterBars.splice(idx, 0, ...action.masterBars)
+
+      // Seed BPM on the first inserted masterBar if it doesn't have one, so playback
+      // inherits the tempo that was active at the insertion point.
+      const insertedMB = masterBars[idx]!
+      if (insertedMB.bpm === undefined) {
+        const inheritedBpm = effectiveBpmAt(s.track, idx)
+        masterBars[idx] = { ...insertedMB, bpm: inheritedBpm }
+      }
+
+      return {
+        ...s,
+        track: { ...s.track, measures, masterBars },
+        cursor: { measureIndex: idx, beatIndex: 0, stringIndex: s.track.stringCount },
+        selection: null,
+        selectionAnchor: null,
+        noteSelection: [],
+      }
+    }
 
     case 'IMPORT_TRACK': {
       const track: TabTrack = {

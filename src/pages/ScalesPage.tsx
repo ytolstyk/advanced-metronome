@@ -82,6 +82,14 @@ function toggleCls(active: boolean, disabled = false): string {
   return cn(BASE_TOGGLE, disabled ? DISABLED_CLS : cn("transition-colors", active ? ACTIVE_CLS : INACTIVE_CLS));
 }
 
+// ── Isolate mode styling ─────────────────────────────────────────────────────
+const ISOLATE_FILL = "#b35c00";
+const ISOLATE_STROKE = "#ffb347";
+const ISOLATE_DIM_OPACITY = 0.15;
+const DEFAULT_STROKE_WIDTH = 1.5;
+const ISOLATED_STROKE_WIDTH = 2;
+const ISOLATED_ROOT_STROKE_WIDTH = 3;
+
 const DEGREE_LABELS: Record<number, string> = {
   0: 'R', 1: '♭2', 2: '2', 3: '♭3', 4: '3', 5: '4',
   6: '♭5', 7: '5', 8: '♭6', 9: '6', 10: '♭7', 11: '7',
@@ -107,10 +115,168 @@ interface FretboardProps {
   showDegrees?: boolean;
   showCaged?: boolean;
   pentatonicSet?: Set<number> | null;
+  isolateMode?: boolean;
+  isolatedKeys?: Set<string>;
+  onIsolateDrag?: (dotKeys: string[]) => void;
 }
 
-function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practiceMode, showDegrees, showCaged, pentatonicSet }: FretboardProps) {
+const DRAG_THRESHOLD = 4;
+
+function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practiceMode, showDegrees, showCaged, pentatonicSet, isolateMode, isolatedKeys, onIsolateDrag }: FretboardProps) {
   const [hoveredDotKey, setHoveredDotKey] = useState<string | null>(null);
+  const [dragBox, setDragBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const hasIsolated = (isolatedKeys?.size ?? 0) > 0;
+
+  // Build note dots. Memoized so a `dragBox` update during a rubber-band drag (which
+  // fires on every pointermove) doesn't rebuild ~150 SVG dot elements on every frame.
+  // hoveredDotKey is deliberately excluded from the deps below — the hover tooltip is
+  // looked up separately from `dotPositions` so hovering doesn't rebuild every dot either.
+  const { noteDots, dotPositions } = useMemo(() => {
+    const noteDots: React.ReactNode[] = [];
+    const dotPositions: { dotKey: string; cx: number; cy: number; midiNote: number; noteName: string; interval: number }[] = [];
+
+    for (let svgStr = 0; svgStr < NUM_STRINGS; svgStr++) {
+      // svgStr 0 = high e (string index 5 in OPEN_MIDI), 5 = low E (string index 0)
+      const midiStringIdx = NUM_STRINGS - 1 - svgStr;
+      const cy = stringY(svgStr);
+
+      for (let fret = 0; fret <= NUM_FRETS; fret++) {
+        const midiNote = OPEN_MIDI[midiStringIdx] + fret;
+        const pc = midiNote % 12;
+        const interval = (pc - rootPc + 12) % 12;
+        if (!intervals.has(interval)) continue;
+
+        const isRoot = interval === 0;
+        const dotKey = `${svgStr}-${fret}`;
+        const isHighlighted = dotKey === highlightedDotKey;
+        const cx =
+          fret === 0
+            ? LEFT_PAD + NUT_X / 2 // open string: center in nut area
+            : fretX(fret) - FRET_W / 2; // fretted: center between fret lines
+
+        let fill = isHighlighted ? "#22dd88" : isRoot ? "#5b7fff" : "#2a2a4c";
+        let stroke = isHighlighted ? "#66ffbb" : isRoot ? "#8eaaff" : "#6060a0";
+        const noteName = NOTE_NAMES[pc];
+        const isPentatonicDimmed = pentatonicSet != null && !pentatonicSet.has(interval);
+        let dotOpacity = isPentatonicDimmed ? 0.28 : 1;
+
+        const isIsolated = isolatedKeys?.has(dotKey) ?? false;
+        let dotStrokeWidth = DEFAULT_STROKE_WIDTH;
+        if (isolateMode) {
+          if (isIsolated) {
+            fill = ISOLATE_FILL;
+            stroke = ISOLATE_STROKE;
+            dotOpacity = 1;
+            dotStrokeWidth = isRoot ? ISOLATED_ROOT_STROKE_WIDTH : ISOLATED_STROKE_WIDTH;
+          } else if (hasIsolated) {
+            dotOpacity = Math.min(dotOpacity, ISOLATE_DIM_OPACITY);
+          }
+        }
+        const displayLabel = showDegrees ? DEGREE_LABELS[interval] : noteName;
+
+        dotPositions.push({ dotKey, cx, cy, midiNote, noteName, interval });
+
+        noteDots.push(
+          <g
+            key={dotKey}
+            onClick={isolateMode ? undefined : () => onNoteClick(midiNote, noteName, dotKey)}
+            onMouseEnter={() => setHoveredDotKey(dotKey)}
+            onMouseLeave={() => setHoveredDotKey(null)}
+            style={{ cursor: practiceMode ? "crosshair" : "pointer", opacity: dotOpacity }}
+            role="button"
+            aria-label={`${noteName} on ${STRING_NAMES_TOP[svgStr]} string fret ${fret}`}
+          >
+            <circle
+              cx={cx}
+              cy={cy}
+              r={CIRCLE_R}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={dotStrokeWidth}
+            />
+            <text
+              x={cx}
+              y={cy}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize="11"
+              fontWeight="700"
+              fill="white"
+              style={{ pointerEvents: "none", userSelect: "none" }}
+            >
+              {displayLabel}
+            </text>
+          </g>,
+        );
+      }
+    }
+
+    return { noteDots, dotPositions };
+  }, [
+    rootPc, intervals, onNoteClick, highlightedDotKey, practiceMode,
+    showDegrees, pentatonicSet, isolateMode, isolatedKeys, hasIsolated,
+  ]);
+
+  const hoveredDot = useMemo(() => {
+    if (!hoveredDotKey) return null;
+    const found = dotPositions.find((d) => d.dotKey === hoveredDotKey);
+    return found ? { cx: found.cx, cy: found.cy, interval: found.interval, noteName: found.noteName } : null;
+  }, [hoveredDotKey, dotPositions]);
+
+  function toSvgCoords(e: React.PointerEvent): { x: number; y: number } {
+    const svg = svgRef.current;
+    if (!svg) return { x: 0, y: 0 };
+    const rect = svg.getBoundingClientRect();
+    const scaleX = SVG_W / rect.width;
+    const scaleY = SVG_H / rect.height;
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  }
+
+  function handlePointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    if (!isolateMode || dragStartRef.current) return; // first pointer wins (ignore a second touch mid-drag)
+    const pt = toSvgCoords(e);
+    dragStartRef.current = pt;
+    setDragBox({ x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y });
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (!isolateMode || !dragStartRef.current || e.buttons === 0) return;
+    const pt = toSvgCoords(e);
+    setDragBox({ x0: dragStartRef.current.x, y0: dragStartRef.current.y, x1: pt.x, y1: pt.y });
+  }
+
+  function handlePointerUp(e: React.PointerEvent<SVGSVGElement>) {
+    if (!isolateMode || !dragStartRef.current) return;
+    const start = dragStartRef.current;
+    const pt = toSvgCoords(e);
+    dragStartRef.current = null;
+    setDragBox(null);
+    if (Math.abs(pt.x - start.x) < DRAG_THRESHOLD && Math.abs(pt.y - start.y) < DRAG_THRESHOLD) {
+      // Plain click. Pointer capture retargets the native click event away from
+      // the note <g>, so resolve which dot was hit here instead.
+      const hit = dotPositions.find(
+        (d) => Math.hypot(d.cx - pt.x, d.cy - pt.y) <= CIRCLE_R,
+      );
+      if (hit) onNoteClick(hit.midiNote, hit.noteName, hit.dotKey);
+      return;
+    }
+    const minX = Math.min(start.x, pt.x);
+    const maxX = Math.max(start.x, pt.x);
+    const minY = Math.min(start.y, pt.y);
+    const maxY = Math.max(start.y, pt.y);
+    const containedKeys = dotPositions
+      .filter((d) => d.cx >= minX && d.cx <= maxX && d.cy >= minY && d.cy <= maxY)
+      .map((d) => d.dotKey);
+    if (containedKeys.length > 0) onIsolateDrag?.(containedKeys);
+  }
+
+  function handlePointerCancel() {
+    dragStartRef.current = null;
+    setDragBox(null);
+  }
 
   // Build CAGED bands
   const cagedBands: React.ReactNode[] = [];
@@ -136,74 +302,6 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
             fontSize="9" fontWeight="700" fill={shape.color} opacity={0.65}
           >
             {shape.name}
-          </text>
-        </g>,
-      );
-    }
-  }
-
-  // Build note dots — also derive tooltip data for the hovered dot during this same pass
-  // (stale tooltip disappears automatically when the hovered key leaves the current scale)
-  const noteDots: React.ReactNode[] = [];
-  let hoveredDot: { cx: number; cy: number; interval: number; noteName: string } | null = null;
-
-  for (let svgStr = 0; svgStr < NUM_STRINGS; svgStr++) {
-    // svgStr 0 = high e (string index 5 in OPEN_MIDI), 5 = low E (string index 0)
-    const midiStringIdx = NUM_STRINGS - 1 - svgStr;
-    const cy = stringY(svgStr);
-
-    for (let fret = 0; fret <= NUM_FRETS; fret++) {
-      const midiNote = OPEN_MIDI[midiStringIdx] + fret;
-      const pc = midiNote % 12;
-      const interval = (pc - rootPc + 12) % 12;
-      if (!intervals.has(interval)) continue;
-
-      const isRoot = interval === 0;
-      const dotKey = `${svgStr}-${fret}`;
-      const isHighlighted = dotKey === highlightedDotKey;
-      const cx =
-        fret === 0
-          ? LEFT_PAD + NUT_X / 2 // open string: center in nut area
-          : fretX(fret) - FRET_W / 2; // fretted: center between fret lines
-
-      const fill = isHighlighted ? "#22dd88" : isRoot ? "#5b7fff" : "#2a2a4c";
-      const stroke = isHighlighted ? "#66ffbb" : isRoot ? "#8eaaff" : "#6060a0";
-      const noteName = NOTE_NAMES[pc];
-      const isPentatonicDimmed = pentatonicSet != null && !pentatonicSet.has(interval);
-      const dotOpacity = isPentatonicDimmed ? 0.28 : 1;
-      const displayLabel = showDegrees ? DEGREE_LABELS[interval] : noteName;
-
-      if (dotKey === hoveredDotKey) hoveredDot = { cx, cy, interval, noteName };
-
-      noteDots.push(
-        <g
-          key={dotKey}
-          onClick={() => onNoteClick(midiNote, noteName, dotKey)}
-          onMouseEnter={() => setHoveredDotKey(dotKey)}
-          onMouseLeave={() => setHoveredDotKey(null)}
-          style={{ cursor: practiceMode ? "crosshair" : "pointer", opacity: dotOpacity }}
-          role="button"
-          aria-label={`${noteName} on ${STRING_NAMES_TOP[svgStr]} string fret ${fret}`}
-        >
-          <circle
-            cx={cx}
-            cy={cy}
-            r={CIRCLE_R}
-            fill={fill}
-            stroke={stroke}
-            strokeWidth="1.5"
-          />
-          <text
-            x={cx}
-            y={cy}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize="11"
-            fontWeight="700"
-            fill="white"
-            style={{ pointerEvents: "none", userSelect: "none" }}
-          >
-            {displayLabel}
           </text>
         </g>,
       );
@@ -284,10 +382,17 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
 
   return (
     <svg
+      ref={svgRef}
       viewBox={`0 0 ${SVG_W} ${SVG_H}`}
       width={SVG_W}
       height={SVG_H}
       aria-label="Guitar fretboard"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onLostPointerCapture={handlePointerCancel}
+      style={isolateMode ? { touchAction: "none" } : undefined}
     >
       {/* String lines */}
       {Array.from({ length: NUM_STRINGS }, (_, i) => (
@@ -352,6 +457,19 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
       {markers}
       {noteDots}
       {tooltipEl}
+      {dragBox && (
+        <rect
+          x={Math.min(dragBox.x0, dragBox.x1)}
+          y={Math.min(dragBox.y0, dragBox.y1)}
+          width={Math.abs(dragBox.x1 - dragBox.x0)}
+          height={Math.abs(dragBox.y1 - dragBox.y0)}
+          fill={`${ISOLATE_FILL}22`}
+          stroke={ISOLATE_FILL}
+          strokeWidth="1"
+          strokeDasharray="4 3"
+          pointerEvents="none"
+        />
+      )}
     </svg>
   );
 }
@@ -391,6 +509,15 @@ export function ScalesPage() {
   const [showPentatonic, setShowPentatonic] = useState(
     () => localStorage.getItem('scales-showPentatonic') === 'true'
   );
+  const [isolateMode, setIsolateMode] = useState(
+    () => localStorage.getItem('scales-isolateMode') === 'true'
+  );
+  const [isolatedKeys, setIsolatedKeys] = useState<string[]>(() => {
+    try {
+      const parsed: unknown = JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '[]');
+      return Array.isArray(parsed) && parsed.every((k) => typeof k === 'string') ? parsed : [];
+    } catch { return []; }
+  });
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(() => {
     const n = Number(localStorage.getItem('scales-bpm'));
@@ -425,7 +552,7 @@ export function ScalesPage() {
         if (bpmVal >= 40 && bpmVal <= 400) setBpm(bpmVal);
         if (payload.notes && payload.notes.length > 0) {
           setPracticeNotes(payload.notes);
-          setPracticeMode(true);
+          activatePracticeMode();
           noteIdCounter.current = payload.notes.reduce((max, n) => Math.max(max, n.id + 1), 0);
         }
       }
@@ -475,6 +602,8 @@ export function ScalesPage() {
   useEffect(() => { localStorage.setItem('scales-showDegrees', String(showDegrees)); }, [showDegrees]);
   useEffect(() => { localStorage.setItem('scales-showCaged', String(showCaged)); }, [showCaged]);
   useEffect(() => { localStorage.setItem('scales-showPentatonic', String(showPentatonic)); }, [showPentatonic]);
+  useEffect(() => { localStorage.setItem('scales-isolateMode', String(isolateMode)); }, [isolateMode]);
+  useEffect(() => { localStorage.setItem('scales-isolatedKeys', JSON.stringify(isolatedKeys)); }, [isolatedKeys]);
 
   // Cleanup on unmount
   useEffect(() => () => {
@@ -491,6 +620,7 @@ export function ScalesPage() {
     () => showPentatonic && pentatonicSubset ? new Set(pentatonicSubset) : null,
     [showPentatonic, pentatonicSubset],
   );
+  const isolatedKeySet = useMemo(() => new Set(isolatedKeys), [isolatedKeys]);
 
   function getOrCreateAudioCtx(): AudioContext {
     if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
@@ -500,6 +630,12 @@ export function ScalesPage() {
   }
 
   function handleNoteClick(midiNote: number, label: string, dotKey: string) {
+    if (isolateMode) {
+      setIsolatedKeys((prev) =>
+        prev.includes(dotKey) ? prev.filter((k) => k !== dotKey) : [...prev, dotKey],
+      );
+      return;
+    }
     const ctx = getOrCreateAudioCtx();
     if (ctx.state === "suspended") void ctx.resume();
     const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
@@ -554,13 +690,52 @@ export function ScalesPage() {
     setActiveNoteIdx(null);
   }
 
+  // Practice Mode and Isolate Mode are mutually exclusive. Route every activation
+  // through these two functions (never set practiceMode/isolateMode directly) so
+  // that invariant is enforced in one place instead of at each call site.
+  function activatePracticeMode() {
+    setIsolateMode(false);
+    setPracticeMode(true);
+  }
+
+  function activateIsolateMode() {
+    stopPlayback();
+    setPracticeMode(false);
+    setIsolateMode(true);
+  }
+
   function togglePracticeMode() {
     if (practiceMode) {
       stopPlayback();
       setPracticeMode(false);
     } else {
-      setPracticeMode(true);
+      activatePracticeMode();
     }
+  }
+
+  function toggleIsolateMode() {
+    if (isolateMode) {
+      setIsolateMode(false);
+    } else {
+      activateIsolateMode();
+    }
+  }
+
+  function clearIsolatedKeys() {
+    setIsolatedKeys([]);
+  }
+
+  function applyIsolateDrag(dotKeys: string[]) {
+    setIsolatedKeys((prev) => {
+      const allAlreadyOn = dotKeys.every((k) => prev.includes(k));
+      if (allAlreadyOn) {
+        const removeSet = new Set(dotKeys);
+        return prev.filter((k) => !removeSet.has(k));
+      }
+      const merged = new Set(prev);
+      dotKeys.forEach((k) => merged.add(k));
+      return Array.from(merged);
+    });
   }
 
   function handleKeyChange(v: string) {
@@ -775,6 +950,21 @@ export function ScalesPage() {
             Playing
           </span>
         )}
+        {isolateMode && (
+          <span className="flex items-center gap-1.5">
+            <svg width="16" height="16">
+              <circle
+                cx="8"
+                cy="8"
+                r="6"
+                fill={ISOLATE_FILL}
+                stroke={ISOLATE_STROKE}
+                strokeWidth={DEFAULT_STROKE_WIDTH}
+              />
+            </svg>
+            Highlighted
+          </span>
+        )}
       </div>
 
       {/* Fretboard */}
@@ -788,10 +978,13 @@ export function ScalesPage() {
           showDegrees={showDegrees}
           showCaged={showCaged}
           pentatonicSet={pentatonicSet}
+          isolateMode={isolateMode}
+          isolatedKeys={isolatedKeySet}
+          onIsolateDrag={applyIsolateDrag}
         />
       </div>
 
-      {/* Practice Mode toggle + Share */}
+      {/* Practice Mode / Isolate Mode toggle + Share */}
       <div className="flex items-center gap-2">
         <button
           onClick={togglePracticeMode}
@@ -803,6 +996,17 @@ export function ScalesPage() {
           }
         >
           {practiceMode ? "✦ Practice Mode" : "Practice Mode"}
+        </button>
+        <button
+          onClick={toggleIsolateMode}
+          className={
+            "px-4 py-1.5 text-[0.82rem] font-semibold rounded-md border transition-colors " +
+            (isolateMode
+              ? "border-[#ffb020] bg-[#241a08] text-[#ffb020]"
+              : "border-[#505270] bg-[#1e1f2c] text-[#aaa] hover:border-[#7070a0] hover:text-[#ddd]")
+          }
+        >
+          {isolateMode ? "✦ Isolate Mode" : "Isolate Mode"}
         </button>
         <button
           onClick={() => {
@@ -822,6 +1026,29 @@ export function ScalesPage() {
           {copiedShare ? "✓ Copied!" : "Share"}
         </button>
       </div>
+
+      {/* Isolate mode panel */}
+      {isolateMode && (
+        <div className="rounded-xl border border-[#5a4420] bg-[#160f04] px-4 py-3 flex flex-wrap items-center gap-3">
+          <span className="text-[0.78rem] text-[#c8a868]">
+            {isolatedKeys.length === 0
+              ? "Click notes, or drag a box over a group, to highlight them for display."
+              : `${isolatedKeys.length} note${isolatedKeys.length === 1 ? "" : "s"} highlighted. Click, or drag a box, to toggle.`}
+          </span>
+          <button
+            onClick={clearIsolatedKeys}
+            disabled={isolatedKeys.length === 0}
+            className={
+              "h-8 px-3 text-[0.82rem] font-semibold rounded-md border transition-colors shrink-0 ml-auto " +
+              (isolatedKeys.length === 0
+                ? "border-[#383858] bg-[#0b0b16] text-[#555578] cursor-not-allowed"
+                : "border-[#6a2020] bg-[#0f0808] text-[#dd7777] hover:border-[#dd4444] hover:text-[#ff8888]")
+            }
+          >
+            Clear Highlights
+          </button>
+        </div>
+      )}
 
       {/* Practice mode panel */}
       {practiceMode && (

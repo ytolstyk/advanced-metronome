@@ -2,7 +2,7 @@ import { useReducer, useEffect, useLayoutEffect, useRef, useCallback, useState, 
 import { useLocation, useNavigate } from 'react-router-dom'
 import * as at from '@coderline/alphatab'
 import './TabEditorPage.css'
-import type { TabCursor, ImportedTrackInfo } from '../tabEditorTypes'
+import type { TabCursor, ImportedTrackInfo, MasterBar, Measure, TabTrack } from '../tabEditorTypes'
 import {
   tabEditorReducer,
   createInitialTabState,
@@ -13,6 +13,7 @@ import {
   measureUsedTicks,
   migrateTrackIfNeeded,
   DURATION_LABELS,
+  effectiveBpmAt,
 } from '../tabEditorState'
 import { fromAlphaTabScore } from '../tabEditor/fromAlphaTabScore'
 import { TabPlaybackEngine } from '../audio/TabPlaybackEngine'
@@ -45,6 +46,7 @@ import {
 import { PublishTabDialog } from '../components/TabEditor/PublishTabDialog'
 import { tabTrackToClickTrackPieces } from '../utils/tabToClickTrack'
 import { uint8ToBase64 } from '../lib/utils'
+import { RecordTranscribeModal } from '../components/RecordTranscribeModal'
 import {
   Dialog,
   DialogContent,
@@ -272,6 +274,7 @@ export function TabEditorPage() {
     firstTrackIndex: number
   } | null>(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [recordModalOpen, setRecordModalOpen] = useState(false)
 
   const directBeatHandlerRef = useRef<((mi: number, bi: number, intendedTime: number, nextMi?: number, nextBi?: number) => void) | null>(null)
   const onRegisterBeatHandler = useCallback((handler: (mi: number, bi: number, intendedTime: number, nextMi?: number, nextBi?: number) => void) => {
@@ -710,6 +713,22 @@ export function TabEditorPage() {
     setPublishedTabId(null)
   }
 
+  function handleRecordInsertAtCursor(measures: Measure[], masterBars: MasterBar[]) {
+    dispatch({
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: state.cursor.measureIndex,
+      measures,
+      masterBars,
+    })
+  }
+
+  function handleRecordOverwriteTrack(track: TabTrack) {
+    dispatch({ type: 'LOAD_TRACK', track })
+    setLoadedCloudId(null)
+    setPublishedTabId(null)
+    setCleanSnapshot(JSON.stringify(track))
+  }
+
   function handleImportClick() {
     setImportError(null)
     fileInputRef.current?.click()
@@ -802,6 +821,11 @@ export function TabEditorPage() {
     }
   }
 
+  const hasExistingContent = useMemo(
+    () => state.track.measures.some(m => m.beats.some(b => b.notes.length > 0)),
+    [state.track.measures],
+  )
+
   return (
     <div className="tab-editor-page" onMouseUp={onMouseUp}>
       <div className="tab-sticky-top">
@@ -820,6 +844,7 @@ export function TabEditorPage() {
               publishedTabId={publishedTabId}
               onImport={handleImportClick}
               onExport={() => setExportDialogOpen(true)}
+              onRecord={() => setRecordModalOpen(true)}
             />
             <TabEditorToolbar state={state} dispatch={dispatch} isNavigating={isNavigating} />
           </>
@@ -978,6 +1003,26 @@ export function TabEditorPage() {
         open={exportDialogOpen}
         track={state.track}
         onClose={() => setExportDialogOpen(false)}
+      />
+
+      <RecordTranscribeModal
+        open={recordModalOpen}
+        onOpenChange={setRecordModalOpen}
+        defaultTuningName={state.track.tuningName}
+        defaultOpenMidi={state.track.openMidi}
+        defaultStringCount={state.track.stringCount}
+        defaultBpm={effectiveBpmAt(state.track, state.cursor.measureIndex)}
+        defaultTimeSigNum={
+          state.track.masterBars[state.cursor.measureIndex]?.timeSignature.numerator
+          ?? state.track.masterBars[0]!.timeSignature.numerator
+        }
+        defaultTimeSigDen={
+          state.track.masterBars[state.cursor.measureIndex]?.timeSignature.denominator
+          ?? state.track.masterBars[0]!.timeSignature.denominator
+        }
+        onInsertAtCursor={handleRecordInsertAtCursor}
+        onOverwriteTrack={handleRecordOverwriteTrack}
+        hasExistingContent={hasExistingContent}
       />
 
       <AuthSignInDialog open={authPromptOpen} onOpenChange={setAuthPromptOpen} />

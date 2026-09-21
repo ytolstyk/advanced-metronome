@@ -1942,3 +1942,240 @@ describe('tabEditorReducer IMPORT_TRACK', () => {
     })
   })
 })
+
+// ─── INSERT_MEASURES_AT ────────────────────────────────────────────────────────
+
+describe('INSERT_MEASURES_AT', () => {
+  function makeMeasureWithId(id: string): Measure {
+    return { id, beats: [] }
+  }
+
+  function makeMasterBar(bpm?: number): import('./tabEditorTypes').MasterBar {
+    return { timeSignature: { numerator: 4, denominator: 4 }, ...(bpm !== undefined ? { bpm } : {}) }
+  }
+
+  it('splices the new measures at the given index', () => {
+    const state = makeState({
+      measures: [makeMeasureWithId('m0'), makeMeasureWithId('m1')],
+      masterBars: [
+        { timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 },
+        { timeSignature: { numerator: 4, denominator: 4 } },
+      ],
+    })
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 1,
+      measures: [makeMeasureWithId('new')],
+      masterBars: [makeMasterBar(100)],
+    })
+    expect(next.track.measures).toHaveLength(3)
+    expect(next.track.measures[0]!.id).toBe('m0')
+    expect(next.track.measures[1]!.id).toBe('new')
+    expect(next.track.measures[2]!.id).toBe('m1')
+  })
+
+  it('also splices the corresponding masterBars at the same index', () => {
+    const state = makeState({
+      measures: [makeMeasureWithId('m0'), makeMeasureWithId('m1')],
+      masterBars: [
+        { timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 },
+        { timeSignature: { numerator: 4, denominator: 4 } },
+      ],
+    })
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 1,
+      measures: [makeMeasureWithId('new')],
+      masterBars: [makeMasterBar(100)],
+    })
+    expect(next.track.masterBars).toHaveLength(3)
+  })
+
+  it('moves cursor to { measureIndex: insertIndex, beatIndex: 0, stringIndex: stringCount }', () => {
+    const state = makeState({
+      measures: [makeMeasureWithId('m0'), makeMeasureWithId('m1')],
+      masterBars: [
+        { timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 },
+        { timeSignature: { numerator: 4, denominator: 4 } },
+      ],
+    })
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 1,
+      measures: [makeMeasureWithId('new')],
+      masterBars: [makeMasterBar(100)],
+    })
+    expect(next.cursor).toEqual({ measureIndex: 1, beatIndex: 0, stringIndex: 6 })
+  })
+
+  it('seeds BPM on the inserted masterBar from effectiveBpmAt when it has no bpm', () => {
+    // Original track: masterBars[0] has bpm=120; insert a masterBar without bpm at index 1
+    const state = makeState({
+      measures: [makeMeasureWithId('m0'), makeMeasureWithId('m1')],
+      masterBars: [
+        { timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 },
+        { timeSignature: { numerator: 4, denominator: 4 } },
+      ],
+    })
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 1,
+      measures: [makeMeasureWithId('new')],
+      masterBars: [{ timeSignature: { numerator: 4, denominator: 4 } }], // no bpm
+    })
+    expect(next.track.masterBars[1]!.bpm).toBe(120)
+  })
+
+  it('does not override BPM if the inserted masterBar already has one', () => {
+    const state = makeState({
+      measures: [makeMeasureWithId('m0')],
+      masterBars: [{ timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 }],
+    })
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 0,
+      measures: [makeMeasureWithId('new')],
+      masterBars: [makeMasterBar(80)], // explicit 80 bpm
+    })
+    expect(next.track.masterBars[0]!.bpm).toBe(80)
+  })
+
+  it('pushes the pre-insert track onto the undo stack', () => {
+    const state = makeState({
+      measures: [makeMeasureWithId('m0')],
+      masterBars: [{ timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 }],
+    })
+    expect(state.undoStack).toHaveLength(0)
+    const after = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 0,
+      measures: [makeMeasureWithId('new')],
+      masterBars: [makeMasterBar(100)],
+    })
+    expect(after.undoStack).toHaveLength(1)
+  })
+
+  it('restores the original state after UNDO', () => {
+    const state = makeState({
+      measures: [makeMeasureWithId('m0')],
+      masterBars: [{ timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 }],
+    })
+    const afterInsert = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 0,
+      measures: [makeMeasureWithId('new')],
+      masterBars: [makeMasterBar(100)],
+    })
+    const afterUndo = tabEditorReducer(afterInsert, { type: 'UNDO' })
+    expect(afterUndo.track.measures).toHaveLength(state.track.measures.length)
+  })
+
+  it('returns state unchanged when action.measures and action.masterBars lengths differ', () => {
+    const state = makeState()
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 0,
+      measures: [makeMeasureWithId('a'), makeMeasureWithId('b')], // 2 measures
+      masterBars: [makeMasterBar(120)],                            // 1 masterBar — mismatch
+    })
+    expect(next.track.measures).toHaveLength(state.track.measures.length)
+    expect(next.undoStack).toHaveLength(0) // no undo entry pushed
+  })
+
+  it('returns state unchanged when action.measures is empty', () => {
+    const state = makeState()
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 0,
+      measures: [],
+      masterBars: [],
+    })
+    expect(next.track.measures).toHaveLength(state.track.measures.length)
+    expect(next.undoStack).toHaveLength(0)
+  })
+
+  it('appends measures when measureIndex equals current measures.length', () => {
+    const state = makeState({
+      measures: [makeMeasureWithId('m0'), makeMeasureWithId('m1')],
+      masterBars: [
+        { timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 },
+        { timeSignature: { numerator: 4, denominator: 4 } },
+      ],
+    })
+    const appendIdx = state.track.measures.length // 2
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: appendIdx,
+      measures: [makeMeasureWithId('appended')],
+      masterBars: [makeMasterBar(120)],
+    })
+    expect(next.track.measures).toHaveLength(3)
+    expect(next.track.measures[2]!.id).toBe('appended')
+    expect(next.cursor.measureIndex).toBe(appendIdx)
+  })
+
+  it('clamps a negative measureIndex to 0 (inserts at front)', () => {
+    const state = makeState({
+      measures: [makeMeasureWithId('m0')],
+      masterBars: [{ timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 }],
+    })
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: -5,
+      measures: [makeMeasureWithId('front')],
+      masterBars: [makeMasterBar(120)],
+    })
+    expect(next.track.measures[0]!.id).toBe('front')
+    expect(next.cursor.measureIndex).toBe(0)
+  })
+
+  it('clamps a measureIndex beyond length to the last valid position', () => {
+    const state = makeState({
+      measures: [makeMeasureWithId('m0')],
+      masterBars: [{ timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 }],
+    })
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 999,
+      measures: [makeMeasureWithId('end')],
+      masterBars: [makeMasterBar(120)],
+    })
+    // Should append at the end (clamped to length = 1)
+    expect(next.track.measures).toHaveLength(2)
+    expect(next.track.measures[next.track.measures.length - 1]!.id).toBe('end')
+  })
+
+  it('clears selection and noteSelection after insert', () => {
+    const state: TabEditorState = {
+      ...makeState(),
+      selection: { startMeasure: 0, startBeat: 0, endMeasure: 0, endBeat: 1 },
+      noteSelection: [{ measureIndex: 0, beatIndex: 0, stringIndex: 3 }],
+    }
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 0,
+      measures: [makeMeasureWithId('new')],
+      masterBars: [makeMasterBar(120)],
+    })
+    expect(next.selection).toBeNull()
+    expect(next.noteSelection).toHaveLength(0)
+  })
+
+  it('inserts multiple measures and masterBars at once', () => {
+    const state = makeState({
+      measures: [makeMeasureWithId('m0')],
+      masterBars: [{ timeSignature: { numerator: 4, denominator: 4 }, bpm: 120 }],
+    })
+    const next = tabEditorReducer(state, {
+      type: 'INSERT_MEASURES_AT',
+      measureIndex: 0,
+      measures: [makeMeasureWithId('a'), makeMeasureWithId('b'), makeMeasureWithId('c')],
+      masterBars: [makeMasterBar(100), makeMasterBar(), makeMasterBar()],
+    })
+    expect(next.track.measures).toHaveLength(4)
+    expect(next.track.measures[0]!.id).toBe('a')
+    expect(next.track.measures[1]!.id).toBe('b')
+    expect(next.track.measures[2]!.id).toBe('c')
+    expect(next.track.measures[3]!.id).toBe('m0')
+  })
+})

@@ -3,7 +3,7 @@ import type { TabTrack } from '../../tabEditorTypes'
 import type { TabEditorAction } from '../../tabEditorState'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { FolderOpen, Cloud, Globe, Link, Upload, Download } from 'lucide-react'
+import { FolderOpen, Cloud, Globe, Link, Upload, Download, Mic } from 'lucide-react'
 
 interface TabEditorHeaderProps {
   track: TabTrack
@@ -18,9 +18,10 @@ interface TabEditorHeaderProps {
   publishedTabId?: string | null
   onImport?: () => void
   onExport?: () => void
+  onRecord?: () => void
 }
 
-export function TabEditorHeader({ track, dispatch, isDirty, onSave, onSaveCopy, onLoad, onPublish, onUpdatePublished, onUnpublish, publishedTabId, onImport, onExport }: TabEditorHeaderProps) {
+export function TabEditorHeader({ track, dispatch, isDirty, onSave, onSaveCopy, onLoad, onPublish, onUpdatePublished, onUnpublish, publishedTabId, onImport, onExport, onRecord }: TabEditorHeaderProps) {
   const [prevTrack, setPrevTrack] = useState(track)
   const [meta, setMeta] = useState({
     title: track.title,
@@ -82,8 +83,13 @@ export function TabEditorHeader({ track, dispatch, isDirty, onSave, onSaveCopy, 
           )}
         </div>
       </div>
-      {(onLoad || onSave || onPublish || onUpdatePublished || onImport || onExport) && (
+      {(onLoad || onSave || onPublish || onUpdatePublished || onImport || onExport || onRecord) && (
         <div className="tab-header-cloud">
+          {onRecord && (
+            <Button variant="outline" size="sm" onClick={onRecord}>
+              <Mic size={13} /> Record
+            </Button>
+          )}
           {onImport && (
             <Button variant="outline" size="sm" onClick={onImport}>
               <Upload size={13} /> Import
