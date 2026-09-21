@@ -89,6 +89,31 @@ const ISOLATE_DIM_OPACITY = 0.15;
 const DEFAULT_STROKE_WIDTH = 1.5;
 const ISOLATED_STROKE_WIDTH = 2;
 const ISOLATED_ROOT_STROKE_WIDTH = 3;
+// Drag-box color while Ctrl/Cmd is held, signaling the drag will subtract from
+// (rather than add to) the highlighted set.
+const ISOLATE_SUBTRACT_STROKE = "#dd4444";
+
+function isSubtractGesture(e: { ctrlKey: boolean; metaKey: boolean }): boolean {
+  return e.ctrlKey || e.metaKey;
+}
+
+// Single source of truth for editing the isolated-notes set, shared by both the
+// single-click toggle and the drag-select gesture so Ctrl/Cmd means the same
+// thing ("remove these") everywhere, not just during a drag.
+function applyIsolateSelection(prev: string[], keys: string[], isSubtractDrag: boolean): string[] {
+  if (isSubtractDrag) {
+    const removeSet = new Set(keys);
+    return prev.filter((k) => !removeSet.has(k));
+  }
+  const allAlreadyOn = keys.every((k) => prev.includes(k));
+  if (allAlreadyOn) {
+    const removeSet = new Set(keys);
+    return prev.filter((k) => !removeSet.has(k));
+  }
+  const merged = new Set(prev);
+  keys.forEach((k) => merged.add(k));
+  return Array.from(merged);
+}
 
 const DEGREE_LABELS: Record<number, string> = {
   0: 'R', 1: '♭2', 2: '2', 3: '♭3', 4: '3', 5: '4',
@@ -109,7 +134,7 @@ function stringY(svgStringIdx: number): number {
 interface FretboardProps {
   rootPc: number;
   intervals: Set<number>;
-  onNoteClick: (midiNote: number, label: string, dotKey: string) => void;
+  onNoteClick: (midiNote: number, label: string, dotKey: string, isSubtractClick?: boolean) => void;
   highlightedDotKey?: string | null;
   practiceMode?: boolean;
   showDegrees?: boolean;
@@ -117,14 +142,14 @@ interface FretboardProps {
   pentatonicSet?: Set<number> | null;
   isolateMode?: boolean;
   isolatedKeys?: Set<string>;
-  onIsolateDrag?: (dotKeys: string[]) => void;
+  onIsolateDrag?: (dotKeys: string[], isSubtractDrag: boolean) => void;
 }
 
 const DRAG_THRESHOLD = 4;
 
 function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practiceMode, showDegrees, showCaged, pentatonicSet, isolateMode, isolatedKeys, onIsolateDrag }: FretboardProps) {
   const [hoveredDotKey, setHoveredDotKey] = useState<string | null>(null);
-  const [dragBox, setDragBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const [dragBox, setDragBox] = useState<{ x0: number; y0: number; x1: number; y1: number; isSubtractDrag: boolean } | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const hasIsolated = (isolatedKeys?.size ?? 0) > 0;
@@ -238,20 +263,24 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
     if (!isolateMode || dragStartRef.current) return; // first pointer wins (ignore a second touch mid-drag)
     const pt = toSvgCoords(e);
     dragStartRef.current = pt;
-    setDragBox({ x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y });
+    setDragBox({ x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y, isSubtractDrag: isSubtractGesture(e) });
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
   function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
     if (!isolateMode || !dragStartRef.current || e.buttons === 0) return;
     const pt = toSvgCoords(e);
-    setDragBox({ x0: dragStartRef.current.x, y0: dragStartRef.current.y, x1: pt.x, y1: pt.y });
+    setDragBox({
+      x0: dragStartRef.current.x, y0: dragStartRef.current.y, x1: pt.x, y1: pt.y,
+      isSubtractDrag: isSubtractGesture(e),
+    });
   }
 
   function handlePointerUp(e: React.PointerEvent<SVGSVGElement>) {
     if (!isolateMode || !dragStartRef.current) return;
     const start = dragStartRef.current;
     const pt = toSvgCoords(e);
+    const isSubtractDrag = isSubtractGesture(e);
     dragStartRef.current = null;
     setDragBox(null);
     if (Math.abs(pt.x - start.x) < DRAG_THRESHOLD && Math.abs(pt.y - start.y) < DRAG_THRESHOLD) {
@@ -260,7 +289,7 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
       const hit = dotPositions.find(
         (d) => Math.hypot(d.cx - pt.x, d.cy - pt.y) <= CIRCLE_R,
       );
-      if (hit) onNoteClick(hit.midiNote, hit.noteName, hit.dotKey);
+      if (hit) onNoteClick(hit.midiNote, hit.noteName, hit.dotKey, isSubtractDrag);
       return;
     }
     const minX = Math.min(start.x, pt.x);
@@ -270,7 +299,7 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
     const containedKeys = dotPositions
       .filter((d) => d.cx >= minX && d.cx <= maxX && d.cy >= minY && d.cy <= maxY)
       .map((d) => d.dotKey);
-    if (containedKeys.length > 0) onIsolateDrag?.(containedKeys);
+    if (containedKeys.length > 0) onIsolateDrag?.(containedKeys, isSubtractDrag);
   }
 
   function handlePointerCancel() {
@@ -392,7 +421,7 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
       onLostPointerCapture={handlePointerCancel}
-      style={isolateMode ? { touchAction: "none" } : undefined}
+      style={{ userSelect: "none", touchAction: isolateMode ? "none" : undefined }}
     >
       {/* String lines */}
       {Array.from({ length: NUM_STRINGS }, (_, i) => (
@@ -463,8 +492,8 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
           y={Math.min(dragBox.y0, dragBox.y1)}
           width={Math.abs(dragBox.x1 - dragBox.x0)}
           height={Math.abs(dragBox.y1 - dragBox.y0)}
-          fill={`${ISOLATE_FILL}22`}
-          stroke={ISOLATE_FILL}
+          fill={`${dragBox.isSubtractDrag ? ISOLATE_SUBTRACT_STROKE : ISOLATE_FILL}22`}
+          stroke={dragBox.isSubtractDrag ? ISOLATE_SUBTRACT_STROKE : ISOLATE_FILL}
           strokeWidth="1"
           strokeDasharray="4 3"
           pointerEvents="none"
@@ -629,11 +658,9 @@ export function ScalesPage() {
     return audioCtxRef.current;
   }
 
-  function handleNoteClick(midiNote: number, label: string, dotKey: string) {
+  function handleNoteClick(midiNote: number, label: string, dotKey: string, isSubtractClick = false) {
     if (isolateMode) {
-      setIsolatedKeys((prev) =>
-        prev.includes(dotKey) ? prev.filter((k) => k !== dotKey) : [...prev, dotKey],
-      );
+      setIsolatedKeys((prev) => applyIsolateSelection(prev, [dotKey], isSubtractClick));
       return;
     }
     const ctx = getOrCreateAudioCtx();
@@ -725,17 +752,8 @@ export function ScalesPage() {
     setIsolatedKeys([]);
   }
 
-  function applyIsolateDrag(dotKeys: string[]) {
-    setIsolatedKeys((prev) => {
-      const allAlreadyOn = dotKeys.every((k) => prev.includes(k));
-      if (allAlreadyOn) {
-        const removeSet = new Set(dotKeys);
-        return prev.filter((k) => !removeSet.has(k));
-      }
-      const merged = new Set(prev);
-      dotKeys.forEach((k) => merged.add(k));
-      return Array.from(merged);
-    });
+  function applyIsolateDrag(dotKeys: string[], isSubtractDrag: boolean) {
+    setIsolatedKeys((prev) => applyIsolateSelection(prev, dotKeys, isSubtractDrag));
   }
 
   function handleKeyChange(v: string) {

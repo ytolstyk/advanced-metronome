@@ -109,12 +109,17 @@ function dotCy(svgStringIdx: number): number {
 // simulated as the SVG-level pointerdown/pointerup hit-test path does it:
 // a pointerdown followed by a pointerup a few px away (comfortably under
 // DRAG_THRESHOLD=4) at the dot's known center coordinates.
-function isolateClickDot(svgStringIdx: number, fret: number) {
+function isolateClickDot(
+  svgStringIdx: number,
+  fret: number,
+  opts?: { ctrlKey?: boolean; metaKey?: boolean },
+) {
   const svg = screen.getByLabelText(/guitar fretboard/i)
   const x = dotCx(fret)
   const y = dotCy(svgStringIdx)
-  fireEvent.pointerDown(svg, { clientX: x, clientY: y })
-  fireEvent.pointerUp(svg, { clientX: x + 1, clientY: y + 1 })
+  const modifiers = { ctrlKey: opts?.ctrlKey ?? false, metaKey: opts?.metaKey ?? false }
+  fireEvent.pointerDown(svg, { clientX: x, clientY: y, ...modifiers })
+  fireEvent.pointerUp(svg, { clientX: x + 1, clientY: y + 1, ...modifiers })
 }
 
 beforeEach(() => {
@@ -440,7 +445,199 @@ describe('ScalesPage – Isolate Mode click-to-highlight', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. Clear Highlights button
+// 3. Ctrl/Cmd-held drag subtracts from (rather than toggles) the highlighted set
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('ScalesPage – Isolate Mode Ctrl/Cmd subtract-drag', () => {
+  // Drag-box selector for the in-progress marquee rect — see the identical
+  // helper in the click-to-highlight describe block above (function-scoped
+  // there, so it's redeclared here rather than shared).
+  function dragBoxRect(): Element | null {
+    return document.querySelector('svg rect[stroke-dasharray="4 3"]')
+  }
+
+  it('a ctrl-held drag over a mix of highlighted and never-highlighted notes removes only the highlighted ones (true subtraction, not toggle-all/add-missing)', () => {
+    renderScalesPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate Mode' }))
+
+    // Pre-highlight C (outside the upcoming drag box, to prove it's left
+    // untouched) and G (inside the drag box, already highlighted).
+    isolateClickDot(1, 1) // C on B string fret 1
+    isolateClickDot(2, 0) // G on G string fret 0
+    expect(JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '[]')).toEqual(['1-1', '2-0'])
+
+    const svg = screen.getByLabelText(/guitar fretboard/i)
+    // Same box as the plain-drag test above: covers G (fret 0) and A (fret 2)
+    // on the G string, but not C (a different string/row entirely).
+    const y = dotCy(2)
+    fireEvent.pointerDown(svg, { clientX: dotCx(0) - 10, clientY: y - 15, ctrlKey: true })
+    fireEvent.pointerMove(svg, { clientX: dotCx(2) + 10, clientY: y + 15, ctrlKey: true })
+    fireEvent.pointerUp(svg, { clientX: dotCx(2) + 10, clientY: y + 15, ctrlKey: true })
+
+    // G (previously highlighted, in the box) is removed. A (never
+    // highlighted, in the box) must NOT appear — proving subtraction, not
+    // the old toggle logic (which would have added A since not all of the
+    // dragged dots were already on). C (previously highlighted, outside the
+    // box) is untouched.
+    expect(screen.getByText('1 note highlighted. Click, or drag a box, to toggle.')).toBeInTheDocument()
+    const stored = JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '[]') as string[]
+    expect(stored).toEqual(['1-1'])
+
+    const cDot = screen.getByRole('button', { name: 'C on B string fret 1' })
+    const gDot = screen.getByRole('button', { name: 'G on G string fret 0' })
+    const aDot = screen.getByRole('button', { name: 'A on G string fret 2' })
+    expect(cDot.querySelector('circle')).toHaveAttribute('fill', '#b35c00') // still isolated
+    expect(gDot.querySelector('circle')).not.toHaveAttribute('fill', '#b35c00') // subtracted
+    expect(aDot.querySelector('circle')).not.toHaveAttribute('fill', '#b35c00') // never added
+    expect(mockPluckString).not.toHaveBeenCalled()
+  })
+
+  it('a cmd (metaKey)-held drag also subtracts, same as ctrl', () => {
+    renderScalesPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate Mode' }))
+
+    isolateClickDot(2, 0) // G on G string fret 0 — pre-highlighted
+    expect(JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '[]')).toEqual(['2-0'])
+
+    const svg = screen.getByLabelText(/guitar fretboard/i)
+    const y = dotCy(2)
+    fireEvent.pointerDown(svg, { clientX: dotCx(0) - 10, clientY: y - 15, metaKey: true })
+    fireEvent.pointerMove(svg, { clientX: dotCx(2) + 10, clientY: y + 15, metaKey: true })
+    fireEvent.pointerUp(svg, { clientX: dotCx(2) + 10, clientY: y + 15, metaKey: true })
+
+    // G removed, A (never highlighted) never added -> nothing highlighted.
+    expect(
+      screen.getByText(/click notes, or drag a box over a group, to highlight them/i),
+    ).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '["x"]')).toEqual([])
+    expect(mockPluckString).not.toHaveBeenCalled()
+  })
+
+  it('a plain (no modifier) drag over the same mixed set still uses the old toggle/add-missing behavior', () => {
+    renderScalesPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate Mode' }))
+
+    isolateClickDot(2, 0) // G on G string fret 0 — pre-highlighted
+    expect(JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '[]')).toEqual(['2-0'])
+
+    const svg = screen.getByLabelText(/guitar fretboard/i)
+    const y = dotCy(2)
+    // No ctrlKey/metaKey — plain drag.
+    fireEvent.pointerDown(svg, { clientX: dotCx(0) - 10, clientY: y - 15 })
+    fireEvent.pointerMove(svg, { clientX: dotCx(2) + 10, clientY: y + 15 })
+    fireEvent.pointerUp(svg, { clientX: dotCx(2) + 10, clientY: y + 15 })
+
+    // Not all dragged dots were already on (A wasn't) -> merge: both end up on.
+    expect(screen.getByText('2 notes highlighted. Click, or drag a box, to toggle.')).toBeInTheDocument()
+    const stored = JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '[]') as string[]
+    expect(stored).toEqual(['2-0', '2-2'])
+    const aDot = screen.getByRole('button', { name: 'A on G string fret 2' })
+    expect(aDot.querySelector('circle')).toHaveAttribute('fill', '#b35c00')
+  })
+
+  it('shows the drag-box in ISOLATE_SUBTRACT_STROKE color while ctrl is held mid-drag', () => {
+    renderScalesPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate Mode' }))
+
+    const svg = screen.getByLabelText(/guitar fretboard/i)
+    const y = dotCy(2)
+    fireEvent.pointerDown(svg, { clientX: dotCx(0) - 10, clientY: y - 15, ctrlKey: true })
+    fireEvent.pointerMove(svg, { clientX: dotCx(2) + 10, clientY: y + 15, ctrlKey: true })
+
+    const rect = dragBoxRect()
+    expect(rect).toBeInTheDocument()
+    expect(rect).toHaveAttribute('stroke', '#dd4444')
+
+    fireEvent.pointerUp(svg, { clientX: dotCx(2) + 10, clientY: y + 15, ctrlKey: true })
+    expect(dragBoxRect()).not.toBeInTheDocument()
+  })
+
+  it('shows the drag-box in the default isolate color (not ISOLATE_SUBTRACT_STROKE) for a plain drag', () => {
+    renderScalesPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate Mode' }))
+
+    const svg = screen.getByLabelText(/guitar fretboard/i)
+    const y = dotCy(2)
+    fireEvent.pointerDown(svg, { clientX: dotCx(0) - 10, clientY: y - 15 })
+    fireEvent.pointerMove(svg, { clientX: dotCx(2) + 10, clientY: y + 15 })
+
+    const rect = dragBoxRect()
+    expect(rect).toBeInTheDocument()
+    expect(rect).toHaveAttribute('stroke', '#b35c00')
+    expect(rect).not.toHaveAttribute('stroke', '#dd4444')
+
+    fireEvent.pointerUp(svg, { clientX: dotCx(2) + 10, clientY: y + 15 })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. Ctrl/Cmd single-click subtract (same rule as the drag, applied to a
+//    lone click via the shared applyIsolateSelection helper)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('ScalesPage – Isolate Mode Ctrl/Cmd single-click subtract', () => {
+  it('ctrl+click on an already-highlighted note removes it', () => {
+    renderScalesPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate Mode' }))
+
+    isolateClickDot(1, 1) // C on B string fret 1 — plain click, highlights it
+    expect(JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '[]')).toEqual(['1-1'])
+
+    isolateClickDot(1, 1, { ctrlKey: true })
+
+    expect(
+      screen.getByText(/click notes, or drag a box over a group, to highlight them/i),
+    ).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '["x"]')).toEqual([])
+    const cDot = screen.getByRole('button', { name: 'C on B string fret 1' })
+    expect(cDot.querySelector('circle')).not.toHaveAttribute('fill', '#b35c00')
+    expect(mockPluckString).not.toHaveBeenCalled()
+  })
+
+  it('ctrl+click on a note that was never highlighted is a no-op (does not add it)', () => {
+    renderScalesPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate Mode' }))
+
+    // G on G string fret 0 has never been clicked/highlighted.
+    isolateClickDot(2, 0, { ctrlKey: true })
+
+    // Unlike a plain click on a not-yet-highlighted note, this must NOT add it.
+    expect(
+      screen.getByText(/click notes, or drag a box over a group, to highlight them/i),
+    ).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '["x"]')).toEqual([])
+    const gDot = screen.getByRole('button', { name: 'G on G string fret 0' })
+    expect(gDot.querySelector('circle')).not.toHaveAttribute('fill', '#b35c00')
+    expect(mockPluckString).not.toHaveBeenCalled()
+  })
+
+  it('cmd (metaKey)+click on a never-highlighted note is also a no-op, same as ctrl', () => {
+    renderScalesPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate Mode' }))
+
+    isolateClickDot(2, 0, { metaKey: true }) // G on G string fret 0
+
+    expect(
+      screen.getByText(/click notes, or drag a box over a group, to highlight them/i),
+    ).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '["x"]')).toEqual([])
+  })
+
+  it('a plain click (no modifier) on a not-yet-highlighted note still adds it, unaffected by the subtract path', () => {
+    renderScalesPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate Mode' }))
+
+    isolateClickDot(2, 0) // G on G string fret 0 — no ctrlKey/metaKey
+
+    expect(screen.getByText('1 note highlighted. Click, or drag a box, to toggle.')).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('scales-isolatedKeys') ?? '[]')).toEqual(['2-0'])
+    const gDot = screen.getByRole('button', { name: 'G on G string fret 0' })
+    expect(gDot.querySelector('circle')).toHaveAttribute('fill', '#b35c00')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. Clear Highlights button
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('ScalesPage – Clear Highlights button', () => {
@@ -480,7 +677,7 @@ describe('ScalesPage – Clear Highlights button', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. localStorage persistence
+// 6. localStorage persistence
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('ScalesPage – Isolate Mode localStorage persistence', () => {
