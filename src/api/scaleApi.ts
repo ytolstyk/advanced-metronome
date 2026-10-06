@@ -1,7 +1,6 @@
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
 import type { RootNote } from '../data/chords';
-import type { ScaleMode } from '../data/scales';
 import { isAuthenticated } from './authUtils';
 
 const client = generateClient<Schema>();
@@ -17,7 +16,8 @@ export interface CloudScaleTrack {
   id: string;
   name: string;
   selectedKey: RootNote;
-  selectedMode: ScaleMode;
+  // A preset ScaleMode, or an encoded custom scale (see utils/customScale).
+  selectedMode: string;
   practiceNotes: PracticeNote[];
   bpm: number;
 }
@@ -35,7 +35,7 @@ export async function loadCloudScaleTracks(): Promise<CloudScaleTrack[]> {
           id: t.id,
           name: t.name,
           selectedKey: t.selectedKey as RootNote,
-          selectedMode: t.selectedMode as ScaleMode,
+          selectedMode: t.selectedMode,
           practiceNotes: JSON.parse(t.practiceNotesJson) as PracticeNote[],
           bpm: t.bpm,
         });
@@ -52,7 +52,7 @@ export async function loadCloudScaleTracks(): Promise<CloudScaleTrack[]> {
 export async function createCloudScaleTrack(
   name: string,
   selectedKey: RootNote,
-  selectedMode: ScaleMode,
+  selectedMode: string,
   practiceNotes: PracticeNote[],
   bpm: number,
 ): Promise<CloudScaleTrack | null> {
@@ -76,7 +76,7 @@ export async function updateCloudScaleTrack(
   id: string,
   name: string,
   selectedKey: RootNote,
-  selectedMode: ScaleMode,
+  selectedMode: string,
   practiceNotes: PracticeNote[],
   bpm: number,
 ): Promise<CloudScaleTrack | null> {

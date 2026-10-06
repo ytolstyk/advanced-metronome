@@ -42,6 +42,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { pluckString } from "@/audio/pluckString";
 import { cn } from "@/lib/utils";
+import { useCustomScaleIntervals } from "../hooks/useCustomScaleIntervals";
+import {
+  CUSTOM_MODE,
+  ROOT_INTERVAL,
+  SEMITONES_PER_OCTAVE,
+  encodeCustomMode,
+  parseCustomMode,
+} from "../utils/customScale";
 
 // ── Fretboard constants ──────────────────────────────────────────────────────
 // Standard tuning: low E → high e (index 0 = low E)
@@ -530,16 +538,8 @@ export function ScalesPage() {
       return JSON.parse(localStorage.getItem('scales-practiceNotes') ?? '[]') as PracticeNote[];
     } catch { return []; }
   });
-  const [customIntervals, setCustomIntervals] = useState<number[]>(() => {
-    try {
-      const parsed: unknown = JSON.parse(localStorage.getItem('scales-customIntervals') ?? '[0]');
-      if (Array.isArray(parsed)) {
-        const valid = parsed.filter((n): n is number => Number.isInteger(n) && n >= 1 && n <= 11);
-        return [0, ...Array.from(new Set(valid)).sort((a, b) => a - b)];
-      }
-    } catch { /* fall through */ }
-    return [0];
-  });
+  const { intervals: customIntervals, toggle: toggleCustomInterval, replace: replaceCustomIntervals } =
+    useCustomScaleIntervals();
   const [showDegrees, setShowDegrees] = useState(
     () => localStorage.getItem('scales-showDegrees') === 'true'
   );
@@ -587,7 +587,7 @@ export function ScalesPage() {
       const payload = decodeScaleShare(encoded);
       if (payload) {
         if (ROOT_NOTES.includes(payload.key as RootNote)) setSelectedKey(payload.key as RootNote);
-        if (SCALE_MODES.includes(payload.mode as ScaleMode)) setSelectedMode(payload.mode as ScaleMode);
+        applyModeString(payload.mode);
         const bpmVal = payload.bpm;
         if (bpmVal >= 40 && bpmVal <= 400) setBpm(bpmVal);
         if (payload.notes && payload.notes.length > 0) {
@@ -634,7 +634,6 @@ export function ScalesPage() {
   useEffect(() => { practiceNotesRef.current = practiceNotes; }, [practiceNotes]);
 
   // Persist to localStorage
-  useEffect(() => { localStorage.setItem('scales-customIntervals', JSON.stringify(customIntervals)); }, [customIntervals]);
   useEffect(() => { localStorage.setItem('scales-selectedKey', selectedKey); }, [selectedKey]);
   useEffect(() => { localStorage.setItem('scales-selectedMode', selectedMode); }, [selectedMode]);
   useEffect(() => { localStorage.setItem('scales-bpm', String(bpm)); }, [bpm]);
@@ -656,7 +655,7 @@ export function ScalesPage() {
 
   const rootPc = ROOT_NOTES.indexOf(selectedKey);
   const intervals = useMemo(
-    () => new Set(selectedMode === 'custom' ? customIntervals : SCALE_INTERVALS[selectedMode]),
+    () => new Set(selectedMode === CUSTOM_MODE ? customIntervals : SCALE_INTERVALS[selectedMode]),
     [selectedMode, customIntervals],
   );
   const pentatonicSubset = SCALE_PENTATONIC_SUBSET[selectedMode];
@@ -777,6 +776,21 @@ export function ScalesPage() {
     setSelectedKey(v as RootNote);
   }
 
+  function applyModeString(mode: string) {
+    if (SCALE_MODES.includes(mode as ScaleMode)) {
+      setSelectedMode(mode as ScaleMode);
+      return;
+    }
+    const custom = parseCustomMode(mode);
+    if (custom) {
+      replaceCustomIntervals(custom);
+      setSelectedMode(CUSTOM_MODE);
+    }
+  }
+
+  // Mode string as stored in share links / cloud tracks: a preset name or an encoded custom scale.
+  const modeString = selectedMode === CUSTOM_MODE ? encodeCustomMode(customIntervals) : selectedMode;
+
   function handleModeChange(v: string) {
     if (!v) return;
     if (isPlaying) stopPlayback();
@@ -790,7 +804,7 @@ export function ScalesPage() {
 
   function handleSaveTrackClick() {
     const name = trackName.trim();
-    if (!name || selectedMode === 'custom') return;
+    if (!name) return;
     const existing = cloudTracks.find(
       (t) => t.name.toLowerCase() === name.toLowerCase(),
     );
@@ -811,7 +825,7 @@ export function ScalesPage() {
           overrideConfirm.id,
           name,
           selectedKey,
-          selectedMode,
+          modeString,
           practiceNotes,
           bpm,
         );
@@ -825,7 +839,7 @@ export function ScalesPage() {
         const created = await createCloudScaleTrack(
           name,
           selectedKey,
-          selectedMode,
+          modeString,
           practiceNotes,
           bpm,
         );
@@ -847,7 +861,7 @@ export function ScalesPage() {
     setSelectedTrackId(trackId);
     setTrackName(track.name);
     setSelectedKey(track.selectedKey);
-    setSelectedMode(track.selectedMode);
+    applyModeString(track.selectedMode);
     setPracticeNotes(track.practiceNotes);
     setBpm(track.bpm);
     noteIdCounter.current = track.practiceNotes.reduce(
@@ -920,32 +934,32 @@ export function ScalesPage() {
         </ToggleGroup>
       </div>
 
-      {selectedMode === 'custom' && (
+      {selectedMode === CUSTOM_MODE && (
         <div className="flex flex-wrap items-center gap-1">
           <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8] mr-1">
-            Notes
+            Scale notes
           </span>
-          {Array.from({ length: 12 }, (_, i) => {
-            const active = customIntervals.includes(i);
-            const label = showDegrees ? DEGREE_LABELS[i] : NOTE_NAMES[(rootPc + i) % 12];
+          {Array.from({ length: SEMITONES_PER_OCTAVE }, (_, semitones) => {
+            const isRoot = semitones === ROOT_INTERVAL;
+            const active = customIntervals.includes(semitones);
+            const label = showDegrees ? DEGREE_LABELS[semitones] : NOTE_NAMES[(rootPc + semitones) % SEMITONES_PER_OCTAVE];
             return (
               <button
-                key={i}
+                key={semitones}
                 type="button"
                 aria-pressed={active}
-                disabled={i === 0}
-                title={i === 0 ? 'Root (always included)' : undefined}
-                onClick={() =>
-                  setCustomIntervals((prev) =>
-                    prev.includes(i) ? prev.filter((n) => n !== i) : [...prev, i].sort((a, b) => a - b),
-                  )
-                }
-                className={toggleCls(active, i === 0)}
+                disabled={isRoot}
+                title={isRoot ? 'Root (always included)' : undefined}
+                onClick={() => toggleCustomInterval(semitones)}
+                className={toggleCls(active, isRoot)}
               >
                 {label}
               </button>
             );
           })}
+          {customIntervals.length < 2 && (
+            <span className="ml-2 text-[0.75rem] text-[#777799]">Pick at least one more note</span>
+          )}
         </div>
       )}
 
@@ -1074,7 +1088,7 @@ export function ScalesPage() {
           onClick={() => {
             const url = buildScaleShareUrl(
               selectedKey,
-              selectedMode,
+              modeString,
               bpm,
               practiceNotes.length > 0 ? practiceNotes : undefined,
             );
@@ -1083,14 +1097,7 @@ export function ScalesPage() {
               setTimeout(() => setCopiedShare(false), 2000);
             });
           }}
-          disabled={selectedMode === 'custom'}
-          title={selectedMode === 'custom' ? 'Sharing is not available for custom scales' : undefined}
-          className={cn(
-            "px-4 py-1.5 text-[0.82rem] font-semibold rounded-md border transition-colors",
-            selectedMode === 'custom'
-              ? DISABLED_CLS
-              : "border-[#505270] bg-[#1e1f2c] text-[#aaa] hover:border-[#7070a0] hover:text-[#ddd]",
-          )}
+          className="px-4 py-1.5 text-[0.82rem] font-semibold rounded-md border transition-colors border-[#505270] bg-[#1e1f2c] text-[#aaa] hover:border-[#7070a0] hover:text-[#ddd]"
         >
           {copiedShare ? "✓ Copied!" : "Share"}
         </button>
@@ -1273,11 +1280,10 @@ export function ScalesPage() {
 
               <button
                 onClick={handleSaveTrackClick}
-                disabled={saving || !trackName.trim() || practiceNotes.length === 0 || overrideConfirm !== null || selectedMode === 'custom'}
-                title={selectedMode === 'custom' ? 'Cloud saving is not available for custom scales' : undefined}
+                disabled={saving || !trackName.trim() || practiceNotes.length === 0 || overrideConfirm !== null}
                 className={
                   "h-8 px-3.5 text-[0.82rem] font-semibold rounded-md border transition-colors " +
-                  (saving || !trackName.trim() || practiceNotes.length === 0 || selectedMode === 'custom'
+                  (saving || !trackName.trim() || practiceNotes.length === 0
                     ? "border-[#383858] bg-[#0b0b16] text-[#555578] cursor-not-allowed"
                     : "border-[#4a5fff] bg-[#10122a] text-[#8eaaff] hover:border-[#8eaaff] hover:text-[#c0d4ff]")
                 }
