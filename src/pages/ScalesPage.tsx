@@ -9,6 +9,7 @@ import {
   SCALE_INTERVALS,
   SCALE_LABELS,
   SCALE_MODES,
+  SCALE_PAGE_MODES,
   NOTE_NAMES,
   SCALE_PENTATONIC_SUBSET,
 } from "../data/scales";
@@ -529,6 +530,16 @@ export function ScalesPage() {
       return JSON.parse(localStorage.getItem('scales-practiceNotes') ?? '[]') as PracticeNote[];
     } catch { return []; }
   });
+  const [customIntervals, setCustomIntervals] = useState<number[]>(() => {
+    try {
+      const parsed: unknown = JSON.parse(localStorage.getItem('scales-customIntervals') ?? '[0]');
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter((n): n is number => Number.isInteger(n) && n >= 1 && n <= 11);
+        return [0, ...Array.from(new Set(valid)).sort((a, b) => a - b)];
+      }
+    } catch { /* fall through */ }
+    return [0];
+  });
   const [showDegrees, setShowDegrees] = useState(
     () => localStorage.getItem('scales-showDegrees') === 'true'
   );
@@ -623,6 +634,7 @@ export function ScalesPage() {
   useEffect(() => { practiceNotesRef.current = practiceNotes; }, [practiceNotes]);
 
   // Persist to localStorage
+  useEffect(() => { localStorage.setItem('scales-customIntervals', JSON.stringify(customIntervals)); }, [customIntervals]);
   useEffect(() => { localStorage.setItem('scales-selectedKey', selectedKey); }, [selectedKey]);
   useEffect(() => { localStorage.setItem('scales-selectedMode', selectedMode); }, [selectedMode]);
   useEffect(() => { localStorage.setItem('scales-bpm', String(bpm)); }, [bpm]);
@@ -643,7 +655,10 @@ export function ScalesPage() {
   }, []);
 
   const rootPc = ROOT_NOTES.indexOf(selectedKey);
-  const intervals = useMemo(() => new Set(SCALE_INTERVALS[selectedMode]), [selectedMode]);
+  const intervals = useMemo(
+    () => new Set(selectedMode === 'custom' ? customIntervals : SCALE_INTERVALS[selectedMode]),
+    [selectedMode, customIntervals],
+  );
   const pentatonicSubset = SCALE_PENTATONIC_SUBSET[selectedMode];
   const pentatonicSet = useMemo(
     () => showPentatonic && pentatonicSubset ? new Set(pentatonicSubset) : null,
@@ -775,7 +790,7 @@ export function ScalesPage() {
 
   function handleSaveTrackClick() {
     const name = trackName.trim();
-    if (!name) return;
+    if (!name || selectedMode === 'custom') return;
     const existing = cloudTracks.find(
       (t) => t.name.toLowerCase() === name.toLowerCase(),
     );
@@ -893,7 +908,7 @@ export function ScalesPage() {
           onValueChange={handleModeChange}
           className="flex flex-wrap justify-start gap-1"
         >
-          {SCALE_MODES.map((mode) => (
+          {SCALE_PAGE_MODES.map((mode) => (
             <ToggleGroupItem
               key={mode}
               value={mode}
@@ -904,6 +919,35 @@ export function ScalesPage() {
           ))}
         </ToggleGroup>
       </div>
+
+      {selectedMode === 'custom' && (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[0.7rem] font-bold uppercase tracking-wider text-[#9898c8] mr-1">
+            Notes
+          </span>
+          {Array.from({ length: 12 }, (_, i) => {
+            const active = customIntervals.includes(i);
+            const label = showDegrees ? DEGREE_LABELS[i] : NOTE_NAMES[(rootPc + i) % 12];
+            return (
+              <button
+                key={i}
+                type="button"
+                aria-pressed={active}
+                disabled={i === 0}
+                title={i === 0 ? 'Root (always included)' : undefined}
+                onClick={() =>
+                  setCustomIntervals((prev) =>
+                    prev.includes(i) ? prev.filter((n) => n !== i) : [...prev, i].sort((a, b) => a - b),
+                  )
+                }
+                className={toggleCls(active, i === 0)}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Display options */}
       <div className="flex flex-wrap items-center gap-2">
@@ -1039,7 +1083,14 @@ export function ScalesPage() {
               setTimeout(() => setCopiedShare(false), 2000);
             });
           }}
-          className="px-4 py-1.5 text-[0.82rem] font-semibold rounded-md border transition-colors border-[#505270] bg-[#1e1f2c] text-[#aaa] hover:border-[#7070a0] hover:text-[#ddd]"
+          disabled={selectedMode === 'custom'}
+          title={selectedMode === 'custom' ? 'Sharing is not available for custom scales' : undefined}
+          className={cn(
+            "px-4 py-1.5 text-[0.82rem] font-semibold rounded-md border transition-colors",
+            selectedMode === 'custom'
+              ? DISABLED_CLS
+              : "border-[#505270] bg-[#1e1f2c] text-[#aaa] hover:border-[#7070a0] hover:text-[#ddd]",
+          )}
         >
           {copiedShare ? "✓ Copied!" : "Share"}
         </button>
@@ -1222,10 +1273,11 @@ export function ScalesPage() {
 
               <button
                 onClick={handleSaveTrackClick}
-                disabled={saving || !trackName.trim() || practiceNotes.length === 0 || overrideConfirm !== null}
+                disabled={saving || !trackName.trim() || practiceNotes.length === 0 || overrideConfirm !== null || selectedMode === 'custom'}
+                title={selectedMode === 'custom' ? 'Cloud saving is not available for custom scales' : undefined}
                 className={
                   "h-8 px-3.5 text-[0.82rem] font-semibold rounded-md border transition-colors " +
-                  (saving || !trackName.trim() || practiceNotes.length === 0
+                  (saving || !trackName.trim() || practiceNotes.length === 0 || selectedMode === 'custom'
                     ? "border-[#383858] bg-[#0b0b16] text-[#555578] cursor-not-allowed"
                     : "border-[#4a5fff] bg-[#10122a] text-[#8eaaff] hover:border-[#8eaaff] hover:text-[#c0d4ff]")
                 }

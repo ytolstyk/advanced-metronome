@@ -1,4 +1,4 @@
-export type ScaleMode =
+export type PresetScaleMode =
   | 'major'
   | 'minor'
   | 'harmonic_minor'
@@ -11,6 +11,9 @@ export type ScaleMode =
   | 'pentatonic_major'
   | 'pentatonic_minor'
   | 'blues';
+
+// 'custom' is a Scales-page-only mode; its intervals are user-selected page state.
+export type ScaleMode = PresetScaleMode | 'custom';
 
 export const SCALE_LABELS: Record<ScaleMode, string> = {
   major:            'Major',
@@ -25,9 +28,10 @@ export const SCALE_LABELS: Record<ScaleMode, string> = {
   pentatonic_major: 'Pentatonic Major',
   pentatonic_minor: 'Pentatonic Minor',
   blues:            'Blues',
+  custom:           'Custom',
 };
 
-export const SCALE_MODES: ScaleMode[] = [
+export const SCALE_MODES: PresetScaleMode[] = [
   'major',
   'minor',
   'harmonic_minor',
@@ -42,8 +46,11 @@ export const SCALE_MODES: ScaleMode[] = [
   'blues',
 ];
 
+// Modes offered on the Scales page (presets + user-defined custom).
+export const SCALE_PAGE_MODES: ScaleMode[] = [...SCALE_MODES, 'custom'];
+
 // Semitone intervals from root (0 = root)
-export const SCALE_INTERVALS: Record<ScaleMode, number[]> = {
+export const SCALE_INTERVALS: Record<PresetScaleMode, number[]> = {
   major:            [0, 2, 4, 5, 7, 9, 11],
   minor:            [0, 2, 3, 5, 7, 8, 10],
   harmonic_minor:   [0, 2, 3, 5, 7, 8, 11],
