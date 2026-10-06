@@ -2,7 +2,7 @@ import { playPianoNote } from './pianoSynth';
 import { pluckString, playPianoChord } from './chordSynths';
 import type { RootNote, ChordType } from '../data/chords';
 import { SCALE_INTERVALS } from '../data/scales';
-import type { ScaleMode } from '../data/scales';
+import type { PresetScaleMode } from '../data/scales';
 
 export function playInterval(
   ctx: AudioContext,
@@ -50,7 +50,7 @@ export function playEarTrainingChord(
 export function playScale(
   ctx: AudioContext,
   rootMidi: number,
-  mode: ScaleMode,
+  mode: PresetScaleMode,
   stepMs = 280,
 ): () => void {
   if (ctx.state === 'suspended') void ctx.resume();

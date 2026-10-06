@@ -7,7 +7,7 @@ import {
   type IntervalDirection,
 } from '../data/intervals';
 import { ROOT_NOTES, type ChordType } from '../data/chords';
-import { SCALE_MODES, type ScaleMode } from '../data/scales';
+import { SCALE_MODES, type PresetScaleMode } from '../data/scales';
 
 export interface IntervalQuestion {
   key: string;
@@ -72,11 +72,11 @@ export function generateChordQuestion(
 export interface ScaleQuestion {
   key: string;
   rootMidi: number;
-  mode: ScaleMode;
+  mode: PresetScaleMode;
 }
 
 export function generateScaleQuestion(
-  enabled: ReadonlySet<ScaleMode>,
+  enabled: ReadonlySet<PresetScaleMode>,
   excludeKey: string | null,
 ): ScaleQuestion {
   const modes = [...enabled];

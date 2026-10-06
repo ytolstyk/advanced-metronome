@@ -1,7 +1,7 @@
 import type { RootNote, ChordType } from '../data/chords';
 import { ROOT_NOTE_TO_PC, ROOT_NOTES } from '../data/chords';
 import { CHORD_INTERVALS } from '../audio/chordSynths';
-import type { ScaleMode } from '../data/scales';
+import type { PresetScaleMode } from '../data/scales';
 import { SCALE_INTERVALS, SCALE_MODES, SCALE_LABELS } from '../data/scales';
 
 export interface ChordSlot {
@@ -16,7 +16,7 @@ export interface DetectedKey {
 
 export interface ScaleSuggestion {
   root: RootNote;
-  mode: ScaleMode;
+  mode: PresetScaleMode;
   label: string;
 }
 

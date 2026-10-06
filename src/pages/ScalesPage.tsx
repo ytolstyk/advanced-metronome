@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuthenticator } from "@aws-amplify/ui-react";
 import { AuthGate } from "@/components/AuthGate/AuthGate";
 import { decodeScaleShare, buildScaleShareUrl } from "../shareUtils";
-import type { ScaleMode } from "../data/scales";
+import type { PresetScaleMode, ScaleMode } from "../data/scales";
 import {
   SCALE_INTERVALS,
   SCALE_LABELS,
@@ -528,7 +528,7 @@ export function ScalesPage() {
   });
   const [selectedMode, setSelectedMode] = useState<ScaleMode>(() => {
     const saved = localStorage.getItem('scales-selectedMode');
-    return SCALE_MODES.includes(saved as ScaleMode) ? (saved as ScaleMode) : 'major';
+    return SCALE_MODES.includes(saved as PresetScaleMode) ? (saved as PresetScaleMode) : 'major';
   });
   const [practiceMode, setPracticeMode] = useState(() =>
     localStorage.getItem('scales-practiceMode') === 'true'
@@ -777,8 +777,8 @@ export function ScalesPage() {
   }
 
   function applyModeString(mode: string) {
-    if (SCALE_MODES.includes(mode as ScaleMode)) {
-      setSelectedMode(mode as ScaleMode);
+    if (SCALE_MODES.includes(mode as PresetScaleMode)) {
+      setSelectedMode(mode as PresetScaleMode);
       return;
     }
     const custom = parseCustomMode(mode);

@@ -11,7 +11,7 @@ import {
   type IntervalDirection,
 } from '../data/intervals';
 import { CHORD_TYPE_LABELS, type ChordType } from '../data/chords';
-import { SCALE_LABELS, SCALE_MODES, type ScaleMode } from '../data/scales';
+import { SCALE_LABELS, SCALE_MODES, type PresetScaleMode } from '../data/scales';
 import {
   playInterval,
   playEarTrainingChord,
@@ -45,7 +45,7 @@ const TOGGLE_CLS =
   'data-[state=on]:border-[#5b7fff] data-[state=on]:bg-[#252850] data-[state=on]:text-[#8eaaff]';
 
 const DEFAULT_CHORD_TYPES: ChordType[] = ['major', 'minor', '7', 'maj7', 'dim', 'aug', 'sus2', 'sus4'];
-const DEFAULT_SCALE_MODES: ScaleMode[] = [
+const DEFAULT_SCALE_MODES: PresetScaleMode[] = [
   'major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian',
   'pentatonic_major', 'pentatonic_minor',
 ];
@@ -694,18 +694,18 @@ function ScalesExercise({ getCtx }: { getCtx: () => AudioContext }) {
     const v = lsGet('earTraining.scales.gameMode');
     return (v === '10' || v === '20' || v === '30' || v === 'infinite') ? v : '10';
   });
-  const [enabledModes, setEnabledModes] = useState<Set<ScaleMode>>(() => {
+  const [enabledModes, setEnabledModes] = useState<Set<PresetScaleMode>>(() => {
     try {
       const raw = lsGet('earTraining.scales.enabledModes');
       if (raw) {
-        const arr = JSON.parse(raw) as ScaleMode[];
+        const arr = JSON.parse(raw) as PresetScaleMode[];
         if (Array.isArray(arr) && arr.length > 0) return new Set(arr);
       }
     } catch { /* ignore */ }
     return new Set(DEFAULT_SCALE_MODES);
   });
 
-  const [guessState, setGuessState] = useState<{ key: string; guess: ScaleMode } | null>(null);
+  const [guessState, setGuessState] = useState<{ key: string; guess: PresetScaleMode } | null>(null);
 
   useEffect(() => { lsSet('earTraining.scales.gameMode', gameMode); }, [gameMode]);
   useEffect(() => { lsSet('earTraining.scales.enabledModes', JSON.stringify([...enabledModes])); }, [enabledModes]);
@@ -746,7 +746,7 @@ function ScalesExercise({ getCtx }: { getCtx: () => AudioContext }) {
 
   const answerOptions = useMemo(() => [...enabledModes], [enabledModes]);
 
-  function toggleMode(mode: ScaleMode) {
+  function toggleMode(mode: PresetScaleMode) {
     setEnabledModes((prev) => {
       const next = new Set(prev);
       if (next.has(mode)) {
@@ -758,7 +758,7 @@ function ScalesExercise({ getCtx }: { getCtx: () => AudioContext }) {
     });
   }
 
-  function onAnswer(mode: ScaleMode) {
+  function onAnswer(mode: PresetScaleMode) {
     if (!exercise.question) return;
     audio.stopCurrentSound();
     setGuessState({ key: exercise.question.key, guess: mode });
