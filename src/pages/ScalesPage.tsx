@@ -13,7 +13,7 @@ import {
   NOTE_NAMES,
   SCALE_PENTATONIC_SUBSET,
 } from "../data/scales";
-import { computeCAGEDShapes } from "../data/caged";
+import { computeCAGEDBands } from "../data/caged";
 import { INTERVAL_NAMES } from "../data/intervals";
 import { ROOT_NOTES } from "../data/chords";
 import type { RootNote } from "../data/chords";
@@ -319,18 +319,15 @@ function Fretboard({ rootPc, intervals, onNoteClick, highlightedDotKey, practice
   // Build CAGED bands
   const cagedBands: React.ReactNode[] = [];
   if (showCaged) {
-    const shapes = computeCAGEDShapes(rootPc);
     const bandY1 = TOP_PAD - STRING_H / 2;
     const bandH = (NUM_STRINGS - 1) * STRING_H + STRING_H;
-    for (const shape of shapes) {
-      const frets = shape.notes.map((n) => n.fret);
-      const minFret = Math.min(...frets);
-      const maxFret = Math.max(...frets);
-      const x1 = minFret === 0 ? LEFT_PAD : fretX(minFret) - FRET_W / 2;
-      const x2 = fretX(maxFret) + FRET_W / 2;
+    for (const shape of computeCAGEDBands(rootPc, NUM_FRETS)) {
+      // Dots sit between fret lines (fret n occupies fretX(n) - FRET_W .. fretX(n)); open strings sit in the nut area.
+      const x1 = shape.startFret <= 0 ? LEFT_PAD : fretX(shape.startFret) - FRET_W;
+      const x2 = fretX(shape.endFret);
       const midX = (x1 + x2) / 2;
       cagedBands.push(
-        <g key={`caged-${shape.name}`}>
+        <g key={`caged-${shape.name}-${shape.startFret}`}>
           <rect
             x={x1} y={bandY1} width={x2 - x1} height={bandH}
             fill={shape.color} opacity={0.09} rx="4"

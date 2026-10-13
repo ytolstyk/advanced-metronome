@@ -80,6 +80,35 @@ export function computeCAGEDShapes(rootPc: number): CagedShape[] {
   });
 }
 
+export interface CagedBand {
+  name: CagedName;
+  color: string;
+  startFret: number; // inclusive; may be -1 (meaning the nut/open strings are included)
+  endFret: number;   // inclusive
+}
+
+// Scale positions cover the chord-shape fret span plus one fret either side, so the
+// scale tones surrounding each triad fall inside its band. Neighbouring bands overlap.
+const BAND_PADDING = 1;
+
+// Fret bands (one per CAGED shape, repeated every octave) spanning the scale
+// position of each shape across a neck of `numFrets` frets.
+export function computeCAGEDBands(rootPc: number, numFrets: number): CagedBand[] {
+  const bands: CagedBand[] = [];
+  for (const name of CAGED_SHAPE_ORDER) {
+    const frets = TEMPLATES[name].map((n) => n.fret + rootPc);
+    const lo = Math.min(...frets) - BAND_PADDING;
+    const hi = Math.max(...frets) + BAND_PADDING;
+    for (let shift = -24; shift <= 24; shift += 12) {
+      const startFret = lo + shift;
+      const endFret = hi + shift;
+      if (endFret < 0 || startFret > numFrets) continue;
+      bands.push({ name, color: CAGED_COLORS[name], startFret, endFret: Math.min(endFret, numFrets) });
+    }
+  }
+  return bands;
+}
+
 export function getRootPc(rootNote: RootNote): number {
   return ROOT_NOTE_TO_PC[rootNote];
 }
