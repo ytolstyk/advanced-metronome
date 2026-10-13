@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { Authenticator } from '@aws-amplify/ui-react'
 import '@aws-amplify/ui-react/styles.css'
 import './auth/amplify'
@@ -34,6 +34,9 @@ import { CAGEDPage } from './pages/CAGEDPage.tsx'
 import { PracticeSessionPage } from './pages/PracticeSessionPage.tsx'
 import { IntervalTrainerPage } from './pages/IntervalTrainerPage.tsx'
 import { ArpeggiosPage } from './pages/ArpeggiosPage.tsx'
+import { ScrollToTop } from './components/ScrollToTop/ScrollToTop.tsx'
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage.tsx'
+import { TermsOfServicePage } from './pages/TermsOfServicePage.tsx'
 import { Github } from 'lucide-react'
 
 createRoot(document.getElementById('root')!).render(
@@ -44,6 +47,7 @@ createRoot(document.getElementById('root')!).render(
       <NoteColorsProvider>
       <TooltipProvider>
       <BrowserRouter>
+        <ScrollToTop />
         <Nav />
         <Routes>
           <Route path="/" element={<WelcomePage />} />
@@ -68,8 +72,10 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/practice" element={<PracticeSessionPage />} />
           <Route path="/interval-trainer" element={<IntervalTrainerPage />} />
           <Route path="/arpeggios" element={<ArpeggiosPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsOfServicePage />} />
         </Routes>
-        <footer style={{ textAlign: 'center', padding: '1rem', color: '#666', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+        <footer style={{ textAlign: 'center', padding: '1rem', color: '#666', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <span>&copy; Yuriy Tolstykh</span>
           <a href="https://github.com/ytolstyk/advanced-metronome" target="_blank" rel="noopener noreferrer">
             <Button variant="ghost" size="sm">
@@ -78,6 +84,10 @@ createRoot(document.getElementById('root')!).render(
             </Button>
           </a>
           <DonationModal />
+          <nav aria-label="Legal" style={{ display: 'flex', gap: '0.75rem' }}>
+            <Link to="/privacy" className="underline">Privacy Policy</Link>
+            <Link to="/terms" className="underline">Terms of Service</Link>
+          </nav>
         </footer>
       </BrowserRouter>
       </TooltipProvider>
