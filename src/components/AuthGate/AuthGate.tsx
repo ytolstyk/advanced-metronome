@@ -33,7 +33,7 @@ export function AuthSignInDialog({ open, onOpenChange }: AuthSignInDialogProps) 
         </VisuallyHidden.Root>
         {/* Mount Authenticator only when the dialog is open — avoids booting
             the Amplify state machine and hub subscription when not needed */}
-        {open && <Authenticator />}
+        {open && <Authenticator socialProviders={['google']} />}
       </DialogContent>
     </Dialog>
   );

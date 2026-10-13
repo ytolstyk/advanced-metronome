@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { User } from 'lucide-react';
 import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react';
+import { fetchUserAttributes } from 'aws-amplify/auth';
 import { Button } from '@/components/ui/button';
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 import {
@@ -31,7 +32,20 @@ export function AuthModal() {
     return () => clearTimeout(id);
   }, [isAuthenticated]);
 
-  const displayName = user?.signInDetails?.loginId ?? user?.username ?? '';
+  // Federated (Google) users have no signInDetails.loginId — read email from attributes
+  const [federatedEmail, setFederatedEmail] = useState('');
+  const userId = user?.userId;
+
+  useEffect(() => {
+    if (!isAuthenticated || user?.signInDetails?.loginId) return;
+    let cancelled = false;
+    fetchUserAttributes()
+      .then((attrs) => { if (!cancelled) setFederatedEmail(attrs.email ?? ''); })
+      .catch(() => { /* fall back to username */ });
+    return () => { cancelled = true; };
+  }, [isAuthenticated, userId, user?.signInDetails?.loginId]);
+
+  const displayName = user?.signInDetails?.loginId ?? (federatedEmail || user?.username) ?? '';
   const triggerText = isAuthenticated ? shortenEmail(displayName) : 'Sign In';
 
   function handleSignOut() {
@@ -73,7 +87,7 @@ export function AuthModal() {
             </VisuallyHidden.Root>
             {/* Mount only when the dialog is open — avoids booting the
                 Amplify state machine and hub subscription when not needed */}
-            {open && <Authenticator />}
+            {open && <Authenticator socialProviders={['google']} />}
           </>
         )}
       </DialogContent>
