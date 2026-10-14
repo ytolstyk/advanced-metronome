@@ -16,6 +16,10 @@
 .auth-dialog-content {
   padding: 0;
   max-width: 100%;
+  /* match the Amplify form so no differently-coloured frame shows around it */
+  background: hsl(235 22% 17%);
+  border-color: hsl(237 40% 34%);
+  overflow-x: hidden;
 }
 
 @media (min-width: 640px) {
@@ -68,27 +72,41 @@
 }
 
 /* ── Tabs ───────────────────────────────────────────────────────────── */
-[data-amplify-authenticator] .amplify-tabs {
-  background: hsl(233 26% 12%);
-  border-bottom: 1px solid hsl(237 40% 34%);
+[data-amplify-authenticator] .amplify-tabs__list {
+  background: hsl(235 22% 17%);
+  border-width: 0 0 2px 0;
+  border-style: solid;
+  border-color: hsl(237 40% 34%);
+  /* keep the last tab clear of the dialog close (X) button */
+  padding: 0 3rem 0 1.5rem;
 }
-[data-amplify-authenticator] .amplify-tabs-item {
-  color: hsl(237 40% 68%);
+[data-amplify-authenticator] .amplify-tabs__item {
+  background: transparent;
+  color: hsl(237 50% 80%);
+  border-style: solid;
   border-color: transparent;
-  font-size: 0.875rem;
+  border-width: 0 0 3px 0;
+  margin: 0 0 -2px 0;
+  font-size: 0.9375rem;
   font-weight: 600;
-  padding: 0.875rem 1.5rem;
+  padding: 1rem 1.5rem;
   letter-spacing: 0.01em;
 }
-[data-amplify-authenticator] .amplify-tabs-item[data-state="active"] {
-  color: hsl(237 100% 82%);
-  border-color: hsl(237 100% 68%);
-  background: transparent;
-  text-shadow: 0 0 12px hsl(237 100% 66% / 0.4);
+[data-amplify-authenticator] .amplify-tabs__item--active {
+  color: #fff;
+  background: hsl(237 60% 30% / 0.35);
+  border-color: hsl(237 100% 72%);
+  text-shadow: 0 0 12px hsl(237 100% 66% / 0.5);
 }
-[data-amplify-authenticator] .amplify-tabs-item:hover:not([data-state="active"]) {
-  color: hsl(240 40% 88%);
-  background: hsl(237 25% 20%);
+[data-amplify-authenticator] .amplify-tabs__item:hover:not(.amplify-tabs__item--active) {
+  color: #fff;
+  background: hsl(237 30% 24%);
+}
+[data-amplify-authenticator] .amplify-tabs__item:focus-visible {
+  color: #fff;
+  background: hsl(237 30% 24%);
+  border-color: hsl(237 100% 74%);
+  box-shadow: none;
 }
 
 /* ── Headings & body text ───────────────────────────────────────────── */
@@ -197,13 +215,26 @@
   text-decoration: underline;
 }
 
-/* ── Dividers ───────────────────────────────────────────────────────── */
-[data-amplify-authenticator] .amplify-divider {
-  border-color: hsl(237 35% 38%);
+/* ── Dividers & social sign-in spacing ──────────────────────────────── */
+[data-amplify-authenticator] .amplify-authenticator__federated-buttons {
+  margin-bottom: 0.5rem;
 }
-[data-amplify-authenticator] .amplify-divider-label {
-  color: hsl(237 40% 68%);
-  background: hsl(235 22% 17%);
+[data-amplify-authenticator] .amplify-divider {
+  --amplify-components-divider-label-background-color: hsl(235 22% 17%);
+  --amplify-components-divider-label-color: hsl(237 60% 88%);
+  --amplify-components-divider-label-font-size: 0.875rem;
+  --amplify-components-divider-label-padding-inline: 1rem;
+  border-color: hsl(237 55% 58%);
+  opacity: 1;
+  margin: 1.75rem 0;
+}
+[data-amplify-authenticator] .amplify-divider--horizontal {
+  border-bottom-width: 2px;
+}
+[data-amplify-authenticator] .amplify-divider::after {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* ── Alerts / errors ────────────────────────────────────────────────── */
