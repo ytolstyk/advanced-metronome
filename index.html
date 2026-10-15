@@ -2,6 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Capability URLs (/bands/:id, ?join=CODE) must not leak via the Referer header -->
+    <meta name="referrer" content="same-origin" />
     <link rel="icon" href="/favicon.ico" />
     <link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />

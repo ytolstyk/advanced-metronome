@@ -19,6 +19,12 @@ npm test                    # Run tests (Vitest watch mode)
 npm run test:run            # Single-pass test run (CI)
 ```
 
+Bands auth regression check (needs a **sandbox** backend, never staging/prod). It refuses to run unless you name the target pool and it differs from this repo's own `amplify_outputs.json` (by path and by the committed copy); it creates throwaway Cognito users and deletes them when done:
+
+```bash
+BANDS_SANDBOX_POOL_ID=<sandbox user pool id> node scripts/bands-auth-check.mjs /path/to/sandbox/amplify_outputs.json
+```
+
 End-to-end tests: **Playwright** (Chromium only) running against the Vite dev server.
 
 ```bash
@@ -64,6 +70,9 @@ Routes:
 - `/ear-training` — Ear training: intervals, chords, scales (`src/pages/EarTrainingPage.tsx`)
 - `/interval-trainer` — Fretboard interval identification game (`src/pages/IntervalTrainerPage.tsx`)
 - `/arpeggios` — Arpeggio library with CAGED shapes and sweep playback (`src/pages/ArpeggiosPage.tsx`)
+- `/bands` — My bands: create, join by invite code (`src/pages/BandsPage.tsx`)
+- `/bands/:bandId` — Band: set lists, roster, invite, moderation, leave/delete (`src/pages/BandPage.tsx`)
+- `/bands/:bandId/setlists/:setListId` — Set list: suggest songs, vote up/down (`src/pages/SetListPage.tsx`)
 - `/click-track` — Click track builder (`src/pages/ClickTrackPage.tsx`)
 - `/fret-memorizer` — Fretboard note memorizer game (`src/pages/FretMemorizerPage.tsx`)
 - `/practice` — Practice session tracker: goals, timer, history (`src/pages/PracticeSessionPage.tsx`)
@@ -191,6 +200,26 @@ Components in `src/components/TabEditor/`:
 
 `src/pages/PracticeSessionPage.tsx`. Phase-based UI (setup → active → summary). Goal fields: duration, target BPM, skill focus text, and which tools to practice. Live timer via `usePracticeTimer` hook (`src/hooks/usePracticeTimer.ts`). Interrupted sessions are persisted to localStorage so the user can resume. Completed sessions save to cloud via `src/api/practiceSessionApi.ts`. History view shows weekly calendar, streak counter, and contextual nudges (`computeNudges` in `src/practiceSessionUtils.ts`). Types in `src/practiceSessionTypes.ts`.
 
+## Bands
+
+`src/pages/BandsPage.tsx` → `BandPage.tsx` → `SetListPage.tsx`; components in `src/components/Bands/`; pure logic in `src/bandUtils.ts` (validators, sanitising, tallies) and `src/bandViews.ts` (raw rows → validated views), types/limits in `src/bandTypes.ts`; API in `src/api/bandsApi.ts` (bands, invites, members, owner moderation), `setListsApi.ts` (set lists, songs), `songVotesApi.ts` (votes), shared client/helpers/Band write protocol in `bandsShared.ts`, pagination + bounded parallelism in `api/paginate.ts`; data loading via `src/hooks/useLoader.ts`, optimistic voting in `useOptimisticVotes.ts`. Users belong to bands (instant join by invite code), bands have set lists, set lists have songs; members suggest songs straight onto a set list and vote up/down, at most once each (switch/retract allowed). A set list is a vote-ranked suggestions board (no manual running order yet).
+
+**Access model (no Lambda, Amplify auth rules only):** rows are reachable only by id (`get`) or by index queries that need a parent id; plain `list` is disabled on every public model. Possessing a `bandId` is the capability. **`Band` is the single root of trust**: only its owner can write it, and its owner-written arrays (`setListIds`, `archivedSetListIds`, `bannedSubs`, `hiddenSongIds`) drive read-time validation. Every row shown must pass through the validators (`bandUtils.ts`, assembled in `bandViews.ts`); pages call `assembleBandView`/`assembleSetListView` on fetched rows and never render raw rows. Rows whose text changes when sanitised (zero-width/bidi characters, padding) are hidden, not repaired. Auth rules only check a row's own fields on write, so a signed-in user can write junk rows; validators make them invisible.
+
+**Invariants — do not break:**
+- All owner rules use `allow.owner().identityClaim('sub')` (`owner` = bare Cognito sub). Do **not** declare `owner` on Band/SetList/Song (undeclared, it is server-populated and absent from create/update inputs, so it can't be forged or reassigned). Vote/Member/MyBand declare `owner` only because it is part of their key.
+- Never add an `owner`-keyed index to a public-read model (it would let anyone list every band a user belongs to). "My bands" comes from the private `MyBand` model.
+- Band, BandInvite and SetList rows are **never deleted** (tombstones: `deletedAt`, `revokedAt`, `archivedAt`) so ids/codes can't be re-created and hijacked. `disableOperations(['delete', …])` enforces it.
+- Band writes go through `updateBand` (checks sign-in, fresh read, partial update, `version` condition, per-band mutex, refuses tombstoned bands). Never send a whole Band object. Reads never write: dead bands are dropped by an explicit `pruneDeadBands`.
+- Deleting a band is one atomic tombstone+scrub Band write (after retiring the invite), then set-list rows are tombstoned; every step is re-runnable.
+- Text limits: band/set-list names 50 characters, display names 30 (`sanitizeName` vs `sanitizeDisplayName`); never clamp one with the other's limit.
+- Votes: key `(songId, owner)` guarantees one row per member per song; the tally also dedupes and checks the voter is a valid member and the vote's parents match the song.
+- Keys and GSIs are immutable after deploy. After any schema change run the sandbox check above and wait ~5 minutes for AppSync/GSIs to settle before trusting results.
+
+**Known limits (disclosed in the privacy policy):** a `bandId` is the real capability — ex-members or anyone holding the link can still read a band; "remove member" and "reset code" are UI-level (reset only stops people without the id); banning is per account (Google and email sign-ins are different accounts); Vote rows are queryable by any signed-in user who knows the ids; a hostile signed-in user can flood a known set list's vote page; ownership can't be transferred and the owner can't leave (only delete). Caps (15 members, 10 set lists, 100 songs per list, 200 bans, 1000 hidden songs) are client-side only.
+
+**Persistence exception:** band data is cloud-only and requires sign-in (`<AuthGate>`); it is inherently multi-user, so it is not mirrored to localStorage. Only the pending invite code (sessionStorage, cleared after use or sign-out) is stored locally.
+
 ## Lessons
 
 Three nested pages: `LessonsPage` → `ModulePage` → `LessonPage`. Lesson content lives in `src/data/lessons.ts` (static). Progress (completed/favorites) is tracked in `LessonsProgressContext` and persisted to localStorage. `BuildLessonPage` is an admin tool for drafting new lessons. `LessonTabView` component renders individual lesson steps.
@@ -250,6 +279,7 @@ All use `cn()` from `src/lib/utils.ts` (clsx + tailwind-merge) for class merging
 - `useLessonAudio` (`src/hooks/useLessonAudio.ts`) — audio playback for lesson examples
 - `useLessonsProgress` (`src/hooks/useLessonsProgress.ts`) — lesson completion tracking
 - `useExercise(mode)` (`src/hooks/useExercise.ts`) — game state machine (idle/playing/result) shared by ear training tabs
+- `useLoader(load)` (`src/hooks/useLoader.ts`) — load-on-mount + throttled refetch on tab focus + `reload()`; keeps last good data on a failed refresh, error state on a failed first load; mount with a `key` per resource
 - `usePracticeTimer()` (`src/hooks/usePracticeTimer.ts`) — wall-clock elapsed timer for practice sessions; returns elapsed seconds and a reset function
 
 ## Context providers

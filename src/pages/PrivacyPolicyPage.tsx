@@ -2,7 +2,7 @@ import { LegalPage } from '@/components/LegalPage/LegalPage';
 
 export function PrivacyPolicyPage() {
   return (
-    <LegalPage title="Privacy Policy" lastUpdated="October 12, 2026">
+    <LegalPage title="Privacy Policy" lastUpdated="October 14, 2026">
       <p>
         This Privacy Policy explains what information Advanced Metronome (the &ldquo;Service&rdquo;)
         collects, how it is used, and the choices you have.
@@ -22,6 +22,16 @@ export function PrivacyPolicyPage() {
         </li>
         <li>
           <strong>Published tabs:</strong> tabs you choose to publish are visible to other users.
+        </li>
+        <li>
+          <strong>Bands:</strong> if you create or join a band, the name you choose for it, your
+          display name, the songs you suggest, your up/down votes and your account&rsquo;s internal
+          user ID are stored in the cloud. Anyone who has a band&rsquo;s link or ID can read that
+          band&rsquo;s set lists, members&rsquo; display names and IDs, songs and votes, and the
+          list of removed members&rsquo; IDs. Vote records (an ID, the song and your up/down choice,
+          never names or titles) can also be looked up by any signed-in user who knows the set
+          list&rsquo;s ID. Removing someone from a band hides them in the app but does not stop
+          someone who already has the band&rsquo;s ID from reading it.
         </li>
         <li>
           <strong>Microphone (local analysis only):</strong> the tuner and fret memorizer can use your
@@ -53,13 +63,17 @@ export function PrivacyPolicyPage() {
       <p>
         Local data can be cleared via your browser settings. To request deletion of your account and
         cloud-stored data, contact us using the details below. Deleting a published tab removes it
-        from the public library.
+        from the public library. When you leave a band you can also delete your own votes and songs
+        in it. Deleted bands are closed and their name, invite code and member bans are cleared, but
+        songs and votes written by other members may remain until those members remove them.
       </p>
 
       <h2>Cookies and local storage</h2>
       <p>
         We use localStorage and authentication session storage that are necessary for the Service to
-        function. We do not use advertising cookies.
+        function. If you open a band invite link while signed out, the invite code is kept in your
+        browser&rsquo;s session storage until you finish joining, dismiss it or sign out. We do not
+        use advertising cookies.
       </p>
 
       <h2>Children</h2>

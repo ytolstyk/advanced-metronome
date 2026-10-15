@@ -142,6 +142,13 @@ const CATEGORIES = [
         route: "/practice",
         color: "#22d3ee",
       },
+      {
+        icon: "🎤",
+        title: "Bands",
+        desc: "Share set lists with your band, suggest songs and vote on what to play",
+        route: "/bands",
+        color: "#f472b6",
+      },
     ],
   },
 ];

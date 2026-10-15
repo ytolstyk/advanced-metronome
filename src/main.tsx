@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { Authenticator } from '@aws-amplify/ui-react'
 import '@aws-amplify/ui-react/styles.css'
 import './auth/amplify'
+import { registerJoinCodeCleanup } from './bandJoinCode.ts'
 import './index.css'
 import { DrumMachinePage } from './pages/DrumMachinePage.tsx'
 import { WelcomePage } from './pages/WelcomePage.tsx'
@@ -34,10 +35,15 @@ import { CAGEDPage } from './pages/CAGEDPage.tsx'
 import { PracticeSessionPage } from './pages/PracticeSessionPage.tsx'
 import { IntervalTrainerPage } from './pages/IntervalTrainerPage.tsx'
 import { ArpeggiosPage } from './pages/ArpeggiosPage.tsx'
+import { BandsPage } from './pages/BandsPage.tsx'
+import { BandPage } from './pages/BandPage.tsx'
+import { SetListPage } from './pages/SetListPage.tsx'
 import { ScrollToTop } from './components/ScrollToTop/ScrollToTop.tsx'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage.tsx'
 import { TermsOfServicePage } from './pages/TermsOfServicePage.tsx'
 import { Github } from 'lucide-react'
+
+registerJoinCodeCleanup()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -72,6 +78,9 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/practice" element={<PracticeSessionPage />} />
           <Route path="/interval-trainer" element={<IntervalTrainerPage />} />
           <Route path="/arpeggios" element={<ArpeggiosPage />} />
+          <Route path="/bands" element={<BandsPage />} />
+          <Route path="/bands/:bandId" element={<BandPage />} />
+          <Route path="/bands/:bandId/setlists/:setListId" element={<SetListPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/terms" element={<TermsOfServicePage />} />
         </Routes>

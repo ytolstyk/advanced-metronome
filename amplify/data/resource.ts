@@ -245,6 +245,113 @@ const schema = a.schema({
     .returns(a.string())
     .authorization(allow => [allow.authenticated()])
     .handler(a.handler.function(geminiTabsFunction)),
+
+  // ── Bands ────────────────────────────────────────────────────────────────
+  // Capability-style access (see the Bands plan): rows are reachable only by id (`get`) or by
+  // index queries that need a parent id; plain `list` is disabled on every public model.
+  // `identityClaim('sub')` makes `owner` the bare Cognito sub. Do NOT add owner-keyed indexes to
+  // public-read models (they would let anyone look up all bands a user belongs to), and do NOT
+  // declare `owner` on Band/SetList/Song (undeclared, it is server-populated and not in any input,
+  // so it can neither be forged nor reassigned). Keys/GSIs are immutable once deployed.
+
+  // Root of trust. Only the owner can write it; the owner-written arrays below drive validation.
+  Band: a.model({
+    name: a.string().required(),
+    inviteCode: a.string().required(),
+    deletedAt: a.datetime(),            // tombstone: Band rows are never deleted
+    version: a.integer().required(),    // optimistic lock via update condition (version eq N)
+    setListIds: a.string().array(),
+    archivedSetListIds: a.string().array(),
+    bannedSubs: a.string().array(),
+    hiddenSongIds: a.string().array(),
+  })
+    .disableOperations(['delete', 'list', 'subscriptions'])
+    .authorization(allow => [
+      allow.owner().identityClaim('sub').to(['create', 'read', 'update']),
+      allow.authenticated().to(['get']),
+    ]),
+
+  // Invite code → bandId lookup. Rows are never deleted (a retired code can't be re-created).
+  BandInvite: a.model({
+    code: a.string().required(),
+    bandId: a.string().required(),
+    revokedAt: a.datetime(),
+  })
+    .identifier(['code'])
+    .disableOperations(['delete', 'list', 'subscriptions'])
+    .authorization(allow => [
+      allow.owner().identityClaim('sub').to(['create', 'read', 'update']),
+      allow.authenticated().to(['get']),
+    ]),
+
+  // Private per-user "my bands" list. No authenticated read.
+  MyBand: a.model({
+    owner: a.string().required(),
+    bandId: a.string().required(),
+  })
+    .identifier(['owner', 'bandId'])
+    .disableOperations(['subscriptions'])
+    .authorization(allow => [allow.owner().identityClaim('sub')]),
+
+  // Self-written membership row; roster is read through the bandId index.
+  Member: a.model({
+    bandId: a.string().required(),
+    owner: a.string().required(),
+    displayName: a.string().required(),
+  })
+    .identifier(['bandId', 'owner'])
+    .secondaryIndexes(index => [index('bandId').queryField('listMemberByBandId')])
+    .disableOperations(['list', 'subscriptions'])
+    .authorization(allow => [
+      allow.owner().identityClaim('sub'),
+      allow.authenticated().to(['get', 'list']),
+    ]),
+
+  // Loaded by `get` for each id in Band.setListIds; rows are never deleted (archived instead).
+  SetList: a.model({
+    bandId: a.string().required(),
+    name: a.string().required(),
+    archivedAt: a.datetime(),
+  })
+    .disableOperations(['delete', 'list', 'subscriptions'])
+    .authorization(allow => [
+      allow.owner().identityClaim('sub').to(['create', 'read', 'update']),
+      allow.authenticated().to(['get']),
+    ]),
+
+  Song: a.model({
+    bandId: a.string().required(),
+    setListId: a.string().required(),
+    title: a.string().required(),
+    artist: a.string(),
+    key: a.string(),
+    bpm: a.integer(),
+    notes: a.string(),
+  })
+    .secondaryIndexes(index => [index('setListId').queryField('listSongBySetList')])
+    .disableOperations(['list', 'subscriptions'])
+    .authorization(allow => [
+      allow.owner().identityClaim('sub'),
+      allow.authenticated().to(['get', 'list']),
+    ]),
+
+  // One row per (song, voter). The key makes a second vote a conflict and stops key squatting.
+  Vote: a.model({
+    songId: a.string().required(),
+    owner: a.string().required(),
+    value: a.string().required(),       // 'up' | 'down', validated in the client
+    bandId: a.string().required(),
+    setListId: a.string().required(),
+  })
+    .identifier(['songId', 'owner'])
+    .secondaryIndexes(index => [
+      index('setListId').sortKeys(['owner']).queryField('listVoteBySetList'),
+    ])
+    .disableOperations(['list', 'subscriptions'])
+    .authorization(allow => [
+      allow.owner().identityClaim('sub'),
+      allow.authenticated().to(['get', 'list']),
+    ]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

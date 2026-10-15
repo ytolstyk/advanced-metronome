@@ -36,6 +36,7 @@ const NAV_GROUPS = [
     label: "Track",
     items: [
       { to: "/practice", label: "Practice" },
+      { to: "/bands", label: "Bands" },
     ],
   },
 ];
