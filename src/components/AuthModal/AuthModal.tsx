@@ -14,8 +14,12 @@ import {
 } from '@/components/ui/dialog';
 import './AuthModal.css';
 
-function shortenEmail(email: string): string {
-  const [local] = email.split('@');
+const FEDERATED_LABEL_RETRY_MS = 1000;
+const FEDERATED_LABEL_MAX_RETRIES = 3;
+
+/** Shortens an email (local part) or a display name for the nav button. */
+function shortenLabel(label: string): string {
+  const [local] = label.split('@');
   return local.length > 10 ? local.slice(0, 10) + '…' : local;
 }
 
@@ -32,21 +36,42 @@ export function AuthModal() {
     return () => clearTimeout(id);
   }, [isAuthenticated]);
 
-  // Federated (Google) users have no signInDetails.loginId — read email from attributes
-  const [federatedEmail, setFederatedEmail] = useState('');
+  // Federated (Google) users have no signInDetails.loginId — read email/name from attributes.
+  // Right after the OAuth redirect the tokens may not be stored yet, so retry a few times.
+  // Keyed by user id so a previous user's label never shows for the next one.
+  const [federated, setFederated] = useState<{ id: string; label: string } | null>(null);
   const userId = user?.userId;
 
   useEffect(() => {
-    if (!isAuthenticated || user?.signInDetails?.loginId) return;
+    if (!isAuthenticated || !userId || user?.signInDetails?.loginId) return;
     let cancelled = false;
-    fetchUserAttributes()
-      .then((attrs) => { if (!cancelled) setFederatedEmail(attrs.email ?? ''); })
-      .catch(() => { /* fall back to username */ });
-    return () => { cancelled = true; };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const retry = (attempt: number) => {
+      if (cancelled || attempt >= FEDERATED_LABEL_MAX_RETRIES) return;
+      timer = setTimeout(() => load(attempt + 1), FEDERATED_LABEL_RETRY_MS);
+    };
+    const load = (attempt: number) => {
+      fetchUserAttributes()
+        .then((attrs) => {
+          if (cancelled) return;
+          const label = attrs.email ?? attrs.name ?? attrs.preferred_username ?? '';
+          if (label) setFederated({ id: userId, label });
+          else retry(attempt);
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          console.warn(`[AuthModal] fetchUserAttributes failed (attempt ${attempt + 1}):`, err);
+          retry(attempt);
+        });
+    };
+    load(0);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [isAuthenticated, userId, user?.signInDetails?.loginId]);
 
-  const displayName = user?.signInDetails?.loginId ?? (federatedEmail || user?.username) ?? '';
-  const triggerText = isAuthenticated ? shortenEmail(displayName) : 'Sign In';
+  const federatedLabel = federated && federated.id === userId ? federated.label : '';
+  // Never show the raw federated username (e.g. "google_1052…") — it is an opaque id, not a name.
+  const displayName = user?.signInDetails?.loginId ?? federatedLabel;
+  const triggerText = isAuthenticated ? (displayName ? shortenLabel(displayName) : 'Account') : 'Sign In';
 
   function handleSignOut() {
     signOut();
@@ -74,7 +99,7 @@ export function AuthModal() {
               <DialogDescription>Signed in to your account.</DialogDescription>
             </DialogHeader>
             <div className="auth-signed-in">
-              <p className="auth-email">{displayName}</p>
+              {displayName && <p className="auth-email">{displayName}</p>}
               <Button variant="outline" onClick={handleSignOut} className="w-full">
                 Sign Out
               </Button>
