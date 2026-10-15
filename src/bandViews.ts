@@ -13,6 +13,7 @@ import {
   filterValidMembers,
   filterValidSetLists,
   isBandOwner,
+  isSetListShared,
   myVotes,
   partitionSongs,
   sanitizeDisplayName,
@@ -81,6 +82,7 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
   const tallies = tallyVotes(counted, visible);
   return {
     setList,
+    shared: isSetListShared(view.band, setListId),
     songs: sortSongsByScore(visible, tallies),
     tallies,
     myVotes: myVotes(counted, view.sub),

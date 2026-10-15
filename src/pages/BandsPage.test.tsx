@@ -39,6 +39,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   archivedSetListIds: [],
   bannedSubs: [],
   hiddenSongIds: [],
+  sharedSetListIds: [],
   ...over,
 });
 const entry = (over: Partial<MyBandEntry> = {}): MyBandEntry => ({ band: band(), status: 'active', isOwner: false, ...over });

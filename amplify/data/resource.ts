@@ -254,6 +254,14 @@ const schema = a.schema({
   // declare `owner` on Band/SetList/Song (undeclared, it is server-populated and not in any input,
   // so it can neither be forged nor reassigned). Keys/GSIs are immutable once deployed.
 
+  // Shared (public) set lists: `allow.guest()` lets signed-out visitors READ Band/SetList/Song/Vote/
+  // Member by id or parent-id index (never write). Auth rules can't look at a row's contents, so
+  // "not shared" is enforced only by the client validators via `Band.sharedSetListIds`, like every
+  // other owner-written moderation array. Consequence (disclosed in the privacy policy): a visitor
+  // with a shared link can read the SetList row, hence its bandId, hence the whole band (inviteCode,
+  // roster, votes) without signing in. Anyone could already do this by signing up; guests just skip
+  // that step. Real per-list revocation would need a separate public projection model.
+
   // Root of trust. Only the owner can write it; the owner-written arrays below drive validation.
   Band: a.model({
     name: a.string().required(),
@@ -264,11 +272,13 @@ const schema = a.schema({
     archivedSetListIds: a.string().array(),
     bannedSubs: a.string().array(),
     hiddenSongIds: a.string().array(),
+    sharedSetListIds: a.string().array(), // owner-written: set lists anyone with the link may read
   })
     .disableOperations(['delete', 'list', 'subscriptions'])
     .authorization(allow => [
       allow.owner().identityClaim('sub').to(['create', 'read', 'update']),
       allow.authenticated().to(['get']),
+      allow.guest().to(['get']),
     ]),
 
   // Invite code → bandId lookup. Rows are never deleted (a retired code can't be re-created).
@@ -305,6 +315,7 @@ const schema = a.schema({
     .authorization(allow => [
       allow.owner().identityClaim('sub'),
       allow.authenticated().to(['get', 'list']),
+      allow.guest().to(['get', 'list']),
     ]),
 
   // Loaded by `get` for each id in Band.setListIds; rows are never deleted (archived instead).
@@ -317,6 +328,7 @@ const schema = a.schema({
     .authorization(allow => [
       allow.owner().identityClaim('sub').to(['create', 'read', 'update']),
       allow.authenticated().to(['get']),
+      allow.guest().to(['get']),
     ]),
 
   Song: a.model({
@@ -335,6 +347,7 @@ const schema = a.schema({
     .authorization(allow => [
       allow.owner().identityClaim('sub'),
       allow.authenticated().to(['get', 'list']),
+      allow.guest().to(['get', 'list']),
     ]),
 
   // One row per (song, voter). The key makes a second vote a conflict and stops key squatting.
@@ -353,6 +366,7 @@ const schema = a.schema({
     .authorization(allow => [
       allow.owner().identityClaim('sub'),
       allow.authenticated().to(['get', 'list']),
+      allow.guest().to(['get', 'list']),
     ]),
 });
 

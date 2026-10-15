@@ -18,6 +18,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   archivedSetListIds: [],
   bannedSubs: [],
   hiddenSongIds: [],
+  sharedSetListIds: [],
   ...over,
 });
 const member = (owner: string, displayName = owner, createdAt = '2026-01-01T00:00:00Z'): MemberRecord => ({
@@ -167,5 +168,18 @@ describe('assembleSetListView', () => {
     expect(assembleSetListView(view, 'sl-1', rows([], [], { s: true, v: false }))!.incomplete).toBe(true);
     expect(assembleSetListView(view, 'sl-1', rows([], [], { s: false, v: true }))!.incomplete).toBe(true);
     expect(assembleSetListView(view, 'sl-1', rows([], []))!.incomplete).toBe(false);
+  });
+
+  it('marks the list shared only when the owner shared it (band-level, independent of who is asking)', () => {
+    expect(assembleSetListView(bandView(), 'sl-1', rows([], []))!.shared).toBe(false);
+    const sharedBand = band({ sharedSetListIds: ['sl-1'] });
+    expect(assembleSetListView(bandView({ band: sharedBand }), 'sl-1', rows([], []))!.shared).toBe(true);
+    expect(assembleSetListView(bandView({ band: sharedBand, sub: '', ownRow: null }), 'sl-1', rows([], []))!.shared).toBe(true);
+  });
+
+  it('a shared id that is not one of the band\'s set lists yields no list at all', () => {
+    const view = bandView({ band: band({ setListIds: ['sl-1'], sharedSetListIds: ['sl-2'] }), setListRows: [setList()] });
+    expect(assembleSetListView(view, 'sl-2', rows([], []))).toBeNull();
+    expect(assembleSetListView(view, 'sl-1', rows([], []))!.shared).toBe(false);
   });
 });

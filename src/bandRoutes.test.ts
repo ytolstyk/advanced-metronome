@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandPath, setListPath } from './bandRoutes';
+import { bandPath, setListPath, sharedSetListPath } from './bandRoutes';
 
 describe('bandRoutes', () => {
   it('builds plain paths for normal ids', () => {
@@ -11,5 +11,14 @@ describe('bandRoutes', () => {
     expect(bandPath('../tab-editor')).toBe('/bands/..%2Ftab-editor');
     expect(bandPath('x?join=ABC#frag')).toBe('/bands/x%3Fjoin%3DABC%23frag');
     expect(setListPath('b', 'a/b')).toBe('/bands/b/setlists/a%2Fb');
+  });
+
+  it('builds the public shared path from the set list id only (no band id leaks into the URL)', () => {
+    expect(sharedSetListPath('sl-1')).toBe('/shared/sl-1');
+  });
+
+  it('encodes hostile set list ids in the shared path', () => {
+    expect(sharedSetListPath('../bands')).toBe('/shared/..%2Fbands');
+    expect(sharedSetListPath('a b?x=1#h')).toBe('/shared/a%20b%3Fx%3D1%23h');
   });
 });

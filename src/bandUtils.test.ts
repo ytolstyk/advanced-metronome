@@ -11,6 +11,8 @@ import {
   formatInviteCode,
   generateInviteCode,
   isBanned,
+  isCleanText,
+  isSetListShared,
   isVoteValue,
   myVotes,
   normalizeHttpUrl,
@@ -48,6 +50,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   archivedSetListIds: [],
   bannedSubs: [],
   hiddenSongIds: [],
+  sharedSetListIds: [],
   ...over,
 });
 const member = (owner: string, over: Partial<MemberRecord> = {}): MemberRecord => ({
@@ -906,5 +909,72 @@ describe('splitTextWithLinks', () => {
       { text: '>' },
     ]);
     expect(splitTextWithLinks('"https://example.com/x"').filter((p) => p.href)).toHaveLength(1);
+  });
+});
+
+describe('isSetListShared', () => {
+  const shared = (over: Partial<BandRecord> = {}) =>
+    band({ setListIds: ['sl-1', 'sl-2'], sharedSetListIds: ['sl-1'], ...over });
+
+  it('is true for an alive band whose id is in both setListIds and sharedSetListIds', () => {
+    expect(isSetListShared(shared(), 'sl-1')).toBe(true);
+  });
+
+  it('is false for a set list the owner has not shared', () => {
+    expect(isSetListShared(shared(), 'sl-2')).toBe(false);
+  });
+
+  it('is false for an id only in sharedSetListIds (not one of the band\'s set lists)', () => {
+    expect(isSetListShared(shared({ setListIds: ['sl-2'], sharedSetListIds: ['sl-1'] }), 'sl-1')).toBe(false);
+  });
+
+  it('is false for an archived id (moved out of setListIds) even if still listed as shared', () => {
+    expect(isSetListShared(shared({ setListIds: [], archivedSetListIds: ['sl-1'] }), 'sl-1')).toBe(false);
+  });
+
+  it('is false for an unknown id and for the empty id', () => {
+    expect(isSetListShared(shared(), 'sl-nope')).toBe(false);
+    expect(isSetListShared(shared({ sharedSetListIds: [''], setListIds: [''] }), 'sl-1')).toBe(false);
+  });
+
+  it('is false once the band is deleted', () => {
+    expect(isSetListShared(shared({ deletedAt: '2026-02-01T00:00:00Z' }), 'sl-1')).toBe(false);
+  });
+
+  it('ignores ids beyond the maxSetLists prefix of EITHER array (hostile owner-written arrays are bounded)', () => {
+    const filler = Array.from({ length: BAND_LIMITS.maxSetLists }, (_, i) => `f${i}`);
+    expect(isSetListShared(band({ setListIds: ['sl-1'], sharedSetListIds: [...filler, 'sl-1'] }), 'sl-1')).toBe(false);
+    expect(isSetListShared(band({ setListIds: [...filler, 'sl-1'], sharedSetListIds: ['sl-1'] }), 'sl-1')).toBe(false);
+  });
+
+  it('still honours an id sitting exactly at the last allowed position', () => {
+    const filler = Array.from({ length: BAND_LIMITS.maxSetLists - 1 }, (_, i) => `f${i}`);
+    expect(isSetListShared(band({ setListIds: [...filler, 'sl-1'], sharedSetListIds: [...filler, 'sl-1'] }), 'sl-1')).toBe(true);
+  });
+});
+
+describe('isCleanText', () => {
+  it('accepts normal text within the limit', () => {
+    expect(isCleanText('The Band', 50, true)).toBe(true);
+    expect(isCleanText('x'.repeat(50), 50, true)).toBe(true);
+  });
+
+  it('rejects text over the limit, counting characters rather than UTF-16 units', () => {
+    expect(isCleanText('x'.repeat(51), 50, true)).toBe(false);
+    expect(isCleanText('\u{1F3B8}'.repeat(50), 50, true)).toBe(true);
+  });
+
+  it('rejects zero-width characters, bidi overrides and padding (rows written by something else)', () => {
+    expect(isCleanText('The\u200BBand', 50, true)).toBe(false);
+    expect(isCleanText('\u202Eband', 50, true)).toBe(false);
+    expect(isCleanText(' The Band', 50, true)).toBe(false);
+    expect(isCleanText('The  Band', 50, true)).toBe(false);
+  });
+
+  it('empty or missing text is valid only when not required', () => {
+    expect(isCleanText('', 50, true)).toBe(false);
+    expect(isCleanText(null, 50, true)).toBe(false);
+    expect(isCleanText(undefined, 50, false)).toBe(true);
+    expect(isCleanText('', 50, false)).toBe(true);
   });
 });

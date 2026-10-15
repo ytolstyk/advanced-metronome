@@ -124,4 +124,50 @@ describe('useLoader', () => {
     act(() => { window.dispatchEvent(new Event('focus')); });
     expect(load).toHaveBeenCalledTimes(1);
   });
+
+  describe('focusRefetchMs', () => {
+    it('defaults to FOCUS_REFETCH_MS (30 s)', () => {
+      expect(FOCUS_REFETCH_MS).toBe(30_000);
+    });
+
+    it('a larger window suppresses a refetch the default would have allowed, until it elapses', async () => {
+      const now = vi.spyOn(Date, 'now');
+      now.mockReturnValue(1_000_000);
+      const load = vi.fn(async () => 'x');
+      const slow = 5 * 60_000;
+      const { result } = renderHook(() => useLoader(load, { focusRefetchMs: slow }));
+      await waitFor(() => expect(result.current.state.status).toBe('ready'));
+
+      now.mockReturnValue(1_000_000 + FOCUS_REFETCH_MS + 1);
+      act(() => { window.dispatchEvent(new Event('focus')); });
+      expect(load).toHaveBeenCalledTimes(1);
+
+      now.mockReturnValue(1_000_000 + slow - 1);
+      act(() => { window.dispatchEvent(new Event('focus')); });
+      expect(load).toHaveBeenCalledTimes(1);
+
+      now.mockReturnValue(1_000_000 + slow + 1);
+      act(() => { window.dispatchEvent(new Event('focus')); });
+      await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    });
+
+    it('a smaller window refetches sooner than the default', async () => {
+      const now = vi.spyOn(Date, 'now');
+      now.mockReturnValue(1_000_000);
+      const load = vi.fn(async () => 'x');
+      const { result } = renderHook(() => useLoader(load, { focusRefetchMs: 1_000 }));
+      await waitFor(() => expect(result.current.state.status).toBe('ready'));
+      now.mockReturnValue(1_000_000 + 1_001);
+      act(() => { window.dispatchEvent(new Event('focus')); });
+      await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    });
+
+    it('does not affect explicit reload()', async () => {
+      const load = vi.fn(async () => 'x');
+      const { result } = renderHook(() => useLoader(load, { focusRefetchMs: 10 * 60_000 }));
+      await waitFor(() => expect(result.current.state.status).toBe('ready'));
+      await act(async () => { await result.current.reload(); });
+      expect(load).toHaveBeenCalledTimes(2);
+    });
+  });
 });

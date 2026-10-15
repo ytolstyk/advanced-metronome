@@ -12,10 +12,10 @@ export const FOCUS_REFETCH_MS = 30_000;
 /**
  * Loads data on mount, again on tab focus (throttled, never while a load is in flight) and on
  * `reload()`. Keeps the last good data on screen while refreshing and when a refresh fails (the
- * failure is reported in `refreshError`); a failed *first* load is an error state, never an
+ * failure is reported in `refreshError`; `focusRefetchMs` raises the refetch throttle for public pages); a failed *first* load is an error state, never an
  * empty-looking page. Mount it with a `key` per resource so state resets by remount.
  */
-export function useLoader<T>(load: () => Promise<T>) {
+export function useLoader<T>(load: () => Promise<T>, { focusRefetchMs = FOCUS_REFETCH_MS }: { focusRefetchMs?: number } = {}) {
   const [state, setState] = useState<LoaderState<T>>({ status: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
@@ -65,7 +65,7 @@ export function useLoader<T>(load: () => Promise<T>) {
     // `focus` and `visibilitychange` both fire when returning to a tab: one refetch, not two.
     const onReturn = () => {
       if (document.visibilityState === 'hidden' || inFlight.current) return;
-      if (Date.now() - lastStartedAt.current >= FOCUS_REFETCH_MS) void fetchData(true);
+      if (Date.now() - lastStartedAt.current >= focusRefetchMs) void fetchData(true);
     };
     window.addEventListener('focus', onReturn);
     document.addEventListener('visibilitychange', onReturn);
@@ -73,7 +73,7 @@ export function useLoader<T>(load: () => Promise<T>) {
       window.removeEventListener('focus', onReturn);
       document.removeEventListener('visibilitychange', onReturn);
     };
-  }, [fetchData]);
+  }, [fetchData, focusRefetchMs]);
 
   const reload = useCallback(() => fetchData(true), [fetchData]);
   return { state, refreshing, refreshError, reload };

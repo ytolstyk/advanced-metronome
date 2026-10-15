@@ -14,6 +14,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   archivedSetListIds: [],
   bannedSubs: [],
   hiddenSongIds: [],
+  sharedSetListIds: [],
   ...over,
 });
 const member = (owner: string): ValidMember =>

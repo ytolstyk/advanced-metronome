@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BandRecord, BandView, ValidMember, ValidSetList } from '../bandTypes';
+import { PUBLIC_READ_PAGES, type BandRecord, type BandView, type ValidMember, type ValidSetList } from '../bandTypes';
 
 const { m } = vi.hoisted(() => {
   const m = {
@@ -27,10 +27,13 @@ import {
   deleteSong,
   fetchSetListRows,
   renameSetList,
+  setSetListShared,
   suggestSong,
   updateSong,
 } from './setListsApi';
+import { fetchPublicSetListRows } from './bandReads';
 import { isAuthenticated } from './authUtils';
+import { NotSignedInError } from './bandsShared';
 
 const CONFLICT = [{ errorType: 'DynamoDB:ConditionalCheckFailedException', message: 'conditional' }];
 const UNAUTH = [{ errorType: 'Unauthorized', message: 'Not Authorized' }];
@@ -46,6 +49,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   archivedSetListIds: [],
   bannedSubs: [],
   hiddenSongIds: [],
+  sharedSetListIds: [],
   ...over,
 });
 const bandRow = (over: Partial<BandRecord> = {}) => band(over);
@@ -137,6 +141,15 @@ describe('createSetList', () => {
     expect(current().setListIds).toEqual(['sl-1', id]);
   });
 
+  it('starts private: the new id is NOT added to sharedSetListIds', async () => {
+    m.SetList.create.mockResolvedValue({ data: {} });
+    const current = echoBandUpdates(bandRow({ sharedSetListIds: ['sl-1'] }));
+    const id = await createSetList('band-1', 'Gig 2');
+    expect(current().setListIds).toContain(id);
+    expect(current().sharedSetListIds).toEqual(['sl-1']);
+    expect(m.graphql.mock.calls[0][0].variables.input).not.toHaveProperty('sharedSetListIds');
+  });
+
   it('enforces the set-list cap and never half-writes the array', async () => {
     m.SetList.create.mockResolvedValue({ data: {} });
     const current = echoBandUpdates(bandRow({ setListIds: Array.from({ length: 10 }, (_, i) => `sl-${i}`) }));
@@ -174,6 +187,28 @@ describe('renameSetList / archiveSetList', () => {
     expect(m.SetList.update.mock.calls[0][0].archivedAt).toBeTruthy();
   });
 
+  it('archiving also removes the id from sharedSetListIds in the SAME band write (archived = no longer public)', async () => {
+    const current = echoBandUpdates(
+      bandRow({ setListIds: ['sl-1', 'sl-2'], sharedSetListIds: ['sl-1', 'sl-2'] }),
+    );
+    m.SetList.update.mockResolvedValue({ data: {} });
+    await archiveSetList('band-1', 'sl-1');
+    expect(m.graphql).toHaveBeenCalledTimes(1);
+    expect(m.graphql.mock.calls[0][0].variables.input).toMatchObject({
+      setListIds: ['sl-2'],
+      archivedSetListIds: ['sl-1'],
+      sharedSetListIds: ['sl-2'],
+    });
+    expect(current().sharedSetListIds).toEqual(['sl-2']);
+  });
+
+  it('archiving an unshared list leaves sharedSetListIds unchanged', async () => {
+    const current = echoBandUpdates(bandRow({ setListIds: ['sl-1', 'sl-2'], sharedSetListIds: ['sl-2'] }));
+    m.SetList.update.mockResolvedValue({ data: {} });
+    await archiveSetList('band-1', 'sl-1');
+    expect(current().sharedSetListIds).toEqual(['sl-2']);
+  });
+
   it('a crash after the band write leaves the id archived (never stranded) and a retry finishes', async () => {
     const current = echoBandUpdates(bandRow({ setListIds: ['sl-1'] }));
     m.SetList.update.mockResolvedValueOnce({ data: null, errors: [{ message: 'network' }] });
@@ -198,6 +233,68 @@ describe('renameSetList / archiveSetList', () => {
     echoBandUpdates(bandRow());
     m.SetList.update.mockResolvedValue({ data: null, errors: CONFLICT });
     await expect(archiveSetList('band-1', 'sl-1')).resolves.toBeUndefined();
+  });
+});
+
+describe('setSetListShared', () => {
+  it('adds the id to sharedSetListIds with a single partial band write', async () => {
+    const current = echoBandUpdates(bandRow({ setListIds: ['sl-1', 'sl-2'], sharedSetListIds: ['sl-2'] }));
+    await setSetListShared('band-1', 'sl-1', true);
+    expect(current().sharedSetListIds).toEqual(['sl-2', 'sl-1']);
+    expect(m.graphql).toHaveBeenCalledTimes(1);
+    const { input } = m.graphql.mock.calls[0][0].variables as { input: Record<string, unknown> };
+    expect(Object.keys(input).sort()).toEqual(['id', 'sharedSetListIds', 'version']);
+    expect(m.graphql.mock.calls[0][0].variables.condition).toEqual({ version: { eq: 1 } });
+  });
+
+  it('removes only that id when sharing is turned off', async () => {
+    const current = echoBandUpdates(bandRow({ setListIds: ['sl-1', 'sl-2'], sharedSetListIds: ['sl-1', 'sl-2'] }));
+    await setSetListShared('band-1', 'sl-1', false);
+    expect(current().sharedSetListIds).toEqual(['sl-2']);
+    expect(current().setListIds).toEqual(['sl-1', 'sl-2']);
+  });
+
+  it('is idempotent: sharing an already shared list, or unsharing an unshared one, writes nothing', async () => {
+    echoBandUpdates(bandRow({ setListIds: ['sl-1', 'sl-2'], sharedSetListIds: ['sl-1'] }));
+    await expect(setSetListShared('band-1', 'sl-1', true)).resolves.toBeUndefined();
+    await expect(setSetListShared('band-1', 'sl-2', false)).resolves.toBeUndefined();
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('throws "Set list not found" for an id that is not one of the band\'s set lists, writing nothing', async () => {
+    echoBandUpdates(bandRow({ setListIds: ['sl-1'], archivedSetListIds: ['sl-old'] }));
+    await expect(setSetListShared('band-1', 'sl-nope', true)).rejects.toThrow('Set list not found');
+    await expect(setSetListShared('band-1', 'sl-old', true)).rejects.toThrow('Set list not found'); // archived
+    await expect(setSetListShared('band-1', 'sl-nope', false)).rejects.toThrow('Set list not found');
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('works from the FRESH band (re-derives after a version conflict instead of clobbering)', async () => {
+    m.Band.get
+      .mockResolvedValueOnce({ data: bandRow({ version: 1, setListIds: ['sl-1', 'sl-2'], sharedSetListIds: [] }) })
+      .mockResolvedValueOnce({ data: bandRow({ version: 2, setListIds: ['sl-1', 'sl-2'], sharedSetListIds: ['sl-2'] }) });
+    m.graphql
+      .mockRejectedValueOnce({ errors: CONFLICT })
+      .mockImplementationOnce(async ({ variables }: { variables: { input: Record<string, unknown> } }) => ({
+        data: { updateBand: { ...bandRow(), ...variables.input } },
+      }));
+    await setSetListShared('band-1', 'sl-1', true);
+    expect(m.graphql).toHaveBeenCalledTimes(2);
+    expect(m.graphql.mock.calls[1][0].variables.input).toMatchObject({ version: 3, sharedSetListIds: ['sl-2', 'sl-1'] });
+    expect(m.graphql.mock.calls[1][0].variables.condition).toEqual({ version: { eq: 2 } });
+  });
+
+  it('refuses a deleted band', async () => {
+    echoBandUpdates(bandRow({ deletedAt: '2026-02-01T00:00:00Z' }));
+    await expect(setSetListShared('band-1', 'sl-1', true)).rejects.toThrow('This band was deleted');
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('requires sign-in before reading or writing anything', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+    await expect(setSetListShared('band-1', 'sl-1', true)).rejects.toBeInstanceOf(NotSignedInError);
+    expect(m.Band.get).not.toHaveBeenCalled();
+    expect(m.graphql).not.toHaveBeenCalled();
   });
 });
 
@@ -332,8 +429,15 @@ describe('fetchSetListRows', () => {
   it('checks sign-in BEFORE any read (a signed-out user never triggers a cloud call)', async () => {
     vi.mocked(isAuthenticated).mockResolvedValue(false);
     await expect(fetchSetListRows('sl-1')).rejects.toThrow('Not authenticated');
+    await expect(fetchSetListRows('sl-1')).rejects.toBeInstanceOf(NotSignedInError);
     expect(m.Song.listSongBySetList).not.toHaveBeenCalled();
     expect(m.Vote.listVoteBySetList).not.toHaveBeenCalled();
+  });
+
+  it('keeps using the signed-in (default) auth mode: no authMode option is sent', async () => {
+    await fetchSetListRows('sl-1');
+    expect(m.Song.listSongBySetList.mock.calls[0][1]).toEqual({ limit: 250, nextToken: undefined });
+    expect(m.Vote.listVoteBySetList.mock.calls[0][1]).toEqual({ limit: 250, nextToken: undefined });
   });
 
   it('flags incomplete when a list hits the page cap', async () => {
@@ -349,11 +453,54 @@ describe('fetchSetListRows', () => {
   });
 });
 
+describe('fetchPublicSetListRows', () => {
+  it('works signed out: never consults sign-in, and reads songs and votes with the guest auth mode', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+    m.Song.listSongBySetList.mockResolvedValue({ data: [songRow('a', 'sub-bob')], nextToken: null });
+    m.Vote.listVoteBySetList.mockResolvedValue({ data: [voteRow('a', 'sub-bob', 'up')], nextToken: null });
+    const rows = await fetchPublicSetListRows('sl-1', 'identityPool');
+    expect(isAuthenticated).not.toHaveBeenCalled();
+    expect(rows.songs.items.map((s) => s.id)).toEqual(['a']);
+    expect(rows.votes.items.map((v) => v.songId)).toEqual(['a']);
+    expect(rows.songs.incomplete || rows.votes.incomplete).toBe(false);
+    expect(m.Song.listSongBySetList).toHaveBeenCalledWith({ setListId: 'sl-1' }, { limit: 250, nextToken: undefined, authMode: 'identityPool' });
+    expect(m.Vote.listVoteBySetList).toHaveBeenCalledWith({ setListId: 'sl-1' }, { limit: 250, nextToken: undefined, authMode: 'identityPool' });
+  });
+
+  it('passes the given mode through (a signed-in reader uses userPool)', async () => {
+    await fetchPublicSetListRows('sl-1', 'userPool');
+    expect(m.Song.listSongBySetList.mock.calls[0][1]).toMatchObject({ authMode: 'userPool' });
+    expect(m.Vote.listVoteBySetList.mock.calls[0][1]).toMatchObject({ authMode: 'userPool' });
+  });
+
+  it('caps songs at PUBLIC_READ_PAGES.songs and votes at PUBLIC_READ_PAGES.votes, flagging incomplete', async () => {
+    m.Song.listSongBySetList.mockResolvedValue({ data: [], nextToken: 'more' });
+    m.Vote.listVoteBySetList.mockResolvedValue({ data: [], nextToken: 'more' });
+    const rows = await fetchPublicSetListRows('sl-1', 'identityPool');
+    expect(m.Song.listSongBySetList).toHaveBeenCalledTimes(PUBLIC_READ_PAGES.songs);
+    expect(m.Vote.listVoteBySetList).toHaveBeenCalledTimes(PUBLIC_READ_PAGES.votes);
+    expect(rows.songs.incomplete).toBe(true);
+    expect(rows.votes.incomplete).toBe(true);
+    // every page of every query keeps the guest mode
+    for (const call of [...m.Song.listSongBySetList.mock.calls, ...m.Vote.listVoteBySetList.mock.calls]) {
+      expect(call[1]).toMatchObject({ authMode: 'identityPool' });
+    }
+  });
+
+  it('fetches songs and votes in parallel and fails closed when either read fails', async () => {
+    m.Vote.listVoteBySetList.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
+    await expect(fetchPublicSetListRows('sl-1', 'identityPool')).rejects.toThrow('gsi down');
+    expect(m.Song.listSongBySetList).toHaveBeenCalled();
+  });
+});
+
 describe('auth gating', () => {
   it.each([
     ['createSetList', () => createSetList('band-1', 'Gig')],
     ['renameSetList', () => renameSetList('sl-1', 'Gig')],
     ['archiveSetList', () => archiveSetList('band-1', 'sl-1')],
+    ['setSetListShared', () => setSetListShared('band-1', 'sl-1', true)],
+    ['fetchSetListRows', () => fetchSetListRows('sl-1')],
     ['updateSong', () => updateSong('s1', { title: 'x' })],
     ['deleteSong', () => deleteSong('s1')],
     ['deleteMyContent', () => deleteMyContent(band(), true)],

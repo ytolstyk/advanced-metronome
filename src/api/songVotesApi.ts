@@ -1,5 +1,6 @@
 import type { ListAllResult, SongRecord, VoteRecord, VoteValue } from '../bandTypes';
 import { getCurrentUserSub } from './authUtils';
+import { listVotes } from './bandReads';
 import {
   bandsClient as client,
   createIdempotent,
@@ -15,13 +16,10 @@ import {
 } from './bandsShared';
 import { listAll, pageOpts } from './paginate';
 
-/** All vote rows for a set list (unvalidated: pass through `filterCountedVotes` before showing). */
+/** All vote rows for a set list (unvalidated: pass through `filterCountedVotes` before showing). Signed in. */
 export async function listVotesForSetList(setListId: string): Promise<ListAllResult<VoteRecord>> {
   await requireAuth();
-  return listAll(async (token) => {
-    const res = await client.models.Vote.listVoteBySetList({ setListId }, pageOpts(token));
-    return { items: unwrap(res, 'listVotes').map(toVote), nextToken: res.nextToken };
-  });
+  return listVotes(setListId);
 }
 
 /** One voter's rows in a set list via the exact owner sort-key query (no flood to page through). */

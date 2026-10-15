@@ -42,6 +42,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   archivedSetListIds: [],
   bannedSubs: [],
   hiddenSongIds: [],
+  sharedSetListIds: [],
   ...over,
 });
 
@@ -244,6 +245,27 @@ describe('SetListPage', () => {
 
     fireEvent.click(within(row('Song b')).getByRole('button', { name: 'Hide Song b' }));
     await waitFor(() => expect(hideSong).toHaveBeenCalledWith('band-1', 'b'));
+  });
+
+  it('shows NO copy-link button while the set list is not shared', async () => {
+    setup();
+    await screen.findByText('Song a');
+    expect(screen.queryByRole('button', { name: /Copy share link/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the copy-link button when the owner shared the list, copying the public /shared/<id> URL', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    setup(makeView({}, band({ sharedSetListIds: ['sl-1'] })));
+    await screen.findByText('Song a');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy share link for Main Set' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/shared/sl-1`));
+  });
+
+  it('a shared id that is not a set list of the band does not make this list look shared', async () => {
+    setup(makeView({}, band({ setListIds: ['sl-1'], sharedSetListIds: ['sl-2'] })));
+    await screen.findByText('Song a');
+    expect(screen.queryByRole('button', { name: /Copy share link/ })).not.toBeInTheDocument();
   });
 
   it('shows an empty state with a prompt', async () => {

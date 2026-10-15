@@ -12,6 +12,7 @@ import {
 } from '../components/Bands/BandActionDialogs';
 import { DangerZone, InviteSection, MembersSection, SetListsSection } from '../components/Bands/BandSections';
 import { BandsShell } from '../components/Bands/BandsShell';
+import { ConfirmDialog } from '../components/Bands/ConfirmDialog';
 import { InlineAlert } from '../components/Bands/InlineAlert';
 import { JoinConfirm } from '../components/Bands/JoinConfirm';
 import { LoaderBoundary } from '../components/Bands/LoaderBoundary';
@@ -26,7 +27,7 @@ import {
   renameBand,
   unbanMember,
 } from '../api/bandsApi';
-import { createSetList, renameSetList } from '../api/setListsApi';
+import { createSetList, renameSetList, setSetListShared } from '../api/setListsApi';
 import { BAND_GONE_TITLES, BAND_LIMITS, type BandLoadResult, type BandView } from '../bandTypes';
 import { useActionThenReload, useAsyncAction } from '../hooks/useAsyncAction';
 import { useDefaultDisplayName } from '../hooks/useDefaultDisplayName';
@@ -126,6 +127,7 @@ type OpenDialog =
   | { kind: 'new-set-list' }
   | { kind: 'rename-set-list'; id: string; name: string }
   | { kind: 'archive-set-list'; id: string; name: string }
+  | { kind: 'share-set-list'; id: string; name: string }
   | { kind: 'rename-band' }
   | { kind: 'remove-member'; sub: string; name: string }
   | { kind: 'reset-code' }
@@ -179,6 +181,11 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
         onCreate={() => setDialog({ kind: 'new-set-list' })}
         onRename={(id, name) => setDialog({ kind: 'rename-set-list', id, name })}
         onArchive={(id, name) => setDialog({ kind: 'archive-set-list', id, name })}
+        onToggleShared={(id, shared) => {
+          // Turning sharing on publishes more than the list: the owner confirms what that means first.
+          if (!shared) return void act(() => setSetListShared(band.id, id, false));
+          setDialog({ kind: 'share-set-list', id, name: view.setLists.find((s) => s.id === id)?.name ?? '' });
+        }}
       />
       <MembersSection
         view={view}
@@ -224,6 +231,25 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
           maxLength={BAND_LIMITS.nameMax}
           submitLabel="Save"
           onSubmit={async (name) => void (await renameBand(band.id, name))}
+          onSettled={settled}
+        />
+      )}
+      {dialog?.kind === 'share-set-list' && (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => !open && close()}
+          title={`Share “${dialog.name}” publicly?`}
+          description={
+            <>
+              Anyone with the link can view this list without signing in. Because of how the backend is secured,
+              anyone with the link can also read the rest of this band’s data: the invite code, members’ display
+              names and account IDs, votes and your other set lists. “Stop sharing” hides the list in the app but
+              can’t take that access back from people who already have the link. Links and notes on the page come
+              from band members and aren’t checked.
+            </>
+          }
+          confirmLabel="Share"
+          onConfirm={() => setSetListShared(band.id, dialog.id, true)}
           onSettled={settled}
         />
       )}

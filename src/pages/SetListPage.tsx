@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { AuthGate } from '../components/AuthGate/AuthGate';
 import { BandsShell } from '../components/Bands/BandsShell';
 import { ConfirmDialog } from '../components/Bands/ConfirmDialog';
+import { CopyShareLinkButton } from '../components/Bands/CopyShareLinkButton';
 import { InlineAlert } from '../components/Bands/InlineAlert';
 import { LoaderBoundary } from '../components/Bands/LoaderBoundary';
 import { SongRow } from '../components/Bands/SongRow';
@@ -121,7 +122,8 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
             {view.band.name} · Suggestions ranked by votes · {list.songs.length}/{BAND_LIMITS.maxSongsPerSetList} songs
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {list.shared && <CopyShareLinkButton setListId={setListId} setListName={list.setList.name} />}
           <Button onClick={() => setSuggestOpen(true)}>Suggest a song</Button>
           <Button variant="outline" size="icon" onClick={() => void reload()} disabled={refreshing} aria-label="Refresh">
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />

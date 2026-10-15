@@ -31,6 +31,7 @@ const band: BandRecord = {
   archivedSetListIds: [],
   bannedSubs: [],
   hiddenSongIds: [],
+  sharedSetListIds: [],
 };
 
 beforeEach(() => {

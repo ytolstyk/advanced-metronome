@@ -4,9 +4,10 @@ import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BAND_LIMITS, type BandView } from '../../bandTypes';
 import { setListPath } from '../../bandRoutes';
-import { buildInviteLink, formatInviteCode } from '../../bandUtils';
+import { buildInviteLink, formatInviteCode, isSetListShared } from '../../bandUtils';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { InlineAlert } from './InlineAlert';
+import { CopyShareLinkButton } from './CopyShareLinkButton';
 import { MemberList } from './MemberList';
 
 /** The four sections of the band page. They only render; every action is a callback. */
@@ -16,11 +17,13 @@ export function SetListsSection({
   onCreate,
   onRename,
   onArchive,
+  onToggleShared,
 }: {
   view: BandView;
   onCreate: () => void;
   onRename: (id: string, name: string) => void;
   onArchive: (id: string, name: string) => void;
+  onToggleShared: (id: string, shared: boolean) => void;
 }) {
   const { band, isOwner } = view;
   return (
@@ -31,33 +34,52 @@ export function SetListsSection({
           <Button size="sm" onClick={onCreate}>New set list</Button>
         )}
       </div>
+      <p className="mb-2 text-sm text-muted-foreground">
+        A shared set list has a public link anyone can open without signing in. Nothing is shared until the owner
+        turns it on, and stopping only hides the list in the app.
+      </p>
       {view.setLists.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
           {isOwner ? 'Create your first set list.' : 'The owner hasn’t created a set list yet.'}
         </p>
       ) : (
         <ul className="grid gap-2">
-          {view.setLists.map((setList) => (
-            <li key={setList.id} className="flex items-center gap-2">
-              <Link
-                to={setListPath(band.id, setList.id)}
-                className="flex min-h-12 min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 text-foreground no-underline transition-colors hover:bg-accent"
-              >
-                <span className="truncate">{setList.name}</span>
-                <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden />
-              </Link>
-              {isOwner && (
-                <>
-                  <Button variant="ghost" size="sm" onClick={() => onRename(setList.id, setList.name)} aria-label={`Rename ${setList.name}`}>
-                    Rename
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onArchive(setList.id, setList.name)} aria-label={`Archive ${setList.name}`}>
-                    Archive
-                  </Button>
-                </>
-              )}
-            </li>
-          ))}
+          {view.setLists.map((setList) => {
+            const shared = isSetListShared(band, setList.id);
+            return (
+              <li key={setList.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <Link
+                  to={setListPath(band.id, setList.id)}
+                  className="flex min-h-12 min-w-0 flex-1 basis-48 items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 text-foreground no-underline transition-colors hover:bg-accent"
+                >
+                  <span className="truncate">{setList.name}</span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{shared ? 'Shared' : 'Not shared'}</span>
+                    <ChevronRight size={18} className="text-muted-foreground" aria-hidden />
+                  </span>
+                </Link>
+                {shared && <CopyShareLinkButton setListId={setList.id} setListName={setList.name} />}
+                {isOwner && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onToggleShared(setList.id, !shared)}
+                      aria-label={`${shared ? 'Stop sharing' : 'Share'} ${setList.name}`}
+                    >
+                      {shared ? 'Stop sharing' : 'Share'}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onRename(setList.id, setList.name)} aria-label={`Rename ${setList.name}`}>
+                      Rename
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onArchive(setList.id, setList.name)} aria-label={`Archive ${setList.name}`}>
+                      Archive
+                    </Button>
+                  </>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

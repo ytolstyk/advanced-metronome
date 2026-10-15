@@ -115,7 +115,7 @@ export function sanitizeNotes(raw: string): string {
  * Rows written by this app are always already clean, so a field that changes when cleaned was
  * written by something else (zero-width spoofing, bidi tricks, padding): hide it, don't repair it.
  */
-function isCleanText(text: string | null | undefined, max: number, required: boolean): boolean {
+export function isCleanText(text: string | null | undefined, max: number, required: boolean): boolean {
   const value = text ?? '';
   if (value === '') return !required;
   return stripUnsafeText(value) === value && textLength(value) <= max;
@@ -179,6 +179,18 @@ export function filterValidSetLists(setLists: SetListRecord[], band: BandRecord)
       s.owner === band.owner &&
       isCleanText(s.name, BAND_LIMITS.nameMax, true),
   ) as ValidSetList[];
+}
+
+/**
+ * Whether the owner shares this set list with anyone who has its link (the band must be alive and
+ * the list one of its first `maxSetLists` ids, so a hostile owner's long arrays are bounded).
+ */
+export function isSetListShared(band: BandRecord, setListId: string): boolean {
+  return (
+    isBandAlive(band) &&
+    band.setListIds.slice(0, BAND_LIMITS.maxSetLists).includes(setListId) &&
+    band.sharedSetListIds.slice(0, BAND_LIMITS.maxSetLists).includes(setListId)
+  );
 }
 
 const SONG_KEY = /^[A-G][#b]?m?$/;

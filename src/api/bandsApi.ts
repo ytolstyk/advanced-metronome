@@ -5,7 +5,7 @@ import {
   type BandRecord,
   type InviteFailure,
   type InvitePreview,
-  type MemberRecord,
+  type SetListRecord,
   type MyBandEntry,
 } from '../bandTypes';
 import {
@@ -25,14 +25,15 @@ import {
   createIdempotent,
   deleteQuietly,
   getBand,
+  getSetListRow,
   isConflict,
+  listRoster,
   requireAuth,
   throwOnError,
   throwUnlessConflict,
   tombstoneSetList,
   toBand,
   toMember,
-  toSetList,
   unwrap,
   updateBand,
 } from './bandsShared';
@@ -52,17 +53,6 @@ const INVITE_ATTEMPTS = 5;
 /** Parallel reads/writes per band operation (bounded so a hostile band can't trigger a burst). */
 const READS_AT_ONCE = 6;
 const WRITES_AT_ONCE = 4;
-/** A valid roster is at most 15 rows, so a few pages is plenty; a junk flood must not cost 50 round trips. */
-const ROSTER_MAX_PAGES = 4;
-
-async function listRoster(bandId: string): Promise<{ rows: MemberRecord[]; incomplete: boolean }> {
-  const { items, incomplete } = await listAll(async (token) => {
-    const res = await client.models.Member.listMemberByBandId({ bandId }, pageOpts(token));
-    return { items: unwrap(res, 'listMembers').map(toMember), nextToken: res.nextToken };
-  }, ROSTER_MAX_PAGES);
-  return { rows: items, incomplete };
-}
-
 /** Creates a BandInvite with a fresh code, retrying on key collision. Returns the code. */
 async function createInvite(bandId: string): Promise<string> {
   for (let i = 0; i < INVITE_ATTEMPTS; i++) {
@@ -157,14 +147,12 @@ export async function loadBandView(bandId: string, options: { onlySetListId?: st
   const ids = band.setListIds
     .slice(0, BAND_LIMITS.maxSetLists)
     .filter((id) => options.onlySetListId === undefined || id === options.onlySetListId);
-  const setListRows = new Array<ReturnType<typeof toSetList> | null>(ids.length).fill(null);
+  const setListRows = new Array<SetListRecord | null>(ids.length).fill(null);
   await runPool(
     READS_AT_ONCE,
     ids.map((id, index) => ({ id, index })),
     async ({ id, index }) => {
-      const res = await client.models.SetList.get({ id });
-      throwOnError(res, 'getSetList');
-      setListRows[index] = res.data ? toSetList(res.data) : null;
+      setListRows[index] = await getSetListRow(id);
     },
   );
 
@@ -221,6 +209,7 @@ export async function createBand(nameInput: string, displayNameInput: string): P
         archivedSetListIds: [],
         bannedSubs: [],
         hiddenSongIds: [],
+        sharedSetListIds: [], // nothing is public until the owner shares it
       }),
       'createBand',
     );
@@ -365,7 +354,7 @@ export type DeleteStep = 'set-lists' | 'tombstone' | 'invite' | 'done';
  * Tombstones the band (rows are never deleted, so the id can't be re-created). Order matters:
  * (1) tombstone the set list rows while the band is still alive, so a failure here leaves a normal
  * band that the ordinary Delete button can retry; (2) ONE atomic Band write that tombstones and
- * scrubs (name, code, bans, hidden ids) — after this nothing sensitive is left; (3) retire the old
+ * scrubs (name, code, bans, hidden + shared ids) — after this nothing sensitive is left; (3) retire the old
  * invite row best-effort (join already rejects dead bands, so this is only tidiness). Re-runnable.
  */
 export async function deleteBand(bandId: string, onProgress?: (step: DeleteStep) => void): Promise<void> {
@@ -389,7 +378,11 @@ export async function deleteBand(bandId: string, onProgress?: (step: DeleteStep)
     bandId,
     (b) => {
       const scrubbed =
-        b.name === BAND_TEXT.deletedName && !b.inviteCode && b.bannedSubs.length === 0 && b.hiddenSongIds.length === 0;
+        b.name === BAND_TEXT.deletedName &&
+        !b.inviteCode &&
+        b.bannedSubs.length === 0 &&
+        b.hiddenSongIds.length === 0 &&
+        b.sharedSetListIds.length === 0;
       if (b.deletedAt && scrubbed) return null;
       return {
         ...(b.deletedAt ? {} : { deletedAt: new Date().toISOString() }),
@@ -397,6 +390,7 @@ export async function deleteBand(bandId: string, onProgress?: (step: DeleteStep)
         inviteCode: '',
         bannedSubs: [],
         hiddenSongIds: [],
+        sharedSetListIds: [],
       };
     },
     { allowDeleted: true },

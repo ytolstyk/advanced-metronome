@@ -15,6 +15,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   archivedSetListIds: [],
   bannedSubs: [],
   hiddenSongIds: [],
+  sharedSetListIds: [],
   ...over,
 });
 const setList = (id: string, name: string): ValidSetList =>
@@ -37,7 +38,7 @@ const view = (over: Partial<BandView> = {}): BandView => ({
 const inRouter = (ui: React.ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
 
 describe('SetListsSection', () => {
-  const handlers = () => ({ onCreate: vi.fn(), onRename: vi.fn(), onArchive: vi.fn() });
+  const handlers = () => ({ onCreate: vi.fn(), onRename: vi.fn(), onArchive: vi.fn(), onToggleShared: vi.fn() });
 
   it('tells the owner to create the first set list, and offers the create button', () => {
     const h = handlers();
@@ -74,12 +75,12 @@ describe('SetListsSection', () => {
         {...handlers()}
       />,
     );
-    expect(screen.getByRole('link', { name: 'Weird/Name' })).toHaveAttribute('href', '/bands/b%2F1/setlists/sl%201');
+    expect(screen.getByRole('link', { name: /^Weird\/Name/ })).toHaveAttribute('href', '/bands/b%2F1/setlists/sl%201');
   });
 
   it('members get no rename/archive controls', () => {
     inRouter(<SetListsSection view={view({ setLists: [setList('sl-1', 'Main Set')] })} {...handlers()} />);
-    expect(screen.getByRole('link', { name: 'Main Set' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Main Set/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Rename|Archive/ })).not.toBeInTheDocument();
   });
 
@@ -90,6 +91,88 @@ describe('SetListsSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Archive Main Set' }));
     expect(h.onRename).toHaveBeenCalledWith('sl-1', 'Main Set');
     expect(h.onArchive).toHaveBeenCalledWith('sl-1', 'Main Set');
+  });
+});
+
+describe('SetListsSection public sharing', () => {
+  const handlers = () => ({ onCreate: vi.fn(), onRename: vi.fn(), onArchive: vi.fn(), onToggleShared: vi.fn() });
+  const writeText = vi.fn();
+  beforeEach(() => {
+    writeText.mockReset();
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  });
+  const sharedBand = (over: Partial<BandRecord> = {}) =>
+    band({ setListIds: ['sl-1', 'sl-2'], sharedSetListIds: ['sl-1'], ...over });
+  const lists = [setList('sl-1', 'Main Set'), setList('sl-2', 'Acoustic')];
+  const rowOf = (name: string) => screen.getByRole('link', { name: new RegExp(`^${name}`) }).closest('li') as HTMLElement;
+
+  it('labels each set list Shared or Not shared', () => {
+    inRouter(<SetListsSection view={view({ band: sharedBand(), setLists: lists })} {...handlers()} />);
+    expect(within(rowOf('Main Set')).getByText('Shared')).toBeInTheDocument();
+    expect(within(rowOf('Acoustic')).getByText('Not shared')).toBeInTheDocument();
+  });
+
+  it('explains that nothing is public until the owner turns it on', () => {
+    inRouter(<SetListsSection view={view()} {...handlers()} />);
+    expect(screen.getByText(/Nothing is\s+shared until the owner turns it on/)).toBeInTheDocument();
+  });
+
+  it('the owner sees Share on an unshared list and Stop sharing on a shared one, and each calls onToggleShared(id, !shared)', () => {
+    const h = handlers();
+    inRouter(<SetListsSection view={view({ isOwner: true, band: sharedBand(), setLists: lists })} {...h} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Share Acoustic' }));
+    expect(h.onToggleShared).toHaveBeenLastCalledWith('sl-2', true);
+    fireEvent.click(screen.getByRole('button', { name: 'Stop sharing Main Set' }));
+    expect(h.onToggleShared).toHaveBeenLastCalledWith('sl-1', false);
+    expect(screen.queryByRole('button', { name: 'Stop sharing Acoustic' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Share Main Set' })).not.toBeInTheDocument();
+    expect(h.onToggleShared).toHaveBeenCalledTimes(2);
+  });
+
+  it('members get no Share / Stop sharing controls', () => {
+    const h = handlers();
+    inRouter(<SetListsSection view={view({ isOwner: false, band: sharedBand(), setLists: lists })} {...h} />);
+    expect(screen.queryByRole('button', { name: /^(Share|Stop sharing) / })).not.toBeInTheDocument();
+  });
+
+  it('shows Copy link only for shared lists (to owners and members alike)', () => {
+    for (const isOwner of [true, false]) {
+      const { unmount } = inRouter(<SetListsSection view={view({ isOwner, band: sharedBand(), setLists: lists })} {...handlers()} />);
+      expect(within(rowOf('Main Set')).getByRole('button', { name: 'Copy share link for Main Set' })).toBeInTheDocument();
+      expect(within(rowOf('Acoustic')).queryByRole('button', { name: /Copy share link/ })).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('Copy link copies the public /shared/<id> URL', async () => {
+    writeText.mockResolvedValue(undefined);
+    inRouter(<SetListsSection view={view({ band: sharedBand(), setLists: lists })} {...handlers()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy share link for Main Set' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/shared/sl-1`));
+  });
+
+  it('a set list whose id is only in sharedSetListIds (not in setListIds) or whose band is deleted shows Not shared', () => {
+    const { unmount } = inRouter(
+      <SetListsSection
+        view={view({ band: band({ setListIds: ['sl-1'], sharedSetListIds: ['sl-1'], deletedAt: '2026-02-01T00:00:00Z' }), setLists: [setList('sl-1', 'Main Set')] })}
+        {...handlers()}
+      />,
+    );
+    expect(screen.getByText('Not shared')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Copy share link/ })).not.toBeInTheDocument();
+    unmount();
+    inRouter(
+      <SetListsSection
+        view={view({ band: band({ setListIds: ['sl-9'], sharedSetListIds: ['sl-1'] }), setLists: [setList('sl-1', 'Main Set')] })}
+        {...handlers()}
+      />,
+    );
+    expect(screen.getByText('Not shared')).toBeInTheDocument();
+  });
+
+  it('the share toggle accessible name uses the set list name, so lists are distinguishable', () => {
+    inRouter(<SetListsSection view={view({ isOwner: true, band: sharedBand(), setLists: lists })} {...handlers()} />);
+    expect(screen.getAllByRole('button', { name: /^(Share|Stop sharing) / })).toHaveLength(2);
   });
 });
 

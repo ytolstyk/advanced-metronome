@@ -15,7 +15,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 
 const refuse = (why) => {
   console.error(`Refusing to run: ${why}`);
@@ -81,6 +81,38 @@ async function gql(user, query, variables = {}) {
 const errType = (r) => (r.errors ?? []).map((e) => e.errorType ?? e.message).join('|') || '-';
 const denied = (r) => !!r.errors?.some((e) => /Unauthorized/i.test(e.errorType ?? '') || /Unauthorized/i.test(e.message ?? ''));
 
+// Signed-out visitors use the Cognito identity pool's guest role: AppSync then expects IAM (SigV4).
+const sha256Hex = (data) => createHash('sha256').update(data).digest('hex');
+const hmac = (key, data) => createHmac('sha256', key).update(data).digest();
+
+function guestCredentials() {
+  const identityPoolId = outputs.auth.identity_pool_id;
+  const { IdentityId } = aws(['cognito-identity', 'get-id', '--identity-pool-id', identityPoolId, '--no-sign-request']);
+  const { Credentials } = aws(['cognito-identity', 'get-credentials-for-identity', '--identity-id', IdentityId, '--no-sign-request']);
+  return { accessKeyId: Credentials.AccessKeyId, secretKey: Credentials.SecretKey, sessionToken: Credentials.SessionToken };
+}
+
+async function gqlGuest(creds, query, variables = {}) {
+  const url = new URL(API_URL);
+  const body = JSON.stringify({ query, variables });
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''); // 20260101T000000Z
+  const date = amzDate.slice(0, 8);
+  const headers = { 'content-type': 'application/json', host: url.host, 'x-amz-date': amzDate, 'x-amz-security-token': creds.sessionToken };
+  const signedHeaders = Object.keys(headers).sort().join(';');
+  // Canonical headers are ONE block (each line ends in \n), so joining them with '\n' as separate items would add blank lines.
+  // The signed set is fixed: content-type, host, x-amz-date, x-amz-security-token.
+  const canonicalHeaders = Object.keys(headers).sort().map((k) => `${k}:${headers[k]}\n`).join('');
+  const canonical = ['POST', url.pathname, '', canonicalHeaders, signedHeaders, sha256Hex(body)].join('\n');
+  const scope = `${date}/${REGION}/appsync/aws4_request`;
+  const toSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256Hex(canonical)].join('\n');
+  const key = hmac(hmac(hmac(hmac(`AWS4${creds.secretKey}`, date), REGION), 'appsync'), 'aws4_request');
+  const signature = createHmac('sha256', key).update(toSign).digest('hex');
+  headers.authorization = `AWS4-HMAC-SHA256 Credential=${creds.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  const res = await fetch(API_URL, { method: 'POST', headers, body });
+  const parsed = await res.json();
+  return { data: parsed.data ?? null, errors: parsed.errors ?? null, status: res.status };
+}
+
 const results = [];
 function check(gate, name, pass, detail = '', blocking = false) {
   results.push({ gate, name, pass, detail, blocking });
@@ -123,7 +155,7 @@ for (const q of ['listMemberByBandId', 'listSongBySetList', 'listVoteBySetList']
 
 // ---------- helpers ----------
 const FIELDS = {
-  Band: 'id owner name inviteCode deletedAt version setListIds archivedSetListIds bannedSubs hiddenSongIds createdAt updatedAt',
+  Band: 'id owner name inviteCode deletedAt version setListIds archivedSetListIds bannedSubs hiddenSongIds sharedSetListIds createdAt updatedAt',
   BandInvite: 'code bandId revokedAt owner',
   MyBand: 'owner bandId',
   Member: 'bandId owner displayName createdAt',
@@ -305,6 +337,59 @@ check('G0', 'stale Band write (version eq 1 again) is rejected', !r.data?.update
 r = await update(A, 'Band', { id: bandId, bannedSubs: [B.sub] });
 const afterPartial = await getById(A, 'Band', { id: bandId });
 check('G0', 'partial Band update leaves other fields untouched', afterPartial.data?.getBand?.name === 'Spike Band' && afterPartial.data?.getBand?.setListIds?.[0] === setListId, errType(r));
+
+// ---------- guests (signed-out visitors of a shared set list) ----------
+// Read-only by design: they may get Band/SetList and read Member/Song/Vote by id or parent-id index,
+// and nothing else. "Not shared" is client-side (Band.sharedSetListIds), so reads are NOT blocked here.
+const guest = guestCredentials();
+const G = (query, variables) => gqlGuest(guest, query, variables);
+const guestSongId = randomUUID();
+await create(B, 'Song', { id: guestSongId, bandId, setListId, title: 'Guest-visible song' });
+await update(A, 'Band', { id: bandId, sharedSetListIds: [setListId] });
+
+r = await G(`query($id:ID!){ getBand(id:$id){ id name sharedSetListIds } }`, { id: bandId });
+check('G6', 'guest can get the Band (owner-written sharedSetListIds drives visibility)', r.data?.getBand?.sharedSetListIds?.[0] === setListId, errType(r), true);
+r = await G(`query($id:ID!){ getSetList(id:$id){ id bandId name } }`, { id: setListId });
+check('G6', 'guest can get the SetList', r.data?.getSetList?.id === setListId, errType(r), true);
+// What a guest can read is wider than what the page shows (auth rules can't see sharedSetListIds): record it.
+r = await G(`query($id:ID!){ getBand(id:$id){ inviteCode bannedSubs } }`, { id: bandId });
+info('G6', 'guest reads Band.inviteCode / bannedSubs (known limit: the bandId is the capability)', r.data?.getBand ? `readable: inviteCode=${!!r.data.getBand.inviteCode}` : `denied: ${errType(r)}`);
+r = await G(`query($s:String!){ listSongBySetList(setListId:$s){ items{ id title } } }`, { s: setListId });
+check('G6', 'guest can list songs by setListId', (r.data?.listSongBySetList?.items?.length ?? 0) >= 1, errType(r), true);
+r = await G(`query($s:String!){ listVoteBySetList(setListId:$s){ items{ songId } } }`, { s: setListId });
+check('G6', 'guest can list votes by setListId', !!r.data?.listVoteBySetList, errType(r), true);
+r = await G(`query($b:String!){ listMemberByBandId(bandId:$b){ items{ owner displayName } } }`, { b: bandId });
+check('G6', 'guest can list the roster by bandId (needed to validate song authors)', (r.data?.listMemberByBandId?.items?.length ?? 0) >= 1, errType(r), true);
+
+// Guests never write, and never reach the private models.
+const guestWrites = [
+  ['createBand', 'CreateBandInput', { id: randomUUID(), name: 'g', inviteCode: 'G', version: 1 }, 'id'],
+  ['updateBand', 'UpdateBandInput', { id: bandId, sharedSetListIds: [] }, 'id'],
+  ['createSetList', 'CreateSetListInput', { id: randomUUID(), bandId, name: 'g' }, 'id'],
+  ['updateSetList', 'UpdateSetListInput', { id: setListId, name: 'g' }, 'id'],
+  ['createSong', 'CreateSongInput', { id: randomUUID(), bandId, setListId, title: 'g' }, 'id'],
+  ['updateSong', 'UpdateSongInput', { id: guestSongId, title: 'g' }, 'id'],
+  ['deleteSong', 'DeleteSongInput', { id: guestSongId }, 'id'],
+  ['createVote', 'CreateVoteInput', { songId: guestSongId, owner: 'guest', value: 'up', bandId, setListId }, 'songId'],
+  ['createMember', 'CreateMemberInput', { bandId, owner: 'guest', displayName: 'g' }, 'bandId'],
+  ['createMyBand', 'CreateMyBandInput', { owner: 'guest', bandId }, 'bandId'],
+  ['createBandInvite', 'CreateBandInviteInput', { code: 'GUESTCODE1', bandId }, 'code'],
+];
+// A denial must be an authorization error: a typo, bad signature or expired credential also returns
+// no data and must not read as "the rule held". The G6 reads above (same signer) are the positive control.
+const guestDenied = (res, field) => !res.data?.[field] && denied(res);
+for (const [name, inputType, input, field] of guestWrites) {
+  r = await G(`mutation($input:${inputType}!){ ${name}(input:$input){ ${field} } }`, { input });
+  check('G6', `guest cannot ${name}`, guestDenied(r, name), errType(r), true);
+}
+r = await G(`query($c:String!){ getBandInvite(code:$c){ code bandId } }`, { c: code });
+check('G6', 'guest cannot get a BandInvite', guestDenied(r, 'getBandInvite'), errType(r), true);
+r = await G(`query($o:String!,$b:String!){ getMyBand(owner:$o, bandId:$b){ owner bandId } }`, { o: A.sub, b: bandId });
+check('G6', 'guest cannot get a MyBand row', guestDenied(r, 'getMyBand'), errType(r), true);
+r = await G(`query($o:String!){ listMyBands(owner:$o){ items{ bandId } } }`, { o: A.sub });
+check('G6', 'guest cannot list MyBand rows', denied(r) && !r.data?.listMyBands?.items?.length, errType(r), true);
+r = await G(`query($id:ID!){ getPublishedTab(id:$id){ id } }`, { id: randomUUID() });
+check('G6', 'guest cannot read other (signed-in only) models', guestDenied(r, 'getPublishedTab'), errType(r));
 
 // ---------- summary ----------
 const failed = results.filter((x) => x.pass === false);

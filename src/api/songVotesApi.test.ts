@@ -16,6 +16,8 @@ vi.mock('./authUtils', () => ({
   getCurrentUserSub: vi.fn(async () => 'sub-me'),
 }));
 
+import { PUBLIC_READ_PAGES } from '../bandTypes';
+import { listVotes } from './bandReads';
 import { castVote, deleteVoteRow, listVotesByOwner, listVotesForSetList } from './songVotesApi';
 import { isAuthenticated } from './authUtils';
 
@@ -172,6 +174,67 @@ describe('listVotesForSetList', () => {
   it('throws on API errors so callers fail closed', async () => {
     m.Vote.listVoteBySetList.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
     await expect(listVotesForSetList('sl-1')).rejects.toThrow('gsi down');
+  });
+});
+
+describe('listVotesForSetList (signed-in read)', () => {
+  it('requires sign-in before querying, with a NotSignedIn error', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+    await expect(listVotesForSetList('sl-1')).rejects.toMatchObject({ name: 'NotSignedInError' });
+    expect(m.Vote.listVoteBySetList).not.toHaveBeenCalled();
+  });
+
+  it('sends no authMode (the signed-in default)', async () => {
+    m.Vote.listVoteBySetList.mockResolvedValue({ data: [], nextToken: null });
+    await listVotesForSetList('sl-1');
+    expect(m.Vote.listVoteBySetList.mock.calls[0][1]).not.toHaveProperty('authMode');
+  });
+});
+
+describe('listVotes (public, guest mode)', () => {
+  const row = (songId: string, owner: string) => ({
+    songId,
+    owner,
+    value: 'down',
+    bandId: 'band-1',
+    setListId: 'sl-1',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  });
+
+  it('needs no sign-in: never consults isAuthenticated, and sends the guest authMode', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+    m.Vote.listVoteBySetList.mockResolvedValue({ data: [row('s1', 'a')], nextToken: null });
+    const res = await listVotes('sl-1', 'identityPool', PUBLIC_READ_PAGES.votes);
+    expect(isAuthenticated).not.toHaveBeenCalled();
+    expect(res.items.map((v) => v.songId)).toEqual(['s1']);
+    expect(res.incomplete).toBe(false);
+    expect(m.Vote.listVoteBySetList).toHaveBeenCalledWith(
+      { setListId: 'sl-1' },
+      { limit: 250, nextToken: undefined, authMode: 'identityPool' },
+    );
+  });
+
+  it('follows pages with the auth mode on every page', async () => {
+    m.Vote.listVoteBySetList
+      .mockResolvedValueOnce({ data: [row('s1', 'a')], nextToken: 't1' })
+      .mockResolvedValueOnce({ data: [row('s2', 'b')], nextToken: null });
+    const res = await listVotes('sl-1', 'userPool', 5);
+    expect(res.items.map((v) => v.songId)).toEqual(['s1', 's2']);
+    expect(m.Vote.listVoteBySetList.mock.calls[1][1]).toEqual({ limit: 250, nextToken: 't1', authMode: 'userPool' });
+  });
+
+  it('stops at the given page cap (not the signed-in 50) and flags incomplete', async () => {
+    m.Vote.listVoteBySetList.mockResolvedValue({ data: [row('s', 'a')], nextToken: 'more' });
+    const res = await listVotes('sl-1', 'identityPool', PUBLIC_READ_PAGES.votes);
+    expect(m.Vote.listVoteBySetList).toHaveBeenCalledTimes(PUBLIC_READ_PAGES.votes);
+    expect(res.incomplete).toBe(true);
+    expect(res.items).toHaveLength(PUBLIC_READ_PAGES.votes);
+  });
+
+  it('throws on API errors so callers fail closed', async () => {
+    m.Vote.listVoteBySetList.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
+    await expect(listVotes('sl-1', 'identityPool', 2)).rejects.toThrow('gsi down');
   });
 });
 

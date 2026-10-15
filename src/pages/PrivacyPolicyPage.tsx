@@ -29,9 +29,16 @@ export function PrivacyPolicyPage() {
           user ID are stored in the cloud. Anyone who has a band&rsquo;s link or ID can read that
           band&rsquo;s set lists, members&rsquo; display names and IDs, songs and votes, and the
           list of removed members&rsquo; IDs. Vote records (an ID, the song and your up/down choice,
-          never names or titles) can also be looked up by any signed-in user who knows the set
+          never names or titles) can also be looked up by anyone, signed in or not, who knows the set
           list&rsquo;s ID. Removing someone from a band hides them in the app but does not stop
-          someone who already has the band&rsquo;s ID from reading it.
+          someone who already has the band&rsquo;s ID from reading it. The band&rsquo;s owner can
+          share a set list: anyone with its link can then view it without signing in. The page shows
+          its songs, links and vote totals, not member names. The records behind it are not scoped to
+          that list, though: the signed-out read access applies to every band, not only shared lists,
+          so anyone who has a shared link (or any band or set list ID) can also read, without signing
+          in, the band behind it (including its invite code, which lets them join), its members&rsquo;
+          display names and account IDs, its votes and the songs of its other set lists. Turning sharing off hides the list in the app but does not revoke that access
+          for someone who already has the link.
         </li>
         <li>
           <strong>Microphone (local analysis only):</strong> the tuner and fret memorizer can use your

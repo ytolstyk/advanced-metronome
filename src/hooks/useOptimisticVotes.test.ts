@@ -12,6 +12,7 @@ const song = { id: 's1', bandId: 'band-1', setListId: 'sl-1' } as unknown as Val
 function makeList(serverVote?: VoteValue, tally: SongTally = { up: serverVote === 'up' ? 1 : 0, down: serverVote === 'down' ? 1 : 0, score: 0 }): SetListView {
   return {
     setList: {} as ValidSetList,
+    shared: false,
     songs: [song],
     tallies: new Map([['s1', { ...tally, score: tally.up - tally.down }]]),
     myVotes: new Map(serverVote ? [['s1', serverVote]] : []),

@@ -64,6 +64,7 @@ const bandRow = (over: Record<string, unknown> = {}) => ({
   archivedSetListIds: [],
   bannedSubs: [],
   hiddenSongIds: [],
+  sharedSetListIds: [],
   ...over,
 });
 const memberRow = (owner: string, over: Record<string, unknown> = {}) => ({
@@ -144,6 +145,17 @@ describe('createBand', () => {
     expect(m.Member.create.mock.calls[0][0]).toMatchObject({ owner: ME, displayName: 'Alice' });
     expect(m.MyBand.create.mock.calls[0][0]).toMatchObject({ owner: ME });
     expect(band).toMatchObject({ name: 'The Band', owner: ME, version: 1, inviteCode: bandInput.inviteCode });
+  });
+
+  it('creates the Band with nothing publicly shared (sharing is opt-in by the owner)', async () => {
+    m.SetList.create.mockResolvedValue({ data: setListRow() });
+    m.BandInvite.create.mockResolvedValue({ data: {} });
+    m.MyBand.create.mockResolvedValue({ data: {} });
+    m.Member.create.mockResolvedValue({ data: {} });
+    m.Band.create.mockImplementation(async (i: Record<string, unknown>) => ({ data: bandRow({ ...i, owner: ME }) }));
+    const band = await createBand('The Band', 'Alice');
+    expect(m.Band.create.mock.calls[0][0]).toHaveProperty('sharedSetListIds', []);
+    expect(band.sharedSetListIds).toEqual([]);
   });
 
   it('removes its own member rows again if the final Band write fails (no inert leftovers)', async () => {
@@ -609,6 +621,35 @@ describe('deleteBand (tombstone)', () => {
     expect(m.SetList.update.mock.calls[0][0].name).toBe('Deleted');
     expect(m.Band.create).not.toHaveBeenCalled();
     expect(m.BandInvite.delete).not.toHaveBeenCalled();
+  });
+
+  it('the scrub clears sharedSetListIds so a deleted band can never leave a set list public', async () => {
+    echoBandUpdates(bandRow({ setListIds: ['sl-1'], sharedSetListIds: ['sl-1'] }));
+    m.SetList.update.mockResolvedValue({ data: {} });
+    m.BandInvite.update.mockResolvedValue({ data: {} });
+    await deleteBand('band-1');
+    expect(m.graphql.mock.calls[0][0].variables.input).toMatchObject({ sharedSetListIds: [] });
+    const band = await m.Band.get.getMockImplementation()!({ id: 'band-1' });
+    expect(band.data.sharedSetListIds).toEqual([]);
+  });
+
+  it('a tombstoned band that still lists shared ids is NOT considered scrubbed, so a re-run finishes the scrub', async () => {
+    echoBandUpdates(
+      bandRow({
+        deletedAt: '2026-02-01T00:00:00Z',
+        name: 'Deleted',
+        inviteCode: '',
+        setListIds: ['sl-1'],
+        sharedSetListIds: ['sl-1'],
+      }),
+    );
+    m.SetList.update.mockResolvedValue({ data: {} });
+    m.BandInvite.update.mockResolvedValue({ data: {} });
+    await deleteBand('band-1');
+    expect(m.graphql).toHaveBeenCalledTimes(1);
+    const input = m.graphql.mock.calls[0][0].variables.input;
+    expect(input).toMatchObject({ sharedSetListIds: [] });
+    expect(input).not.toHaveProperty('deletedAt'); // already tombstoned: the original time is kept
   });
 
   it('a set-list failure aborts BEFORE the band changes, so the normal Delete button can simply retry', async () => {

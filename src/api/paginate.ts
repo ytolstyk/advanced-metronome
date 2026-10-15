@@ -1,12 +1,16 @@
-import { LIST_PAGE_SIZE, MAX_LIST_PAGES, type ListAllResult } from '../bandTypes';
+import { LIST_PAGE_SIZE, MAX_LIST_PAGES, type ListAllResult, type ReadAuthMode } from '../bandTypes';
 
 export interface PageResult<T> {
   items: T[];
   nextToken?: string | null;
 }
 
-/** Options for one index/list query page. */
-export const pageOpts = (nextToken: string | undefined) => ({ limit: LIST_PAGE_SIZE, nextToken });
+/** Options for one index/list query page (`authMode` only when the caller is a resolved guest/reader). */
+export const pageOpts = (nextToken: string | undefined, authMode?: ReadAuthMode) => ({
+  limit: LIST_PAGE_SIZE,
+  nextToken,
+  ...(authMode ? { authMode } : {}),
+});
 
 /**
  * Follows `nextToken` to the end. Stops at `maxPages` and reports `incomplete` so the UI can say

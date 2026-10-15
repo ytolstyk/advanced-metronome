@@ -4,7 +4,8 @@ const { m } = vi.hoisted(() => ({
   m: {
     models: {
       Band: { get: vi.fn() },
-      SetList: { update: vi.fn() },
+      SetList: { get: vi.fn(), update: vi.fn() },
+      Member: { listMemberByBandId: vi.fn() },
     },
     graphql: vi.fn(),
   },
@@ -16,6 +17,7 @@ vi.mock('aws-amplify/data', () => ({
 vi.mock('./authUtils', () => ({
   isAuthenticated: vi.fn(async () => true),
   getCurrentUserSub: vi.fn(async () => 'sub-me'),
+  getSignedInSub: vi.fn(async () => 'sub-me' as string | null),
 }));
 
 import {
@@ -26,9 +28,13 @@ import {
   deleteQuietly,
   errorText,
   getBand,
+  getSetListRow,
   isConflict,
   isUnauthorized,
+  listRoster,
+  readArgs,
   requireAuth,
+  resolveReader,
   throwOnError,
   throwUnlessConflict,
   toBand,
@@ -42,7 +48,7 @@ import {
   withKeyLock,
   type BandRow,
 } from './bandsShared';
-import { isAuthenticated } from './authUtils';
+import { getSignedInSub, isAuthenticated } from './authUtils';
 
 const CONFLICT = [{ errorType: 'DynamoDB:ConditionalCheckFailedException', message: 'The conditional request failed' }];
 const UNAUTH = [{ errorType: 'Unauthorized', message: 'Not Authorized to access deleteSong' }];
@@ -58,6 +64,7 @@ const bandRow = (over: Partial<BandRow> = {}): BandRow => ({
   archivedSetListIds: [],
   bannedSubs: [],
   hiddenSongIds: [],
+  sharedSetListIds: [],
   ...over,
 });
 
@@ -66,7 +73,10 @@ beforeEach(() => {
   vi.mocked(isAuthenticated).mockResolvedValue(true);
   m.models.Band.get.mockReset();
   m.models.SetList.update.mockReset();
+  m.models.SetList.get.mockReset();
+  m.models.Member.listMemberByBandId.mockReset();
   m.graphql.mockReset();
+  vi.mocked(getSignedInSub).mockResolvedValue('sub-me');
 });
 
 describe('error classification', () => {
@@ -213,7 +223,20 @@ describe('row mappers', () => {
       archivedSetListIds: [],
       bannedSubs: [],
       hiddenSongIds: [],
+      sharedSetListIds: [],
     });
+  });
+
+  it('toBand maps a null, undefined or absent sharedSetListIds to [] and keeps real ids', () => {
+    expect(toBand({ ...bandRow(), sharedSetListIds: null } as unknown as BandRow).sharedSetListIds).toEqual([]);
+    expect(toBand({ ...bandRow(), sharedSetListIds: undefined } as unknown as BandRow).sharedSetListIds).toEqual([]);
+    const { sharedSetListIds: _omitted, ...withoutField } = bandRow();
+    void _omitted;
+    expect(toBand(withoutField as unknown as BandRow).sharedSetListIds).toEqual([]);
+    expect(toBand(bandRow({ sharedSetListIds: ['sl-1', null, 'sl-2'] as unknown as string[] })).sharedSetListIds).toEqual([
+      'sl-1',
+      'sl-2',
+    ]);
   });
 
   it('toBand keeps a real deletedAt and populated arrays', () => {
@@ -582,5 +605,104 @@ describe('updateBand', () => {
     expect(started).toContain('band-b');
     release();
     await a;
+  });
+});
+
+describe('resolveReader', () => {
+  it('a signed-in caller reads with their sub and the userPool mode', async () => {
+    vi.mocked(getSignedInSub).mockResolvedValue('sub-abc');
+    await expect(resolveReader()).resolves.toEqual({ sub: 'sub-abc', authMode: 'userPool' });
+  });
+
+  it('a signed-out caller has no sub and reads as the identityPool guest', async () => {
+    vi.mocked(getSignedInSub).mockResolvedValue(null);
+    await expect(resolveReader()).resolves.toEqual({ sub: null, authMode: 'identityPool' });
+  });
+
+  it('does not go through requireAuth (a signed-out visitor must not fail)', async () => {
+    vi.mocked(getSignedInSub).mockResolvedValue(null);
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+    await expect(resolveReader()).resolves.toMatchObject({ authMode: 'identityPool' });
+    expect(isAuthenticated).not.toHaveBeenCalled();
+  });
+});
+
+describe('readArgs', () => {
+  it('is empty without a mode (the client default applies)', () => {
+    expect(readArgs()).toEqual([]);
+    expect(readArgs(undefined)).toEqual([]);
+  });
+
+  it('spreads into a single options argument naming the mode', () => {
+    expect(readArgs('identityPool')).toEqual([{ authMode: 'identityPool' }]);
+    expect(readArgs('userPool')).toEqual([{ authMode: 'userPool' }]);
+  });
+});
+
+describe('getBand with an auth mode', () => {
+  it('passes no options without a mode, and the mode when given', async () => {
+    m.models.Band.get.mockResolvedValue({ data: bandRow() });
+    await getBand('band-1');
+    expect(m.models.Band.get).toHaveBeenLastCalledWith({ id: 'band-1' });
+    await getBand('band-1', 'identityPool');
+    expect(m.models.Band.get).toHaveBeenLastCalledWith({ id: 'band-1' }, { authMode: 'identityPool' });
+  });
+});
+
+describe('getSetListRow', () => {
+  const row = { id: 'sl-1', owner: 'sub-owner', bandId: 'band-1', name: 'Main', archivedAt: null };
+
+  it('returns the mapped row, or null when it does not exist', async () => {
+    m.models.SetList.get.mockResolvedValueOnce({ data: row });
+    expect(await getSetListRow('sl-1')).toEqual({ id: 'sl-1', owner: 'sub-owner', bandId: 'band-1', name: 'Main', archivedAt: null });
+    m.models.SetList.get.mockResolvedValueOnce({ data: null });
+    expect(await getSetListRow('sl-1')).toBeNull();
+  });
+
+  it('uses the client default without a mode and an explicit mode for a resolved reader', async () => {
+    m.models.SetList.get.mockResolvedValue({ data: row });
+    await getSetListRow('sl-1');
+    expect(m.models.SetList.get).toHaveBeenLastCalledWith({ id: 'sl-1' });
+    await getSetListRow('sl-1', 'identityPool');
+    expect(m.models.SetList.get).toHaveBeenLastCalledWith({ id: 'sl-1' }, { authMode: 'identityPool' });
+  });
+
+  it('throws on API errors rather than reporting "not found" (callers fail closed)', async () => {
+    m.models.SetList.get.mockResolvedValue({ data: null, errors: [{ message: 'transient' }] });
+    await expect(getSetListRow('sl-1')).rejects.toThrow('getSetList: transient');
+  });
+});
+
+describe('listRoster', () => {
+  const member = (owner: string) => ({ bandId: 'band-1', owner, displayName: owner, createdAt: 'c' });
+
+  it('follows pages and maps rows, with no authMode by default', async () => {
+    m.models.Member.listMemberByBandId
+      .mockResolvedValueOnce({ data: [member('a')], nextToken: 't1' })
+      .mockResolvedValueOnce({ data: [member('b')], nextToken: null });
+    const res = await listRoster('band-1');
+    expect(res.rows.map((r) => r.owner)).toEqual(['a', 'b']);
+    expect(res.incomplete).toBe(false);
+    expect(m.models.Member.listMemberByBandId.mock.calls[0]).toEqual([{ bandId: 'band-1' }, { limit: 250, nextToken: undefined }]);
+  });
+
+  it('defaults to a cap of 4 pages and reports incomplete', async () => {
+    m.models.Member.listMemberByBandId.mockResolvedValue({ data: [member('a')], nextToken: 'more' });
+    const res = await listRoster('band-1');
+    expect(m.models.Member.listMemberByBandId).toHaveBeenCalledTimes(4);
+    expect(res.incomplete).toBe(true);
+  });
+
+  it('honours a custom page cap and passes the auth mode to every page', async () => {
+    m.models.Member.listMemberByBandId.mockResolvedValue({ data: [member('a')], nextToken: 'more' });
+    const res = await listRoster('band-1', { authMode: 'identityPool', maxPages: 2 });
+    expect(m.models.Member.listMemberByBandId).toHaveBeenCalledTimes(2);
+    for (const call of m.models.Member.listMemberByBandId.mock.calls) expect(call[1]).toMatchObject({ authMode: 'identityPool' });
+    expect(res.incomplete).toBe(true);
+  });
+
+  it('fails closed on API errors', async () => {
+    m.models.Member.listMemberByBandId.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
+    await expect(listRoster('band-1')).rejects.toThrow('gsi down');
   });
 });

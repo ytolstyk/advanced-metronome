@@ -1,7 +1,8 @@
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
-import type { BandRecord, MemberRecord, SetListRecord, SongRecord, VoteRecord } from '../bandTypes';
-import { isAuthenticated } from './authUtils';
+import type { BandRecord, MemberRecord, ReadAuthMode, SetListRecord, SongRecord, VoteRecord } from '../bandTypes';
+import { getSignedInSub, isAuthenticated } from './authUtils';
+import { listAll, pageOpts } from './paginate';
 
 /**
  * Shared client + helpers for the Bands API modules (bandsApi, setListsApi, songVotesApi):
@@ -26,6 +27,29 @@ export class BandConflictError extends Error {
 export async function requireAuth(): Promise<void> {
   if (!(await isAuthenticated())) throw new NotSignedInError();
 }
+
+/** A valid roster is at most 15 rows, so a few pages is plenty; a junk flood must not cost 50 round trips. */
+const ROSTER_MAX_PAGES = 4;
+
+// ── Who is reading ─────────────────────────────────────────────────────────
+
+/** The caller of a read that also works signed out: `sub` is `null` for an anonymous visitor. */
+export interface Reader {
+  sub: string | null;
+  authMode: ReadAuthMode;
+}
+
+export async function resolveReader(): Promise<Reader> {
+  const sub = await getSignedInSub();
+  return sub ? { sub, authMode: 'userPool' } : { sub: null, authMode: 'identityPool' };
+}
+
+/**
+ * Trailing args for a `get`: nothing for the normal signed-in path (the client default), an explicit
+ * auth mode when the caller is a resolved `Reader`.
+ */
+export const readArgs = (authMode?: ReadAuthMode): [] | [{ authMode: ReadAuthMode }] =>
+  authMode ? [{ authMode }] : [];
 
 // ── Result handling ────────────────────────────────────────────────────────
 
@@ -125,7 +149,10 @@ const BAND_FIELDS = [
   'archivedSetListIds',
   'bannedSubs',
   'hiddenSongIds',
+  'sharedSetListIds',
 ] as const;
+
+export type { ReadAuthMode };
 
 export type BandRow = Pick<Row<'Band'>, (typeof BAND_FIELDS)[number]>;
 
@@ -141,6 +168,7 @@ export function toBand(r: BandRow): BandRecord {
     archivedSetListIds: strings(r.archivedSetListIds),
     bannedSubs: strings(r.bannedSubs),
     hiddenSongIds: strings(r.hiddenSongIds),
+    sharedSetListIds: strings(r.sharedSetListIds),
   };
 }
 
@@ -185,10 +213,29 @@ export function toVote(r: Row<'Vote'>): VoteRecord {
 // ── Single-row reads / writes shared by several modules ────────────────────
 
 /** Band by id; `null` when it doesn't exist. Throws on API errors (callers fail closed). */
-export async function getBand(bandId: string): Promise<BandRecord | null> {
-  const { data, errors } = await bandsClient.models.Band.get({ id: bandId });
+export async function getBand(bandId: string, authMode?: ReadAuthMode): Promise<BandRecord | null> {
+  const { data, errors } = await bandsClient.models.Band.get({ id: bandId }, ...readArgs(authMode));
   throwOnError({ errors }, 'getBand');
   return data ? toBand(data) : null;
+}
+
+/** SetList by id; `null` when it doesn't exist. Throws on API errors (callers fail closed). */
+export async function getSetListRow(setListId: string, authMode?: ReadAuthMode): Promise<SetListRecord | null> {
+  const res = await bandsClient.models.SetList.get({ id: setListId }, ...readArgs(authMode));
+  throwOnError(res, 'getSetList');
+  return res.data ? toSetList(res.data) : null;
+}
+
+/** Member rows of a band via the roster index (unvalidated; capped pages, `incomplete` when hit). */
+export async function listRoster(
+  bandId: string,
+  { authMode, maxPages = ROSTER_MAX_PAGES }: { authMode?: ReadAuthMode; maxPages?: number } = {},
+): Promise<{ rows: MemberRecord[]; incomplete: boolean }> {
+  const { items, incomplete } = await listAll(async (token) => {
+    const res = await bandsClient.models.Member.listMemberByBandId({ bandId }, pageOpts(token, authMode));
+    return { items: unwrap(res, 'listMembers').map(toMember), nextToken: res.nextToken };
+  }, maxPages);
+  return { rows: items, incomplete };
 }
 
 /**
@@ -210,7 +257,14 @@ export async function tombstoneSetList(setListId: string, scrubbedName: string):
 export type BandPatch = Partial<
   Pick<
     BandRecord,
-    'name' | 'inviteCode' | 'deletedAt' | 'setListIds' | 'archivedSetListIds' | 'bannedSubs' | 'hiddenSongIds'
+    | 'name'
+    | 'inviteCode'
+    | 'deletedAt'
+    | 'setListIds'
+    | 'archivedSetListIds'
+    | 'bannedSubs'
+    | 'hiddenSongIds'
+    | 'sharedSetListIds'
   >
 >;
 

@@ -29,6 +29,7 @@ vi.mock('../api/setListsApi', () => ({
   createSetList: vi.fn(),
   renameSetList: vi.fn(),
   archiveSetList: vi.fn(),
+  setSetListShared: vi.fn(),
   deleteMyContent: vi.fn(),
 }));
 
@@ -45,7 +46,7 @@ import {
   resetInviteCode,
   unbanMember,
 } from '../api/bandsApi';
-import { archiveSetList, createSetList, deleteMyContent, renameSetList } from '../api/setListsApi';
+import { archiveSetList, createSetList, deleteMyContent, renameSetList, setSetListShared } from '../api/setListsApi';
 
 const ME = 'sub-me';
 const BOB = 'sub-bob';
@@ -62,6 +63,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   archivedSetListIds: [],
   bannedSubs: [],
   hiddenSongIds: [],
+  sharedSetListIds: [],
   ...over,
 });
 
@@ -349,6 +351,66 @@ describe('BandPage as the owner', () => {
     expect(archiveSetList).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'Archive' }));
     await waitFor(() => expect(archiveSetList).toHaveBeenCalledWith('band-1', 'sl-1'));
+  });
+
+  it('the owner can share a set list: calls setSetListShared(band, list, true), then reloads', async () => {
+    load(ownerView());
+    vi.mocked(setSetListShared).mockResolvedValue(undefined);
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    expect(screen.getByText('Not shared')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Copy share link/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Share Main Set' }));
+    // Sharing publishes more than the list, so nothing is written until the owner confirms.
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('invite code');
+    expect(dialog).toHaveTextContent('can’t take that access back');
+    expect(setSetListShared).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Share' }));
+    await waitFor(() => expect(setSetListShared).toHaveBeenCalledWith('band-1', 'sl-1', true));
+    await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+  });
+
+  it('cancelling the share confirmation writes nothing', async () => {
+    load(ownerView());
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    fireEvent.click(screen.getByRole('button', { name: 'Share Main Set' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(setSetListShared).not.toHaveBeenCalled();
+  });
+
+  it('the owner can stop sharing a shared set list (and sees its copy-link button meanwhile)', async () => {
+    load(ownerView({ band: band({ sharedSetListIds: ['sl-1'] }) }));
+    vi.mocked(setSetListShared).mockResolvedValue(undefined);
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    expect(screen.getByText('Shared')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy share link for Main Set' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop sharing Main Set' }));
+    await waitFor(() => expect(setSetListShared).toHaveBeenCalledWith('band-1', 'sl-1', false));
+  });
+
+  it('a failed share toggle shows the error and STILL reloads, so the label never lies', async () => {
+    load(ownerView());
+    vi.mocked(setSetListShared).mockRejectedValue(new Error('The band changed while you were editing. Please retry.'));
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    fireEvent.click(screen.getByRole('button', { name: 'Share Main Set' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Share' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The band changed');
+    await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+  });
+
+  it('members see the Shared status and a copy link, but cannot toggle sharing', async () => {
+    load(makeView({ band: band({ sharedSetListIds: ['sl-1'] }) }));
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    expect(screen.getByText('Shared')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy share link for Main Set' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Share|Stop sharing) / })).not.toBeInTheDocument();
+    expect(setSetListShared).not.toHaveBeenCalled();
   });
 
   it('hides "New set list" at the cap', async () => {

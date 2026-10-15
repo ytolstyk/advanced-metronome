@@ -42,6 +42,20 @@ export const BAND_GONE_TITLES = {
   'not-found': 'Band not found',
 } as const;
 
+/** `identityPool` is the signed-out guest role; only shared set lists are meant to be read that way. */
+export type ReadAuthMode = 'userPool' | 'identityPool';
+
+/**
+ * Page caps for the PUBLIC set list page. A valid list is tiny (<= 100 songs, <= 15 members, so
+ * <= 1500 votes at 250 rows a page), so anything beyond this is a junk flood. This only keeps our
+ * own page cheap: the API itself is not capped, and a flood can push real rows off the page (the
+ * `incomplete` banner then shows).
+ */
+export const PUBLIC_READ_PAGES = { songs: 3, votes: 7, roster: 4 } as const;
+
+/** The `sub` of a signed-out visitor: never a member or owner (validators reject an empty sub). */
+export const ANONYMOUS_SUB = '';
+
 /** A just-cast vote is trusted over a refetch for this long (the vote index can lag a moment). */
 export const VOTE_INDEX_LAG_GRACE_MS = 5_000;
 
@@ -60,6 +74,8 @@ export interface BandRecord {
   archivedSetListIds: string[];
   bannedSubs: string[];
   hiddenSongIds: string[];
+  /** Set lists anyone with the link may read, signed in or not (owner-written; a subset of `setListIds`). */
+  sharedSetListIds: string[];
 }
 
 export interface MemberRecord {
@@ -171,6 +187,8 @@ export interface SetListRows {
 
 export interface SetListView {
   setList: ValidSetList;
+  /** The owner shares this set list with anyone who has its link. */
+  shared: boolean;
   /** Valid, non-hidden songs, ranked by score. */
   songs: ValidSong[];
   tallies: Map<string, SongTally>;
@@ -188,3 +206,9 @@ export interface PendingVote {
   /** When the request finished; `null` while it is still in flight. */
   settledAt: number | null;
 }
+
+/** What the public (signed-out friendly) set list page gets. */
+export type SharedSetListResult =
+  /** Missing, archived, deleted or not shared: deliberately indistinguishable to a visitor. */
+  | { status: 'unavailable' }
+  | { status: 'ok'; view: BandView; list: SetListView };

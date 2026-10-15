@@ -2,7 +2,6 @@ import {
   BAND_LIMITS,
   BAND_TEXT,
   type BandRecord,
-  type ListAllResult,
   type SetListRows,
   type SongRecord,
 } from '../bandTypes';
@@ -19,23 +18,17 @@ import {
   unwrap,
   updateBand,
 } from './bandsShared';
-import { listAll, pageOpts, runPool } from './paginate';
+import { runPool } from './paginate';
+import { listSongs } from './bandReads';
 import { deleteVoteRow, listVotesByOwner, listVotesForSetList } from './songVotesApi';
 
 /** Parallelism for leave-band cleanup: a few set lists at a time, a few deletes per list. */
 const CLEANUP_LISTS_AT_ONCE = 3;
 const CLEANUP_DELETES_AT_ONCE = 6;
 
-async function listSongs(setListId: string): Promise<ListAllResult<SongRecord>> {
-  return listAll(async (token) => {
-    const res = await client.models.Song.listSongBySetList({ setListId }, pageOpts(token));
-    return { items: unwrap(res, 'listSongs').map(toSong), nextToken: res.nextToken };
-  });
-}
-
 /**
  * Raw (unvalidated) songs and votes for a set list. Independent of the band view, so pages fetch
- * both in parallel; pass the result to `assembleSetListView` (never render it directly).
+ * both in parallel; pass the result to `assembleSetListView` (never render it directly). Signed in.
  */
 export async function fetchSetListRows(setListId: string): Promise<SetListRows> {
   await requireAuth();
@@ -45,7 +38,7 @@ export async function fetchSetListRows(setListId: string): Promise<SetListRows> 
 
 // ── Set lists (owner only; rows are never deleted, only archived) ──────────
 
-/** Row first, then the id into `Band.setListIds` (an orphan row never validates). */
+/** Row first, then the id into `Band.setListIds` (an orphan row never validates). Starts private. */
 export async function createSetList(bandId: string, nameInput: string): Promise<string> {
   await requireAuth();
   const name = requireName(nameInput);
@@ -59,6 +52,20 @@ export async function createSetList(bandId: string, nameInput: string): Promise<
     return { setListIds: [...band.setListIds, id] };
   });
   return id;
+}
+
+/** Turns public sharing of a set list on or off (one owner-only Band write; idempotent). */
+export async function setSetListShared(bandId: string, setListId: string, shared: boolean): Promise<void> {
+  await requireAuth();
+  await updateBand(bandId, (band) => {
+    if (!band.setListIds.includes(setListId)) throw new Error('Set list not found');
+    if (band.sharedSetListIds.includes(setListId) === shared) return null;
+    return {
+      sharedSetListIds: shared
+        ? [...band.sharedSetListIds, setListId]
+        : band.sharedSetListIds.filter((id) => id !== setListId),
+    };
+  });
 }
 
 export async function renameSetList(setListId: string, nameInput: string): Promise<void> {
@@ -77,6 +84,7 @@ export async function archiveSetList(bandId: string, setListId: string): Promise
     return {
       setListIds: band.setListIds.filter((id) => id !== setListId),
       archivedSetListIds: [...band.archivedSetListIds, setListId],
+      sharedSetListIds: band.sharedSetListIds.filter((id) => id !== setListId), // archived = no longer public
     };
   });
   await tombstoneSetList(setListId, BAND_TEXT.archivedSetListName);
