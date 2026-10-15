@@ -44,6 +44,8 @@ const song = (id: string, owner: string, over: Partial<SongRecord> = {}): SongRe
   key: null,
   bpm: null,
   notes: null,
+  songUrl: null,
+  tabUrl: null,
   createdAt: '2026-01-02T00:00:00Z',
   ...over,
 });

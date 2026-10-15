@@ -9,6 +9,7 @@ export const BAND_LIMITS = {
   titleMax: 100,
   artistMax: 100,
   notesMax: 500,
+  urlMax: 300,
   bpmMin: MIN_BPM,
   bpmMax: MAX_BPM,
   maxMembers: 15,
@@ -86,6 +87,8 @@ export interface SongRecord {
   key: string | null;
   bpm: number | null;
   notes: string | null;
+  songUrl: string | null;
+  tabUrl: string | null;
   createdAt: string;
   updatedAt?: string;
 }

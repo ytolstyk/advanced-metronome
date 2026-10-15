@@ -187,12 +187,37 @@ export function isValidSongKey(key: string | null | undefined): boolean {
   return !key || SONG_KEY.test(key);
 }
 
+/**
+ * Canonical form of a web link, or null if it isn't one. Only http(s) without embedded credentials
+ * is accepted (the result is used as an `href`, so `javascript:` and friends must never get through).
+ * Canonicalised on write and again at render; read-time validation does not require the stored text
+ * to be byte-identical to it (URL serialisation differs slightly between browsers).
+ */
+export function normalizeHttpUrl(raw: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (url.username || url.password) return null;
+  return url.href;
+}
+
+function isStoredUrl(value: string | null | undefined): boolean {
+  // `length` first: hostile rows can hold megabytes and `textLength`/`new URL` walk the whole string.
+  return !value || (value.length <= BAND_LIMITS.urlMax * 2 && textLength(value) <= BAND_LIMITS.urlMax && stripUnsafeText(value) === value && normalizeHttpUrl(value) !== null);
+}
+
 interface SongFields {
   title: string;
   artist?: string | null;
   key?: string | null;
   bpm?: number | null;
   notes?: string | null;
+  songUrl?: string | null;
+  tabUrl?: string | null;
 }
 
 /** The one definition of song bounds, shared by the form (write) and the validators (read). */
@@ -202,6 +227,8 @@ export function songFieldError(f: SongFields): string | null {
   if (textLength(f.artist ?? '') > BAND_LIMITS.artistMax) return `Artist must be at most ${BAND_LIMITS.artistMax} characters`;
   if (textLength(f.notes ?? '') > BAND_LIMITS.notesMax) return `Notes must be at most ${BAND_LIMITS.notesMax} characters`;
   if (!isValidSongKey(f.key)) return 'Key must look like C, F#, Bb or Am';
+  if (!isStoredUrl(f.songUrl)) return `Song link must be a web address (http or https) of at most ${BAND_LIMITS.urlMax} characters`;
+  if (!isStoredUrl(f.tabUrl)) return `Tab link must be a web address (http or https) of at most ${BAND_LIMITS.urlMax} characters`;
   if (f.bpm != null && (!Number.isInteger(f.bpm) || f.bpm < BAND_LIMITS.bpmMin || f.bpm > BAND_LIMITS.bpmMax)) {
     return `BPM must be a whole number from ${BAND_LIMITS.bpmMin} to ${BAND_LIMITS.bpmMax}`;
   }
@@ -378,6 +405,8 @@ export interface SongInput {
   key: string | null;
   bpm: number | null;
   notes: string | null;
+  songUrl: string | null;
+  tabUrl: string | null;
 }
 
 export interface RawSongInput {
@@ -386,6 +415,27 @@ export interface RawSongInput {
   key?: string;
   bpm?: string | number | null;
   notes?: string;
+  songUrl?: string;
+  tabUrl?: string;
+}
+
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+/** "localhost:3000/x" looks like a scheme but is a host and port. */
+const HOST_WITH_PORT = /^[^/]+:\d+(\/|$)/;
+
+/** Text without a scheme ("example.com/x", "localhost:3000") is assumed to be https. */
+function withDefaultScheme(text: string): string {
+  return HAS_SCHEME.test(text) && !HOST_WITH_PORT.test(text) ? text : `https://${text}`;
+}
+
+/**
+ * A link typed into the form: "example.com/x" gets `https://`. Returns the canonical link, `''`
+ * when empty, or the raw text when it isn't a valid link (so `songFieldError` reports it).
+ */
+function parseLinkInput(raw: string | undefined): string {
+  const text = stripUnsafeText(raw ?? '');
+  if (!text) return '';
+  return normalizeHttpUrl(withDefaultScheme(text)) ?? text;
 }
 
 /** Validates/normalizes a suggest-song form with the same bounds the read-time validators enforce. */
@@ -397,7 +447,64 @@ export function parseSongInput(raw: RawSongInput): { value: SongInput } | { erro
   const bpmText = typeof raw.bpm === 'number' ? String(raw.bpm) : (raw.bpm ?? '').trim();
   const bpm = bpmText === '' ? null : Number(bpmText);
 
-  const error = songFieldError({ title, artist, key, bpm, notes });
+  const songUrl = parseLinkInput(raw.songUrl);
+  const tabUrl = parseLinkInput(raw.tabUrl);
+
+  const error = songFieldError({ title, artist, key, bpm, notes, songUrl, tabUrl });
   if (error) return { error };
-  return { value: { title, artist: artist || null, key: key || null, bpm, notes: notes || null } };
+  return {
+    value: { title, artist: artist || null, key: key || null, bpm, notes: notes || null, songUrl: songUrl || null, tabUrl: tabUrl || null },
+  };
+}
+
+// ── Links in text ──────────────────────────────────────────────────────────
+
+export interface TextPart {
+  text: string;
+  /** Present for a clickable web link (canonical, http(s) only). */
+  href?: string;
+}
+
+const TRAILING_PUNCTUATION_CHAR = /[.,;:!?)\]}]/;
+const NON_ASCII = /[\u0080-\uffff]/; // astral characters are surrogate pairs, so they match too
+const URL_IN_TEXT = /https?:\/\/[^\s<>"']+/gi;
+
+/** Drops sentence punctuation after a link, keeping a closing ")" that balances one inside it. */
+function trimTrailingPunctuation(url: string): string {
+  let open = 0;
+  let close = 0;
+  for (const ch of url) {
+    if (ch === '(') open += 1;
+    else if (ch === ')') close += 1;
+  }
+  let end = url.length;
+  while (end > 0 && TRAILING_PUNCTUATION_CHAR.test(url[end - 1])) {
+    if (url[end - 1] === ')') {
+      if (close <= open) break;
+      close -= 1;
+    }
+    end -= 1;
+  }
+  return url.slice(0, end);
+}
+
+/** Splits text into plain and link parts so URLs can be rendered as anchors (never via innerHTML). */
+export function splitTextWithLinks(text: string): TextPart[] {
+  const parts: TextPart[] = [];
+  let last = 0;
+  const push = (t: string, href?: string) => {
+    if (t) parts.push(href ? { text: t, href } : { text: t });
+  };
+  for (const match of text.matchAll(URL_IN_TEXT)) {
+    const start = match.index;
+    const candidate = trimTrailingPunctuation(match[0]);
+    // Non-ASCII text could display one host while linking to another (homographs): leave it plain.
+    const href = NON_ASCII.test(candidate) ? null : normalizeHttpUrl(candidate);
+    if (!href) continue;
+    push(text.slice(last, start));
+    push(candidate, href);
+    last = start + candidate.length;
+  }
+  push(text.slice(last));
+  return parts;
 }

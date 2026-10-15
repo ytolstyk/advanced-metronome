@@ -208,6 +208,8 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
             key: editing.key ?? '',
             bpm: editing.bpm ?? '',
             notes: editing.notes ?? '',
+            songUrl: editing.songUrl ?? '',
+            tabUrl: editing.tabUrl ?? '',
           }}
           onSubmit={async (raw) => {
             try {

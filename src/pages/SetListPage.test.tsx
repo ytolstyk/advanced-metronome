@@ -75,6 +75,8 @@ const song = (id: string, owner: string, createdAt: string): SongRecord => ({
   key: null,
   bpm: null,
   notes: null,
+  songUrl: null,
+  tabUrl: null,
   createdAt,
 });
 const vote = (songId: string, owner: string, value: string): VoteRecord => ({

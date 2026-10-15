@@ -1,6 +1,9 @@
-import { Pencil, Trash2, EyeOff } from 'lucide-react';
+import { useMemo } from 'react';
+import { ExternalLink, Pencil, Trash2, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { normalizeHttpUrl } from '../../bandUtils';
 import type { SongTally, ValidSong, VoteValue } from '../../bandTypes';
+import { LinkifiedText } from './LinkifiedText';
 import { VoteButtons } from './VoteButtons';
 
 interface SongRowProps {
@@ -26,6 +29,33 @@ const EDITED_AFTER_MS = 60_000;
 function wasEdited(song: ValidSong): boolean {
   if (!song.updatedAt) return false;
   return Date.parse(song.updatedAt) - Date.parse(song.createdAt) > EDITED_AFTER_MS;
+}
+
+/** The destination shown beside the label so teammates can see where a link goes (IDN hosts show as xn--). */
+function hostOf(href: string): string {
+  return new URL(href).hostname.replace(/^www\./, '');
+}
+
+function ExternalAnchor({ url, label, songTitle }: { url: string; label: string; songTitle: string }) {
+  // Re-checked at render: only a canonical http(s) link is ever an href.
+  const link = useMemo(() => {
+    const href = normalizeHttpUrl(url);
+    return href ? { href, host: hostOf(href) } : null;
+  }, [url]);
+  if (!link) return null;
+  const { href, host } = link;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${label} link for ${songTitle} (opens in a new tab)`}
+      className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
+    >
+      {label} <span className="text-xs text-muted-foreground">{host}</span>
+      <ExternalLink size={12} aria-hidden="true" />
+    </a>
+  );
 }
 
 export function SongRow({
@@ -58,7 +88,17 @@ export function SongRow({
             {(song.artist || meta.length > 0) && (
               <p className="break-words text-sm text-foreground/70">{[song.artist, ...meta].filter(Boolean).join(' · ')}</p>
             )}
-            {song.notes && <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">{song.notes}</p>}
+            {(song.songUrl || song.tabUrl) && (
+              <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+                {song.songUrl && <ExternalAnchor url={song.songUrl} label="Song" songTitle={song.title} />}
+                {song.tabUrl && <ExternalAnchor url={song.tabUrl} label="Tab" songTitle={song.title} />}
+              </p>
+            )}
+            {song.notes && (
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                <LinkifiedText text={song.notes} />
+              </p>
+            )}
             <p className="mt-1 text-xs text-muted-foreground">Suggested by {suggestedBy}</p>
           </div>
         </div>

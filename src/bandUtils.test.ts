@@ -13,6 +13,7 @@ import {
   isBanned,
   isVoteValue,
   myVotes,
+  normalizeHttpUrl,
   normalizeInviteCode,
   parseSongInput,
   partitionSongs,
@@ -24,6 +25,7 @@ import {
   sanitizeNotes,
   songFieldError,
   sortSongsByScore,
+  splitTextWithLinks,
   stripUnsafeText,
   tallyVotes,
   textLength,
@@ -73,6 +75,8 @@ const song = (id: string, owner: string, over: Partial<SongRecord> = {}): SongRe
   key: null,
   bpm: null,
   notes: null,
+  songUrl: null,
+  tabUrl: null,
   createdAt: '2026-01-02T00:00:00Z',
   ...over,
 });
@@ -384,13 +388,13 @@ describe('buildDisplayNames', () => {
 describe('parseSongInput', () => {
   it('normalizes a full valid form', () => {
     expect(parseSongInput({ title: '  Wonderwall ', artist: ' Oasis ', key: 'F#m', bpm: '87', notes: ' capo 2 ' })).toEqual({
-      value: { title: 'Wonderwall', artist: 'Oasis', key: 'F#m', bpm: 87, notes: 'capo 2' },
+      value: { title: 'Wonderwall', artist: 'Oasis', key: 'F#m', bpm: 87, notes: 'capo 2', songUrl: null, tabUrl: null },
     });
   });
 
   it('treats blank optional fields as null and accepts numeric bpm', () => {
     expect(parseSongInput({ title: 'x', artist: ' ', key: '', bpm: '', notes: '' })).toEqual({
-      value: { title: 'x', artist: null, key: null, bpm: null, notes: null },
+      value: { title: 'x', artist: null, key: null, bpm: null, notes: null, songUrl: null, tabUrl: null },
     });
     expect(parseSongInput({ title: 'x', bpm: 120 })).toMatchObject({ value: { bpm: 120 } });
     expect(parseSongInput({ title: 'x', bpm: null })).toMatchObject({ value: { bpm: null } });
@@ -421,7 +425,7 @@ describe('parseSongInput', () => {
     const dirty = `Ti${String.fromCharCode(0)}tle${String.fromCharCode(0x202e)}`;
     expect(bs).toBe('\\');
     expect(parseSongInput({ title: dirty })).toEqual({
-      value: { title: 'Title', artist: null, key: null, bpm: null, notes: null },
+      value: { title: 'Title', artist: null, key: null, bpm: null, notes: null, songUrl: null, tabUrl: null },
     });
   });
 });
@@ -664,5 +668,243 @@ describe('sanitising edge cases', () => {
     expect(sanitizeDisplayName(invisible)).toBe('');
     const rows = [member('sub-a', { displayName: 'Bob' + String.fromCharCode(0x3164) }), member('sub-b', { displayName: 'Ok' })];
     expect(filterValidMembers(rows, band()).map((m) => m.owner)).toEqual(['sub-b']);
+  });
+});
+
+describe('normalizeHttpUrl', () => {
+  it('accepts http and https and returns the canonical href', () => {
+    expect(normalizeHttpUrl('https://example.com/a?b=1#c')).toBe('https://example.com/a?b=1#c');
+    expect(normalizeHttpUrl('http://example.com')).toBe('http://example.com/');
+    expect(normalizeHttpUrl('HTTPS://Example.COM/Path')).toBe('https://example.com/Path');
+    expect(normalizeHttpUrl('https://example.com:8080/x')).toBe('https://example.com:8080/x');
+  });
+
+  it('rejects script, data, file and other non-web schemes', () => {
+    for (const bad of [
+      'javascript:alert(1)',
+      'JaVaScRiPt:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'file:///etc/passwd',
+      'ftp://example.com/x',
+      'mailto:a@example.com',
+      'vbscript:msgbox(1)',
+    ]) {
+      expect(normalizeHttpUrl(bad), bad).toBeNull();
+    }
+  });
+
+  it('rejects embedded credentials', () => {
+    expect(normalizeHttpUrl('https://user@example.com/')).toBeNull();
+    expect(normalizeHttpUrl('https://user:pw@example.com/')).toBeNull();
+    expect(normalizeHttpUrl('http://:pw@example.com/')).toBeNull();
+  });
+
+  it('rejects text that is not a URL at all', () => {
+    expect(normalizeHttpUrl('')).toBeNull();
+    expect(normalizeHttpUrl('example.com/x')).toBeNull();
+    expect(normalizeHttpUrl('not a url')).toBeNull();
+    expect(normalizeHttpUrl('https://')).toBeNull();
+  });
+});
+
+describe('parseSongInput links', () => {
+  const link = (raw: { songUrl?: string; tabUrl?: string }) => parseSongInput({ title: 'x', ...raw });
+
+  it('gives a bare host/path the https scheme', () => {
+    expect(link({ songUrl: 'example.com/x', tabUrl: 'tabs.example.com/y?z=1' })).toMatchObject({
+      value: { songUrl: 'https://example.com/x', tabUrl: 'https://tabs.example.com/y?z=1' },
+    });
+  });
+
+  it('treats host:port as a host, not a scheme', () => {
+    expect(link({ songUrl: 'localhost:3000/x' })).toMatchObject({ value: { songUrl: 'https://localhost:3000/x' } });
+    expect(link({ songUrl: 'example.com:8080' })).toMatchObject({ value: { songUrl: 'https://example.com:8080/' } });
+  });
+
+  it('keeps an explicit http or https scheme and canonicalises it', () => {
+    expect(link({ songUrl: 'http://example.com' })).toMatchObject({ value: { songUrl: 'http://example.com/' } });
+    expect(link({ songUrl: 'HTTPS://Example.com/A' })).toMatchObject({ value: { songUrl: 'https://example.com/A' } });
+  });
+
+  it('trims surrounding whitespace and strips control characters', () => {
+    expect(link({ songUrl: '  https://example.com/x  ' })).toMatchObject({ value: { songUrl: 'https://example.com/x' } });
+    expect(link({ songUrl: 'https://exam\u200bple.com/x' })).toMatchObject({ value: { songUrl: 'https://example.com/x' } });
+  });
+
+  it('maps empty or blank links to null', () => {
+    expect(link({})).toMatchObject({ value: { songUrl: null, tabUrl: null } });
+    expect(link({ songUrl: '', tabUrl: '   ' })).toMatchObject({ value: { songUrl: null, tabUrl: null } });
+  });
+
+  it('reports an error naming the offending field for invalid links', () => {
+    expect(link({ songUrl: 'javascript:alert(1)' })).toEqual({ error: expect.stringContaining('Song link') });
+    expect(link({ tabUrl: 'data:text/html,hi' })).toEqual({ error: expect.stringContaining('Tab link') });
+    expect(link({ songUrl: 'ftp://example.com/x' })).toHaveProperty('error');
+    expect(link({ songUrl: 'mailto:a@example.com' })).toHaveProperty('error');
+    expect(link({ tabUrl: 'https://user:pw@example.com/' })).toEqual({ error: expect.stringContaining('Tab link') });
+    expect(link({ songUrl: 'not a url' })).toHaveProperty('error');
+  });
+
+  it('rejects links longer than the limit but accepts exactly the limit', () => {
+    const prefix = 'https://example.com/';
+    const atLimit = prefix + 'a'.repeat(BAND_LIMITS.urlMax - prefix.length);
+    expect(link({ songUrl: atLimit })).toMatchObject({ value: { songUrl: atLimit } });
+    expect(link({ songUrl: atLimit + 'a' })).toEqual({ error: expect.stringContaining('300 characters') });
+  });
+});
+
+describe('songFieldError links (read-time rule)', () => {
+  const err = (songUrl: string | null | undefined, tabUrl?: string | null) =>
+    songFieldError({ title: 'x', songUrl, tabUrl });
+
+  it('accepts absent, null and empty links', () => {
+    expect(err(undefined)).toBeNull();
+    expect(err(null, null)).toBeNull();
+    expect(err('', '')).toBeNull();
+  });
+
+  it('accepts valid http(s) links, canonical or not byte-identical to the canonical form', () => {
+    expect(err('https://example.com/x')).toBeNull();
+    expect(err('https://example.com')).toBeNull();
+    expect(err('HTTP://Example.com/x', 'https://example.com:8080/y')).toBeNull();
+  });
+
+  it('rejects non-web schemes, credentials and garbage with a field-specific message', () => {
+    expect(err('javascript:alert(1)')).toContain('Song link');
+    expect(err(null, 'data:text/html,x')).toContain('Tab link');
+    expect(err('https://user:pw@example.com/')).toContain('Song link');
+    expect(err(null, 'example.com/no-scheme')).toContain('Tab link');
+  });
+
+  it('rejects links with hidden characters or padding instead of repairing them', () => {
+    expect(err(' https://example.com/x')).toContain('Song link');
+    expect(err(null, 'https://example.com/x ')).toContain('Tab link');
+    expect(err('https://exam\u200bple.com/x')).toContain('Song link');
+    expect(err('https://example.com/\u202ex')).toContain('Song link');
+  });
+
+  it('enforces the character limit and a cheap raw-length cap', () => {
+    const prefix = 'https://example.com/';
+    expect(err(prefix + 'a'.repeat(BAND_LIMITS.urlMax - prefix.length))).toBeNull();
+    expect(err(prefix + 'a'.repeat(BAND_LIMITS.urlMax - prefix.length + 1))).toContain('Song link');
+    expect(err(prefix + 'a'.repeat(BAND_LIMITS.urlMax * 2))).toContain('Song link');
+    expect(err(null, prefix + 'a'.repeat(1_000_000))).toContain('Tab link');
+  });
+});
+
+describe('filterValidSongs hides songs with bad stored links', () => {
+  const b = band();
+  const members = [member(BOB)];
+  const visible = (rows: SongRecord[]) => world(b, members, [setList()], rows).validSongs.map((s) => s.id);
+
+  it('keeps songs with null, canonical or merely valid links', () => {
+    expect(
+      visible([
+        song('none', BOB),
+        song('canon', BOB, { songUrl: 'https://example.com/x', tabUrl: 'https://tabs.example.com/y' }),
+        song('bare', BOB, { songUrl: 'https://example.com' }),
+      ]),
+    ).toEqual(['none', 'canon', 'bare']);
+  });
+
+  it('hides javascript:, data:, credentialed, schemeless, padded and invisible-character links', () => {
+    const rows = [
+      song('js', BOB, { songUrl: 'javascript:alert(1)' }),
+      song('data', BOB, { tabUrl: 'data:text/html,x' }),
+      song('creds', BOB, { songUrl: 'https://user:pw@example.com/' }),
+      song('schemeless', BOB, { tabUrl: 'example.com/x' }),
+      song('padded', BOB, { songUrl: ' https://example.com/x' }),
+      song('zwsp', BOB, { songUrl: 'https://exam\u200bple.com/x' }),
+      song('long', BOB, { tabUrl: 'https://example.com/' + 'a'.repeat(BAND_LIMITS.urlMax) }),
+      song('huge', BOB, { songUrl: 'https://example.com/' + 'a'.repeat(1_000_000) }),
+      song('ok', BOB, { songUrl: 'https://example.com/ok' }),
+    ];
+    expect(visible(rows)).toEqual(['ok']);
+  });
+});
+
+describe('splitTextWithLinks', () => {
+  it('returns a single plain part when there are no links', () => {
+    expect(splitTextWithLinks('Capo 2, half-time outro')).toEqual([{ text: 'Capo 2, half-time outro' }]);
+    expect(splitTextWithLinks('')).toEqual([]);
+  });
+
+  it('splits text around a link', () => {
+    expect(splitTextWithLinks('See https://example.com/a now')).toEqual([
+      { text: 'See ' },
+      { text: 'https://example.com/a', href: 'https://example.com/a' },
+      { text: ' now' },
+    ]);
+  });
+
+  it('finds multiple links and keeps all the text in order', () => {
+    const text = 'A https://one.example/x, B http://two.example/y; C';
+    const parts = splitTextWithLinks(text);
+    expect(parts.filter((p) => p.href).map((p) => p.href)).toEqual(['https://one.example/x', 'http://two.example/y']);
+    expect(parts.map((p) => p.text).join('')).toBe(text);
+  });
+
+  it('handles a link at the very start or end and back-to-back links', () => {
+    expect(splitTextWithLinks('https://a.example/ https://b.example/')).toEqual([
+      { text: 'https://a.example/', href: 'https://a.example/' },
+      { text: ' ' },
+      { text: 'https://b.example/', href: 'https://b.example/' },
+    ]);
+  });
+
+  it('keeps trailing sentence punctuation out of the link', () => {
+    for (const [text, url] of [
+      ['Try https://example.com/x.', 'https://example.com/x'],
+      ['Try https://example.com/x,', 'https://example.com/x'],
+      ['Really https://example.com/x?!', 'https://example.com/x'],
+      ['Items: https://example.com/x;', 'https://example.com/x'],
+      ['Wait https://example.com/x...', 'https://example.com/x'],
+      ['(see https://example.com/x)', 'https://example.com/x'],
+      ['[https://example.com/x]', 'https://example.com/x'],
+    ] as const) {
+      const parts = splitTextWithLinks(text);
+      expect(parts.find((p) => p.href)?.text, text).toBe(url);
+      expect(parts.map((p) => p.text).join(''), text).toBe(text);
+    }
+  });
+
+  it('keeps a trailing ")" that balances a "(" inside the link', () => {
+    expect(splitTextWithLinks('https://en.wikipedia.org/wiki/Foo_(bar)')).toEqual([
+      { text: 'https://en.wikipedia.org/wiki/Foo_(bar)', href: 'https://en.wikipedia.org/wiki/Foo_(bar)' },
+    ]);
+    expect(splitTextWithLinks('(https://en.wikipedia.org/wiki/Foo_(bar)).')).toEqual([
+      { text: '(' },
+      { text: 'https://en.wikipedia.org/wiki/Foo_(bar)', href: 'https://en.wikipedia.org/wiki/Foo_(bar)' },
+      { text: ').' },
+    ]);
+  });
+
+  it('does not link javascript:, data: or other non-http text', () => {
+    for (const text of ['javascript:alert(1)', 'data:text/html,x', 'ftp://example.com/x', 'mailto:a@example.com', 'example.com/x']) {
+      expect(splitTextWithLinks(text), text).toEqual([{ text }]);
+    }
+  });
+
+  it('does not link a URL carrying credentials', () => {
+    expect(splitTextWithLinks('https://user:pw@example.com/x')).toEqual([{ text: 'https://user:pw@example.com/x' }]);
+  });
+
+  it('leaves URLs containing non-ASCII characters unlinked (homograph guard)', () => {
+    const cyrillicA = String.fromCharCode(0x0430);
+    for (const text of [`https://ex${cyrillicA}mple.com/x`, 'https://example.com/caf\u00e9']) {
+      expect(splitTextWithLinks(text), text).toEqual([{ text }]);
+    }
+    expect(splitTextWithLinks(`bad https://ex${cyrillicA}mple.com ok https://example.com/ fine`).filter((p) => p.href)).toEqual([
+      { text: 'https://example.com/', href: 'https://example.com/' },
+    ]);
+  });
+
+  it('does not swallow angle brackets or quotes into the link', () => {
+    expect(splitTextWithLinks('<https://example.com/x>')).toEqual([
+      { text: '<' },
+      { text: 'https://example.com/x', href: 'https://example.com/x' },
+      { text: '>' },
+    ]);
+    expect(splitTextWithLinks('"https://example.com/x"').filter((p) => p.href)).toHaveLength(1);
   });
 });

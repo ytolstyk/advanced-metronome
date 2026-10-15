@@ -14,6 +14,8 @@ const song = (over: Partial<ValidSong> = {}): ValidSong =>
     key: null,
     bpm: null,
     notes: null,
+    songUrl: null,
+    tabUrl: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...over,
@@ -81,6 +83,69 @@ describe('SongRow', () => {
     it('renders notes only when present', () => {
       setup({ notes: 'Capo 2\nHalf-time outro' });
       expect(screen.getByText(/Capo 2/)).toBeInTheDocument();
+    });
+  });
+
+  describe('links', () => {
+    it('renders no link row when there are no links', () => {
+      setup();
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    });
+
+    it('renders a Song link that opens safely in a new tab', () => {
+      setup({ songUrl: 'https://open.spotify.com/track/1' });
+      const a = screen.getByRole('link', { name: /Song link for Wonderwall/ });
+      expect(a).toHaveAttribute('href', 'https://open.spotify.com/track/1');
+      expect(a).toHaveAttribute('target', '_blank');
+      expect(a).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(a).toHaveTextContent('Song');
+      expect(a).toHaveTextContent('open.spotify.com');
+      expect(screen.queryByRole('link', { name: /Tab link/ })).not.toBeInTheDocument();
+    });
+
+    it('renders a Tab link that opens safely in a new tab', () => {
+      setup({ tabUrl: 'https://tabs.example.com/w' });
+      const a = screen.getByRole('link', { name: /Tab link for Wonderwall/ });
+      expect(a).toHaveAttribute('href', 'https://tabs.example.com/w');
+      expect(a).toHaveAttribute('target', '_blank');
+      expect(a).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(screen.queryByRole('link', { name: /Song link/ })).not.toBeInTheDocument();
+    });
+
+    it('shows the host beside the label with www. stripped', () => {
+      setup({ songUrl: 'https://www.example.com/x', tabUrl: 'https://tabs.example.org:8080/y' });
+      expect(screen.getByRole('link', { name: /Song link/ })).toHaveTextContent('Song example.com');
+      expect(screen.getByRole('link', { name: /Tab link/ })).toHaveTextContent('Tab tabs.example.org');
+    });
+
+    it('renders nothing for a stored link that is not a safe http(s) URL', () => {
+      setup({ songUrl: 'javascript:alert(1)', tabUrl: 'https://user:pw@example.com/' });
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    });
+
+    it('re-canonicalises a non-canonical stored link for the href', () => {
+      setup({ songUrl: 'HTTPS://Example.com' });
+      expect(screen.getByRole('link', { name: /Song link/ })).toHaveAttribute('href', 'https://example.com/');
+    });
+
+    it('renders both links when both are set', () => {
+      setup({ songUrl: 'https://a.example/s', tabUrl: 'https://b.example/t' });
+      expect(screen.getAllByRole('link')).toHaveLength(2);
+    });
+
+    it('turns URLs in notes into new-tab links and leaves the rest as text', () => {
+      setup({ notes: 'Capo 2, see https://example.com/lesson.' });
+      const a = screen.getByRole('link', { name: 'https://example.com/lesson' });
+      expect(a).toHaveAttribute('href', 'https://example.com/lesson');
+      expect(a).toHaveAttribute('target', '_blank');
+      expect(a).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(screen.getByText(/Capo 2, see/)).toBeInTheDocument();
+    });
+
+    it('does not link a javascript: URL in notes', () => {
+      setup({ notes: 'javascript:alert(1) is not a link' });
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
+      expect(screen.getByText(/javascript:alert\(1\) is not a link/)).toBeInTheDocument();
     });
   });
 

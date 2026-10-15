@@ -163,6 +163,8 @@ export function toSong(r: Row<'Song'>): SongRecord {
     key: r.key ?? null,
     bpm: r.bpm ?? null,
     notes: r.notes ?? null,
+    songUrl: r.songUrl ?? null,
+    tabUrl: r.tabUrl ?? null,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };

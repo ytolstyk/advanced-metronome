@@ -20,8 +20,44 @@ describe('SuggestSongDialog', () => {
     type('BPM (optional)', '87');
     fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(onSubmit).toHaveBeenCalledWith({ title: 'Wonderwall', artist: 'Oasis', key: 'F#m', bpm: '87', notes: '' });
+    expect(onSubmit).toHaveBeenCalledWith({ title: 'Wonderwall', artist: 'Oasis', key: 'F#m', bpm: '87', notes: '', songUrl: '', tabUrl: '' });
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  it('submits the typed song and tab links as raw text', async () => {
+    const { onSubmit } = setup();
+    type('Title', 'Wonderwall');
+    type('Song link (optional)', 'open.spotify.com/track/1');
+    type('Tab link (optional)', 'https://tabs.example.com/w');
+    fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      songUrl: 'open.spotify.com/track/1',
+      tabUrl: 'https://tabs.example.com/w',
+    });
+  });
+
+  it('renders both link inputs as optional url inputs', () => {
+    setup();
+    for (const label of ['Song link (optional)', 'Tab link (optional)']) {
+      const input = screen.getByLabelText(label);
+      expect(input).toHaveValue('');
+      expect(input).toHaveAttribute('inputmode', 'url');
+      expect(input).not.toBeRequired();
+    }
+  });
+
+  it('blocks a javascript: song link or an invalid tab link with a readable message', async () => {
+    const { onSubmit } = setup();
+    type('Title', 'x');
+    type('Song link (optional)', 'javascript:alert(1)');
+    fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Song link must be a web address');
+    type('Song link (optional)', '');
+    type('Tab link (optional)', 'https://user:pw@example.com/x');
+    fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tab link must be a web address');
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('blocks invalid input with a readable message and never calls the API', async () => {
@@ -56,5 +92,13 @@ describe('SuggestSongDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ title: 'New', artist: 'A' });
+  });
+
+  it('edit mode prefills the existing links', () => {
+    setup({
+      initial: { title: 'Old', songUrl: 'https://a.example/s', tabUrl: 'https://b.example/t' },
+    });
+    expect(screen.getByLabelText('Song link (optional)')).toHaveValue('https://a.example/s');
+    expect(screen.getByLabelText('Tab link (optional)')).toHaveValue('https://b.example/t');
   });
 });

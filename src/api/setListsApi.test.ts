@@ -218,8 +218,25 @@ describe('suggestSong', () => {
       key: 'F#m',
       bpm: 87,
       notes: null,
+      songUrl: null,
+      tabUrl: null,
     });
     expect(created.id).toBe('new');
+  });
+
+  it('normalizes song and tab links before sending them', async () => {
+    m.Song.create.mockResolvedValue({ data: songRow('new', 'sub-me') });
+    await suggestSong(makeView(), 'sl-1', { title: 'x', songUrl: 'open.spotify.com/track/1', tabUrl: ' HTTPS://Example.com/tab ' }, 0);
+    expect(m.Song.create.mock.calls[0][0]).toMatchObject({
+      songUrl: 'https://open.spotify.com/track/1',
+      tabUrl: 'https://example.com/tab',
+    });
+  });
+
+  it('rejects a javascript: link without calling the API', async () => {
+    await expect(suggestSong(makeView(), 'sl-1', { title: 'x', songUrl: 'javascript:alert(1)' }, 0)).rejects.toThrow('Song link');
+    await expect(suggestSong(makeView(), 'sl-1', { title: 'x', tabUrl: 'data:text/html,hi' }, 0)).rejects.toThrow('Tab link');
+    expect(m.Song.create).not.toHaveBeenCalled();
   });
 
   it('never sends an owner (the server populates it)', async () => {
@@ -254,8 +271,19 @@ describe('updateSong / deleteSong', () => {
       key: null,
       bpm: 100,
       notes: null,
+      songUrl: null,
+      tabUrl: null,
     });
     await expect(updateSong('s1', { title: '' })).rejects.toThrow('Title');
+  });
+
+  it('sends normalized links on update, and null when cleared', async () => {
+    m.Song.update.mockResolvedValue({ data: {} });
+    await updateSong('s1', { title: 'x', songUrl: 'example.com/a', tabUrl: '' });
+    expect(m.Song.update).toHaveBeenCalledWith(expect.objectContaining({ songUrl: 'https://example.com/a', tabUrl: null }));
+    m.Song.update.mockClear();
+    await expect(updateSong('s1', { title: 'x', tabUrl: 'ftp://example.com/a' })).rejects.toThrow('Tab link');
+    expect(m.Song.update).not.toHaveBeenCalled();
   });
 
   it('deleting: a failed condition counts as already gone', async () => {

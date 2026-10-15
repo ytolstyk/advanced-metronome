@@ -327,6 +327,8 @@ const schema = a.schema({
     key: a.string(),
     bpm: a.integer(),
     notes: a.string(),
+    songUrl: a.string(),                // http(s) link to the song (validated in the client)
+    tabUrl: a.string(),                 // http(s) link to the tab (validated in the client)
   })
     .secondaryIndexes(index => [index('setListId').queryField('listSongBySetList')])
     .disableOperations(['list', 'subscriptions'])

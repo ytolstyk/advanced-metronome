@@ -233,6 +233,8 @@ describe('row mappers', () => {
       key: undefined,
       bpm: null,
       notes: null,
+      songUrl: undefined,
+      tabUrl: null,
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-02T00:00:00Z',
     } as unknown as Parameters<typeof toSong>[0];
@@ -246,6 +248,8 @@ describe('row mappers', () => {
       key: null,
       bpm: null,
       notes: null,
+      songUrl: null,
+      tabUrl: null,
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-02T00:00:00Z',
     });
@@ -254,6 +258,10 @@ describe('row mappers', () => {
     expect(falsy.bpm).toBe(0);
     expect(falsy.notes).toBe('');
     expect(falsy.artist).toBe('');
+    // Real stored links pass straight through.
+    const linked = toSong({ ...base, songUrl: 'https://a.example/x', tabUrl: 'https://b.example/y' } as unknown as Parameters<typeof toSong>[0]);
+    expect(linked.songUrl).toBe('https://a.example/x');
+    expect(linked.tabUrl).toBe('https://b.example/y');
   });
 
   it('toSetList maps a null owner and null archivedAt', () => {

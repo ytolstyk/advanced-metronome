@@ -23,11 +23,11 @@ interface SuggestSongDialogProps {
   onSubmit: (input: RawSongInput) => Promise<void>;
 }
 
-const EMPTY: RawSongInput = { title: '', artist: '', key: '', bpm: '', notes: '' };
+const EMPTY: RawSongInput = { title: '', artist: '', key: '', bpm: '', notes: '', songUrl: '', tabUrl: '' };
 
 export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit }: SuggestSongDialogProps) {
   const editing = initial !== undefined;
-  const ids = { title: useId(), artist: useId(), key: useId(), bpm: useId(), notes: useId() };
+  const ids = { title: useId(), artist: useId(), key: useId(), bpm: useId(), notes: useId(), songUrl: useId(), tabUrl: useId() };
   // The parent mounts this with a key per song, so the initial values seed state once.
   const [form, setForm] = useState<RawSongInput>({ ...EMPTY, ...initial });
   const { run, busy, error, setError } = useAsyncAction();
@@ -84,6 +84,30 @@ export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit }: Sug
                 placeholder={`${BAND_LIMITS.bpmMin}–${BAND_LIMITS.bpmMax}`}
               />
             </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor={ids.songUrl}>Song link (optional)</Label>
+            <Input
+              id={ids.songUrl}
+              inputMode="url"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={form.songUrl ?? ''}
+              onChange={set('songUrl')}
+              placeholder="https://open.spotify.com/…"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor={ids.tabUrl}>Tab link (optional)</Label>
+            <Input
+              id={ids.tabUrl}
+              inputMode="url"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={form.tabUrl ?? ''}
+              onChange={set('tabUrl')}
+              placeholder="https://tabs.ultimate-guitar.com/…"
+            />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor={ids.notes}>Notes (optional)</Label>
