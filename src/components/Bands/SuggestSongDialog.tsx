@@ -13,6 +13,7 @@ import {
 import { BAND_LIMITS } from '../../bandTypes';
 import { parseSongInput, type RawSongInput } from '../../bandUtils';
 import { useAsyncAction } from '../../hooks/useAsyncAction';
+import { useSongLinkAutofill } from '../../hooks/useSongLinkAutofill';
 import { InlineAlert } from './InlineAlert';
 
 interface SuggestSongDialogProps {
@@ -31,9 +32,16 @@ export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit }: Sug
   // The parent mounts this with a key per song, so the initial values seed state once.
   const [form, setForm] = useState<RawSongInput>({ ...EMPTY, ...initial });
   const { run, busy, error, setError } = useAsyncAction();
+  const { status, fillFromLink, reset } = useSongLinkAutofill(setForm, initial?.songUrl);
 
   const set = (field: keyof RawSongInput) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const handleOpenChange = (next: boolean) => {
+    if (busy) return;
+    if (!next) reset();
+    onOpenChange(next);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,11 +53,11 @@ export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit }: Sug
     const ok = await run(() => onSubmit(form));
     if (!ok) return;
     if (!editing) setForm(EMPTY);
-    onOpenChange(false);
+    handleOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
@@ -94,8 +102,18 @@ export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit }: Sug
               spellCheck={false}
               value={form.songUrl ?? ''}
               onChange={set('songUrl')}
+              onBlur={(e) => void fillFromLink(e.target.value)}
+              onPaste={(e) => void fillFromLink(e.clipboardData.getData('text'))}
               placeholder="https://open.spotify.com/…"
+              aria-describedby={`${ids.songUrl}-status`}
             />
+            <p id={`${ids.songUrl}-status`} role="status" className="min-h-4 text-xs text-muted-foreground">
+              {status.kind === 'busy' && 'Looking up title and artist…'}
+              {status.kind === 'found' && `Found “${status.title}”${status.artist ? ` by ${status.artist}` : ''}.`}
+              {status.kind === 'failed' && 'Couldn’t read details from that link. Type the title and artist instead.'}
+              {status.kind === 'error' && 'Couldn’t look that link up right now. Click out of the field to try again.'}
+              {status.kind === 'signedOut' && 'Sign in to fill the title and artist from a link. You can still type them.'}
+            </p>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor={ids.tabUrl}>Tab link (optional)</Label>
@@ -123,7 +141,7 @@ export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit }: Sug
 
           {error && <InlineAlert tone="error">{error}</InlineAlert>}
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={busy}>
               Cancel
             </Button>
             <Button type="submit" disabled={busy}>

@@ -4,6 +4,7 @@ import { geminiPlanFunction } from '../functions/gemini-plan/resource';
 import { geminiDrumsFunction } from '../functions/gemini-drums/resource';
 import { geminiChordsFunction } from '../functions/gemini-chords/resource';
 import { geminiTabsFunction } from '../functions/gemini-tabs/resource';
+import { songMetadataFunction } from '../functions/song-metadata/resource';
 
 const schema = a.schema({
   // One record per user — auto-saved on every change
@@ -187,6 +188,14 @@ const schema = a.schema({
     .returns(a.string())
     .authorization(allow => [allow.authenticated()])
     .handler(a.handler.function(geminiSuggestFunction)),
+
+  // Reads title/artist from a pasted Spotify/YouTube/Apple Music/SoundCloud link (JSON string, or null).
+  // Not AI, but it makes outbound requests on the user's behalf, so it is signed-in only.
+  lookupSongLink: a.query()
+    .arguments({ url: a.string().required() })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(songMetadataFunction)),
 
   generatePracticePlan: a.query()
     .arguments({

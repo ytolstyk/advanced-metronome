@@ -1,6 +1,21 @@
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { SongLinkMetadata } from '../../api/songMetadataApi';
+import { NotSignedInError } from '../../api/bandsShared';
+
+const { lookupSongLink } = vi.hoisted(() => ({ lookupSongLink: vi.fn() }));
+// Same shape as the real allow-list check, without pulling the amplify-function parser into the test.
+vi.mock('../../api/songMetadataApi', () => ({
+  lookupSongLink,
+  isLookupSupported: (url: string) => /spotify|youtube|youtu\.be|apple|soundcloud/.test(url),
+}));
+
 import { SuggestSongDialog } from './SuggestSongDialog';
+
+beforeEach(() => {
+  lookupSongLink.mockReset();
+  lookupSongLink.mockResolvedValue(null);
+});
 
 const setup = (props: Partial<React.ComponentProps<typeof SuggestSongDialog>> = {}) => {
   const onSubmit = vi.fn().mockResolvedValue(undefined);
@@ -100,5 +115,410 @@ describe('SuggestSongDialog', () => {
     });
     expect(screen.getByLabelText('Song link (optional)')).toHaveValue('https://a.example/s');
     expect(screen.getByLabelText('Tab link (optional)')).toHaveValue('https://b.example/t');
+  });
+
+  describe('song link lookup', () => {
+    const SPOTIFY = 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT';
+    const YOUTUBE = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    const RICK: SongLinkMetadata = { title: 'Never Gonna Give You Up', artist: 'Rick Astley' };
+    const QUEEN: SongLinkMetadata = { title: 'Bohemian Rhapsody', artist: 'Queen' };
+    const LINK = 'Song link (optional)';
+    const FAILED = /Couldn’t read details from that link\. Type the title and artist instead\./;
+    const ERRORED = 'Couldn’t look that link up right now. Click out of the field to try again.';
+    const SIGNED_OUT = 'Sign in to fill the title and artist from a link. You can still type them.';
+    const FOUND_RICK = 'Found “Never Gonna Give You Up” by Rick Astley.';
+    const FOUND_QUEEN = 'Found “Bohemian Rhapsody” by Queen.';
+
+    const paste = (text: string) =>
+      fireEvent.paste(screen.getByLabelText(LINK), { clipboardData: { getData: () => text } });
+    const blurWith = (value: string) => {
+      type(LINK, value);
+      fireEvent.blur(screen.getByLabelText(LINK));
+    };
+    const deferred = () => {
+      let resolve!: (value: SongLinkMetadata | null) => void;
+      let reject!: (reason: unknown) => void;
+      const promise = new Promise<SongLinkMetadata | null>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    };
+    /** Lets every pending promise continuation (and the state updates it triggers) run. */
+    const flush = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    const title = () => screen.getByLabelText('Title');
+    const artist = () => screen.getByLabelText('Artist (optional)');
+
+    it('fills an empty title and artist when a link is pasted', async () => {
+      lookupSongLink.mockResolvedValue(RICK);
+      setup();
+      paste(SPOTIFY);
+      await waitFor(() => expect(title()).toHaveValue('Never Gonna Give You Up'));
+      expect(artist()).toHaveValue('Rick Astley');
+      expect(lookupSongLink).toHaveBeenCalledWith(SPOTIFY);
+      expect(screen.getByRole('status')).toHaveTextContent(FOUND_RICK);
+    });
+
+    it('fills an empty title and artist when the link field loses focus', async () => {
+      lookupSongLink.mockResolvedValue(RICK);
+      setup();
+      blurWith(YOUTUBE);
+      await waitFor(() => expect(title()).toHaveValue('Never Gonna Give You Up'));
+      expect(artist()).toHaveValue('Rick Astley');
+      expect(lookupSongLink).toHaveBeenCalledWith(YOUTUBE);
+    });
+
+    it('looks up a scheme-less link using its canonical https form', async () => {
+      lookupSongLink.mockResolvedValue(RICK);
+      setup();
+      blurWith('open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT');
+      await waitFor(() => expect(lookupSongLink).toHaveBeenCalledWith(SPOTIFY));
+    });
+
+    it('shows a busy status while the lookup is in flight', async () => {
+      const pending = deferred();
+      lookupSongLink.mockReturnValue(pending.promise);
+      setup();
+      paste(SPOTIFY);
+      expect(await screen.findByText('Looking up title and artist…')).toBeInTheDocument();
+      pending.resolve(RICK);
+      await waitFor(() => expect(screen.queryByText('Looking up title and artist…')).not.toBeInTheDocument());
+    });
+
+    it.each([
+      ['an empty link', ''],
+      ['whitespace', '   '],
+      ['a javascript: link', 'javascript:alert(1)'],
+      ['a link with credentials', 'https://user:pw@open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT'],
+    ])('does not look anything up for %s', async (_label, value) => {
+      setup();
+      blurWith(value);
+      paste(value);
+      await flush();
+      expect(lookupSongLink).not.toHaveBeenCalled();
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    });
+
+    it('does not overwrite a title the person already typed, but still fills the empty artist', async () => {
+      lookupSongLink.mockResolvedValue(RICK);
+      setup();
+      type('Title', 'My own title');
+      paste(SPOTIFY);
+      await waitFor(() => expect(artist()).toHaveValue('Rick Astley'));
+      expect(title()).toHaveValue('My own title');
+    });
+
+    it('does not overwrite an artist the person already typed, but still fills the empty title', async () => {
+      lookupSongLink.mockResolvedValue(RICK);
+      setup();
+      type('Artist (optional)', 'Typed Artist');
+      paste(SPOTIFY);
+      await waitFor(() => expect(title()).toHaveValue('Never Gonna Give You Up'));
+      expect(artist()).toHaveValue('Typed Artist');
+    });
+
+    it('treats a whitespace-only title as empty', async () => {
+      lookupSongLink.mockResolvedValue(RICK);
+      setup();
+      type('Title', '   ');
+      paste(SPOTIFY);
+      await waitFor(() => expect(title()).toHaveValue('Never Gonna Give You Up'));
+    });
+
+    it('makes no lookup when editing a song and the saved link is blurred unchanged', async () => {
+      setup({ initial: { title: 'Existing', artist: 'Someone', songUrl: SPOTIFY } });
+      fireEvent.blur(screen.getByLabelText(LINK));
+      paste(SPOTIFY);
+      await flush();
+      expect(lookupSongLink).not.toHaveBeenCalled();
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+      expect(title()).toHaveValue('Existing');
+      expect(artist()).toHaveValue('Someone');
+    });
+
+    it('treats a scheme-less spelling of the saved link as unchanged when editing', async () => {
+      setup({ initial: { title: 'Existing', songUrl: SPOTIFY } });
+      blurWith('open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT');
+      await flush();
+      expect(lookupSongLink).not.toHaveBeenCalled();
+    });
+
+    it('leaves an existing title and artist alone when editing a song and the link is changed', async () => {
+      lookupSongLink.mockResolvedValue(QUEEN);
+      setup({ initial: { title: 'Existing', artist: 'Someone', songUrl: SPOTIFY } });
+      blurWith(YOUTUBE);
+      await waitFor(() => expect(lookupSongLink).toHaveBeenCalledWith(YOUTUBE));
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(FOUND_QUEEN));
+      expect(title()).toHaveValue('Existing');
+      expect(artist()).toHaveValue('Someone');
+    });
+
+    it('fills a blank artist when editing a song and the link is changed', async () => {
+      lookupSongLink.mockResolvedValue(QUEEN);
+      setup({ initial: { title: 'Existing', artist: '', songUrl: SPOTIFY } });
+      blurWith(YOUTUBE);
+      await waitFor(() => expect(artist()).toHaveValue('Queen'));
+      expect(title()).toHaveValue('Existing');
+    });
+
+    it('replaces previously auto-filled values when a new link is pasted', async () => {
+      lookupSongLink.mockResolvedValueOnce(RICK).mockResolvedValueOnce(QUEEN);
+      setup();
+      paste(SPOTIFY);
+      await waitFor(() => expect(title()).toHaveValue(RICK.title));
+      paste(YOUTUBE);
+      await waitFor(() => expect(title()).toHaveValue('Bohemian Rhapsody'));
+      expect(artist()).toHaveValue('Queen');
+    });
+
+    it('keeps text the person edited after an auto-fill when a new link arrives', async () => {
+      lookupSongLink.mockResolvedValueOnce(RICK).mockResolvedValueOnce(QUEEN);
+      setup();
+      paste(SPOTIFY);
+      await waitFor(() => expect(title()).toHaveValue(RICK.title));
+      type('Title', 'Never Gonna Give You Up (live)');
+      paste(YOUTUBE);
+      await waitFor(() => expect(artist()).toHaveValue('Queen'));
+      expect(title()).toHaveValue('Never Gonna Give You Up (live)');
+    });
+
+    it('does not look the same link up twice once it has filled the form', async () => {
+      lookupSongLink.mockResolvedValue(RICK);
+      setup();
+      paste(SPOTIFY);
+      await waitFor(() => expect(title()).toHaveValue(RICK.title));
+      blurWith(SPOTIFY);
+      paste(SPOTIFY);
+      await flush();
+      expect(lookupSongLink).toHaveBeenCalledTimes(1);
+    });
+
+    it('looks the same link up again after a successful submit resets the form', async () => {
+      lookupSongLink.mockResolvedValue(RICK);
+      const { onSubmit } = setup();
+      paste(SPOTIFY);
+      await waitFor(() => expect(title()).toHaveValue(RICK.title));
+      fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      await waitFor(() => expect(title()).toHaveValue(''));
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+      paste(SPOTIFY);
+      await waitFor(() => expect(title()).toHaveValue(RICK.title));
+      expect(lookupSongLink).toHaveBeenCalledTimes(2);
+    });
+
+    it('ignores a stale response that resolves after a newer link was pasted', async () => {
+      const first = deferred();
+      const second = deferred();
+      lookupSongLink.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+      setup();
+      paste(SPOTIFY);
+      paste(YOUTUBE);
+      second.resolve(QUEEN);
+      await waitFor(() => expect(title()).toHaveValue('Bohemian Rhapsody'));
+      first.resolve(RICK);
+      await flush();
+      expect(title()).toHaveValue('Bohemian Rhapsody');
+      expect(artist()).toHaveValue('Queen');
+      expect(screen.getByRole('status')).toHaveTextContent(FOUND_QUEEN);
+    });
+
+    it('ignores a stale failure that arrives after a newer link succeeded', async () => {
+      const first = deferred();
+      const second = deferred();
+      lookupSongLink.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+      setup();
+      paste(SPOTIFY);
+      paste(YOUTUBE);
+      second.resolve(QUEEN);
+      await waitFor(() => expect(title()).toHaveValue('Bohemian Rhapsody'));
+      first.reject(new Error('boom'));
+      await flush();
+      expect(screen.queryByText(FAILED)).not.toBeInTheDocument();
+      expect(screen.queryByText(ERRORED)).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent(FOUND_QUEEN);
+    });
+
+    it('ignores a response that arrives after the dialog was cancelled', async () => {
+      const pending = deferred();
+      lookupSongLink.mockReturnValue(pending.promise);
+      setup();
+      paste(SPOTIFY);
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      pending.resolve(RICK);
+      await flush();
+      expect(title()).toHaveValue('');
+      expect(artist()).toHaveValue('');
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    });
+
+    it('shows no "Looking up…" when the dialog is closed mid-lookup and reopened', async () => {
+      const pending = deferred();
+      lookupSongLink.mockReturnValue(pending.promise);
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      const onOpenChange = vi.fn();
+      const view = (open: boolean) => <SuggestSongDialog open={open} onOpenChange={onOpenChange} onSubmit={onSubmit} />;
+      const { rerender } = render(view(true));
+
+      paste(SPOTIFY);
+      expect(await screen.findByText('Looking up title and artist…')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      rerender(view(false));
+      await flush();
+      rerender(view(true));
+
+      expect(screen.queryByText('Looking up title and artist…')).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+
+      // the abandoned lookup must not land in the reopened form, even when it finally resolves
+      pending.resolve(RICK);
+      await flush();
+      expect(title()).toHaveValue('');
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    });
+
+    it('looks the link up afresh after a close and reopen', async () => {
+      lookupSongLink.mockResolvedValue(RICK);
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      const onOpenChange = vi.fn();
+      const view = (open: boolean) => <SuggestSongDialog open={open} onOpenChange={onOpenChange} onSubmit={onSubmit} />;
+      const { rerender } = render(view(true));
+      paste(SPOTIFY);
+      await waitFor(() => expect(title()).toHaveValue(RICK.title));
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      rerender(view(false));
+      rerender(view(true));
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+      paste(SPOTIFY);
+      await waitFor(() => expect(lookupSongLink).toHaveBeenCalledTimes(2));
+    });
+
+    it('shows a failure message when nothing could be read', async () => {
+      lookupSongLink.mockResolvedValue(null);
+      setup();
+      paste(SPOTIFY);
+      expect(await screen.findByText(FAILED)).toBeInTheDocument();
+      expect(title()).toHaveValue('');
+    });
+
+    it('asks to retry when the lookup itself throws', async () => {
+      lookupSongLink.mockRejectedValue(new Error('Could not look up that link.'));
+      setup();
+      paste(SPOTIFY);
+      expect(await screen.findByText(ERRORED)).toBeInTheDocument();
+      expect(screen.queryByText(FAILED)).not.toBeInTheDocument();
+      expect(title()).toHaveValue('');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('says to sign in when the lookup is refused because nobody is signed in', async () => {
+      lookupSongLink.mockRejectedValue(new NotSignedInError());
+      setup();
+      paste(SPOTIFY);
+      expect(await screen.findByText(SIGNED_OUT)).toBeInTheDocument();
+      expect(title()).toHaveValue('');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('does not look a link up again after it could not be read', async () => {
+      lookupSongLink.mockResolvedValue(null);
+      setup();
+      paste(SPOTIFY);
+      await screen.findByText(FAILED);
+      blurWith(SPOTIFY);
+      paste(SPOTIFY);
+      await flush();
+      expect(lookupSongLink).toHaveBeenCalledTimes(1);
+      expect(screen.getByText(FAILED)).toBeInTheDocument();
+    });
+
+    it('retries the same link after the lookup threw, as the message promises', async () => {
+      lookupSongLink.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(RICK);
+      setup();
+      blurWith(SPOTIFY);
+      await screen.findByText(ERRORED);
+      fireEvent.blur(screen.getByLabelText(LINK));
+      await waitFor(() => expect(title()).toHaveValue(RICK.title));
+      expect(lookupSongLink).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText(ERRORED)).not.toBeInTheDocument();
+    });
+
+    it('makes no request for a link the lookup cannot read, and says nothing', async () => {
+      setup();
+      blurWith('https://example.com/some-song');
+      paste('https://example.com/some-song');
+      await flush();
+      expect(lookupSongLink).not.toHaveBeenCalled();
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    });
+
+    it('drops an in-flight lookup when the link is changed to one that cannot be read', async () => {
+      const pending = deferred();
+      lookupSongLink.mockReturnValue(pending.promise);
+      setup();
+      paste(SPOTIFY);
+      expect(await screen.findByText('Looking up title and artist…')).toBeInTheDocument();
+      blurWith('https://example.com/some-song');
+      await flush();
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+      pending.resolve(RICK);
+      await flush();
+      expect(title()).toHaveValue('');
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    });
+
+    it('does not block submitting while a lookup is still pending', async () => {
+      lookupSongLink.mockReturnValue(new Promise(() => undefined));
+      const { onSubmit } = setup();
+      type('Title', 'Typed Title');
+      paste(SPOTIFY);
+      expect(screen.getByRole('button', { name: 'Suggest' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0]).toMatchObject({ title: 'Typed Title' });
+    });
+
+    it('does not block submitting after a failed lookup, and submits the link as typed', async () => {
+      lookupSongLink.mockResolvedValue(null);
+      const { onSubmit } = setup();
+      type('Title', 'Typed Title');
+      blurWith(SPOTIFY);
+      await screen.findByText(FAILED);
+      fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0]).toMatchObject({ title: 'Typed Title', songUrl: SPOTIFY });
+    });
+
+    it('submits the auto-filled values', async () => {
+      lookupSongLink.mockResolvedValue(RICK);
+      const { onSubmit } = setup();
+      blurWith(SPOTIFY);
+      await waitFor(() => expect(title()).toHaveValue(RICK.title));
+      fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0]).toMatchObject({ title: RICK.title, artist: RICK.artist, songUrl: SPOTIFY });
+    });
+
+    it('clears an auto-filled artist when the next link has none, but keeps a typed one', async () => {
+      lookupSongLink.mockResolvedValueOnce(RICK).mockResolvedValueOnce({ title: 'Anonymous Track', artist: '' });
+      setup();
+      paste(SPOTIFY);
+      await waitFor(() => expect(artist()).toHaveValue('Rick Astley'));
+      paste(YOUTUBE);
+      await waitFor(() => expect(title()).toHaveValue('Anonymous Track'));
+      expect(artist()).toHaveValue('');
+      expect(screen.getByRole('status')).toHaveTextContent('Found “Anonymous Track”.');
+    });
+
+    it('leaves an empty artist alone when the lookup found none', async () => {
+      lookupSongLink.mockResolvedValue({ title: 'Solo Title', artist: '' });
+      setup();
+      type('Artist (optional)', 'Typed Artist');
+      paste(SPOTIFY);
+      await waitFor(() => expect(title()).toHaveValue('Solo Title'));
+      expect(artist()).toHaveValue('Typed Artist');
+    });
   });
 });

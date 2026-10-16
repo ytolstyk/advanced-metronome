@@ -444,7 +444,7 @@ function withDefaultScheme(text: string): string {
  * A link typed into the form: "example.com/x" gets `https://`. Returns the canonical link, `''`
  * when empty, or the raw text when it isn't a valid link (so `songFieldError` reports it).
  */
-function parseLinkInput(raw: string | undefined): string {
+export function parseLinkInput(raw: string | undefined): string {
   const text = stripUnsafeText(raw ?? '');
   if (!text) return '';
   return normalizeHttpUrl(withDefaultScheme(text)) ?? text;

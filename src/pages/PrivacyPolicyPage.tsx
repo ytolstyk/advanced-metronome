@@ -63,6 +63,11 @@ export function PrivacyPolicyPage() {
       <ul>
         <li>Amazon Web Services (authentication, data storage, serverless functions).</li>
         <li>Google Gemini (AI-powered features listed above).</li>
+        <li>
+          Spotify, YouTube, Apple Music and SoundCloud: when you paste a song link into a set list,
+          our backend asks that service for the song&apos;s title and artist. Only the track
+          identifier from the link is sent, not your account or address.
+        </li>
         <li>PayPal and Venmo, if you choose to donate; they process payments under their own policies.</li>
       </ul>
 

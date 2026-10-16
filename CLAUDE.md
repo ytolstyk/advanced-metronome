@@ -221,6 +221,8 @@ Components in `src/components/TabEditor/`:
 
 **Known limits (disclosed in the privacy policy):** a `bandId` is the real capability — ex-members or anyone holding the link can still read a band; "remove member" and "reset code" are UI-level (reset only stops people without the id); banning is per account (Google and email sign-ins are different accounts); Vote rows are queryable by anyone (signed in or not) who knows the ids; a hostile signed-in user can flood a known set list's vote page; ownership can't be transferred and the owner can't leave (only delete). Caps (15 members, 10 set lists, 100 songs per list, 200 bans, 1000 hidden songs) are client-side only.
 
+**Song link autofill:** pasting a Spotify/YouTube/Apple Music/SoundCloud link into the song form fills title/artist via the signed-in `lookupSongLink` query → `amplify/functions/song-metadata` (`parse.ts` is the SSRF allow-list: fixed provider hosts, validated ids, no redirects; `isLookupSupported` in `src/api/songMetadataApi.ts` reuses it so other links cost no request). Client orchestration lives in `src/hooks/useSongLinkAutofill.ts` (looks each link up once, never overwrites typed text). The Lambda output is untrusted and re-sanitised client-side; no per-user rate limit (reserved concurrency 5 only).
+
 **Persistence exception:** band data is cloud-only and requires sign-in (`<AuthGate>`); it is inherently multi-user, so it is not mirrored to localStorage. Only the pending invite code (sessionStorage, cleared after use or sign-out) is stored locally.
 
 ## Lessons
