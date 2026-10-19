@@ -7,6 +7,7 @@ const { m } = vi.hoisted(() => {
     SetList: { create: vi.fn(), update: vi.fn() },
     Song: { get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), listSongBySetList: vi.fn() },
     Vote: { get: vi.fn(), delete: vi.fn(), listVoteBySetList: vi.fn() },
+    SongColor: { listSongColorBySetList: vi.fn() },
     graphql: vi.fn(),
   };
   return { m };
@@ -104,12 +105,13 @@ function makeView(over: Partial<BandView> = {}, b = band()): BandView {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(isAuthenticated).mockResolvedValue(true);
-  for (const model of [m.Band, m.SetList, m.Song, m.Vote]) {
+  for (const model of [m.Band, m.SetList, m.Song, m.Vote, m.SongColor]) {
     for (const fn of Object.values(model)) (fn as ReturnType<typeof vi.fn>).mockReset();
   }
   m.graphql.mockReset();
   m.Song.listSongBySetList.mockResolvedValue({ data: [], nextToken: null });
   m.Vote.listVoteBySetList.mockResolvedValue({ data: [], nextToken: null });
+  m.SongColor.listSongColorBySetList.mockResolvedValue({ data: [], nextToken: null });
 });
 
 function echoBandUpdates(base: BandRecord) {
@@ -426,12 +428,79 @@ describe('fetchSetListRows', () => {
     expect(rows.songs.incomplete || rows.votes.incomplete).toBe(false);
   });
 
+  it('includes the song colors, fetched in parallel with songs and votes', async () => {
+    const started: string[] = [];
+    m.Song.listSongBySetList.mockImplementation(async () => {
+      started.push('songs');
+      await Promise.resolve();
+      return { data: [], nextToken: null };
+    });
+    m.Vote.listVoteBySetList.mockImplementation(async () => {
+      started.push('votes');
+      await Promise.resolve();
+      return { data: [], nextToken: null };
+    });
+    m.SongColor.listSongColorBySetList.mockImplementation(async () => {
+      started.push('colors');
+      await Promise.resolve();
+      return {
+        data: [{ songId: 'a', owner: 'sub-bob', bandId: 'band-1', setListId: 'sl-1', color: 'red', createdAt: 'c', updatedAt: 'u' }],
+        nextToken: null,
+      };
+    });
+    const rows = await fetchSetListRows('sl-1');
+    // all three reads are in flight together (order depends on each helper's own awaits)
+    expect([...started].sort()).toEqual(['colors', 'songs', 'votes']);
+    expect(rows.colors?.items).toEqual([
+      { songId: 'a', owner: 'sub-bob', bandId: 'band-1', setListId: 'sl-1', color: 'red', createdAt: 'c', updatedAt: 'u' },
+    ]);
+    expect(rows.colors?.incomplete).toBe(false);
+    expect(m.SongColor.listSongColorBySetList).toHaveBeenCalledWith(
+      { setListId: 'sl-1' },
+      { limit: 250, nextToken: undefined },
+    );
+  });
+
+  it('flags incomplete colors when the colors list hits the page cap', async () => {
+    m.SongColor.listSongColorBySetList.mockResolvedValue({ data: [], nextToken: 'more' });
+    const rows = await fetchSetListRows('sl-1');
+    expect(rows.colors?.incomplete).toBe(true);
+    expect(rows.songs.incomplete).toBe(false);
+    expect(rows.votes.incomplete).toBe(false);
+  });
+
+  it('degrades a failed colors read to an empty, incomplete result instead of failing the page', async () => {
+    m.Song.listSongBySetList.mockResolvedValue({ data: [songRow('a', 'sub-bob')], nextToken: null });
+    m.Vote.listVoteBySetList.mockResolvedValue({ data: [voteRow('a', 'sub-bob', 'up')], nextToken: null });
+    m.SongColor.listSongColorBySetList.mockResolvedValue({ data: null, errors: [{ message: 'colors gsi down' }] });
+    const rows = await fetchSetListRows('sl-1');
+    expect(rows.colors).toEqual({ items: [], incomplete: true });
+    expect(rows.songs.items.map((s) => s.id)).toEqual(['a']);
+    expect(rows.votes.items.map((v) => v.songId)).toEqual(['a']);
+    expect(rows.songs.incomplete).toBe(false);
+    expect(rows.votes.incomplete).toBe(false);
+  });
+
+  it('degrades a thrown (network) colors failure the same way', async () => {
+    m.SongColor.listSongColorBySetList.mockRejectedValue(new Error('network down'));
+    const rows = await fetchSetListRows('sl-1');
+    expect(rows.colors).toEqual({ items: [], incomplete: true });
+  });
+
+  it('a colors failure does not wait on or hide good songs and votes', async () => {
+    m.Song.listSongBySetList.mockResolvedValue({ data: [songRow('a', 'sub-bob'), songRow('b', 'sub-bob')], nextToken: null });
+    m.SongColor.listSongColorBySetList.mockRejectedValue(new Error('boom'));
+    const rows = await fetchSetListRows('sl-1');
+    expect(rows.songs.items).toHaveLength(2);
+  });
+
   it('checks sign-in BEFORE any read (a signed-out user never triggers a cloud call)', async () => {
     vi.mocked(isAuthenticated).mockResolvedValue(false);
     await expect(fetchSetListRows('sl-1')).rejects.toThrow('Not authenticated');
     await expect(fetchSetListRows('sl-1')).rejects.toBeInstanceOf(NotSignedInError);
     expect(m.Song.listSongBySetList).not.toHaveBeenCalled();
     expect(m.Vote.listVoteBySetList).not.toHaveBeenCalled();
+    expect(m.SongColor.listSongColorBySetList).not.toHaveBeenCalled();
   });
 
   it('keeps using the signed-in (default) auth mode: no authMode option is sent', async () => {
@@ -447,8 +516,19 @@ describe('fetchSetListRows', () => {
     expect(rows.songs.incomplete).toBe(false);
   });
 
-  it('fails closed when songs or votes cannot be read', async () => {
+  it('fails closed when songs cannot be read', async () => {
     m.Song.listSongBySetList.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
+    await expect(fetchSetListRows('sl-1')).rejects.toThrow('gsi down');
+  });
+
+  it('fails closed when votes cannot be read', async () => {
+    m.Vote.listVoteBySetList.mockResolvedValue({ data: null, errors: [{ message: 'votes gsi down' }] });
+    await expect(fetchSetListRows('sl-1')).rejects.toThrow('votes gsi down');
+  });
+
+  it('fails closed on a songs failure even when colors also fail', async () => {
+    m.Song.listSongBySetList.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
+    m.SongColor.listSongColorBySetList.mockRejectedValue(new Error('colors down'));
     await expect(fetchSetListRows('sl-1')).rejects.toThrow('gsi down');
   });
 });
@@ -465,6 +545,12 @@ describe('fetchPublicSetListRows', () => {
     expect(rows.songs.incomplete || rows.votes.incomplete).toBe(false);
     expect(m.Song.listSongBySetList).toHaveBeenCalledWith({ setListId: 'sl-1' }, { limit: 250, nextToken: undefined, authMode: 'identityPool' });
     expect(m.Vote.listVoteBySetList).toHaveBeenCalledWith({ setListId: 'sl-1' }, { limit: 250, nextToken: undefined, authMode: 'identityPool' });
+  });
+
+  it('public rows carry no colors and never query the SongColor model (no guest read rule for it)', async () => {
+    const rows = await fetchPublicSetListRows('sl-1', 'identityPool');
+    expect(rows.colors).toBeUndefined();
+    expect(m.SongColor.listSongColorBySetList).not.toHaveBeenCalled();
   });
 
   it('passes the given mode through (a signed-in reader uses userPool)', async () => {
@@ -508,7 +594,7 @@ describe('auth gating', () => {
   ])('%s never touches the API when signed out', async (_name, call) => {
     vi.mocked(isAuthenticated).mockResolvedValue(false);
     await expect(call()).rejects.toThrow('Not authenticated');
-    for (const model of [m.Band, m.SetList, m.Song, m.Vote]) {
+    for (const model of [m.Band, m.SetList, m.Song, m.Vote, m.SongColor]) {
       for (const fn of Object.values(model)) expect(fn).not.toHaveBeenCalled();
     }
     expect(m.graphql).not.toHaveBeenCalled();

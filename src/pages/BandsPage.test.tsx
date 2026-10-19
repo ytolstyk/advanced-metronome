@@ -69,6 +69,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   auth.status = 'authenticated';
   sessionStorage.clear();
+  localStorage.clear();
   vi.mocked(loadMyBands).mockResolvedValue(result());
 });
 
@@ -76,7 +77,8 @@ describe('BandsPage signed out', () => {
   it('shows the sign-in gate and calls no APIs', () => {
     auth.status = 'unauthenticated';
     renderAt();
-    expect(screen.getByText('Sign in to create or join a band')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Bands are for signed-in users' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in or create an account' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create a band' })).not.toBeInTheDocument();
     expect(loadMyBands).not.toHaveBeenCalled();
   });
@@ -87,6 +89,210 @@ describe('BandsPage signed out', () => {
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/bands$/));
     expect(sessionStorage.getItem('band-join-code')).toBe('ABCDE-FGHJK');
     expect(localStorage.getItem('band-join-code')).toBeNull();
+  });
+});
+
+describe('BandsPage "Only bands I’m in" filter', () => {
+  const KEY = 'bands-only-mine';
+  const checkbox = () => screen.findByRole('checkbox', { name: 'Only bands I’m in' });
+  const mixed = () =>
+    result([
+      entry({ band: band({ id: 'b1', name: 'Alpha' }), isOwner: true }),
+      entry({ band: band({ id: 'b2', name: 'Bravo' }) }),
+      entry({ band: band({ id: 'b3', name: 'Gone Band' }), status: 'removed' }),
+    ]);
+
+  it('is checked by default and hides bands you were removed from', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue(mixed());
+    renderAt();
+    expect(await checkbox()).toBeChecked();
+    expect(await screen.findByRole('link', { name: /Alpha/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Bravo/ })).toBeInTheDocument();
+    expect(screen.queryByText('Gone Band')).not.toBeInTheDocument();
+    expect(screen.queryByText('You were removed from this band.')).not.toBeInTheDocument();
+  });
+
+  it('unchecking reveals removed bands alongside the active ones', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue(mixed());
+    renderAt();
+    fireEvent.click(await checkbox());
+    expect(screen.getByRole('checkbox', { name: 'Only bands I’m in' })).not.toBeChecked();
+    expect(screen.getByText('Gone Band')).toBeInTheDocument();
+    expect(screen.getByText('You were removed from this band.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Alpha/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+  });
+
+  it('re-checking hides them again', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue(mixed());
+    renderAt();
+    fireEvent.click(await checkbox());
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Only bands I’m in' }));
+    expect(screen.queryByText('Gone Band')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Alpha/ })).toBeInTheDocument();
+  });
+
+  it('does not reload bands when toggling (it is a pure client-side filter)', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue(mixed());
+    renderAt();
+    fireEvent.click(await checkbox());
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Only bands I’m in' }));
+    expect(loadMyBands).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists the choice in localStorage under bands-only-mine', async () => {
+    renderAt();
+    expect(localStorage.getItem(KEY)).toBeNull(); // nothing written until the user chooses
+    fireEvent.click(await checkbox());
+    expect(localStorage.getItem(KEY)).toBe('false');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Only bands I’m in' }));
+    expect(localStorage.getItem(KEY)).toBe('true');
+  });
+
+  it('restores an unchecked choice from storage on the next visit', async () => {
+    localStorage.setItem(KEY, 'false');
+    vi.mocked(loadMyBands).mockResolvedValue(mixed());
+    renderAt();
+    expect(await checkbox()).not.toBeChecked();
+    expect(await screen.findByText('Gone Band')).toBeInTheDocument();
+  });
+
+  it('restores a checked choice from storage', async () => {
+    localStorage.setItem(KEY, 'true');
+    vi.mocked(loadMyBands).mockResolvedValue(mixed());
+    renderAt();
+    expect(await checkbox()).toBeChecked();
+    expect(screen.queryByText('Gone Band')).not.toBeInTheDocument();
+  });
+
+  it.each(['not json', 'null', '0', '"false"', '{}', ''])('falls back to checked for an unrecognised stored value %j', async (stored) => {
+    localStorage.setItem(KEY, stored);
+    renderAt();
+    expect(await checkbox()).toBeChecked();
+  });
+
+  it('keeps working when storage rejects the write (the choice just is not remembered)', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue(mixed());
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+    try {
+      renderAt();
+      fireEvent.click(await checkbox());
+      expect(screen.getByRole('checkbox', { name: 'Only bands I’m in' })).not.toBeChecked();
+      expect(screen.getByText('Gone Band')).toBeInTheDocument();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('keeps working when storage cannot be read', async () => {
+    const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    try {
+      renderAt();
+      expect(await checkbox()).toBeChecked();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  describe('hidden-bands note', () => {
+    const removed = (id: string) => entry({ band: band({ id, name: `Gone ${id}` }), status: 'removed' });
+    const active = (id: string) => entry({ band: band({ id, name: `Active ${id}` }) });
+
+    it('says one removed band is hidden (singular) when some others are visible', async () => {
+      vi.mocked(loadMyBands).mockResolvedValue(mixed());
+      renderAt();
+      expect(await screen.findByText('1 band you were removed from is hidden.')).toBeInTheDocument();
+    });
+
+    it('says how many removed bands are hidden (plural)', async () => {
+      vi.mocked(loadMyBands).mockResolvedValue(result([active('a1'), removed('r1'), removed('r2'), removed('r3')]));
+      renderAt();
+      expect(await screen.findByText('3 bands you were removed from are hidden.')).toBeInTheDocument();
+    });
+
+    it('goes away when the filter is unchecked (the removed bands are shown instead)', async () => {
+      vi.mocked(loadMyBands).mockResolvedValue(mixed());
+      renderAt();
+      await screen.findByText(/you were removed from is hidden/);
+      fireEvent.click(await checkbox());
+      expect(screen.queryByText(/you were removed from (is|are) hidden/)).not.toBeInTheDocument();
+    });
+
+    it('is not shown when no band is hidden', async () => {
+      vi.mocked(loadMyBands).mockResolvedValue(result([active('a1'), active('a2')]));
+      renderAt();
+      await screen.findByRole('link', { name: /Active a1/ });
+      expect(screen.queryByText(/removed from (is|are) hidden/)).not.toBeInTheDocument();
+    });
+
+    it('is replaced by the "No bands to show" message when every band is hidden', async () => {
+      vi.mocked(loadMyBands).mockResolvedValue(result([removed('r1'), removed('r2')]));
+      renderAt();
+      expect(await screen.findByText(/No bands to show/)).toBeInTheDocument();
+      expect(screen.queryByText(/removed from (is|are) hidden/)).not.toBeInTheDocument();
+    });
+
+    it('still shows alongside the failed-to-load warning when some bands are visible', async () => {
+      vi.mocked(loadMyBands).mockResolvedValue(result([active('a1'), removed('r1')], { failedCount: 2 }));
+      renderAt();
+      expect(await screen.findByRole('status')).toHaveTextContent('2 bands couldn’t be loaded');
+      expect(screen.getByText('1 band you were removed from is hidden.')).toBeInTheDocument();
+    });
+
+    it('re-appears when the filter is checked again', async () => {
+      vi.mocked(loadMyBands).mockResolvedValue(mixed());
+      renderAt();
+      fireEvent.click(await checkbox());
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Only bands I’m in' }));
+      expect(screen.getByText('1 band you were removed from is hidden.')).toBeInTheDocument();
+    });
+  });
+
+  it('when only removed bands exist, explains why the list is empty and how to see them', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue(result([entry({ status: 'removed' })]));
+    renderAt();
+    expect(await screen.findByText(/No bands to show/)).toHaveTextContent('Uncheck “Only bands I’m in” to see bands you were removed from.');
+    expect(screen.queryByText(/not in a band yet/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Only bands I’m in' }));
+    expect(screen.queryByText(/No bands to show/)).not.toBeInTheDocument();
+    expect(screen.getByText('You were removed from this band.')).toBeInTheDocument();
+  });
+
+  it('with no bands at all, keeps the original "not in a band yet" message in either state', async () => {
+    renderAt();
+    expect(await screen.findByText(/not in a band yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/No bands to show/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Only bands I’m in' }));
+    expect(screen.getByText(/not in a band yet/)).toBeInTheDocument();
+  });
+
+  it('shows no empty message while some bands failed to load, even if every loaded one is filtered out', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue(result([entry({ status: 'removed' })], { failedCount: 1 }));
+    renderAt();
+    expect(await screen.findByRole('status')).toHaveTextContent('1 band couldn’t be loaded');
+    expect(screen.queryByText(/No bands to show/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not in a band yet/)).not.toBeInTheDocument();
+  });
+
+  it('dismissing a removed band while unchecked reloads and keeps the choice', async () => {
+    vi.mocked(loadMyBands).mockResolvedValueOnce(mixed()).mockResolvedValue(result([entry({ band: band({ id: 'b1', name: 'Alpha' }) })]));
+    vi.mocked(dismissBand).mockResolvedValue(undefined);
+    renderAt();
+    fireEvent.click(await checkbox());
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(dismissBand).toHaveBeenCalledWith('b3'));
+    await waitFor(() => expect(screen.queryByText('Gone Band')).not.toBeInTheDocument());
+    expect(screen.getByRole('checkbox', { name: 'Only bands I’m in' })).not.toBeChecked();
+  });
+
+  it('is not rendered when signed out', () => {
+    auth.status = 'unauthenticated';
+    renderAt();
+    expect(screen.queryByRole('checkbox', { name: 'Only bands I’m in' })).not.toBeInTheDocument();
   });
 });
 
@@ -116,6 +322,7 @@ describe('BandsPage signed in', () => {
     vi.mocked(loadMyBands).mockResolvedValueOnce(result([entry({ status: 'removed' })])).mockResolvedValue(result());
     vi.mocked(dismissBand).mockResolvedValue(undefined);
     renderAt();
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Only bands I’m in' })); // removed bands are hidden by default
     expect(await screen.findByText('You were removed from this band.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     await waitFor(() => expect(dismissBand).toHaveBeenCalledWith('band-1'));

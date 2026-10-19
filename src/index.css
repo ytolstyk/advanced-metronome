@@ -7,6 +7,12 @@
   --color-foreground: hsl(240 20% 92%);
   --color-card: hsl(233 18% 18%);
   --color-card-foreground: hsl(240 20% 92%);
+  /* Raised cards that must stand out from the page background (Bands). */
+  --color-surface: hsl(235 18% 26%);
+  --color-surface-hover: hsl(235 18% 30%);
+  /* Secondary text on a surface card (and its color tint) must stay readable (AA). */
+  --color-surface-muted-foreground: hsl(237 22% 80%);
+  --color-surface-border: hsl(237 22% 48%);
   --color-popover: hsl(233 18% 18%);
   --color-popover-foreground: hsl(240 20% 92%);
   --color-primary: hsl(237 100% 69%);

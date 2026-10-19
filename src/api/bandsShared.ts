@@ -1,6 +1,14 @@
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
-import type { BandRecord, MemberRecord, ReadAuthMode, SetListRecord, SongRecord, VoteRecord } from '../bandTypes';
+import type {
+  BandRecord,
+  MemberRecord,
+  ReadAuthMode,
+  SetListRecord,
+  SongColorRecord,
+  SongRecord,
+  VoteRecord,
+} from '../bandTypes';
 import { getSignedInSub, isAuthenticated } from './authUtils';
 import { listAll, pageOpts } from './paginate';
 
@@ -130,6 +138,22 @@ export async function deleteConfirmed(
   throwOnError(res, label);
 }
 
+/**
+ * Upsert for rows keyed by the caller / the song. Each attempt reports whether the row now has the
+ * wanted value; it can fail for a benign reason (the row exists / vanished since the UI looked, e.g.
+ * another tab), so the other operation is the fallback, and one more try covers a row that changes
+ * between the two. `exists` is what the UI believes: it only picks which operation goes first.
+ */
+export async function upsertRow(
+  { create, update }: { create: () => Promise<boolean>; update: () => Promise<boolean> },
+  exists: boolean,
+  failure: string,
+): Promise<void> {
+  const attempts = exists ? [update, create, update] : [create, update, create];
+  for (const attempt of attempts) if (await attempt()) return;
+  throw new Error(failure);
+}
+
 // ── Row mappers ────────────────────────────────────────────────────────────
 
 const strings = (xs: ReadonlyArray<string | null> | null | undefined): string[] =>
@@ -193,6 +217,18 @@ export function toSong(r: Row<'Song'>): SongRecord {
     notes: r.notes ?? null,
     songUrl: r.songUrl ?? null,
     tabUrl: r.tabUrl ?? null,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  };
+}
+
+export function toSongColor(r: Row<'SongColor'>): SongColorRecord {
+  return {
+    songId: r.songId,
+    owner: r.owner,
+    bandId: r.bandId,
+    setListId: r.setListId,
+    color: r.color,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };

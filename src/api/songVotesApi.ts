@@ -12,6 +12,7 @@ import {
   throwOnError,
   toVote,
   unwrap,
+  upsertRow,
   withKeyLock,
 } from './bandsShared';
 import { listAll, pageOpts } from './paginate';
@@ -39,11 +40,8 @@ export async function deleteVoteRow(songId: string, owner: string): Promise<void
 
 /**
  * Sets the caller's vote on a song: `value` null retracts. One row per (song, voter) is guaranteed
- * by the table key, so "vote" is an upsert. `current` is the vote the UI believes exists; it only
- * picks which operation to try first. Each attempt can fail for a benign reason (the row exists /
- * vanished since the UI looked, e.g. another tab), so the other operation is the fallback, and one
- * more try covers a row that changes between the two. Serialised per song so rapid clicks can't
- * interleave.
+ * by the table key, so "vote" is an upsert (`upsertRow`). `current` is the vote the UI believes
+ * exists. Serialised per song so rapid clicks can't interleave.
  */
 export function castVote(
   song: Pick<SongRecord, 'id' | 'bandId' | 'setListId'>,
@@ -82,8 +80,6 @@ export function castVote(
       return false;
     };
 
-    const attempts = current === undefined ? [create, update, create] : [update, create, update];
-    for (const attempt of attempts) if (await attempt()) return;
-    throw new Error('Could not save your vote. Please try again.');
+    await upsertRow({ create, update }, current !== undefined, 'Could not save your vote. Please try again.');
   });
 }

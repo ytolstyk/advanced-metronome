@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { BAND_LIMITS, type BandRecord, type MemberRecord, type PendingVote, type SetListRecord, type SongRecord, type VoteRecord } from './bandTypes';
 import {
+  BAND_LIMITS,
+  SONG_COLOR_KEYS,
+  VOTE_INDEX_LAG_GRACE_MS,
+  type BandRecord,
+  type MemberRecord,
+  type PendingChoice,
+  type PendingVote,
+  type SetListRecord,
+  type SongColorRecord,
+  type SongRecord,
+  type VoteRecord,
+} from './bandTypes';
+import {
+  activePending,
   adjustTally,
   buildDisplayNames,
   buildInviteLink,
@@ -13,7 +26,9 @@ import {
   isBanned,
   isCleanText,
   isSetListShared,
+  isSongColorKey,
   isVoteValue,
+  myColorSongIds,
   myVotes,
   normalizeHttpUrl,
   normalizeInviteCode,
@@ -22,6 +37,7 @@ import {
   requireDisplayName,
   requireName,
   resolveMyVote,
+  resolveSongColors,
   sanitizeDisplayName,
   sanitizeName,
   sanitizeNotes,
@@ -976,5 +992,287 @@ describe('isCleanText', () => {
     expect(isCleanText(null, 50, true)).toBe(false);
     expect(isCleanText(undefined, 50, false)).toBe(true);
     expect(isCleanText('', 50, false)).toBe(true);
+  });
+});
+
+describe('isSongColorKey', () => {
+  it.each(SONG_COLOR_KEYS)('accepts the palette color %s', (key) => {
+    expect(isSongColorKey(key)).toBe(true);
+  });
+
+  it.each(['none', '', 'Red', 'RED', ' red', 'red ', 'magenta', '#ef4444', '__proto__', 'constructor', 'toString'])(
+    'rejects %j',
+    (value) => {
+      expect(isSongColorKey(value)).toBe(false);
+    },
+  );
+});
+
+describe('resolveSongColors', () => {
+  const b = band();
+  const w = world(b, [member(BOB), member(CAT)], [setList()], [song('s1', BOB), song('s2', CAT)]);
+  const colorRow = (songId: string, color: string, over: Partial<SongColorRecord> = {}): SongColorRecord => ({
+    songId,
+    owner: BOB,
+    bandId: 'band-1',
+    setListId: 'sl-1',
+    color,
+    createdAt: '2026-02-01T00:00:00Z',
+    ...over,
+  });
+  const resolve = (rows: SongColorRecord[], songs = w.validSongs, subs = w.subs) => resolveSongColors(rows, songs, subs);
+
+  it('maps each valid song to its palette color', () => {
+    const colors = resolve([colorRow('s1', 'red'), colorRow('s2', 'teal')]);
+    expect(colors).toEqual(new Map([['s1', 'red'], ['s2', 'teal']]));
+  });
+
+  it('returns an empty map for no rows, and for no songs', () => {
+    expect(resolve([]).size).toBe(0);
+    expect(resolve([colorRow('s1', 'red')], []).size).toBe(0);
+  });
+
+  it('treats the stored "none" (a cleared color) as no color', () => {
+    expect(resolve([colorRow('s1', 'none')]).has('s1')).toBe(false);
+  });
+
+  it('ignores colors outside the palette (a signed-in user can write any string)', () => {
+    const colors = resolve([colorRow('s1', 'javascript:alert(1)'), colorRow('s2', 'Red'), colorRow('s1', '')]);
+    expect(colors.size).toBe(0);
+  });
+
+  it('ignores rows for unknown or non-valid songs', () => {
+    const hidden = world(band({ hiddenSongIds: ['s1'] }), [member(BOB), member(CAT)], [setList()], [song('s1', BOB), song('s2', CAT)]);
+    const colors = resolveSongColors(
+      [colorRow('s1', 'red'), colorRow('nope', 'blue'), colorRow('s2', 'green')],
+      hidden.validSongs,
+      hidden.subs,
+    );
+    expect(colors).toEqual(new Map([['s2', 'green']]));
+  });
+
+  it('ignores rows whose bandId or setListId disagree with the song', () => {
+    const colors = resolve([colorRow('s1', 'red', { setListId: 'sl-other' }), colorRow('s2', 'red', { bandId: 'band-other' })]);
+    expect(colors.size).toBe(0);
+  });
+
+  describe('member filtering', () => {
+    it('ignores rows whose owner is not a valid member', () => {
+      expect(resolve([colorRow('s1', 'red', { owner: MALLORY })]).size).toBe(0);
+    });
+
+    it('ignores rows from banned members', () => {
+      const banned = world(band({ bannedSubs: [CAT] }), [member(BOB), member(CAT)], [setList()], [song('s1', BOB)]);
+      expect(resolveSongColors([colorRow('s1', 'red', { owner: CAT })], banned.validSongs, banned.subs).size).toBe(0);
+    });
+
+    it('counts the band owner as a member', () => {
+      expect(resolve([colorRow('s1', 'blue', { owner: OWNER })]).get('s1')).toBe('blue');
+    });
+
+    it('a stranger newer row cannot shadow a member row', () => {
+      const colors = resolve([
+        colorRow('s1', 'red', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+        colorRow('s1', 'none', { owner: MALLORY, updatedAt: '2026-04-01T00:00:00Z' }),
+      ]);
+      expect(colors.get('s1')).toBe('red');
+    });
+
+    it('uses the explicit memberSubs argument, not the song set', () => {
+      expect(resolveSongColors([colorRow('s1', 'red')], w.validSongs, new Set([CAT])).size).toBe(0);
+      expect(resolveSongColors([colorRow('s1', 'red')], w.validSongs, new Set([BOB])).get('s1')).toBe('red');
+    });
+  });
+
+  describe('newest row wins across owners', () => {
+    it('keeps the latest row by updatedAt across different members', () => {
+      const colors = resolve([
+        colorRow('s1', 'red', { owner: BOB, updatedAt: '2026-03-02T00:00:00Z' }),
+        colorRow('s1', 'blue', { owner: CAT, updatedAt: '2026-03-01T00:00:00Z' }),
+      ]);
+      expect(colors.get('s1')).toBe('red');
+    });
+
+    it('is independent of row order', () => {
+      const older = colorRow('s1', 'blue', { owner: CAT, updatedAt: '2026-03-01T00:00:00Z' });
+      const newer = colorRow('s1', 'red', { owner: BOB, updatedAt: '2026-03-02T00:00:00Z' });
+      expect(resolve([older, newer]).get('s1')).toBe('red');
+      expect(resolve([newer, older]).get('s1')).toBe('red');
+    });
+
+    it('prefers updatedAt over createdAt when both are present', () => {
+      const colors = resolve([
+        colorRow('s1', 'red', { owner: BOB, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-03-05T00:00:00Z' }),
+        colorRow('s1', 'blue', { owner: CAT, createdAt: '2026-03-01T00:00:00Z' }),
+      ]);
+      expect(colors.get('s1')).toBe('red');
+    });
+
+    it('falls back to createdAt when updatedAt is absent, and a later createdAt beats an earlier one', () => {
+      const colors = resolve([
+        colorRow('s1', 'red', { owner: BOB, createdAt: '2026-03-01T00:00:00Z' }),
+        colorRow('s1', 'blue', { owner: CAT, createdAt: '2026-03-05T00:00:00Z' }),
+      ]);
+      expect(colors.get('s1')).toBe('blue');
+    });
+
+    it('breaks equal stamps by owner (greater owner wins), regardless of row order', () => {
+      const a = colorRow('s1', 'red', { owner: BOB });
+      const c = colorRow('s1', 'blue', { owner: CAT });
+      expect(CAT.localeCompare(BOB)).toBeGreaterThan(0);
+      expect(resolve([a, c]).get('s1')).toBe('blue');
+      expect(resolve([c, a]).get('s1')).toBe('blue');
+    });
+
+    it('a newest "none" row leaves the song uncolored even if an older member picked a color', () => {
+      const colors = resolve([
+        colorRow('s1', 'red', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+        colorRow('s1', 'none', { owner: CAT, updatedAt: '2026-03-02T00:00:00Z' }),
+      ]);
+      expect(colors.has('s1')).toBe(false);
+    });
+
+    it('an older "none" row does not hide a newer color from another member', () => {
+      const colors = resolve([
+        colorRow('s1', 'none', { owner: CAT, updatedAt: '2026-03-01T00:00:00Z' }),
+        colorRow('s1', 'green', { owner: BOB, updatedAt: '2026-03-02T00:00:00Z' }),
+      ]);
+      expect(colors.get('s1')).toBe('green');
+    });
+
+    it('resolves each song independently', () => {
+      const colors = resolve([
+        colorRow('s1', 'red', { owner: BOB, updatedAt: '2026-03-02T00:00:00Z' }),
+        colorRow('s1', 'blue', { owner: CAT, updatedAt: '2026-03-01T00:00:00Z' }),
+        colorRow('s2', 'blue', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+        colorRow('s2', 'teal', { owner: CAT, updatedAt: '2026-03-02T00:00:00Z' }),
+      ]);
+      expect(colors).toEqual(new Map([['s1', 'red'], ['s2', 'teal']]));
+    });
+  });
+
+  describe('invalid palette keys', () => {
+    it('are ignored before comparing: a newer invalid row does not shadow an older valid one', () => {
+      const colors = resolve([
+        colorRow('s1', 'red', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+        colorRow('s1', 'bogus', { owner: CAT, updatedAt: '2026-03-02T00:00:00Z' }),
+      ]);
+      expect(colors.get('s1')).toBe('red');
+    });
+
+    it('an invalid row from the same owner does not shadow their earlier valid row either', () => {
+      const colors = resolve([
+        colorRow('s1', 'red', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+        colorRow('s1', '__proto__', { owner: BOB, updatedAt: '2026-03-02T00:00:00Z' }),
+      ]);
+      expect(colors.get('s1')).toBe('red');
+    });
+
+    it('a newer invalid row does not undo an older "none" either (song stays uncolored)', () => {
+      const colors = resolve([
+        colorRow('s1', 'none', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+        colorRow('s1', 'bogus', { owner: CAT, updatedAt: '2026-03-02T00:00:00Z' }),
+      ]);
+      expect(colors.has('s1')).toBe(false);
+    });
+  });
+});
+
+describe('myColorSongIds', () => {
+  const b = band();
+  const w = world(b, [member(BOB), member(CAT)], [setList()], [song('s1', BOB), song('s2', CAT), song('s3', BOB)]);
+  const colorRow = (songId: string, color: string, over: Partial<SongColorRecord> = {}): SongColorRecord => ({
+    songId,
+    owner: BOB,
+    bandId: 'band-1',
+    setListId: 'sl-1',
+    color,
+    createdAt: '2026-02-01T00:00:00Z',
+    ...over,
+  });
+  const mine = (rows: SongColorRecord[], sub = BOB, songs = w.validSongs, subs = w.subs) =>
+    myColorSongIds(rows, songs, subs, sub);
+
+  it('is empty for no rows', () => {
+    expect(mine([]).size).toBe(0);
+  });
+
+  it('returns the songs the caller has a row for', () => {
+    expect(mine([colorRow('s1', 'red'), colorRow('s2', 'blue')])).toEqual(new Set(['s1', 's2']));
+  });
+
+  it('includes songs whose own row is "none" (a cleared color still exists)', () => {
+    expect(mine([colorRow('s1', 'none')])).toEqual(new Set(['s1']));
+  });
+
+  it('excludes rows written by other members', () => {
+    expect(mine([colorRow('s1', 'red', { owner: CAT }), colorRow('s2', 'red', { owner: BOB })])).toEqual(new Set(['s2']));
+  });
+
+  it('excludes rows for unknown or non-valid songs', () => {
+    expect(mine([colorRow('nope', 'red'), colorRow('s1', 'red')])).toEqual(new Set(['s1']));
+  });
+
+  it('excludes rows whose parents disagree with the song', () => {
+    expect(mine([colorRow('s1', 'red', { setListId: 'sl-x' }), colorRow('s2', 'red', { bandId: 'band-x' })]).size).toBe(0);
+  });
+
+  it('is empty when the caller is not a valid member (e.g. banned)', () => {
+    const banned = world(band({ bannedSubs: [BOB] }), [member(BOB), member(CAT)], [setList()], [song('s1', CAT)]);
+    expect(mine([colorRow('s1', 'red')], BOB, banned.validSongs, banned.subs).size).toBe(0);
+  });
+
+  it('counts the caller own row even if it is not the newest or has an unknown palette key', () => {
+    const rows = [
+      colorRow('s1', 'bogus', { owner: BOB }),
+      colorRow('s2', 'red', { owner: BOB, updatedAt: '2026-01-01T00:00:00Z' }),
+      colorRow('s2', 'blue', { owner: CAT, updatedAt: '2026-05-01T00:00:00Z' }),
+    ];
+    expect(mine(rows)).toEqual(new Set(['s1', 's2']));
+  });
+
+  it('does not depend on which row is newest across owners', () => {
+    expect(mine([colorRow('s3', 'red', { owner: CAT, updatedAt: '2026-09-01T00:00:00Z' })])).toEqual(new Set());
+  });
+});
+
+describe('activePending', () => {
+  const inFlight = <T,>(value: T | null): PendingChoice<T> => ({ value, settledAt: null });
+  const settled = <T,>(value: T | null, at: number): PendingChoice<T> => ({ value, settledAt: at });
+
+  it('is undefined when nothing is pending', () => {
+    expect(activePending(undefined, 1000)).toBeUndefined();
+  });
+
+  it('returns an in-flight choice regardless of fetchedAt', () => {
+    const p = inFlight('red');
+    expect(activePending(p, 9_999_999)).toBe(p);
+    expect(activePending(p, 0)).toBe(p);
+  });
+
+  it('keeps a null (cleared) in-flight choice', () => {
+    const p = inFlight<string>(null);
+    expect(activePending(p, 9_999_999)).toBe(p);
+  });
+
+  it('returns a settled choice while fetchedAt is inside the grace period (inclusive boundary)', () => {
+    const p = settled('red', 10_000);
+    expect(activePending(p, 5_000)).toBe(p);
+    expect(activePending(p, 10_000)).toBe(p);
+    expect(activePending(p, 10_000 + VOTE_INDEX_LAG_GRACE_MS)).toBe(p);
+  });
+
+  it('drops a settled choice once fetchedAt is past the grace period', () => {
+    expect(activePending(settled('red', 10_000), 10_000 + VOTE_INDEX_LAG_GRACE_MS + 1)).toBeUndefined();
+  });
+
+  it('honours a custom grace period', () => {
+    expect(activePending(settled('red', 0), 100, 50)).toBeUndefined();
+    expect(activePending(settled('red', 0), 50, 50)).toEqual({ value: 'red', settledAt: 0 });
+  });
+
+  it('is what resolveMyVote delegates to (same grace default)', () => {
+    expect(resolveMyVote(settled('up', 10_000), 10_000 + VOTE_INDEX_LAG_GRACE_MS + 1, 'down').pending).toBeUndefined();
+    expect(resolveMyVote(settled('up', 10_000), 10_000 + VOTE_INDEX_LAG_GRACE_MS, 'down').pending).toBe('up');
   });
 });

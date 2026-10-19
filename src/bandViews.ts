@@ -14,8 +14,10 @@ import {
   filterValidSetLists,
   isBandOwner,
   isSetListShared,
+  myColorSongIds,
   myVotes,
   partitionSongs,
+  resolveSongColors,
   sanitizeDisplayName,
   sortSongsByScore,
   tallyVotes,
@@ -80,14 +82,17 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
   const { visible, hidden } = partitionSongs(rows.songs.items, view.band, view.setLists, view.memberSubs);
   const counted = filterCountedVotes(rows.votes.items, visible, view.memberSubs);
   const tallies = tallyVotes(counted, visible);
+  const colorRows = rows.colors?.items ?? [];
   return {
     setList,
     shared: isSetListShared(view.band, setListId),
     songs: sortSongsByScore(visible, tallies),
     tallies,
+    colors: resolveSongColors(colorRows, visible, view.memberSubs),
+    myColorSongIds: myColorSongIds(colorRows, visible, view.memberSubs, view.sub),
     myVotes: myVotes(counted, view.sub),
     // The Hidden section is owner-only; everyone else doesn't need the second list.
     hiddenSongs: view.isOwner ? hidden : [],
-    incomplete: rows.songs.incomplete || rows.votes.incomplete,
+    incomplete: rows.songs.incomplete || rows.votes.incomplete || (rows.colors?.incomplete ?? false),
   };
 }

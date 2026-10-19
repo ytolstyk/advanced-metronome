@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { BandRecord, BandView, SongRecord, VoteRecord, ValidMember, ValidSetList } from '../bandTypes';
+import type { BandRecord, BandView, SongColorRecord, SongRecord, VoteRecord, ValidMember, ValidSetList } from '../bandTypes';
+import { SONG_COLOR_STYLES } from '../bandSongColors';
+import userEvent from '@testing-library/user-event';
 
 vi.mock('@aws-amplify/ui-react', () => ({
   useAuthenticator: () => ({ authStatus: 'authenticated' }),
@@ -14,6 +16,7 @@ vi.mock('../api/bandsApi', () => ({
   unhideSong: vi.fn(),
 }));
 vi.mock('../api/songVotesApi', () => ({ castVote: vi.fn() }));
+vi.mock('../api/songColorsApi', () => ({ setSongColor: vi.fn() }));
 vi.mock('../api/setListsApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/setListsApi')>()),
   fetchSetListRows: vi.fn(),
@@ -26,6 +29,7 @@ import { SetListPage } from './SetListPage';
 import { hideSong, loadBandView, unhideSong } from '../api/bandsApi';
 import { deleteSong, fetchSetListRows, suggestSong } from '../api/setListsApi';
 import { castVote } from '../api/songVotesApi';
+import { setSongColor } from '../api/songColorsApi';
 
 const ME = 'sub-me';
 const BOB = 'sub-bob';
@@ -92,9 +96,24 @@ const vote = (songId: string, owner: string, value: string): VoteRecord => ({
 
 const emptyPage = <T,>(items: T[]) => ({ items, incomplete: false });
 
-function setup(view: BandView = makeView(), songs = [song('a', BOB, '2026-01-02T00:00:00Z'), song('b', ME, '2026-01-02T00:00:01Z')], votes = [vote('b', BOB, 'up')]) {
+const colorRow = (songId: string, color: string, owner = BOB, updatedAt = '2026-01-04T00:00:00Z'): SongColorRecord => ({
+  songId,
+  owner,
+  bandId: 'band-1',
+  setListId: 'sl-1',
+  color,
+  createdAt: '2026-01-04T00:00:00Z',
+  updatedAt,
+});
+
+function setup(
+  view: BandView = makeView(),
+  songs = [song('a', BOB, '2026-01-02T00:00:00Z'), song('b', ME, '2026-01-02T00:00:01Z')],
+  votes = [vote('b', BOB, 'up')],
+  colors: SongColorRecord[] = [],
+) {
   vi.mocked(loadBandView).mockResolvedValue({ status: 'ok', view });
-  vi.mocked(fetchSetListRows).mockResolvedValue({ songs: emptyPage(songs), votes: emptyPage(votes) });
+  vi.mocked(fetchSetListRows).mockResolvedValue({ songs: emptyPage(songs), votes: emptyPage(votes), colors: emptyPage(colors) });
   return render(
     <MemoryRouter initialEntries={['/bands/band-1/setlists/sl-1']}>
       <Routes>
@@ -276,7 +295,7 @@ describe('SetListPage', () => {
   it('warns when the member roster was too long to load (members, songs or votes may be missing)', async () => {
     setup(makeView({ incomplete: true }));
     await screen.findByText('Song a');
-    expect(screen.getByText(/some members, songs or votes may be missing/)).toBeInTheDocument();
+    expect(screen.getByText(/some members, songs, votes or colors may be missing/)).toBeInTheDocument();
   });
 
   it('a failed hide shows the error and STILL reloads, so nothing half-applied stays on screen', async () => {
@@ -368,5 +387,161 @@ describe('SetListPage', () => {
   it('says so when the set list is not in the band (archived or forged id)', async () => {
     setup(makeView({ setLists: [] }));
     expect(await screen.findByText('Set list not found')).toBeInTheDocument();
+  });
+
+  describe('song colors', () => {
+    const pick = async (title: string, color: string) => {
+      const user = userEvent.setup();
+      await user.click(within(row(title)).getByRole('button', { name: new RegExp(`^Set color for ${title}(, now .+)?$`) }));
+      await user.click(await screen.findByRole('menuitem', { name: color }));
+    };
+    const calls = () => vi.mocked(setSongColor).mock.calls;
+
+    it('shows each song\'s shared color as a stripe, and leaves uncolored songs plain', async () => {
+      setup(makeView(), undefined, undefined, [colorRow('a', 'purple')]);
+      await screen.findByText('Song a');
+      expect(row('Song a')).toHaveClass('border-l-4');
+      expect(row('Song a')).toHaveStyle({ borderLeftColor: SONG_COLOR_STYLES.purple.hex });
+      // the plain row keeps a transparent border so rows line up, but has no inline color
+      expect(row('Song b')).toHaveClass('border-l-4', 'border-l-transparent');
+      expect(row('Song b').getAttribute('style') ?? '').not.toMatch(/border-left-color|background-color/);
+    });
+
+    it('ignores a stored color that is not in the palette and one for a song that is not shown', async () => {
+      setup(makeView(), undefined, undefined, [colorRow('a', 'chartreuse'), colorRow('ghost', 'red'), colorRow('b', 'none')]);
+      await screen.findByText('Song a');
+      expect(row('Song a').getAttribute('style') ?? '').not.toMatch(/border-left-color/);
+      expect(row('Song b').getAttribute('style') ?? '').not.toMatch(/border-left-color/);
+    });
+
+    it('ignores a color written by someone who is not a member of the band', async () => {
+      setup(makeView(), undefined, undefined, [colorRow('a', 'red', 'sub-mallory')]);
+      await screen.findByText('Song a');
+      expect(row('Song a').getAttribute('style') ?? '').not.toMatch(/border-left-color/);
+    });
+
+    it('shows the newest color across members', async () => {
+      setup(makeView(), undefined, undefined, [
+        colorRow('a', 'red', BOB, '2026-02-01T00:00:00Z'),
+        colorRow('a', 'blue', ME, '2026-03-01T00:00:00Z'),
+      ]);
+      await screen.findByText('Song a');
+      expect(row('Song a')).toHaveStyle({ borderLeftColor: SONG_COLOR_STYLES.blue.hex });
+    });
+
+    it('a newer "none" row from another member leaves the song uncolored', async () => {
+      setup(makeView(), undefined, undefined, [
+        colorRow('a', 'red', BOB, '2026-02-01T00:00:00Z'),
+        colorRow('a', 'none', ME, '2026-03-01T00:00:00Z'),
+      ]);
+      await screen.findByText('Song a');
+      expect(row('Song a').getAttribute('style') ?? '').not.toMatch(/border-left-color/);
+    });
+
+    it('any member can pick a color: it shows immediately and is saved for the song', async () => {
+      vi.mocked(setSongColor).mockResolvedValue(undefined);
+      setup();
+      await screen.findByText('Song a');
+      await pick('Song a', 'Red');
+      expect(row('Song a')).toHaveStyle({ borderLeftColor: SONG_COLOR_STYLES.red.hex });
+      await waitFor(() => expect(setSongColor).toHaveBeenCalledTimes(1));
+      expect(setSongColor).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'a', bandId: 'band-1', setListId: 'sl-1' }),
+        'red',
+        false,
+      );
+    });
+
+    it('announces the current color on the picker trigger', async () => {
+      setup(makeView(), undefined, undefined, [colorRow('a', 'purple')]);
+      await screen.findByText('Song a');
+      expect(within(row('Song a')).getByRole('button', { name: 'Set color for Song a, now Purple' })).toBeInTheDocument();
+      expect(within(row('Song b')).getByRole('button', { name: 'Set color for Song b' })).toBeInTheDocument();
+    });
+
+    it('recoloring a song someone else colored still creates my own row (exists = false)', async () => {
+      vi.mocked(setSongColor).mockResolvedValue(undefined);
+      setup(makeView(), undefined, undefined, [colorRow('a', 'red', BOB)]);
+      await screen.findByText('Song a');
+      await pick('Song a', 'Blue');
+      await waitFor(() => expect(setSongColor).toHaveBeenCalledTimes(1));
+      expect(calls()[0].slice(1)).toEqual(['blue', false]);
+    });
+
+    it('changing a color I already set tells the API my row exists', async () => {
+      vi.mocked(setSongColor).mockResolvedValue(undefined);
+      setup(makeView(), undefined, undefined, [colorRow('a', 'red', ME)]);
+      await screen.findByText('Song a');
+      await pick('Song a', 'Blue');
+      await waitFor(() => expect(setSongColor).toHaveBeenCalledTimes(1));
+      expect(calls()[0].slice(1)).toEqual(['blue', true]);
+    });
+
+    it('my own cleared ("none") row still counts as existing', async () => {
+      vi.mocked(setSongColor).mockResolvedValue(undefined);
+      setup(makeView(), undefined, undefined, [colorRow('a', 'none', ME)]);
+      await screen.findByText('Song a');
+      await pick('Song a', 'Green');
+      await waitFor(() => expect(setSongColor).toHaveBeenCalledTimes(1));
+      expect(calls()[0].slice(1)).toEqual(['green', true]);
+    });
+
+    it('a second pick after a successful first one uses the update path', async () => {
+      vi.mocked(setSongColor).mockResolvedValue(undefined);
+      setup();
+      await screen.findByText('Song a');
+      await pick('Song a', 'Red');
+      await waitFor(() => expect(setSongColor).toHaveBeenCalledTimes(1));
+      await pick('Song a', 'Blue');
+      await waitFor(() => expect(setSongColor).toHaveBeenCalledTimes(2));
+      expect(calls()[0].slice(1)).toEqual(['red', false]);
+      expect(calls()[1].slice(1)).toEqual(['blue', true]);
+    });
+
+    it('"No color" removes the stripe at once and saves null', async () => {
+      vi.mocked(setSongColor).mockResolvedValue(undefined);
+      setup(makeView(), undefined, undefined, [colorRow('a', 'red', ME)]);
+      await screen.findByText('Song a');
+      await pick('Song a', 'No color');
+      expect(row('Song a').getAttribute('style') ?? '').not.toMatch(/border-left-color/);
+      expect(row('Song a')).toHaveClass('border-l-transparent');
+      await waitFor(() => expect(setSongColor).toHaveBeenCalledTimes(1));
+      expect(calls()[0].slice(1)).toEqual([null, true]);
+    });
+
+    it('a failed save reverts the color and shows the error', async () => {
+      vi.mocked(setSongColor).mockRejectedValue(new Error('Could not save the song color. Please try again.'));
+      setup(makeView(), undefined, undefined, [colorRow('a', 'red')]);
+      await screen.findByText('Song a');
+      await pick('Song a', 'Blue');
+      expect(await screen.findByRole('alert')).toHaveTextContent('Could not save the song color. Please try again.');
+      expect(row('Song a')).toHaveStyle({ borderLeftColor: SONG_COLOR_STYLES.red.hex });
+    });
+
+    it('warns that the list may be incomplete when only the colors page cap was hit', async () => {
+      vi.mocked(loadBandView).mockResolvedValue({ status: 'ok', view: makeView() });
+      vi.mocked(fetchSetListRows).mockResolvedValue({
+        songs: emptyPage([song('a', BOB, '2026-01-02T00:00:00Z')]),
+        votes: emptyPage([]),
+        colors: { items: [], incomplete: true },
+      });
+      render(
+        <MemoryRouter initialEntries={['/bands/band-1/setlists/sl-1']}>
+          <Routes>
+            <Route path="/bands/:bandId/setlists/:setListId" element={<SetListPage />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      await screen.findByText('Song a');
+      expect(
+        screen.getByText('This list was too long to load completely, so some members, songs, votes or colors may be missing.'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows no incomplete banner when nothing hit a cap', async () => {
+      setup();
+      await screen.findByText('Song a');
+      expect(screen.queryByText(/too long to load completely/)).not.toBeInTheDocument();
+    });
   });
 });

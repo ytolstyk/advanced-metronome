@@ -1,0 +1,95 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { m } = vi.hoisted(() => {
+  const m = {
+    Song: { listSongBySetList: vi.fn() },
+    Vote: { listVoteBySetList: vi.fn() },
+    SongColor: { listSongColorBySetList: vi.fn() },
+    graphql: vi.fn(),
+  };
+  return { m };
+});
+
+vi.mock('aws-amplify/data', () => ({
+  generateClient: vi.fn(() => ({ models: m, graphql: m.graphql })),
+}));
+vi.mock('./authUtils', () => ({
+  isAuthenticated: vi.fn(async () => true),
+  getCurrentUserSub: vi.fn(async () => 'sub-me'),
+}));
+
+import { LIST_PAGE_SIZE, MAX_LIST_PAGES } from '../bandTypes';
+import { listSongColors } from './bandReads';
+
+const colorRow = (songId: string, color = 'red', owner = 'sub-bob') => ({
+  songId,
+  owner,
+  bandId: 'band-1',
+  setListId: 'sl-1',
+  color,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-02T00:00:00Z',
+  extra: 'dropped',
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  m.SongColor.listSongColorBySetList.mockReset();
+});
+
+describe('listSongColors', () => {
+  it('queries the set-list index with the default (signed-in) auth mode and maps the rows', async () => {
+    m.SongColor.listSongColorBySetList.mockResolvedValue({ data: [colorRow('a'), colorRow('b', 'none')], nextToken: null });
+    const res = await listSongColors('sl-1');
+    expect(m.SongColor.listSongColorBySetList).toHaveBeenCalledWith(
+      { setListId: 'sl-1' },
+      { limit: LIST_PAGE_SIZE, nextToken: undefined },
+    );
+    expect(res.incomplete).toBe(false);
+    expect(res.items).toEqual([
+      { songId: 'a', owner: 'sub-bob', bandId: 'band-1', setListId: 'sl-1', color: 'red', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z' },
+      { songId: 'b', owner: 'sub-bob', bandId: 'band-1', setListId: 'sl-1', color: 'none', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z' },
+    ]);
+  });
+
+  it('keeps one row per (song, owner): rows from different members for the same song are all returned', async () => {
+    m.SongColor.listSongColorBySetList.mockResolvedValue({
+      data: [colorRow('a', 'red', 'sub-bob'), colorRow('a', 'blue', 'sub-cat')],
+      nextToken: null,
+    });
+    const res = await listSongColors('sl-1');
+    expect(res.items.map((r) => [r.songId, r.owner, r.color])).toEqual([
+      ['a', 'sub-bob', 'red'],
+      ['a', 'sub-cat', 'blue'],
+    ]);
+  });
+
+  it('never sends an authMode (there is no guest read rule for colors)', async () => {
+    m.SongColor.listSongColorBySetList.mockResolvedValue({ data: [], nextToken: null });
+    await listSongColors('sl-1');
+    expect(m.SongColor.listSongColorBySetList.mock.calls[0][1]).not.toHaveProperty('authMode');
+  });
+
+  it('follows nextToken across pages and concatenates the rows', async () => {
+    m.SongColor.listSongColorBySetList
+      .mockResolvedValueOnce({ data: [colorRow('a')], nextToken: 't1' })
+      .mockResolvedValueOnce({ data: [colorRow('b')], nextToken: null });
+    const res = await listSongColors('sl-1');
+    expect(res.items.map((r) => r.songId)).toEqual(['a', 'b']);
+    expect(res.incomplete).toBe(false);
+    expect(m.SongColor.listSongColorBySetList.mock.calls[1][1]).toMatchObject({ nextToken: 't1' });
+  });
+
+  it('stops at a tight page cap (a valid list has at most 15 members x 100 songs = 6 pages) and flags incomplete', async () => {
+    m.SongColor.listSongColorBySetList.mockResolvedValue({ data: [], nextToken: 'more' });
+    const res = await listSongColors('sl-1');
+    expect(res.incomplete).toBe(true);
+    expect(m.SongColor.listSongColorBySetList).toHaveBeenCalledTimes(7);
+    expect(7).toBeLessThan(MAX_LIST_PAGES);
+  });
+
+  it('fails closed when the read errors', async () => {
+    m.SongColor.listSongColorBySetList.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
+    await expect(listSongColors('sl-1')).rejects.toThrow('listSongColors: gsi down');
+  });
+});

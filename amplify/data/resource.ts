@@ -359,6 +359,28 @@ const schema = a.schema({
       allow.guest().to(['get', 'list']),
     ]),
 
+  // A member's color for a song, one row per (song, member) like Vote. The song's shared color is the
+  // newest row written by a valid, non-banned member (resolved in the client), so a stranger or a
+  // banned user can't recolor anything and the owner's bans still apply. Clearing writes `none`; a
+  // member's rows can be deleted by that member (leave-band cleanup). `owner` is declared only
+  // because it is part of the key. Signed-in reads only (no guest rule).
+  SongColor: a.model({
+    songId: a.string().required(),
+    owner: a.string().required(),
+    bandId: a.string().required(),
+    setListId: a.string().required(),
+    color: a.string().required(),       // a SONG_COLOR_KEYS value or 'none', validated in the client
+  })
+    .identifier(['songId', 'owner'])
+    .secondaryIndexes(index => [
+      index('setListId').sortKeys(['owner']).queryField('listSongColorBySetList'),
+    ])
+    .disableOperations(['list', 'subscriptions'])
+    .authorization(allow => [
+      allow.owner().identityClaim('sub'),
+      allow.authenticated().to(['get', 'list']),
+    ]),
+
   // One row per (song, voter). The key makes a second vote a conflict and stops key squatting.
   Vote: a.model({
     songId: a.string().required(),

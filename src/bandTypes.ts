@@ -2,6 +2,11 @@ import { MAX_BPM, MIN_BPM } from './constants';
 
 export type VoteValue = 'up' | 'down';
 
+/** Colors a member can give a song. `none` (stored, since rows are never deleted) means no color. */
+export const SONG_COLOR_KEYS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink'] as const;
+export type SongColorKey = (typeof SONG_COLOR_KEYS)[number];
+export const NO_SONG_COLOR = 'none';
+
 /** Client-enforced limits (the API cannot enforce them; validators hide out-of-bounds rows). */
 export const BAND_LIMITS = {
   nameMax: 50,
@@ -109,6 +114,16 @@ export interface SongRecord {
   updatedAt?: string;
 }
 
+export interface SongColorRecord {
+  songId: string;
+  owner: string;
+  bandId: string;
+  setListId: string;
+  color: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface VoteRecord {
   songId: string;
   owner: string;
@@ -183,6 +198,8 @@ export type BandLoadResult =
 export interface SetListRows {
   songs: ListAllResult<SongRecord>;
   votes: ListAllResult<VoteRecord>;
+  /** Absent on the public page, which doesn't show song colors. */
+  colors?: ListAllResult<SongColorRecord>;
 }
 
 export interface SetListView {
@@ -192,6 +209,10 @@ export interface SetListView {
   /** Valid, non-hidden songs, ranked by score. */
   songs: ValidSong[];
   tallies: Map<string, SongTally>;
+  /** Valid, non-hidden songs that have a color (songs without one are absent). */
+  colors: Map<string, SongColorKey>;
+  /** Songs the caller has their own color row for (even `none`): it picks create vs update. */
+  myColorSongIds: Set<string>;
   myVotes: Map<string, VoteValue>;
   /** Valid songs the owner hid (for the owner's "Hidden" section). */
   hiddenSongs: ValidSong[];
@@ -200,12 +221,14 @@ export interface SetListView {
 }
 
 /** The caller's pending (optimistic) choice for one song. */
-export interface PendingVote {
-  /** `null` = the caller retracted their vote. */
-  value: VoteValue | null;
+export interface PendingChoice<T> {
+  /** `null` = the caller cleared it (retracted the vote, removed the color). */
+  value: T | null;
   /** When the request finished; `null` while it is still in flight. */
   settledAt: number | null;
 }
+
+export type PendingVote = PendingChoice<VoteValue>;
 
 /** What the public (signed-out friendly) set list page gets. */
 export type SharedSetListResult =

@@ -65,4 +65,12 @@ describe('SharedSongRow', () => {
     renderRow();
     expect(screen.getByRole('listitem')).toBeInTheDocument();
   });
+
+  it('uses the shared card surface and has no color stripe or picker (colors are not shown publicly)', () => {
+    renderRow();
+    const li = screen.getByRole('listitem');
+    expect(li).toHaveClass('border', 'bg-surface');
+    expect(li).not.toHaveClass('border-l-4');
+    expect(screen.queryByRole('button', { name: /Set color/ })).not.toBeInTheDocument();
+  });
 });

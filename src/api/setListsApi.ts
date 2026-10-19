@@ -2,6 +2,8 @@ import {
   BAND_LIMITS,
   BAND_TEXT,
   type BandRecord,
+  type ListAllResult,
+  type SongColorRecord,
   type SetListRows,
   type SongRecord,
 } from '../bandTypes';
@@ -19,7 +21,8 @@ import {
   updateBand,
 } from './bandsShared';
 import { runPool } from './paginate';
-import { listSongs } from './bandReads';
+import { listSongColors, listSongs } from './bandReads';
+import { deleteMyColorRows } from './songColorsApi';
 import { deleteVoteRow, listVotesByOwner, listVotesForSetList } from './songVotesApi';
 
 /** Parallelism for leave-band cleanup: a few set lists at a time, a few deletes per list. */
@@ -32,8 +35,16 @@ const CLEANUP_DELETES_AT_ONCE = 6;
  */
 export async function fetchSetListRows(setListId: string): Promise<SetListRows> {
   await requireAuth();
-  const [songs, votes] = await Promise.all([listSongs(setListId), listVotesForSetList(setListId)]);
-  return { songs, votes };
+  const [songs, votes, colors] = await Promise.all([
+    listSongs(setListId),
+    listVotesForSetList(setListId),
+    // Colors are cosmetic: if they can't be read, show the songs without them (flagged incomplete).
+    listSongColors(setListId).catch((e): ListAllResult<SongColorRecord> => {
+      console.warn('Could not load song colors', e);
+      return { items: [], incomplete: true };
+    }),
+  ]);
+  return { songs, votes, colors };
 }
 
 // ── Set lists (owner only; rows are never deleted, only archived) ──────────
@@ -152,12 +163,15 @@ export async function deleteMyContent(band: BandRecord, includeSongs: boolean): 
   await runPool(CLEANUP_LISTS_AT_ONCE, setListIds, async (setListId) => {
     const votes = await listVotesByOwner(setListId, owner);
     await runPool(CLEANUP_DELETES_AT_ONCE, votes.items, (v) => deleteVoteRow(v.songId, owner));
-    if (!includeSongs) return;
-    const songs = await listSongs(setListId);
-    await runPool(
-      CLEANUP_DELETES_AT_ONCE,
-      songs.items.filter((s) => s.owner === owner),
-      (s) => deleteQuietly(() => client.models.Song.delete({ id: s.id }), 'deleteSong'),
-    );
+    if (includeSongs) {
+      const songs = await listSongs(setListId);
+      await runPool(
+        CLEANUP_DELETES_AT_ONCE,
+        songs.items.filter((s) => s.owner === owner),
+        (s) => deleteQuietly(() => client.models.Song.delete({ id: s.id }), 'deleteSong'),
+      );
+    }
+    // Last, so a failing colors read can't skip the votes and songs above.
+    await deleteMyColorRows(setListId, owner);
   });
 }

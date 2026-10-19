@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BandRecord, MemberRecord, SetListRecord, SetListRows, SongRecord, VoteRecord } from './bandTypes';
+import type { BandRecord, MemberRecord, SetListRecord, SetListRows, SongColorRecord, SongRecord, VoteRecord } from './bandTypes';
 import { assembleBandView, assembleSetListView } from './bandViews';
 
 const OWNER = 'sub-owner';
@@ -57,6 +57,16 @@ const vote = (songId: string, owner: string, value: string): VoteRecord => ({
   bandId: 'band-1',
   setListId: 'sl-1',
   createdAt: '2026-01-03T00:00:00Z',
+});
+
+const colorRow = (songId: string, color: string, over: Partial<SongColorRecord> = {}): SongColorRecord => ({
+  songId,
+  owner: BOB,
+  bandId: 'band-1',
+  setListId: 'sl-1',
+  color,
+  createdAt: '2026-01-04T00:00:00Z',
+  ...over,
 });
 
 function bandView(over: Partial<Parameters<typeof assembleBandView>[0]> = {}) {
@@ -181,5 +191,136 @@ describe('assembleSetListView', () => {
     const view = bandView({ band: band({ setListIds: ['sl-1'], sharedSetListIds: ['sl-2'] }), setListRows: [setList()] });
     expect(assembleSetListView(view, 'sl-2', rows([], []))).toBeNull();
     expect(assembleSetListView(view, 'sl-1', rows([], []))!.shared).toBe(false);
+  });
+
+  describe('song colors', () => {
+    const withColors = (
+      songs: SongRecord[],
+      colors: SongColorRecord[] | undefined,
+      colorsIncomplete = false,
+    ): SetListRows => ({
+      songs: { items: songs, incomplete: false },
+      votes: { items: [], incomplete: false },
+      ...(colors ? { colors: { items: colors, incomplete: colorsIncomplete } } : {}),
+    });
+
+    it('exposes the valid color of each visible song', () => {
+      const view = assembleSetListView(
+        bandView(),
+        'sl-1',
+        withColors([song('a', BOB), song('b', ME)], [colorRow('a', 'red'), colorRow('b', 'cleared-not-a-color')]),
+      )!;
+      expect(view.colors).toEqual(new Map([['a', 'red']]));
+    });
+
+    it('has an empty map when the rows carry no colors at all (the public page)', () => {
+      const view = assembleSetListView(bandView(), 'sl-1', withColors([song('a', BOB)], undefined))!;
+      expect(view.colors).toEqual(new Map());
+      expect(view.myColorSongIds).toEqual(new Set());
+      expect(view.incomplete).toBe(false);
+    });
+
+    it('treats a stored "none" as no color', () => {
+      const view = assembleSetListView(bandView(), 'sl-1', withColors([song('a', BOB)], [colorRow('a', 'none')]))!;
+      expect(view.colors.has('a')).toBe(false);
+    });
+
+    it('drops colors of forged, hidden and mismatched rows', () => {
+      const hiddenBand = band({ hiddenSongIds: ['h'] });
+      const view = assembleSetListView(
+        bandView({ band: hiddenBand }),
+        'sl-1',
+        withColors(
+          [song('a', BOB), song('h', BOB), song('forged', MALLORY)],
+          [
+            colorRow('h', 'red'),
+            colorRow('forged', 'blue'),
+            colorRow('a', 'green', { setListId: 'sl-other' }),
+            colorRow('ghost', 'pink'),
+          ],
+        ),
+      )!;
+      expect(view.colors.size).toBe(0);
+    });
+
+    it('drops colors written by strangers, banned members or non-members', () => {
+      const view = assembleSetListView(
+        bandView({ band: band({ bannedSubs: [BOB] }) }),
+        'sl-1',
+        withColors(
+          [song('a', ME), song('b', ME), song('c', ME)],
+          [colorRow('a', 'red', { owner: MALLORY }), colorRow('b', 'blue', { owner: BOB }), colorRow('c', 'green', { owner: OWNER })],
+        ),
+      )!;
+      expect(view.colors).toEqual(new Map([['c', 'green']]));
+    });
+
+    it('the newest row across members wins', () => {
+      const view = assembleSetListView(
+        bandView(),
+        'sl-1',
+        withColors(
+          [song('a', BOB)],
+          [
+            colorRow('a', 'red', { owner: BOB, updatedAt: '2026-02-01T00:00:00Z' }),
+            colorRow('a', 'blue', { owner: ME, updatedAt: '2026-03-01T00:00:00Z' }),
+          ],
+        ),
+      )!;
+      expect(view.colors.get('a')).toBe('blue');
+    });
+
+    describe('myColorSongIds', () => {
+      it('holds the songs the viewing member has their own row for, including "none"', () => {
+        const view = assembleSetListView(
+          bandView(),
+          'sl-1',
+          withColors(
+            [song('a', BOB), song('b', BOB), song('c', BOB)],
+            [colorRow('a', 'red', { owner: ME }), colorRow('b', 'none', { owner: ME }), colorRow('c', 'red', { owner: BOB })],
+          ),
+        )!;
+        expect(view.myColorSongIds).toEqual(new Set(['a', 'b']));
+      });
+
+      it('is keyed by the viewing sub: another viewer sees their own rows', () => {
+        const asBob = assembleSetListView(
+          bandView({ sub: BOB, ownRow: null }),
+          'sl-1',
+          withColors([song('a', BOB), song('c', BOB)], [colorRow('a', 'red', { owner: ME }), colorRow('c', 'red', { owner: BOB })]),
+        )!;
+        expect(asBob.myColorSongIds).toEqual(new Set(['c']));
+      });
+
+      it('ignores rows for hidden or forged songs and mismatched parents', () => {
+        const view = assembleSetListView(
+          bandView({ band: band({ hiddenSongIds: ['h'] }) }),
+          'sl-1',
+          withColors(
+            [song('a', BOB), song('h', BOB), song('forged', MALLORY)],
+            [
+              colorRow('h', 'red', { owner: ME }),
+              colorRow('forged', 'red', { owner: ME }),
+              colorRow('a', 'red', { owner: ME, setListId: 'sl-other' }),
+            ],
+          ),
+        )!;
+        expect(view.myColorSongIds.size).toBe(0);
+      });
+
+      it('is empty when the caller is banned (their rows no longer count)', () => {
+        const view = assembleSetListView(
+          bandView({ band: band({ bannedSubs: [ME] }) }),
+          'sl-1',
+          withColors([song('a', BOB)], [colorRow('a', 'red', { owner: ME })]),
+        )!;
+        expect(view.myColorSongIds.size).toBe(0);
+      });
+    });
+
+    it('is incomplete when only the colors page cap was hit', () => {
+      const view = assembleSetListView(bandView(), 'sl-1', withColors([], [], true))!;
+      expect(view.incomplete).toBe(true);
+    });
   });
 });

@@ -25,7 +25,7 @@ export function PrivacyPolicyPage() {
         </li>
         <li>
           <strong>Bands:</strong> if you create or join a band, the name you choose for it, your
-          display name, the songs you suggest, your up/down votes and your account&rsquo;s internal
+          display name, the songs you suggest, your up/down votes, the colors you give songs and your account&rsquo;s internal
           user ID are stored in the cloud. Anyone who has a band&rsquo;s link or ID can read that
           band&rsquo;s set lists, members&rsquo; display names and IDs, songs and votes, and the
           list of removed members&rsquo; IDs. Vote records (an ID, the song and your up/down choice,

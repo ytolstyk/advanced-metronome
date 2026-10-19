@@ -140,17 +140,17 @@ console.log('QUERIES', Object.keys(queries).sort().join(', '));
 console.log('MUTATIONS', mutations.sort().join(', '));
 console.log('SUBSCRIPTIONS', subs.join(', ') || '(none)');
 
-for (const q of ['getBand', 'getBandInvite', 'getSetList', 'getSong', 'getVote', 'getMember', 'getMyBand', 'listMyBands', 'listMemberByBandId', 'listSongBySetList', 'listVoteBySetList'])
+for (const q of ['getBand', 'getBandInvite', 'getSetList', 'getSong', 'getVote', 'getMember', 'getMyBand', 'listMyBands', 'getSongColor', 'listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList'])
   check('G0', `query ${q} exists`, q in queries, '', true);
-for (const q of ['listBands', 'listBandInvites', 'listSetLists', 'listSongs', 'listVotes', 'listMembers'])
+for (const q of ['listBands', 'listBandInvites', 'listSetLists', 'listSongs', 'listVotes', 'listMembers', 'listSongColors'])
   check('G1b', `plain ${q} absent`, !(q in queries), '', true);
 for (const m of ['deleteBand', 'deleteSetList', 'deleteBandInvite'])
   check('G3', `mutation ${m} absent`, !mutations.includes(m), '', true);
-for (const m of ['deleteSong', 'deleteVote', 'deleteMember', 'deleteMyBand'])
+for (const m of ['deleteSong', 'deleteVote', 'deleteMember', 'deleteMyBand', 'deleteSongColor'])
   check('G0', `mutation ${m} present`, mutations.includes(m));
 check('G0', 'subscriptions absent/empty', subs.length === 0, subs.join(','));
 // No owner-partitioned query on public-read models (cross-band pivot).
-for (const q of ['listMemberByBandId', 'listSongBySetList', 'listVoteBySetList'])
+for (const q of ['listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList'])
   check('G1b', `${q} partition arg is not owner`, (queries[q] ?? [])[0] !== 'owner' && (queries[q] ?? []).length > 0, `args=${(queries[q] ?? []).join(',')}`, true);
 
 // ---------- helpers ----------
@@ -162,6 +162,7 @@ const FIELDS = {
   SetList: 'id owner bandId name archivedAt',
   Song: 'id owner bandId setListId title createdAt',
   Vote: 'songId owner value bandId setListId createdAt',
+  SongColor: 'songId owner color bandId setListId createdAt updatedAt',
 };
 const create = (u, model, input) =>
   gql(u, `mutation($input: Create${model}Input!){ create${model}(input:$input){ ${FIELDS[model]} } }`, { input });
@@ -229,6 +230,22 @@ r = await update(B, 'Vote', { songId, owner: A.sub, value: 'up' });
 check('G3', 'B cannot update A\'s vote', !r.data?.updateVote, errType(r));
 r = await gql(B, `mutation($input: DeleteVoteInput!){ deleteVote(input:$input){ songId } }`, { input: { songId, owner: A.sub } });
 check('G3', 'B cannot delete A\'s vote', !r.data?.deleteVote, errType(r));
+
+// ---------- song colors (one row per member per song; shown only if the writer is a valid member) ----------
+r = await create(B, 'SongColor', { songId, owner: A.sub, color: 'red', bandId, setListId });
+check('G2', 'B cannot create a SongColor row as A', !r.data?.createSongColor, errType(r), true);
+r = await create(B, 'SongColor', { songId, owner: B.sub, color: 'blue', bandId, setListId });
+check('G2', 'B colors a song as B', !!r.data?.createSongColor, errType(r));
+r = await update(A, 'SongColor', { songId, owner: B.sub, color: 'red' });
+check('G3', 'A cannot update B\'s SongColor row', !r.data?.updateSongColor, errType(r), true);
+r = await create(A, 'SongColor', { songId, owner: A.sub, color: 'green', bandId, setListId, updatedAt: '2999-01-01T00:00:00.000Z' });
+check('G2', 'a client-supplied updatedAt is rejected or ignored (newest-wins stays server-controlled)', !r.data?.createSongColor || !String(r.data.createSongColor.updatedAt).startsWith('2999'), errType(r), true);
+r = await update(A, 'SongColor', { songId, owner: A.sub, updatedAt: '2999-01-01T00:00:00.000Z' });
+check('G2', 'a client-supplied updatedAt on update is rejected or ignored', !r.data?.updateSongColor || !String(r.data.updateSongColor.updatedAt).startsWith('2999'), errType(r), true);
+r = await gql(A, `mutation($input: DeleteSongColorInput!){ deleteSongColor(input:$input){ songId } }`, { input: { songId, owner: B.sub } });
+check('G3', 'A cannot delete B\'s SongColor row', !r.data?.deleteSongColor, errType(r), true);
+r = await getById(A, 'SongColor', { songId, owner: B.sub });
+check('G1', 'A can read B\'s SongColor row (signed in)', !!r.data?.getSongColor, errType(r));
 
 // ---------- Band root of trust ----------
 r = await update(B, 'Band', { id: bandId, bannedSubs: [A.sub] });
@@ -360,6 +377,9 @@ r = await G(`query($s:String!){ listVoteBySetList(setListId:$s){ items{ songId }
 check('G6', 'guest can list votes by setListId', !!r.data?.listVoteBySetList, errType(r), true);
 r = await G(`query($b:String!){ listMemberByBandId(bandId:$b){ items{ owner displayName } } }`, { b: bandId });
 check('G6', 'guest can list the roster by bandId (needed to validate song authors)', (r.data?.listMemberByBandId?.items?.length ?? 0) >= 1, errType(r), true);
+
+r = await G(`query($s:String!){ listSongColorBySetList(setListId:$s){ items{ songId } } }`, { s: setListId });
+check('G6', 'guest cannot list song colors (signed-in only)', !r.data?.listSongColorBySetList, errType(r), true);
 
 // Guests never write, and never reach the private models.
 const guestWrites = [

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { SONG_COLOR_STYLES, SONG_COLOR_TINT_PERCENT } from '../../bandSongColors';
 import { SongRow } from './SongRow';
-import type { ValidSong } from '../../bandTypes';
+import type { SongColorKey, ValidSong } from '../../bandTypes';
 
 const song = (over: Partial<ValidSong> = {}): ValidSong =>
   ({
@@ -25,7 +27,7 @@ function setup(
   songOver: Partial<ValidSong> = {},
   props: Partial<React.ComponentProps<typeof SongRow>> = {},
 ) {
-  const handlers = { onVote: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn(), onHide: vi.fn() };
+  const handlers = { onVote: vi.fn(), onColor: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn(), onHide: vi.fn() };
   render(
     <ul>
       <SongRow
@@ -34,6 +36,7 @@ function setup(
         tally={{ up: 2, down: 1, score: 1 }}
         myVote={undefined}
         suggestedBy="Alice"
+        color={undefined}
         isAuthor={false}
         isOwner={false}
         isVoting={false}
@@ -182,6 +185,11 @@ describe('SongRow', () => {
       expect(screen.queryByRole('button', { name: /^(Edit|Delete|Hide) / })).not.toBeInTheDocument();
     });
 
+    it('still shows the color picker to a plain member (any member may color a song)', () => {
+      setup();
+      expect(screen.getByRole('button', { name: 'Set color for Wonderwall' })).toBeInTheDocument();
+    });
+
     it('lets the author edit and delete, but not hide', () => {
       const h = setup({}, { isAuthor: true });
       fireEvent.click(screen.getByRole('button', { name: 'Edit Wonderwall' }));
@@ -219,6 +227,90 @@ describe('SongRow', () => {
       setup({}, { isVoting: true });
       expect(screen.getByRole('button', { name: 'Upvote Wonderwall' })).toBeDisabled();
       expect(screen.getByRole('button', { name: 'Downvote Wonderwall' })).toBeDisabled();
+    });
+  });
+
+  describe('song color', () => {
+    const li = () => screen.getByRole('listitem');
+
+    it('reserves a transparent left border without a color, so colored and plain rows line up', () => {
+      setup();
+      expect(li()).toHaveClass('border-l-4', 'border-l-transparent');
+      expect(li().getAttribute('style') ?? '').not.toMatch(/border-left-color|background-color/);
+    });
+
+    it.each(Object.entries(SONG_COLOR_STYLES) as Array<[SongColorKey, { label: string; hex: string }]>)(
+      'a %s song gets a left stripe in that color',
+      (key, { hex }) => {
+        setup({}, { color: key });
+        expect(li()).toHaveClass('border-l-4');
+        expect(li()).toHaveStyle({ borderLeftColor: hex });
+      },
+    );
+
+    it.each(Object.entries(SONG_COLOR_STYLES) as Array<[SongColorKey, { label: string; hex: string }]>)(
+      'a %s song is tinted with the palette color over the card surface',
+      (key, { hex }) => {
+        setup({}, { color: key });
+        expect(li().style.backgroundColor).toBe(
+          `color-mix(in srgb, ${hex} ${SONG_COLOR_TINT_PERCENT}%, var(--color-surface))`,
+        );
+      },
+    );
+
+    it('keeps the tint subtle (8%) so muted text stays readable', () => {
+      expect(SONG_COLOR_TINT_PERCENT).toBe(8);
+    });
+
+    it('keeps the shared card surface classes with or without a color', () => {
+      setup({}, { color: 'red' });
+      expect(li()).toHaveClass('border', 'bg-surface');
+    });
+
+    it('keeps the stripe class on a colored row too (always border-l-4)', () => {
+      setup({}, { color: 'red' });
+      expect(li()).toHaveClass('border-l-4');
+    });
+
+    it('forwards a pick from the picker to onColor', async () => {
+      const user = userEvent.setup();
+      const h = setup();
+      await user.click(screen.getByRole('button', { name: /^Set color for Wonderwall/ }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Green' }));
+      expect(h.onColor).toHaveBeenCalledWith('green');
+    });
+
+    it('forwards "No color" as null, and only offers it when the song has a color', async () => {
+      const user = userEvent.setup();
+      const h = setup({}, { color: 'teal' });
+      await user.click(screen.getByRole('button', { name: /^Set color for Wonderwall/ }));
+      await user.click(await screen.findByRole('menuitem', { name: /No color/ }));
+      expect(h.onColor).toHaveBeenCalledWith(null);
+    });
+
+    it('passes the current color to the picker (check mark on that swatch)', async () => {
+      const user = userEvent.setup();
+      setup({}, { color: 'pink' });
+      await user.click(screen.getByRole('button', { name: /^Set color for Wonderwall/ }));
+      expect((await screen.findByRole('menuitem', { name: 'Pink, selected' })).querySelector('svg')).not.toBeNull();
+      expect(screen.getByRole('menuitem', { name: 'Red' }).querySelector('svg')).toBeNull();
+    });
+
+    it('announces the current color on the picker trigger', () => {
+      setup({}, { color: 'teal' });
+      expect(screen.getByRole('button', { name: 'Set color for Wonderwall, now Teal' })).toBeInTheDocument();
+    });
+
+    it('offers the picker to every member, not just the author or owner', () => {
+      setup({}, { isAuthor: false, isOwner: false });
+      expect(screen.getByRole('button', { name: 'Set color for Wonderwall' })).toBeInTheDocument();
+    });
+
+    it('colors do not interfere with the author / owner controls', () => {
+      setup({}, { color: 'blue', isAuthor: true, isOwner: true });
+      expect(screen.getByRole('button', { name: 'Edit Wonderwall' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Hide Wonderwall' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Set color for Wonderwall/ })).toBeInTheDocument();
     });
   });
 });

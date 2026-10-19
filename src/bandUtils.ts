@@ -1,10 +1,15 @@
 import {
   BAND_LIMITS,
+  NO_SONG_COLOR,
+  SONG_COLOR_KEYS,
   VOTE_INDEX_LAG_GRACE_MS,
   type BandRecord,
   type MemberRecord,
+  type PendingChoice,
   type PendingVote,
   type SetListRecord,
+  type SongColorKey,
+  type SongColorRecord,
   type SongRecord,
   type SongTally,
   type ValidMember,
@@ -297,6 +302,51 @@ export function partitionSongs(
   return { visible: valid.filter((s) => !hiddenIds.has(s.id)), hidden: valid.filter((s) => hiddenIds.has(s.id)) };
 }
 
+// ── Song colors ────────────────────────────────────────────────────────────
+
+export function isSongColorKey(value: string): value is SongColorKey {
+  return (SONG_COLOR_KEYS as readonly string[]).includes(value);
+}
+
+const colorStamp = (r: SongColorRecord): string => r.updatedAt ?? r.createdAt ?? '';
+const isNewerColorRow = (a: SongColorRecord, b: SongColorRecord): boolean =>
+  (colorStamp(a).localeCompare(colorStamp(b)) || a.owner.localeCompare(b.owner)) > 0;
+
+/** Color rows that count: the song is valid, the parents match it and the writer is a valid member. */
+function countedColorRows(rows: SongColorRecord[], songs: ValidSong[], memberSubs: Set<string>): SongColorRecord[] {
+  const songById = new Map(songs.map((s) => [s.id, s]));
+  return rows.filter((row) => {
+    const song = songById.get(row.songId);
+    return !!song && row.setListId === song.setListId && row.bandId === song.bandId && memberSubs.has(row.owner);
+  });
+}
+
+/**
+ * The shared color per song: the newest row (by server `updatedAt`, then owner for a stable tie)
+ * written by a valid member with a palette color; `none` is the newest "no color" and leaves the
+ * song uncolored. Rows from strangers, banned users or forged parents never count.
+ */
+export function resolveSongColors(
+  rows: SongColorRecord[],
+  songs: ValidSong[],
+  memberSubs: Set<string>,
+): Map<string, SongColorKey> {
+  const latest = new Map<string, SongColorRecord>();
+  for (const row of countedColorRows(rows, songs, memberSubs)) {
+    if (!isSongColorKey(row.color) && row.color !== NO_SONG_COLOR) continue;
+    const prev = latest.get(row.songId);
+    if (!prev || isNewerColorRow(row, prev)) latest.set(row.songId, row);
+  }
+  const colors = new Map<string, SongColorKey>();
+  for (const [songId, row] of latest) if (isSongColorKey(row.color)) colors.set(songId, row.color);
+  return colors;
+}
+
+/** Songs the caller has a (valid) color row for, `none` included: picks create vs update for the next write. */
+export function myColorSongIds(rows: SongColorRecord[], songs: ValidSong[], memberSubs: Set<string>, sub: string): Set<string> {
+  return new Set(countedColorRows(rows, songs, memberSubs).filter((r) => r.owner === sub).map((r) => r.songId));
+}
+
 // ── Votes ──────────────────────────────────────────────────────────────────
 
 export function isVoteValue(value: string): value is VoteValue {
@@ -367,20 +417,26 @@ export function adjustTally(
 }
 
 /**
- * Which vote to show for a song: the caller's pending choice while it is in flight, or until
- * `graceMs` after it finished when the data was fetched before that (the vote index can lag);
- * otherwise what the server says. `pending` is `undefined` when the server's answer should be used.
+ * The pending choice to trust over the server's answer: while its request is in flight, or until
+ * `graceMs` after it finished when the data was fetched before that (the index can lag). `undefined`
+ * means the server's answer should be used.
  */
+export function activePending<T>(
+  pending: PendingChoice<T> | undefined,
+  fetchedAt: number,
+  graceMs: number = VOTE_INDEX_LAG_GRACE_MS,
+): PendingChoice<T> | undefined {
+  return pending && (pending.settledAt === null || fetchedAt <= pending.settledAt + graceMs) ? pending : undefined;
+}
+
+/** Which vote to show for a song: the caller's pending choice if `activePending`, else the server's. */
 export function resolveMyVote(
   pendingVote: PendingVote | undefined,
   fetchedAt: number,
   serverMine: VoteValue | undefined,
   graceMs: number = VOTE_INDEX_LAG_GRACE_MS,
 ): { mine: VoteValue | undefined; pending: VoteValue | null | undefined } {
-  const active =
-    pendingVote && (pendingVote.settledAt === null || fetchedAt <= pendingVote.settledAt + graceMs)
-      ? pendingVote
-      : undefined;
+  const active = activePending(pendingVote, fetchedAt, graceMs);
   if (!active) return { mine: serverMine, pending: undefined };
   return { mine: active.value ?? undefined, pending: active.value };
 }

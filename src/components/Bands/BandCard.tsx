@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { dismissBand } from '../../api/bandsApi';
 import { bandPath } from '../../bandRoutes';
 import type { MyBandEntry } from '../../bandTypes';
 import { useAsyncAction } from '../../hooks/useAsyncAction';
+import { CARD_SURFACE_INTERACTIVE } from './cardStyles';
 import { InlineAlert } from './InlineAlert';
 
 interface BandCardProps {
@@ -36,7 +38,10 @@ export function BandCard({ entry, onDismissed }: BandCardProps) {
     <li>
       <Link
         to={bandPath(band.id)}
-        className="flex min-h-14 items-center justify-between gap-3 rounded-lg border border-border bg-card p-4 text-foreground no-underline transition-colors hover:bg-accent"
+        className={cn(
+          'flex min-h-14 items-center justify-between gap-3 rounded-lg p-4 text-foreground no-underline',
+          CARD_SURFACE_INTERACTIVE,
+        )}
       >
         <span className="min-w-0">
           <span className="block truncate font-medium">{band.name}</span>

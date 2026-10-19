@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useId, type ReactNode } from 'react';
 import { useAuthenticator, Authenticator } from '@aws-amplify/ui-react';
 import { Lock } from 'lucide-react';
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
@@ -48,17 +48,47 @@ interface AuthGateProps {
   className?: string;
   /** Use the compact inline variant (e.g. inside a toolbar row) */
   inline?: boolean;
+  /** Use the large, centered banner for pages that are unusable without an account. */
+  prominent?: boolean;
+  /** Headline of the prominent banner. */
+  title?: string;
 }
 
 /**
  * Renders children when authenticated. When not, shows a lock banner with a
  * "Sign In" button that opens an inline auth dialog.
  */
-export function AuthGate({ message = 'Sign in to unlock this feature', children, className, inline }: AuthGateProps) {
+export function AuthGate({
+  message = 'Sign in to unlock this feature',
+  children,
+  className,
+  inline,
+  prominent,
+  title = 'Sign in required',
+}: AuthGateProps) {
   const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
   const [open, setOpen] = useState(false);
+  const titleId = useId();
 
   if (authStatus === 'authenticated') return <>{children}</>;
+
+  const dialog = <AuthSignInDialog open={open} onOpenChange={setOpen} />;
+
+  if (prominent) {
+    return (
+      <>
+        <section className={cn('auth-gate-hero', className)} aria-labelledby={titleId}>
+          <Lock size={36} aria-hidden />
+          <h2 id={titleId} className="auth-gate-hero-title">{title}</h2>
+          <p className="auth-gate-hero-message">{message}</p>
+          <Button size="lg" onClick={() => setOpen(true)}>
+            Sign in or create an account
+          </Button>
+        </section>
+        {dialog}
+      </>
+    );
+  }
 
   return (
     <>
@@ -69,7 +99,7 @@ export function AuthGate({ message = 'Sign in to unlock this feature', children,
           Sign In
         </Button>
       </div>
-      <AuthSignInDialog open={open} onOpenChange={setOpen} />
+      {dialog}
     </>
   );
 }

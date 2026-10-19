@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { AuthGate } from '../components/AuthGate/AuthGate';
 import { BandsShell } from '../components/Bands/BandsShell';
+import { CARD_SURFACE } from '../components/Bands/cardStyles';
 import { ConfirmDialog } from '../components/Bands/ConfirmDialog';
 import { CopyShareLinkButton } from '../components/Bands/CopyShareLinkButton';
 import { InlineAlert } from '../components/Bands/InlineAlert';
@@ -19,6 +21,7 @@ import { assembleSetListView } from '../bandViews';
 import { useActionThenReload } from '../hooks/useAsyncAction';
 import { useLoader } from '../hooks/useLoader';
 import { useOptimisticVotes } from '../hooks/useOptimisticVotes';
+import { useSongColors } from '../hooks/useSongColors';
 
 type PageData =
   | { kind: 'blocked'; status: Exclude<BandLoadResult['status'], 'ok'> }
@@ -106,6 +109,7 @@ interface DetailsProps {
 function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }: DetailsProps) {
   const { isOwner } = view;
   const votes = useOptimisticVotes(list, fetchedAt);
+  const colors = useSongColors(list, fetchedAt);
   const { act, error: actionError } = useActionThenReload(reload);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [editing, setEditing] = useState<ValidSong | null>(null);
@@ -132,10 +136,11 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
       </header>
 
       {votes.error && <InlineAlert tone="error" className="mb-4">{votes.error}</InlineAlert>}
+      {colors.error && <InlineAlert tone="error" className="mb-4">{colors.error}</InlineAlert>}
       {actionError && <InlineAlert tone="error" className="mb-4">{actionError}</InlineAlert>}
       {(list.incomplete || view.incomplete) && (
         <InlineAlert tone="warning" className="mb-4">
-          This list was too long to load completely, so some members, songs or votes may be missing.
+          This list was too long to load completely, so some members, songs, votes or colors may be missing.
         </InlineAlert>
       )}
 
@@ -153,10 +158,12 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
               tally={votes.tallyFor(song.id)}
               myVote={votes.myVoteFor(song.id)}
               suggestedBy={nameOf(song.owner)}
+              color={colors.colorFor(song.id)}
               isAuthor={song.owner === view.sub}
               isOwner={isOwner}
               isVoting={votes.isVoting(song.id)}
               onVote={(value) => void votes.vote(song, value)}
+              onColor={(color) => void colors.setColor(song, color)}
               onEdit={() => setEditing(song)}
               onDelete={() => setDeleting(song)}
               onHide={() => void act(() => hideSong(view.band.id, song.id))}
@@ -170,7 +177,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
           <h2 id="hidden-heading" className="mb-2 text-lg font-semibold text-foreground">Hidden songs</h2>
           <ul className="grid gap-1.5">
             {list.hiddenSongs.map((song) => (
-              <li key={song.id} className="flex min-h-11 items-center justify-between gap-3 rounded-md bg-card px-3 py-1.5">
+              <li key={song.id} className={cn('flex min-h-11 items-center justify-between gap-3 rounded-md px-3 py-1.5', CARD_SURFACE)}>
                 <span className="min-w-0 truncate text-sm text-foreground/80">
                   {song.title} <span className="text-muted-foreground">· {nameOf(song.owner)}</span>
                 </span>

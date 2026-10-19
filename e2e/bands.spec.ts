@@ -8,15 +8,15 @@ test.describe('BandsPage (signed out)', () => {
     await page.goto('/bands');
     await expect(page.getByRole('main', { name: 'Bands' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Bands', level: 1 })).toBeVisible();
-    await expect(page.getByText('Sign in to create or join a band')).toBeVisible();
-    await expect(page.getByRole('main', { name: 'Bands' }).getByRole('button', { name: 'Sign In' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Bands are for signed-in users' })).toBeVisible();
+    await expect(page.getByRole('main', { name: 'Bands' }).getByRole('button', { name: 'Sign in or create an account' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create a band' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Join with a code' })).toHaveCount(0);
   });
 
   test('a shared join link is stripped from the URL and kept only in session storage', async ({ page }) => {
     await page.goto('/bands?join=ABCDE-FGHJK');
-    await expect(page.getByText('Sign in to create or join a band')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Bands are for signed-in users' })).toBeVisible();
     await expect(page).toHaveURL(/\/bands$/);
     const stored = await page.evaluate(() => sessionStorage.getItem('band-join-code'));
     expect(stored).toBe('ABCDE-FGHJK');

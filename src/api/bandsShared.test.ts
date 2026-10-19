@@ -41,10 +41,12 @@ import {
   toMember,
   toSetList,
   toSong,
+  toSongColor,
   toVote,
   tombstoneSetList,
   unwrap,
   updateBand,
+  upsertRow,
   withKeyLock,
   type BandRow,
 } from './bandsShared';
@@ -319,6 +321,104 @@ describe('row mappers', () => {
       createdAt: 'c',
       updatedAt: 'u2',
     });
+  });
+});
+
+describe('toSongColor', () => {
+  it('copies exactly the fields the client reads', () => {
+    const row = {
+      songId: 's',
+      owner: 'sub-x',
+      bandId: 'b',
+      setListId: 'sl',
+      color: 'red',
+      createdAt: 'c',
+      updatedAt: 'u',
+      extra: 1,
+    } as unknown as Parameters<typeof toSongColor>[0];
+    expect(toSongColor(row)).toEqual({
+      songId: 's',
+      owner: 'sub-x',
+      bandId: 'b',
+      setListId: 'sl',
+      color: 'red',
+      createdAt: 'c',
+      updatedAt: 'u',
+    });
+  });
+
+  it('passes the stored color through untouched, even a stray value (the validators judge it)', () => {
+    const row = { songId: 's', bandId: 'b', setListId: 'sl', color: 'none' } as unknown as Parameters<typeof toSongColor>[0];
+    expect(toSongColor(row).color).toBe('none');
+    expect(toSongColor({ ...row, color: 'not-a-color' } as unknown as Parameters<typeof toSongColor>[0]).color).toBe('not-a-color');
+  });
+});
+
+describe('upsertRow', () => {
+  const ops = (create: boolean[], update: boolean[]) => {
+    const log: string[] = [];
+    const next = (name: string, results: boolean[]) => {
+      let i = 0;
+      return vi.fn(async () => {
+        log.push(name);
+        return results[i++] ?? false;
+      });
+    };
+    return { create: next('create', create), update: next('update', update), log };
+  };
+
+  it('row believed absent: tries create first and stops on success', async () => {
+    const o = ops([true], []);
+    await upsertRow(o, false, 'fail');
+    expect(o.log).toEqual(['create']);
+  });
+
+  it('row believed present: tries update first and stops on success', async () => {
+    const o = ops([], [true]);
+    await upsertRow(o, true, 'fail');
+    expect(o.log).toEqual(['update']);
+  });
+
+  it('absent but actually exists: falls back to update', async () => {
+    const o = ops([false], [true]);
+    await upsertRow(o, false, 'fail');
+    expect(o.log).toEqual(['create', 'update']);
+  });
+
+  it('present but actually gone: falls back to create', async () => {
+    const o = ops([true], [false]);
+    await upsertRow(o, true, 'fail');
+    expect(o.log).toEqual(['update', 'create']);
+  });
+
+  it('covers a row that flips between the two attempts with a third try (create, update, create)', async () => {
+    const o = ops([false, true], [false]);
+    await upsertRow(o, false, 'fail');
+    expect(o.log).toEqual(['create', 'update', 'create']);
+  });
+
+  it('covers a row that flips between the two attempts with a third try (update, create, update)', async () => {
+    const o = ops([false], [false, true]);
+    await upsertRow(o, true, 'fail');
+    expect(o.log).toEqual(['update', 'create', 'update']);
+  });
+
+  it('gives up after exactly three attempts with the supplied message', async () => {
+    const absent = ops([false, false], [false]);
+    await expect(upsertRow(absent, false, 'Could not save X')).rejects.toThrow('Could not save X');
+    expect(absent.log).toEqual(['create', 'update', 'create']);
+    const present = ops([false], [false, false]);
+    await expect(upsertRow(present, true, 'Could not save X')).rejects.toThrow('Could not save X');
+    expect(present.log).toEqual(['update', 'create', 'update']);
+  });
+
+  it('propagates an error thrown by an attempt without trying the rest', async () => {
+    const create = vi.fn(async () => {
+      throw new Error('throttled');
+    });
+    const update = vi.fn(async () => true);
+    await expect(upsertRow({ create, update }, false, 'fail')).rejects.toThrow('throttled');
+    expect(update).not.toHaveBeenCalled();
   });
 });
 

@@ -1,12 +1,15 @@
 import {
+  BAND_LIMITS,
+  LIST_PAGE_SIZE,
   PUBLIC_READ_PAGES,
   type ListAllResult,
   type ReadAuthMode,
   type SetListRows,
+  type SongColorRecord,
   type SongRecord,
   type VoteRecord,
 } from '../bandTypes';
-import { bandsClient as client, toSong, toVote, unwrap } from './bandsShared';
+import { bandsClient as client, toSong, toSongColor, toVote, unwrap } from './bandsShared';
 import { listAll, pageOpts } from './paginate';
 
 /**
@@ -38,6 +41,17 @@ export async function listVotes(
     const res = await client.models.Vote.listVoteBySetList({ setListId }, pageOpts(token, authMode));
     return { items: unwrap(res, 'listVotes').map(toVote), nextToken: res.nextToken };
   }, maxPages);
+}
+
+/** A valid list has at most members x songs color rows; one page more is slack, beyond that is a junk flood. */
+const COLOR_READ_PAGES = Math.ceil((BAND_LIMITS.maxMembers * BAND_LIMITS.maxSongsPerSetList) / LIST_PAGE_SIZE) + 1;
+
+/** Raw (unvalidated) color rows by set list; pass them to `resolveSongColors`. Signed in only (no guest read rule). */
+export async function listSongColors(setListId: string): Promise<ListAllResult<SongColorRecord>> {
+  return listAll(async (token) => {
+    const res = await client.models.SongColor.listSongColorBySetList({ setListId }, pageOpts(token));
+    return { items: unwrap(res, 'listSongColors').map(toSongColor), nextToken: res.nextToken };
+  }, COLOR_READ_PAGES);
 }
 
 /**

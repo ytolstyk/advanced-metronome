@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { BAND_LIMITS, type BandView } from '../../bandTypes';
 import { setListPath } from '../../bandRoutes';
 import { buildInviteLink, formatInviteCode, isSetListShared } from '../../bandUtils';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { CARD_SURFACE_INTERACTIVE } from './cardStyles';
 import { InlineAlert } from './InlineAlert';
 import { CopyShareLinkButton } from './CopyShareLinkButton';
 import { MemberList } from './MemberList';
@@ -50,7 +52,10 @@ export function SetListsSection({
               <li key={setList.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <Link
                   to={setListPath(band.id, setList.id)}
-                  className="flex min-h-12 min-w-0 flex-1 basis-48 items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 text-foreground no-underline transition-colors hover:bg-accent"
+                  className={cn(
+                    'flex min-h-12 min-w-0 flex-1 basis-48 items-center justify-between gap-3 rounded-lg px-4 text-foreground no-underline',
+                    CARD_SURFACE_INTERACTIVE,
+                  )}
                 >
                   <span className="truncate">{setList.name}</span>
                   <span className="flex shrink-0 items-center gap-2">
