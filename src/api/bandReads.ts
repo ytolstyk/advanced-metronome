@@ -2,6 +2,8 @@ import {
   BAND_LIMITS,
   LIST_PAGE_SIZE,
   PUBLIC_READ_PAGES,
+  SONG_COLOR_KEYS,
+  type ColorLabelRecord,
   type ListAllResult,
   type ReadAuthMode,
   type SetListRows,
@@ -9,7 +11,7 @@ import {
   type SongRecord,
   type VoteRecord,
 } from '../bandTypes';
-import { bandsClient as client, toSong, toSongColor, toVote, unwrap } from './bandsShared';
+import { bandsClient as client, toColorLabel, toSong, toSongColor, toVote, unwrap } from './bandsShared';
 import { listAll, pageOpts } from './paginate';
 
 /**
@@ -52,6 +54,17 @@ export async function listSongColors(setListId: string): Promise<ListAllResult<S
     const res = await client.models.SongColor.listSongColorBySetList({ setListId }, pageOpts(token));
     return { items: unwrap(res, 'listSongColors').map(toSongColor), nextToken: res.nextToken };
   }, COLOR_READ_PAGES);
+}
+
+/** A valid band has at most members x palette colors label rows; one page more is slack, beyond that is a junk flood. */
+const LABEL_READ_PAGES = Math.ceil((BAND_LIMITS.maxMembers * SONG_COLOR_KEYS.length) / LIST_PAGE_SIZE) + 1;
+
+/** Raw (unvalidated) color label rows by band; pass them to `resolveColorLabels`. Signed in only (no guest read rule). */
+export async function listColorLabels(bandId: string): Promise<ListAllResult<ColorLabelRecord>> {
+  return listAll(async (token) => {
+    const res = await client.models.ColorLabel.listColorLabelByBand({ bandId }, pageOpts(token));
+    return { items: unwrap(res, 'listColorLabels').map(toColorLabel), nextToken: res.nextToken };
+  }, LABEL_READ_PAGES);
 }
 
 /**

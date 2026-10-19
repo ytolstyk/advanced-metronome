@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BandRecord, MemberRecord, SetListRecord, SetListRows, SongColorRecord, SongRecord, VoteRecord } from './bandTypes';
+import type { BandRecord, ColorLabelRecord, MemberRecord, SetListRecord, SetListRows, SongColorRecord, SongRecord, VoteRecord } from './bandTypes';
 import { assembleBandView, assembleSetListView } from './bandViews';
 
 const OWNER = 'sub-owner';
@@ -65,6 +65,15 @@ const colorRow = (songId: string, color: string, over: Partial<SongColorRecord> 
   bandId: 'band-1',
   setListId: 'sl-1',
   color,
+  createdAt: '2026-01-04T00:00:00Z',
+  ...over,
+});
+
+const labelRow = (color: string, label: string, over: Partial<ColorLabelRecord> = {}): ColorLabelRecord => ({
+  bandId: 'band-1',
+  color,
+  owner: BOB,
+  label,
   createdAt: '2026-01-04T00:00:00Z',
   ...over,
 });
@@ -321,6 +330,106 @@ describe('assembleSetListView', () => {
     it('is incomplete when only the colors page cap was hit', () => {
       const view = assembleSetListView(bandView(), 'sl-1', withColors([], [], true))!;
       expect(view.incomplete).toBe(true);
+    });
+  });
+  describe('color labels', () => {
+    const withLabels = (labels: ColorLabelRecord[] | undefined, labelsIncomplete = false): SetListRows => ({
+      songs: { items: [], incomplete: false },
+      votes: { items: [], incomplete: false },
+      ...(labels ? { labels: { items: labels, incomplete: labelsIncomplete } } : {}),
+    });
+
+    it('exposes the band label of each palette color', () => {
+      const view = assembleSetListView(bandView(), 'sl-1', withLabels([labelRow('red', 'Ballad'), labelRow('blue', 'Thrash')]))!;
+      expect(view.colorLabels).toEqual(new Map([['red', 'Ballad'], ['blue', 'Thrash']]));
+    });
+
+    it('has empty labels when the rows carry none at all (the public page)', () => {
+      const view = assembleSetListView(bandView(), 'sl-1', withLabels(undefined))!;
+      expect(view.colorLabels).toEqual(new Map());
+      expect(view.myLabelColors).toEqual(new Set());
+      expect(view.incomplete).toBe(false);
+    });
+
+    it('drops labels written by strangers, banned members or non-members, and from other bands', () => {
+      const view = assembleSetListView(
+        bandView({ band: band({ bannedSubs: [BOB] }) }),
+        'sl-1',
+        withLabels([
+          labelRow('red', 'Mallory', { owner: MALLORY }),
+          labelRow('blue', 'Banned', { owner: BOB }),
+          labelRow('green', 'Other band', { owner: OWNER, bandId: 'band-other' }),
+          labelRow('teal', 'Owner', { owner: OWNER }),
+        ]),
+      )!;
+      expect(view.colorLabels).toEqual(new Map([['teal', 'Owner']]));
+    });
+
+    it('hides spoofed text and non-palette colors', () => {
+      const view = assembleSetListView(
+        bandView(),
+        'sl-1',
+        withLabels([labelRow('red', 'Bal\u200blad'), labelRow('bogus', 'Nope'), labelRow('blue', ' padded ')]),
+      )!;
+      expect(view.colorLabels.size).toBe(0);
+    });
+
+    it('the newest label across members wins, and a newer empty one clears it', () => {
+      const newest = assembleSetListView(
+        bandView(),
+        'sl-1',
+        withLabels([
+          labelRow('red', 'Old', { owner: BOB, updatedAt: '2026-02-01T00:00:00Z' }),
+          labelRow('red', 'New', { owner: ME, updatedAt: '2026-03-01T00:00:00Z' }),
+        ]),
+      )!;
+      expect(newest.colorLabels.get('red')).toBe('New');
+      const cleared = assembleSetListView(
+        bandView(),
+        'sl-1',
+        withLabels([
+          labelRow('red', 'Old', { owner: BOB, updatedAt: '2026-02-01T00:00:00Z' }),
+          labelRow('red', '', { owner: ME, updatedAt: '2026-03-01T00:00:00Z' }),
+        ]),
+      )!;
+      expect(cleared.colorLabels.has('red')).toBe(false);
+    });
+
+    it('myLabelColors holds the colors the viewer has their own row for, empty ones included', () => {
+      const view = assembleSetListView(
+        bandView(),
+        'sl-1',
+        withLabels([
+          labelRow('red', 'Mine', { owner: ME }),
+          labelRow('blue', '', { owner: ME }),
+          labelRow('green', 'Bob', { owner: BOB }),
+        ]),
+      )!;
+      expect(view.myLabelColors).toEqual(new Set(['red', 'blue']));
+    });
+
+    it('myLabelColors is keyed by the viewing sub', () => {
+      const asBob = assembleSetListView(
+        bandView({ sub: BOB, ownRow: null }),
+        'sl-1',
+        withLabels([labelRow('red', 'Mine', { owner: ME }), labelRow('green', 'Bob', { owner: BOB })]),
+      )!;
+      expect(asBob.myLabelColors).toEqual(new Set(['green']));
+    });
+
+    it('labels are band-wide: they do not depend on which set list is viewed or on its songs', () => {
+      const view = assembleSetListView(bandView(), 'sl-1', withLabels([labelRow('red', 'Ballad')]))!;
+      expect(view.songs).toEqual([]);
+      expect(view.colorLabels.get('red')).toBe('Ballad');
+    });
+
+    it('is incomplete when only the labels page cap was hit', () => {
+      const view = assembleSetListView(bandView(), 'sl-1', withLabels([], true))!;
+      expect(view.incomplete).toBe(true);
+    });
+
+    it('is not incomplete when labels were fully read', () => {
+      expect(assembleSetListView(bandView(), 'sl-1', withLabels([], false))!.incomplete).toBe(false);
     });
   });
 });

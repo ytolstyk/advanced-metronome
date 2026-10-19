@@ -301,6 +301,34 @@ describe('SongRow', () => {
       expect(screen.getByRole('button', { name: 'Set color for Wonderwall, now Teal' })).toBeInTheDocument();
     });
 
+    describe('band color labels', () => {
+      const labels = new Map<SongColorKey, string>([['teal', 'Ballad'], ['red', 'Thrash']]);
+
+      it('shows the band\'s label for the song\'s color on the picker trigger', () => {
+        setup({}, { color: 'teal', colorLabels: labels });
+        const trigger = screen.getByRole('button', { name: 'Set color for Wonderwall, now Teal, Ballad' });
+        expect(trigger).toHaveTextContent('Ballad');
+      });
+
+      it('falls back to the palette name when that color has no label', () => {
+        setup({}, { color: 'green', colorLabels: labels });
+        expect(screen.getByRole('button', { name: 'Set color for Wonderwall, now Green' })).toHaveTextContent('Green');
+      });
+
+      it('passes the labels on to the picker menu, and a pick still reports the palette key', async () => {
+        const user = userEvent.setup();
+        const h = setup({}, { colorLabels: labels });
+        await user.click(screen.getByRole('button', { name: /^Set color for Wonderwall/ }));
+        await user.click(await screen.findByRole('menuitem', { name: 'Red, Thrash' }));
+        expect(h.onColor).toHaveBeenCalledWith('red');
+      });
+
+      it('does not change the stripe color', () => {
+        setup({}, { color: 'teal', colorLabels: labels });
+        expect(li()).toHaveStyle({ borderLeftColor: SONG_COLOR_STYLES.teal.hex });
+      });
+    });
+
     it('offers the picker to every member, not just the author or owner', () => {
       setup({}, { isAuthor: false, isOwner: false });
       expect(screen.getByRole('button', { name: 'Set color for Wonderwall' })).toBeInTheDocument();

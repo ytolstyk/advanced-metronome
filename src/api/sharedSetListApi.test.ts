@@ -8,6 +8,8 @@ const { m, auth } = vi.hoisted(() => ({
     Member: { get: vi.fn(), listMemberByBandId: vi.fn() },
     Song: { listSongBySetList: vi.fn() },
     Vote: { listVoteBySetList: vi.fn() },
+    SongColor: { listSongColorBySetList: vi.fn() },
+    ColorLabel: { listColorLabelByBand: vi.fn() },
     graphql: vi.fn(),
   },
   auth: { getCurrentUser: vi.fn(), fetchAuthSession: vi.fn(), fetchUserAttributes: vi.fn() },
@@ -107,7 +109,7 @@ function seedHealthy({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  for (const model of [m.Band, m.SetList, m.Member, m.Song, m.Vote]) {
+  for (const model of [m.Band, m.SetList, m.Member, m.Song, m.Vote, m.SongColor, m.ColorLabel]) {
     for (const fn of Object.values(model)) (fn as ReturnType<typeof vi.fn>).mockReset();
   }
   auth.getCurrentUser.mockReset();
@@ -129,6 +131,17 @@ describe('loadSharedSetList: happy path', () => {
     expect(res.list.tallies.get('a')).toEqual({ up: 0, down: 1, score: -1 });
     expect(res.list.incomplete).toBe(false);
     expect(res.view.incomplete).toBe(false);
+  });
+
+  it('is a public read: no colors and no color labels, and the signed-in-only models are never queried', async () => {
+    const res = await loadSharedSetList('sl-1');
+    expect(res.status).toBe('ok');
+    if (res.status !== 'ok') return;
+    expect(res.list.colors.size).toBe(0);
+    expect(res.list.colorLabels.size).toBe(0);
+    expect(res.list.myLabelColors.size).toBe(0);
+    expect(m.SongColor.listSongColorBySetList).not.toHaveBeenCalled();
+    expect(m.ColorLabel.listColorLabelByBand).not.toHaveBeenCalled();
   });
 
   it('hides forged rows: songs by non-members and votes by non-members never count', async () => {

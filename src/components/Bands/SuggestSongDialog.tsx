@@ -10,27 +10,33 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { BAND_LIMITS } from '../../bandTypes';
+import type { ColorLabels } from '../../bandSongColors';
+import { BAND_LIMITS, type SongColorKey } from '../../bandTypes';
 import { parseSongInput, type RawSongInput } from '../../bandUtils';
 import { useAsyncAction } from '../../hooks/useAsyncAction';
 import { useSongLinkAutofill } from '../../hooks/useSongLinkAutofill';
 import { InlineAlert } from './InlineAlert';
+import { SongColorChoice } from './SongColorChoice';
 
 interface SuggestSongDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Present when editing an existing song. */
   initial?: RawSongInput;
-  onSubmit: (input: RawSongInput) => Promise<void>;
+  /** `color` is only ever set for a new song (existing songs are colored from the song list). */
+  onSubmit: (input: RawSongInput, color: SongColorKey | null) => Promise<void>;
+  /** The band's names for its colors, shown in the color choice. */
+  colorLabels?: ColorLabels;
 }
 
 const EMPTY: RawSongInput = { title: '', artist: '', key: '', bpm: '', notes: '', songUrl: '', tabUrl: '' };
 
-export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit }: SuggestSongDialogProps) {
+export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit, colorLabels }: SuggestSongDialogProps) {
   const editing = initial !== undefined;
-  const ids = { title: useId(), artist: useId(), key: useId(), bpm: useId(), notes: useId(), songUrl: useId(), tabUrl: useId() };
+  const ids = { title: useId(), artist: useId(), key: useId(), bpm: useId(), notes: useId(), songUrl: useId(), tabUrl: useId(), color: useId() };
   // The parent mounts this with a key per song, so the initial values seed state once.
   const [form, setForm] = useState<RawSongInput>({ ...EMPTY, ...initial });
+  const [color, setColor] = useState<SongColorKey | null>(null);
   const { run, busy, error, setError } = useAsyncAction();
   const { status, fillFromLink, reset } = useSongLinkAutofill(setForm, initial?.songUrl);
 
@@ -50,9 +56,12 @@ export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit }: Sug
       setError(parsed.error);
       return;
     }
-    const ok = await run(() => onSubmit(form));
+    const ok = await run(() => onSubmit(form, color));
     if (!ok) return;
-    if (!editing) setForm(EMPTY);
+    if (!editing) {
+      setForm(EMPTY);
+      setColor(null);
+    }
     handleOpenChange(false);
   };
 
@@ -127,6 +136,12 @@ export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit }: Sug
               placeholder="https://tabs.ultimate-guitar.com/…"
             />
           </div>
+          {!editing && (
+            <div className="grid gap-1.5">
+              <span id={ids.color} className="text-sm font-medium leading-none">Color (optional)</span>
+              <SongColorChoice labelledBy={ids.color} value={color} labels={colorLabels} onChange={setColor} />
+            </div>
+          )}
           <div className="grid gap-1.5">
             <Label htmlFor={ids.notes}>Notes (optional)</Label>
             <textarea

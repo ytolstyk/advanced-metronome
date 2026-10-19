@@ -15,8 +15,10 @@ import {
   isBandOwner,
   isSetListShared,
   myColorSongIds,
+  myLabelColors,
   myVotes,
   partitionSongs,
+  resolveColorLabels,
   resolveSongColors,
   sanitizeDisplayName,
   sortSongsByScore,
@@ -83,6 +85,7 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
   const counted = filterCountedVotes(rows.votes.items, visible, view.memberSubs);
   const tallies = tallyVotes(counted, visible);
   const colorRows = rows.colors?.items ?? [];
+  const labelRows = rows.labels?.items ?? [];
   return {
     setList,
     shared: isSetListShared(view.band, setListId),
@@ -90,9 +93,15 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
     tallies,
     colors: resolveSongColors(colorRows, visible, view.memberSubs),
     myColorSongIds: myColorSongIds(colorRows, visible, view.memberSubs, view.sub),
+    colorLabels: resolveColorLabels(labelRows, view.band, view.memberSubs),
+    myLabelColors: myLabelColors(labelRows, view.band, view.memberSubs, view.sub),
     myVotes: myVotes(counted, view.sub),
     // The Hidden section is owner-only; everyone else doesn't need the second list.
     hiddenSongs: view.isOwner ? hidden : [],
-    incomplete: rows.songs.incomplete || rows.votes.incomplete || (rows.colors?.incomplete ?? false),
+    incomplete:
+      rows.songs.incomplete ||
+      rows.votes.incomplete ||
+      (rows.colors?.incomplete ?? false) ||
+      (rows.labels?.incomplete ?? false),
   };
 }

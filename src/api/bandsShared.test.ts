@@ -41,6 +41,7 @@ import {
   toMember,
   toSetList,
   toSong,
+  toColorLabel,
   toSongColor,
   toVote,
   tombstoneSetList,
@@ -351,6 +352,27 @@ describe('toSongColor', () => {
     const row = { songId: 's', bandId: 'b', setListId: 'sl', color: 'none' } as unknown as Parameters<typeof toSongColor>[0];
     expect(toSongColor(row).color).toBe('none');
     expect(toSongColor({ ...row, color: 'not-a-color' } as unknown as Parameters<typeof toSongColor>[0]).color).toBe('not-a-color');
+  });
+});
+
+describe('toColorLabel', () => {
+  type Row = Parameters<typeof toColorLabel>[0];
+
+  it('copies exactly the fields the client reads', () => {
+    const row = { bandId: 'b', color: 'red', owner: 'sub-x', label: 'Ballad', createdAt: 'c', updatedAt: 'u', extra: 1 } as unknown as Row;
+    expect(toColorLabel(row)).toEqual({ bandId: 'b', color: 'red', owner: 'sub-x', label: 'Ballad', createdAt: 'c', updatedAt: 'u' });
+    expect(Object.keys(toColorLabel(row)).sort()).toEqual(['bandId', 'color', 'createdAt', 'label', 'owner', 'updatedAt']);
+  });
+
+  it('passes stray values through untouched (the validators judge them)', () => {
+    const row = { bandId: 'b', color: 'not-a-color', owner: 'o', label: 'Bal\u200blad' } as unknown as Row;
+    const out = toColorLabel(row);
+    expect(out.color).toBe('not-a-color');
+    expect(out.label).toBe('Bal\u200blad');
+  });
+
+  it('keeps an empty (cleared) label', () => {
+    expect(toColorLabel({ bandId: 'b', color: 'red', owner: 'o', label: '' } as unknown as Row).label).toBe('');
   });
 });
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { BandRecord, BandView, SongColorRecord, SongRecord, VoteRecord, ValidMember, ValidSetList } from '../bandTypes';
+import type { BandRecord, BandView, ColorLabelRecord, SongColorRecord, SongRecord, VoteRecord, ValidMember, ValidSetList } from '../bandTypes';
 import { SONG_COLOR_STYLES } from '../bandSongColors';
 import userEvent from '@testing-library/user-event';
 
@@ -17,6 +17,7 @@ vi.mock('../api/bandsApi', () => ({
 }));
 vi.mock('../api/songVotesApi', () => ({ castVote: vi.fn() }));
 vi.mock('../api/songColorsApi', () => ({ setSongColor: vi.fn() }));
+vi.mock('../api/colorLabelsApi', () => ({ fetchColorLabelRows: vi.fn(), setColorLabel: vi.fn() }));
 vi.mock('../api/setListsApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/setListsApi')>()),
   fetchSetListRows: vi.fn(),
@@ -30,6 +31,7 @@ import { hideSong, loadBandView, unhideSong } from '../api/bandsApi';
 import { deleteSong, fetchSetListRows, suggestSong } from '../api/setListsApi';
 import { castVote } from '../api/songVotesApi';
 import { setSongColor } from '../api/songColorsApi';
+import { fetchColorLabelRows, setColorLabel } from '../api/colorLabelsApi';
 
 const ME = 'sub-me';
 const BOB = 'sub-bob';
@@ -106,13 +108,24 @@ const colorRow = (songId: string, color: string, owner = BOB, updatedAt = '2026-
   updatedAt,
 });
 
+const labelRow = (color: string, label: string, owner = BOB, updatedAt = '2026-01-04T00:00:00Z'): ColorLabelRecord => ({
+  bandId: 'band-1',
+  color,
+  owner,
+  label,
+  createdAt: '2026-01-04T00:00:00Z',
+  updatedAt,
+});
+
 function setup(
   view: BandView = makeView(),
   songs = [song('a', BOB, '2026-01-02T00:00:00Z'), song('b', ME, '2026-01-02T00:00:01Z')],
   votes = [vote('b', BOB, 'up')],
   colors: SongColorRecord[] = [],
+  labels: ColorLabelRecord[] = [],
 ) {
   vi.mocked(loadBandView).mockResolvedValue({ status: 'ok', view });
+  vi.mocked(fetchColorLabelRows).mockResolvedValue(emptyPage(labels));
   vi.mocked(fetchSetListRows).mockResolvedValue({ songs: emptyPage(songs), votes: emptyPage(votes), colors: emptyPage(colors) });
   return render(
     <MemoryRouter initialEntries={['/bands/band-1/setlists/sl-1']}>
@@ -128,6 +141,7 @@ const score = (title: string) => within(row(title)).getByLabelText(/^Score/);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(fetchColorLabelRows).mockResolvedValue(emptyPage([]));
 });
 
 describe('SetListPage', () => {
@@ -542,6 +556,287 @@ describe('SetListPage', () => {
       setup();
       await screen.findByText('Song a');
       expect(screen.queryByText(/too long to load completely/)).not.toBeInTheDocument();
+    });
+  });
+  describe('color labels', () => {
+    const user = () => userEvent.setup();
+    const openLabels = async (u: ReturnType<typeof userEvent.setup>) => {
+      await u.click(screen.getByRole('button', { name: 'Color labels' }));
+      return screen.findByRole('dialog');
+    };
+    const labelInput = (name: string) => screen.getByLabelText(`${name} label`);
+
+    it('loads the band\'s labels for this band alongside the set list', async () => {
+      setup();
+      await screen.findByText('Song a');
+      expect(fetchColorLabelRows).toHaveBeenCalledWith('band-1');
+    });
+
+    it('shows the band label for a song\'s color on its picker trigger', async () => {
+      setup(makeView(), undefined, undefined, [colorRow('a', 'red')], [labelRow('red', 'Ballad')]);
+      await screen.findByText('Song a');
+      const trigger = within(row('Song a')).getByRole('button', { name: 'Set color for Song a, now Red, Ballad' });
+      expect(trigger).toHaveTextContent('Ballad');
+    });
+
+    it('uses the palette name for a colored song whose color has no label', async () => {
+      setup(makeView(), undefined, undefined, [colorRow('a', 'red')], [labelRow('blue', 'Thrash')]);
+      await screen.findByText('Song a');
+      expect(within(row('Song a')).getByRole('button', { name: 'Set color for Song a, now Red' })).toHaveTextContent('Red');
+    });
+
+    it('shows labels in the picker menu', async () => {
+      setup(makeView(), undefined, undefined, [], [labelRow('blue', 'Thrash')]);
+      await screen.findByText('Song a');
+      const u = user();
+      await u.click(within(row('Song a')).getByRole('button', { name: 'Set color for Song a' }));
+      expect(await screen.findByRole('menuitem', { name: 'Blue, Thrash' })).toBeInTheDocument();
+    });
+
+    it('ignores labels from non-members and shows the newest valid one', async () => {
+      setup(makeView(), undefined, undefined, [colorRow('a', 'red')], [
+        labelRow('red', 'Hacked', 'sub-mallory', '2026-05-01T00:00:00Z'),
+        labelRow('red', 'Old', BOB, '2026-02-01T00:00:00Z'),
+        labelRow('red', 'Newest', ME, '2026-03-01T00:00:00Z'),
+      ]);
+      await screen.findByText('Song a');
+      expect(within(row('Song a')).getByRole('button', { name: 'Set color for Song a, now Red, Newest' })).toBeInTheDocument();
+    });
+
+    it('hides labels with spoofed text', async () => {
+      setup(makeView(), undefined, undefined, [colorRow('a', 'red')], [labelRow('red', 'Bal\u200blad')]);
+      await screen.findByText('Song a');
+      expect(within(row('Song a')).getByRole('button', { name: 'Set color for Song a, now Red' })).toBeInTheDocument();
+    });
+
+    it('a label read that degraded (incomplete) still shows the songs and flags the list as possibly incomplete', async () => {
+      vi.mocked(loadBandView).mockResolvedValue({ status: 'ok', view: makeView() });
+      vi.mocked(fetchSetListRows).mockResolvedValue({
+        songs: emptyPage([song('a', BOB, '2026-01-02T00:00:00Z')]),
+        votes: emptyPage([]),
+        colors: emptyPage([]),
+      });
+      vi.mocked(fetchColorLabelRows).mockResolvedValue({ items: [], incomplete: true });
+      render(
+        <MemoryRouter initialEntries={['/bands/band-1/setlists/sl-1']}>
+          <Routes>
+            <Route path="/bands/:bandId/setlists/:setListId" element={<SetListPage />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      expect(await screen.findByText('Song a')).toBeInTheDocument();
+      expect(
+        screen.getByText('This list was too long to load completely, so some members, songs, votes or colors may be missing.'),
+      ).toBeInTheDocument();
+    });
+
+    describe('Color labels dialog', () => {
+      it('has a "Color labels" button for every member', async () => {
+        setup();
+        await screen.findByText('Song a');
+        expect(screen.getByRole('button', { name: 'Color labels' })).toBeInTheDocument();
+      });
+
+      it('opens seeded with the band\'s labels', async () => {
+        setup(makeView(), undefined, undefined, [], [labelRow('red', 'Ballad'), labelRow('blue', 'Thrash')]);
+        await screen.findByText('Song a');
+        const u = user();
+        await openLabels(u);
+        expect(screen.getByRole('heading', { name: 'Color labels' })).toBeInTheDocument();
+        expect(labelInput('Red')).toHaveValue('Ballad');
+        expect(labelInput('Blue')).toHaveValue('Thrash');
+        expect(labelInput('Green')).toHaveValue('');
+      });
+
+      it('saving a new label writes it for the band with no row of mine yet, shows it at once and closes', async () => {
+        vi.mocked(setColorLabel).mockResolvedValue(undefined);
+        setup();
+        await screen.findByText('Song a');
+        const u = user();
+        await openLabels(u);
+        fireEvent.change(labelInput('Red'), { target: { value: 'Ballad' } });
+        await u.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(setColorLabel).toHaveBeenCalledTimes(1));
+        expect(setColorLabel).toHaveBeenCalledWith('band-1', 'red', 'Ballad', false);
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      });
+
+      it('a label shows on a colored song right after saving', async () => {
+        vi.mocked(setColorLabel).mockResolvedValue(undefined);
+        setup(makeView(), undefined, undefined, [colorRow('a', 'red')]);
+        await screen.findByText('Song a');
+        const u = user();
+        await openLabels(u);
+        fireEvent.change(labelInput('Red'), { target: { value: 'Ballad' } });
+        await u.click(screen.getByRole('button', { name: 'Save' }));
+        expect(await within(row('Song a')).findByRole('button', { name: 'Set color for Song a, now Red, Ballad' })).toBeInTheDocument();
+      });
+
+      it('renaming a label I already wrote tells the API my row exists', async () => {
+        vi.mocked(setColorLabel).mockResolvedValue(undefined);
+        setup(makeView(), undefined, undefined, [], [labelRow('red', 'Ballad', ME)]);
+        await screen.findByText('Song a');
+        const u = user();
+        await openLabels(u);
+        fireEvent.change(labelInput('Red'), { target: { value: 'Slow' } });
+        await u.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(setColorLabel).toHaveBeenCalledTimes(1));
+        expect(setColorLabel).toHaveBeenCalledWith('band-1', 'red', 'Slow', true);
+      });
+
+      it('renaming a label someone else wrote creates my own row (exists = false)', async () => {
+        vi.mocked(setColorLabel).mockResolvedValue(undefined);
+        setup(makeView(), undefined, undefined, [], [labelRow('red', 'Ballad', BOB)]);
+        await screen.findByText('Song a');
+        const u = user();
+        await openLabels(u);
+        fireEvent.change(labelInput('Red'), { target: { value: 'Slow' } });
+        await u.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(setColorLabel).toHaveBeenCalledTimes(1));
+        expect(setColorLabel).toHaveBeenCalledWith('band-1', 'red', 'Slow', false);
+      });
+
+      it('clearing a label writes "" for just that color', async () => {
+        vi.mocked(setColorLabel).mockResolvedValue(undefined);
+        setup(makeView(), undefined, undefined, [], [labelRow('red', 'Ballad', ME), labelRow('blue', 'Thrash', ME)]);
+        await screen.findByText('Song a');
+        const u = user();
+        await openLabels(u);
+        fireEvent.change(labelInput('Red'), { target: { value: '' } });
+        await u.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(setColorLabel).toHaveBeenCalledTimes(1));
+        expect(setColorLabel).toHaveBeenCalledWith('band-1', 'red', '', true);
+      });
+
+      it('saving without edits writes nothing, closes, and still reloads', async () => {
+        setup(makeView(), undefined, undefined, [], [labelRow('red', 'Ballad')]);
+        await screen.findByText('Song a');
+        const u = user();
+        await openLabels(u);
+        await u.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(setColorLabel).not.toHaveBeenCalled();
+        await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+      });
+
+      it('reloads the list after saving', async () => {
+        vi.mocked(setColorLabel).mockResolvedValue(undefined);
+        setup();
+        await screen.findByText('Song a');
+        const u = user();
+        await openLabels(u);
+        fireEvent.change(labelInput('Red'), { target: { value: 'Ballad' } });
+        await u.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+        expect(fetchColorLabelRows).toHaveBeenCalledTimes(2);
+      });
+
+      it('a failed save keeps the dialog open with the error, rolls the label back, and still reloads', async () => {
+        vi.mocked(setColorLabel).mockRejectedValue(new Error('Could not save the color label. Please try again.'));
+        setup(makeView(), undefined, undefined, [colorRow('a', 'red')]);
+        await screen.findByText('Song a');
+        const u = user();
+        await openLabels(u);
+        fireEvent.change(labelInput('Red'), { target: { value: 'Ballad' } });
+        await u.click(screen.getByRole('button', { name: 'Save' }));
+        expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(
+          'Could not save the color label. Please try again.',
+        );
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+        expect(labelInput('Red')).toHaveValue('Ballad');
+        await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+        // the modal hides the page from the accessibility tree, hence `hidden`
+        expect(within(row('Song a')).getByRole('button', { name: 'Set color for Song a, now Red', hidden: true })).toBeInTheDocument();
+      });
+
+      it('Cancel closes without writing', async () => {
+        setup();
+        await screen.findByText('Song a');
+        const u = user();
+        await openLabels(u);
+        fireEvent.change(labelInput('Red'), { target: { value: 'Ballad' } });
+        await u.click(screen.getByRole('button', { name: 'Cancel' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(setColorLabel).not.toHaveBeenCalled();
+      });
+
+      it('names the band in the dialog', async () => {
+        setup();
+        await screen.findByText('Song a');
+        await openLabels(user());
+        expect(screen.getByText(/Name the colors for The Band/)).toBeInTheDocument();
+      });
+    });
+
+    describe('suggesting a song with a color', () => {
+      const openSuggest = async (title: string) => {
+        fireEvent.click(screen.getByRole('button', { name: 'Suggest a song' }));
+        fireEvent.change(await screen.findByLabelText('Title'), { target: { value: title } });
+      };
+
+      it('shows the band\'s labels in the dialog\'s color choice', async () => {
+        setup(makeView(), undefined, undefined, [], [labelRow('red', 'Ballad')]);
+        await screen.findByText('Song a');
+        fireEvent.click(screen.getByRole('button', { name: 'Suggest a song' }));
+        expect(await screen.findByRole('radio', { name: 'Red, Ballad' })).toBeInTheDocument();
+      });
+
+      it('colors the new song with the chosen color after it is created (no row of mine yet)', async () => {
+        const created = song('new', ME, '2026-01-05T00:00:00Z');
+        vi.mocked(suggestSong).mockResolvedValue(created);
+        vi.mocked(setSongColor).mockResolvedValue(undefined);
+        setup();
+        await screen.findByText('Song a');
+        await openSuggest('Wonderwall');
+        fireEvent.click(screen.getByRole('radio', { name: 'Blue' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+        await waitFor(() => expect(setSongColor).toHaveBeenCalledTimes(1));
+        expect(setSongColor).toHaveBeenCalledWith(created, 'blue', false);
+        expect(vi.mocked(suggestSong).mock.calls[0][2]).toMatchObject({ title: 'Wonderwall' });
+      });
+
+      it('does not write a color when none was chosen', async () => {
+        vi.mocked(suggestSong).mockResolvedValue(song('new', ME, '2026-01-05T00:00:00Z'));
+        setup();
+        await screen.findByText('Song a');
+        await openSuggest('Wonderwall');
+        fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+        await waitFor(() => expect(suggestSong).toHaveBeenCalled());
+        await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+        expect(setSongColor).not.toHaveBeenCalled();
+      });
+
+      it('does not write a color when the song could not be created', async () => {
+        vi.mocked(suggestSong).mockRejectedValue(new Error('This set list is full (100 songs)'));
+        setup();
+        await screen.findByText('Song a');
+        await openSuggest('One more');
+        fireEvent.click(screen.getByRole('radio', { name: 'Blue' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+        expect(await screen.findByText('This set list is full (100 songs)')).toBeInTheDocument();
+        expect(setSongColor).not.toHaveBeenCalled();
+      });
+
+      it('a failed color write does not fail the suggestion: the dialog closes and the page shows the error', async () => {
+        vi.mocked(suggestSong).mockResolvedValue(song('new', ME, '2026-01-05T00:00:00Z'));
+        vi.mocked(setSongColor).mockRejectedValue(new Error('Could not save the song color. Please try again.'));
+        setup();
+        await screen.findByText('Song a');
+        await openSuggest('Wonderwall');
+        fireEvent.click(screen.getByRole('radio', { name: 'Blue' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(await screen.findByRole('alert')).toHaveTextContent('Could not save the song color. Please try again.');
+        await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+      });
+
+      it('editing a song offers no color choice', async () => {
+        setup();
+        await screen.findByText('Song b');
+        fireEvent.click(within(row('Song b')).getByRole('button', { name: 'Edit Song b' }));
+        expect(await screen.findByRole('heading', { name: 'Edit song' })).toBeInTheDocument();
+        expect(screen.queryByText('Color (optional)')).not.toBeInTheDocument();
+      });
     });
   });
 });

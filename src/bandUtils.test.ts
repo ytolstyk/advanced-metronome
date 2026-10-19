@@ -4,6 +4,7 @@ import {
   SONG_COLOR_KEYS,
   VOTE_INDEX_LAG_GRACE_MS,
   type BandRecord,
+  type ColorLabelRecord,
   type MemberRecord,
   type PendingChoice,
   type PendingVote,
@@ -29,6 +30,7 @@ import {
   isSongColorKey,
   isVoteValue,
   myColorSongIds,
+  myLabelColors,
   myVotes,
   normalizeHttpUrl,
   normalizeInviteCode,
@@ -36,8 +38,10 @@ import {
   partitionSongs,
   requireDisplayName,
   requireName,
+  resolveColorLabels,
   resolveMyVote,
   resolveSongColors,
+  sanitizeColorLabel,
   sanitizeDisplayName,
   sanitizeName,
   sanitizeNotes,
@@ -1233,6 +1237,273 @@ describe('myColorSongIds', () => {
 
   it('does not depend on which row is newest across owners', () => {
     expect(mine([colorRow('s3', 'red', { owner: CAT, updatedAt: '2026-09-01T00:00:00Z' })])).toEqual(new Set());
+  });
+});
+
+describe('sanitizeColorLabel', () => {
+  it('keeps clean text as is', () => {
+    expect(sanitizeColorLabel('Ballad')).toBe('Ballad');
+    expect(sanitizeColorLabel('Fast thrash')).toBe('Fast thrash');
+  });
+
+  it('trims and collapses whitespace', () => {
+    expect(sanitizeColorLabel('  Fast \t\n  thrash  ')).toBe('Fast thrash');
+  });
+
+  it('strips zero-width and bidi characters', () => {
+    expect(sanitizeColorLabel('Bal​lad‮')).toBe('Ballad');
+  });
+
+  it('returns an empty string when nothing is left (a cleared label)', () => {
+    expect(sanitizeColorLabel('')).toBe('');
+    expect(sanitizeColorLabel('   ​ ')).toBe('');
+  });
+
+  it('clamps to the colorLabelMax limit (20 characters)', () => {
+    expect(BAND_LIMITS.colorLabelMax).toBe(20);
+    expect(sanitizeColorLabel('x'.repeat(50))).toBe('x'.repeat(20));
+  });
+
+  it('counts an emoji as one character and never splits it', () => {
+    const label = sanitizeColorLabel('\u{1F3B8}'.repeat(25));
+    expect(Array.from(label)).toHaveLength(20);
+    expect(label).toBe('\u{1F3B8}'.repeat(20));
+  });
+
+  it('does not leave a trailing space where the clamp cut between words', () => {
+    const label = sanitizeColorLabel(`${'a'.repeat(19)} bbb`);
+    expect(label).toBe('a'.repeat(19));
+  });
+
+  it('is idempotent', () => {
+    const once = sanitizeColorLabel('  Fast   thrash​ ');
+    expect(sanitizeColorLabel(once)).toBe(once);
+  });
+});
+
+describe('resolveColorLabels / myLabelColors', () => {
+  const b = band({ bannedSubs: [] });
+  const w = world(b, [member(BOB), member(CAT)], [setList()], []);
+  const labelRow = (color: string, label: string, over: Partial<ColorLabelRecord> = {}): ColorLabelRecord => ({
+    bandId: 'band-1',
+    color,
+    owner: BOB,
+    label,
+    createdAt: '2026-02-01T00:00:00Z',
+    ...over,
+  });
+  const resolve = (rows: ColorLabelRecord[], bnd = b, subs = w.subs) => resolveColorLabels(rows, bnd, subs);
+  const mine = (rows: ColorLabelRecord[], sub = BOB, bnd = b, subs = w.subs) => myLabelColors(rows, bnd, subs, sub);
+
+  describe('resolveColorLabels', () => {
+    it('is empty for no rows', () => {
+      expect(resolve([]).size).toBe(0);
+    });
+
+    it('maps each labeled palette color to its label', () => {
+      expect(resolve([labelRow('red', 'Ballad'), labelRow('blue', 'Fast thrash')])).toEqual(
+        new Map([['red', 'Ballad'], ['blue', 'Fast thrash']]),
+      );
+    });
+
+    it('leaves colors without a row out of the map', () => {
+      expect(resolve([labelRow('red', 'Ballad')]).has('blue')).toBe(false);
+    });
+
+    it('counts the band owner as a member', () => {
+      expect(resolve([labelRow('red', 'Boss', { owner: OWNER })]).get('red')).toBe('Boss');
+    });
+
+    describe('who counts', () => {
+      it('ignores strangers (not a member of the band)', () => {
+        expect(resolve([labelRow('red', 'Hacked', { owner: MALLORY })]).size).toBe(0);
+      });
+
+      it('a stranger\'s newer row cannot shadow or clear a member\'s label', () => {
+        const labels = resolve([
+          labelRow('red', 'Ballad', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+          labelRow('red', '', { owner: MALLORY, updatedAt: '2026-04-01T00:00:00Z' }),
+          labelRow('red', 'Spam', { owner: MALLORY, updatedAt: '2026-05-01T00:00:00Z' }),
+        ]);
+        expect(labels.get('red')).toBe('Ballad');
+      });
+
+      it('ignores banned members (they are not in memberSubs)', () => {
+        const banBand = band({ bannedSubs: [CAT] });
+        const banned = world(banBand, [member(BOB), member(CAT)], [setList()], []);
+        const labels = resolve(
+          [
+            labelRow('red', 'Banned', { owner: CAT, updatedAt: '2026-05-01T00:00:00Z' }),
+            labelRow('red', 'Member', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+          ],
+          banBand,
+          banned.subs,
+        );
+        expect(labels.get('red')).toBe('Member');
+      });
+
+      it('uses the explicit memberSubs argument', () => {
+        expect(resolve([labelRow('red', 'Ballad')], b, new Set([CAT])).size).toBe(0);
+        expect(resolve([labelRow('red', 'Ballad')], b, new Set([BOB])).get('red')).toBe('Ballad');
+      });
+    });
+
+    describe('rows that never count', () => {
+      it('ignores rows from another band', () => {
+        expect(resolve([labelRow('red', 'Elsewhere', { bandId: 'band-other' })]).size).toBe(0);
+      });
+
+      it('a newer row of another band does not shadow this band\'s label', () => {
+        const labels = resolve([
+          labelRow('red', 'Ours', { updatedAt: '2026-03-01T00:00:00Z' }),
+          labelRow('red', 'Theirs', { owner: CAT, bandId: 'band-other', updatedAt: '2026-04-01T00:00:00Z' }),
+        ]);
+        expect(labels.get('red')).toBe('Ours');
+      });
+
+      it.each(['none', 'Red', 'magenta', '', '__proto__', 'constructor'])('ignores the non-palette color %j', (color) => {
+        expect(resolve([labelRow(color, 'Whatever')]).size).toBe(0);
+      });
+
+      it.each([
+        ['zero-width characters', 'Bal​lad'],
+        ['bidi override', 'Ballad‮'],
+        ['leading/trailing padding', ' Ballad '],
+        ['internal double spaces', 'Fast  thrash'],
+        ['a tab', 'Fast\tthrash'],
+        ['a newline', 'Fast\nthrash'],
+        ['more than 20 characters', 'x'.repeat(21)],
+      ])('hides (does not repair) a label with %s', (_name, label) => {
+        expect(resolve([labelRow('red', label)]).size).toBe(0);
+      });
+
+      it('accepts a label of exactly 20 characters', () => {
+        expect(resolve([labelRow('red', 'x'.repeat(20))]).get('red')).toBe('x'.repeat(20));
+      });
+
+      it('a spoofed newer row does not shadow an older clean label (it is dropped before comparing)', () => {
+        const labels = resolve([
+          labelRow('red', 'Ballad', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+          labelRow('red', 'Bal​lad', { owner: CAT, updatedAt: '2026-03-02T00:00:00Z' }),
+        ]);
+        expect(labels.get('red')).toBe('Ballad');
+      });
+    });
+
+    describe('newest row wins', () => {
+      it('keeps the latest row by updatedAt across members, regardless of row order', () => {
+        const older = labelRow('red', 'Old', { owner: CAT, updatedAt: '2026-03-01T00:00:00Z' });
+        const newer = labelRow('red', 'New', { owner: BOB, updatedAt: '2026-03-02T00:00:00Z' });
+        expect(resolve([older, newer]).get('red')).toBe('New');
+        expect(resolve([newer, older]).get('red')).toBe('New');
+      });
+
+      it('prefers updatedAt over createdAt when both are present', () => {
+        const labels = resolve([
+          labelRow('red', 'Edited', { owner: BOB, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-03-05T00:00:00Z' }),
+          labelRow('red', 'Created', { owner: CAT, createdAt: '2026-03-01T00:00:00Z' }),
+        ]);
+        expect(labels.get('red')).toBe('Edited');
+      });
+
+      it('falls back to createdAt when updatedAt is absent', () => {
+        const labels = resolve([
+          labelRow('red', 'A', { owner: BOB, createdAt: '2026-03-01T00:00:00Z' }),
+          labelRow('red', 'B', { owner: CAT, createdAt: '2026-03-05T00:00:00Z' }),
+        ]);
+        expect(labels.get('red')).toBe('B');
+      });
+
+      it('breaks equal stamps by owner (greater owner wins), regardless of row order', () => {
+        const a = labelRow('red', 'FromBob', { owner: BOB });
+        const c = labelRow('red', 'FromCat', { owner: CAT });
+        expect(CAT.localeCompare(BOB)).toBeGreaterThan(0);
+        expect(resolve([a, c]).get('red')).toBe('FromCat');
+        expect(resolve([c, a]).get('red')).toBe('FromCat');
+      });
+
+      it('an empty newest label clears the color even if an older member named it', () => {
+        const labels = resolve([
+          labelRow('red', 'Ballad', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+          labelRow('red', '', { owner: CAT, updatedAt: '2026-03-02T00:00:00Z' }),
+        ]);
+        expect(labels.has('red')).toBe(false);
+      });
+
+      it('an older empty label does not hide a newer label from another member', () => {
+        const labels = resolve([
+          labelRow('red', '', { owner: CAT, updatedAt: '2026-03-01T00:00:00Z' }),
+          labelRow('red', 'Ballad', { owner: BOB, updatedAt: '2026-03-02T00:00:00Z' }),
+        ]);
+        expect(labels.get('red')).toBe('Ballad');
+      });
+
+      it('a member\'s own re-edit replaces their earlier row for the same color', () => {
+        const labels = resolve([
+          labelRow('red', 'v1', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+          labelRow('red', 'v2', { owner: BOB, updatedAt: '2026-03-02T00:00:00Z' }),
+        ]);
+        expect(labels.get('red')).toBe('v2');
+      });
+
+      it('resolves each color independently', () => {
+        const labels = resolve([
+          labelRow('red', 'RedBob', { owner: BOB, updatedAt: '2026-03-02T00:00:00Z' }),
+          labelRow('red', 'RedCat', { owner: CAT, updatedAt: '2026-03-01T00:00:00Z' }),
+          labelRow('blue', 'BlueBob', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' }),
+          labelRow('blue', 'BlueCat', { owner: CAT, updatedAt: '2026-03-02T00:00:00Z' }),
+        ]);
+        expect(labels).toEqual(new Map([['red', 'RedBob'], ['blue', 'BlueCat']]));
+      });
+    });
+  });
+
+  describe('myLabelColors', () => {
+    it('is empty for no rows', () => {
+      expect(mine([]).size).toBe(0);
+    });
+
+    it('returns the colors the caller has a row for', () => {
+      expect(mine([labelRow('red', 'A'), labelRow('blue', 'B'), labelRow('green', 'C', { owner: CAT })])).toEqual(
+        new Set(['red', 'blue']),
+      );
+    });
+
+    it('includes colors whose own row is empty (a cleared label still exists)', () => {
+      expect(mine([labelRow('red', '')])).toEqual(new Set(['red']));
+    });
+
+    it('does not depend on which row is newest across members', () => {
+      expect(mine([labelRow('red', 'Theirs', { owner: CAT, updatedAt: '2026-09-01T00:00:00Z' })])).toEqual(new Set());
+      expect(
+        mine([
+          labelRow('red', 'Mine', { owner: BOB, updatedAt: '2026-01-01T00:00:00Z' }),
+          labelRow('red', 'Theirs', { owner: CAT, updatedAt: '2026-09-01T00:00:00Z' }),
+        ]),
+      ).toEqual(new Set(['red']));
+    });
+
+    it('is keyed by the given sub', () => {
+      const rows = [labelRow('red', 'A', { owner: BOB }), labelRow('blue', 'B', { owner: CAT })];
+      expect(mine(rows, CAT)).toEqual(new Set(['blue']));
+    });
+
+    it('excludes rows of another band, non-palette colors and spoofed text', () => {
+      expect(
+        mine([
+          labelRow('red', 'A', { bandId: 'band-other' }),
+          labelRow('bogus', 'B'),
+          labelRow('blue', 'Bal​lad'),
+          labelRow('green', 'x'.repeat(21)),
+        ]).size,
+      ).toBe(0);
+    });
+
+    it('is empty when the caller is not a valid member (e.g. banned)', () => {
+      const banBand = band({ bannedSubs: [BOB] });
+      const banned = world(banBand, [member(BOB), member(CAT)], [setList()], []);
+      expect(mine([labelRow('red', 'A')], BOB, banBand, banned.subs).size).toBe(0);
+    });
   });
 });
 

@@ -22,4 +22,9 @@ describe('PrivacyPolicyPage', () => {
     render(<PrivacyPolicyPage />);
     expect(screen.getAllByRole('heading', { level: 2 }).length).toBeGreaterThan(0);
   });
+
+  it('discloses that band color names are stored and that any member can change them', () => {
+    render(<PrivacyPolicyPage />);
+    expect(screen.getByText(/the names you give a band.s colors \(any member can change them\)/)).toBeInTheDocument();
+  });
 });

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { SongLinkMetadata } from '../../api/songMetadataApi';
 import { NotSignedInError } from '../../api/bandsShared';
+import { SONG_COLOR_KEYS, type SongColorKey } from '../../bandTypes';
 
 const { lookupSongLink } = vi.hoisted(() => ({ lookupSongLink: vi.fn() }));
 // Same shape as the real allow-list check, without pulling the amplify-function parser into the test.
@@ -35,7 +36,10 @@ describe('SuggestSongDialog', () => {
     type('BPM (optional)', '87');
     fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(onSubmit).toHaveBeenCalledWith({ title: 'Wonderwall', artist: 'Oasis', key: 'F#m', bpm: '87', notes: '', songUrl: '', tabUrl: '' });
+    expect(onSubmit).toHaveBeenCalledWith(
+      { title: 'Wonderwall', artist: 'Oasis', key: 'F#m', bpm: '87', notes: '', songUrl: '', tabUrl: '' },
+      null, // no color chosen
+    );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 
@@ -115,6 +119,118 @@ describe('SuggestSongDialog', () => {
     });
     expect(screen.getByLabelText('Song link (optional)')).toHaveValue('https://a.example/s');
     expect(screen.getByLabelText('Tab link (optional)')).toHaveValue('https://b.example/t');
+  });
+
+  describe('color choice', () => {
+    const submit = () => fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+
+    it('offers an optional color choice on a new song, starting with no color', () => {
+      setup();
+      expect(screen.getByText('Color (optional)')).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'Color (optional)' })).toBeInTheDocument();
+      expect(screen.getAllByRole('radio')).toHaveLength(SONG_COLOR_KEYS.length);
+      for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByText('No color')).toBeInTheDocument();
+    });
+
+    it('does not offer a color choice when editing an existing song', () => {
+      setup({ initial: { title: 'Old' } });
+      expect(screen.queryByText('Color (optional)')).not.toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'Color (optional)' })).not.toBeInTheDocument();
+      expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    });
+
+    it('passes the chosen color as the second onSubmit argument', async () => {
+      const { onSubmit } = setup();
+      type('Title', 'Wonderwall');
+      fireEvent.click(screen.getByRole('radio', { name: 'Blue' }));
+      submit();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0]).toMatchObject({ title: 'Wonderwall' });
+      expect(onSubmit.mock.calls[0][1]).toBe('blue');
+    });
+
+    it('passes null when no color was chosen', async () => {
+      const { onSubmit } = setup();
+      type('Title', 'Wonderwall');
+      submit();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][1]).toBeNull();
+    });
+
+    it('choosing the same color again clears it, so null is passed', async () => {
+      const { onSubmit } = setup();
+      type('Title', 'Wonderwall');
+      fireEvent.click(screen.getByRole('radio', { name: 'Blue' }));
+      fireEvent.click(screen.getByRole('radio', { name: 'Blue' }));
+      submit();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][1]).toBeNull();
+    });
+
+    it('the last color picked wins', async () => {
+      const { onSubmit } = setup();
+      type('Title', 'Wonderwall');
+      fireEvent.click(screen.getByRole('radio', { name: 'Blue' }));
+      fireEvent.click(screen.getByRole('radio', { name: 'Red' }));
+      expect(screen.getByRole('radio', { name: 'Red' })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('radio', { name: 'Blue' })).toHaveAttribute('aria-checked', 'false');
+      submit();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][1]).toBe('red');
+    });
+
+    it('shows the band\'s labels in the choice', () => {
+      setup({ colorLabels: new Map<SongColorKey, string>([['red', 'Ballad']]) });
+      expect(screen.getByRole('radio', { name: 'Red, Ballad' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('radio', { name: 'Red, Ballad' }));
+      expect(screen.getByText('Ballad')).toBeInTheDocument();
+    });
+
+    it('does not submit (and keeps the color) when the form is invalid', async () => {
+      const { onSubmit } = setup();
+      fireEvent.click(screen.getByRole('radio', { name: 'Green' }));
+      type('Title', 'x');
+      type('BPM (optional)', '999');
+      submit();
+      expect(await screen.findByRole('alert')).toHaveTextContent('BPM must be');
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(screen.getByRole('radio', { name: 'Green' })).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('keeps the color after a failed submit so the retry sends it', async () => {
+      const onSubmit = vi.fn().mockRejectedValueOnce(new Error('This set list is full')).mockResolvedValue(undefined);
+      setup({ onSubmit });
+      type('Title', 'Another');
+      fireEvent.click(screen.getByRole('radio', { name: 'Pink' }));
+      submit();
+      expect(await screen.findByRole('alert')).toHaveTextContent('This set list is full');
+      expect(screen.getByRole('radio', { name: 'Pink' })).toHaveAttribute('aria-checked', 'true');
+      submit();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+      expect(onSubmit.mock.calls[1][1]).toBe('pink');
+    });
+
+    it('resets the color after a successful submit, so the next song starts uncolored', async () => {
+      const { onSubmit } = setup();
+      type('Title', 'First');
+      fireEvent.click(screen.getByRole('radio', { name: 'Teal' }));
+      submit();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.getByRole('radio', { name: 'Teal' })).toHaveAttribute('aria-checked', 'false'));
+      expect(screen.getByLabelText('Title')).toHaveValue('');
+      type('Title', 'Second');
+      submit();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+      expect(onSubmit.mock.calls[1][1]).toBeNull();
+    });
+
+    it('edit mode submits with a null color', async () => {
+      const { onSubmit } = setup({ initial: { title: 'Old' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][1]).toBeNull();
+    });
   });
 
   describe('song link lookup', () => {

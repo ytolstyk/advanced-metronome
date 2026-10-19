@@ -2,6 +2,7 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
 import type {
   BandRecord,
+  ColorLabelRecord,
   MemberRecord,
   ReadAuthMode,
   SetListRecord,
@@ -229,6 +230,17 @@ export function toSongColor(r: Row<'SongColor'>): SongColorRecord {
     bandId: r.bandId,
     setListId: r.setListId,
     color: r.color,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  };
+}
+
+export function toColorLabel(r: Row<'ColorLabel'>): ColorLabelRecord {
+  return {
+    bandId: r.bandId,
+    color: r.color,
+    owner: r.owner,
+    label: r.label,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };

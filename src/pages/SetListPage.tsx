@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AuthGate } from '../components/AuthGate/AuthGate';
 import { BandsShell } from '../components/Bands/BandsShell';
 import { CARD_SURFACE } from '../components/Bands/cardStyles';
+import { ColorLabelsDialog } from '../components/Bands/ColorLabelsDialog';
 import { ConfirmDialog } from '../components/Bands/ConfirmDialog';
 import { CopyShareLinkButton } from '../components/Bands/CopyShareLinkButton';
 import { InlineAlert } from '../components/Bands/InlineAlert';
@@ -14,10 +15,12 @@ import { SongRow } from '../components/Bands/SongRow';
 import { StatusNotice } from '../components/Bands/StatusNotice';
 import { SuggestSongDialog } from '../components/Bands/SuggestSongDialog';
 import { hideSong, loadBandView, unhideSong } from '../api/bandsApi';
+import { fetchColorLabelRows } from '../api/colorLabelsApi';
 import { deleteSong, fetchSetListRows, suggestSong, updateSong } from '../api/setListsApi';
 import { BAND_GONE_TITLES, BAND_LIMITS, type BandLoadResult, type BandView, type SetListView, type ValidSong } from '../bandTypes';
 import { bandPath } from '../bandRoutes';
 import { assembleSetListView } from '../bandViews';
+import { useColorLabels } from '../hooks/useColorLabels';
 import { useActionThenReload } from '../hooks/useAsyncAction';
 import { useLoader } from '../hooks/useLoader';
 import { useOptimisticVotes } from '../hooks/useOptimisticVotes';
@@ -30,12 +33,18 @@ type PageData =
 async function loadPage(bandId: string, setListId: string): Promise<PageData> {
   const fetchedAt = Date.now();
   // Independent reads in parallel: the band view (validation context) and the raw song/vote rows.
-  const [bandResult, rows] = await Promise.all([
+  const [bandResult, rows, labels] = await Promise.all([
     loadBandView(bandId, { onlySetListId: setListId }), // this page needs one set list, not all ten
     fetchSetListRows(setListId),
+    fetchColorLabelRows(bandId), // band-wide color names; best-effort, so a failure only drops the names
   ]);
   if (bandResult.status !== 'ok') return { kind: 'blocked', status: bandResult.status };
-  return { kind: 'ok', view: bandResult.view, list: assembleSetListView(bandResult.view, setListId, rows), fetchedAt };
+  return {
+    kind: 'ok',
+    view: bandResult.view,
+    list: assembleSetListView(bandResult.view, setListId, { ...rows, labels }),
+    fetchedAt,
+  };
 }
 
 export function SetListPage() {
@@ -110,8 +119,10 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
   const { isOwner } = view;
   const votes = useOptimisticVotes(list, fetchedAt);
   const colors = useSongColors(list, fetchedAt);
+  const colorLabels = useColorLabels(view.band.id, list, fetchedAt);
   const { act, error: actionError } = useActionThenReload(reload);
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [labelsOpen, setLabelsOpen] = useState(false);
   const [editing, setEditing] = useState<ValidSong | null>(null);
   const [deleting, setDeleting] = useState<ValidSong | null>(null);
 
@@ -128,6 +139,9 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {list.shared && <CopyShareLinkButton setListId={setListId} setListName={list.setList.name} />}
+          <Button variant="outline" onClick={() => setLabelsOpen(true)}>
+            <Tags size={14} className="mr-1" aria-hidden /> Color labels
+          </Button>
           <Button onClick={() => setSuggestOpen(true)}>Suggest a song</Button>
           <Button variant="outline" size="icon" onClick={() => void reload()} disabled={refreshing} aria-label="Refresh">
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
@@ -159,6 +173,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
               myVote={votes.myVoteFor(song.id)}
               suggestedBy={nameOf(song.owner)}
               color={colors.colorFor(song.id)}
+              colorLabels={colorLabels.labels}
               isAuthor={song.owner === view.sub}
               isOwner={isOwner}
               isVoting={votes.isVoting(song.id)}
@@ -198,14 +213,32 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
       <SuggestSongDialog
         open={suggestOpen}
         onOpenChange={setSuggestOpen}
-        onSubmit={async (raw) => {
+        colorLabels={colorLabels.labels}
+        onSubmit={async (raw, color) => {
           try {
-            await suggestSong(view, setListId, raw, list.songs.length);
+            const created = await suggestSong(view, setListId, raw, list.songs.length);
+            // The song is already on the list: a failed color write is reported by the page banner, not by failing the dialog.
+            if (color) void colors.setColor(created, color);
           } finally {
             void reload(); // refresh in the background; don't keep the dialog open for it
           }
         }}
       />
+      {labelsOpen && (
+        <ColorLabelsDialog
+          open
+          onOpenChange={setLabelsOpen}
+          bandName={view.band.name}
+          labels={colorLabels.labels}
+          onSave={async (next) => {
+            try {
+              await colorLabels.saveLabels(next);
+            } finally {
+              void reload();
+            }
+          }}
+        />
+      )}
       {editing && (
         <SuggestSongDialog
           key={editing.id}

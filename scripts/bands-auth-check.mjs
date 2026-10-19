@@ -140,17 +140,17 @@ console.log('QUERIES', Object.keys(queries).sort().join(', '));
 console.log('MUTATIONS', mutations.sort().join(', '));
 console.log('SUBSCRIPTIONS', subs.join(', ') || '(none)');
 
-for (const q of ['getBand', 'getBandInvite', 'getSetList', 'getSong', 'getVote', 'getMember', 'getMyBand', 'listMyBands', 'getSongColor', 'listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList'])
+for (const q of ['getBand', 'getBandInvite', 'getSetList', 'getSong', 'getVote', 'getMember', 'getMyBand', 'listMyBands', 'getSongColor', 'getColorLabel', 'listColorLabelByBand', 'listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList'])
   check('G0', `query ${q} exists`, q in queries, '', true);
-for (const q of ['listBands', 'listBandInvites', 'listSetLists', 'listSongs', 'listVotes', 'listMembers', 'listSongColors'])
+for (const q of ['listBands', 'listBandInvites', 'listSetLists', 'listSongs', 'listVotes', 'listMembers', 'listSongColors', 'listColorLabels'])
   check('G1b', `plain ${q} absent`, !(q in queries), '', true);
 for (const m of ['deleteBand', 'deleteSetList', 'deleteBandInvite'])
   check('G3', `mutation ${m} absent`, !mutations.includes(m), '', true);
-for (const m of ['deleteSong', 'deleteVote', 'deleteMember', 'deleteMyBand', 'deleteSongColor'])
+for (const m of ['deleteSong', 'deleteVote', 'deleteMember', 'deleteMyBand', 'deleteSongColor', 'deleteColorLabel'])
   check('G0', `mutation ${m} present`, mutations.includes(m));
 check('G0', 'subscriptions absent/empty', subs.length === 0, subs.join(','));
 // No owner-partitioned query on public-read models (cross-band pivot).
-for (const q of ['listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList'])
+for (const q of ['listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList', 'listColorLabelByBand'])
   check('G1b', `${q} partition arg is not owner`, (queries[q] ?? [])[0] !== 'owner' && (queries[q] ?? []).length > 0, `args=${(queries[q] ?? []).join(',')}`, true);
 
 // ---------- helpers ----------
@@ -163,6 +163,7 @@ const FIELDS = {
   Song: 'id owner bandId setListId title createdAt',
   Vote: 'songId owner value bandId setListId createdAt',
   SongColor: 'songId owner color bandId setListId createdAt updatedAt',
+  ColorLabel: 'bandId color owner label createdAt updatedAt',
 };
 const create = (u, model, input) =>
   gql(u, `mutation($input: Create${model}Input!){ create${model}(input:$input){ ${FIELDS[model]} } }`, { input });
@@ -246,6 +247,18 @@ r = await gql(A, `mutation($input: DeleteSongColorInput!){ deleteSongColor(input
 check('G3', 'A cannot delete B\'s SongColor row', !r.data?.deleteSongColor, errType(r), true);
 r = await getById(A, 'SongColor', { songId, owner: B.sub });
 check('G1', 'A can read B\'s SongColor row (signed in)', !!r.data?.getSongColor, errType(r));
+
+// ---------- color labels (one row per member per band color; shown only if the writer is a valid member) ----------
+r = await create(B, 'ColorLabel', { bandId, color: 'red', owner: A.sub, label: 'Ballad' });
+check('G2', 'B cannot create a ColorLabel row as A', !r.data?.createColorLabel, errType(r), true);
+r = await create(B, 'ColorLabel', { bandId, color: 'red', owner: B.sub, label: 'Slow' });
+check('G2', 'B labels a color as B', !!r.data?.createColorLabel, errType(r));
+r = await update(A, 'ColorLabel', { bandId, color: 'red', owner: B.sub, label: 'Hijacked' });
+check('G3', 'A cannot update B\'s ColorLabel row', !r.data?.updateColorLabel, errType(r), true);
+r = await gql(A, `mutation($input: DeleteColorLabelInput!){ deleteColorLabel(input:$input){ bandId } }`, { input: { bandId, color: 'red', owner: B.sub } });
+check('G3', 'A cannot delete B\'s ColorLabel row', !r.data?.deleteColorLabel, errType(r), true);
+r = await getById(A, 'ColorLabel', { bandId, color: 'red', owner: B.sub });
+check('G1', 'A can read B\'s ColorLabel row (signed in)', !!r.data?.getColorLabel, errType(r));
 
 // ---------- Band root of trust ----------
 r = await update(B, 'Band', { id: bandId, bannedSubs: [A.sub] });
@@ -380,6 +393,8 @@ check('G6', 'guest can list the roster by bandId (needed to validate song author
 
 r = await G(`query($s:String!){ listSongColorBySetList(setListId:$s){ items{ songId } } }`, { s: setListId });
 check('G6', 'guest cannot list song colors (signed-in only)', !r.data?.listSongColorBySetList, errType(r), true);
+r = await G(`query($b:String!){ listColorLabelByBand(bandId:$b){ items{ color } } }`, { b: bandId });
+check('G6', 'guest cannot list color labels (signed-in only)', !r.data?.listColorLabelByBand, errType(r), true);
 
 // Guests never write, and never reach the private models.
 const guestWrites = [

@@ -16,3 +16,16 @@ export const SONG_COLOR_STYLES: Record<SongColorKey, { label: string; hex: strin
 };
 
 export const SONG_COLOR_OPTIONS = SONG_COLOR_KEYS.map((key) => ({ key, ...SONG_COLOR_STYLES[key] }));
+
+/** A band's names for its palette colors ("Ballad" for red); colors without one are absent. */
+export type ColorLabels = ReadonlyMap<SongColorKey, string>;
+
+/** What to call a color on screen: the band's label if it has one, else the palette name. */
+export const songColorName = (key: SongColorKey, labels?: ColorLabels): string =>
+  labels?.get(key) ?? SONG_COLOR_STYLES[key].label;
+
+/** Screen-reader name that keeps the palette color in it: "Red, Ballad" or just "Red". */
+export const songColorAriaName = (key: SongColorKey, labels?: ColorLabels): string => {
+  const label = labels?.get(key);
+  return label ? `${SONG_COLOR_STYLES[key].label}, ${label}` : SONG_COLOR_STYLES[key].label;
+};

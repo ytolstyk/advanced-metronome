@@ -27,6 +27,8 @@ export const BAND_LIMITS = {
   inviteCodeLength: 10,
   /** Longest song key we accept ("F#m"). */
   keyMax: 3,
+  /** Longest label a band can give a song color ("Fast thrash"). */
+  colorLabelMax: 20,
 } as const;
 
 /**
@@ -124,6 +126,16 @@ export interface SongColorRecord {
   updatedAt?: string;
 }
 
+export interface ColorLabelRecord {
+  bandId: string;
+  color: string;
+  owner: string;
+  /** '' = the writer cleared the label. */
+  label: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface VoteRecord {
   songId: string;
   owner: string;
@@ -200,6 +212,8 @@ export interface SetListRows {
   votes: ListAllResult<VoteRecord>;
   /** Absent on the public page, which doesn't show song colors. */
   colors?: ListAllResult<SongColorRecord>;
+  /** The band's color labels (band-wide, not per set list). Absent on the public page. */
+  labels?: ListAllResult<ColorLabelRecord>;
 }
 
 export interface SetListView {
@@ -213,6 +227,10 @@ export interface SetListView {
   colors: Map<string, SongColorKey>;
   /** Songs the caller has their own color row for (even `none`): it picks create vs update. */
   myColorSongIds: Set<string>;
+  /** The band's label per palette color (colors without a label are absent). */
+  colorLabels: Map<SongColorKey, string>;
+  /** Colors the caller has their own label row for (even an empty one): it picks create vs update. */
+  myLabelColors: Set<SongColorKey>;
   myVotes: Map<string, VoteValue>;
   /** Valid songs the owner hid (for the owner's "Hidden" section). */
   hiddenSongs: ValidSong[];

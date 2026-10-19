@@ -1,7 +1,7 @@
 import { Pencil, Trash2, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { SONG_COLOR_STYLES, SONG_COLOR_TINT_PERCENT } from '../../bandSongColors';
+import { SONG_COLOR_STYLES, SONG_COLOR_TINT_PERCENT, type ColorLabels } from '../../bandSongColors';
 import type { SongColorKey, SongTally, ValidSong, VoteValue } from '../../bandTypes';
 import { CARD_SURFACE } from './cardStyles';
 import { SongColorPicker } from './SongColorPicker';
@@ -15,6 +15,8 @@ interface SongRowProps {
   myVote: VoteValue | undefined;
   suggestedBy: string;
   color: SongColorKey | undefined;
+  /** The band's names for its colors. */
+  colorLabels?: ColorLabels;
   /** The caller suggested this song (may edit/delete it). */
   isAuthor: boolean;
   /** The caller owns the band (may hide any song). */
@@ -34,6 +36,7 @@ export function SongRow({
   myVote,
   suggestedBy,
   color,
+  colorLabels,
   isAuthor,
   isOwner,
   isVoting,
@@ -67,7 +70,7 @@ export function SongRow({
         <VoteButtons songTitle={song.title} myVote={myVote} tally={tally} disabled={isVoting} onVote={onVote} />
       </div>
       <div className="mt-2 flex flex-wrap gap-1 pl-9">
-        <SongColorPicker songTitle={song.title} color={color} onChange={onColor} />
+        <SongColorPicker songTitle={song.title} color={color} labels={colorLabels} onChange={onColor} />
         {isAuthor && (
           <>
             <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`Edit ${song.title}`}>

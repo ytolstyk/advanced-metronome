@@ -8,6 +8,7 @@ const { m } = vi.hoisted(() => {
     Song: { get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), listSongBySetList: vi.fn() },
     Vote: { get: vi.fn(), delete: vi.fn(), listVoteBySetList: vi.fn() },
     SongColor: { listSongColorBySetList: vi.fn() },
+    ColorLabel: { listColorLabelByBand: vi.fn(), delete: vi.fn() },
     graphql: vi.fn(),
   };
   return { m };
@@ -105,13 +106,14 @@ function makeView(over: Partial<BandView> = {}, b = band()): BandView {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(isAuthenticated).mockResolvedValue(true);
-  for (const model of [m.Band, m.SetList, m.Song, m.Vote, m.SongColor]) {
+  for (const model of [m.Band, m.SetList, m.Song, m.Vote, m.SongColor, m.ColorLabel]) {
     for (const fn of Object.values(model)) (fn as ReturnType<typeof vi.fn>).mockReset();
   }
   m.graphql.mockReset();
   m.Song.listSongBySetList.mockResolvedValue({ data: [], nextToken: null });
   m.Vote.listVoteBySetList.mockResolvedValue({ data: [], nextToken: null });
   m.SongColor.listSongColorBySetList.mockResolvedValue({ data: [], nextToken: null });
+  m.ColorLabel.listColorLabelByBand.mockResolvedValue({ data: [], nextToken: null });
 });
 
 function echoBandUpdates(base: BandRecord) {
@@ -503,6 +505,12 @@ describe('fetchSetListRows', () => {
     expect(m.SongColor.listSongColorBySetList).not.toHaveBeenCalled();
   });
 
+  it('does not read color labels (they are band-wide and fetched separately by fetchColorLabelRows)', async () => {
+    const rows = await fetchSetListRows('sl-1');
+    expect(rows.labels).toBeUndefined();
+    expect(m.ColorLabel.listColorLabelByBand).not.toHaveBeenCalled();
+  });
+
   it('keeps using the signed-in (default) auth mode: no authMode option is sent', async () => {
     await fetchSetListRows('sl-1');
     expect(m.Song.listSongBySetList.mock.calls[0][1]).toEqual({ limit: 250, nextToken: undefined });
@@ -553,6 +561,12 @@ describe('fetchPublicSetListRows', () => {
     expect(m.SongColor.listSongColorBySetList).not.toHaveBeenCalled();
   });
 
+  it('public rows carry no color labels and never query the ColorLabel model (no guest read rule for it)', async () => {
+    const rows = await fetchPublicSetListRows('sl-1', 'identityPool');
+    expect(rows.labels).toBeUndefined();
+    expect(m.ColorLabel.listColorLabelByBand).not.toHaveBeenCalled();
+  });
+
   it('passes the given mode through (a signed-in reader uses userPool)', async () => {
     await fetchPublicSetListRows('sl-1', 'userPool');
     expect(m.Song.listSongBySetList.mock.calls[0][1]).toMatchObject({ authMode: 'userPool' });
@@ -594,7 +608,7 @@ describe('auth gating', () => {
   ])('%s never touches the API when signed out', async (_name, call) => {
     vi.mocked(isAuthenticated).mockResolvedValue(false);
     await expect(call()).rejects.toThrow('Not authenticated');
-    for (const model of [m.Band, m.SetList, m.Song, m.Vote, m.SongColor]) {
+    for (const model of [m.Band, m.SetList, m.Song, m.Vote, m.SongColor, m.ColorLabel]) {
       for (const fn of Object.values(model)) expect(fn).not.toHaveBeenCalled();
     }
     expect(m.graphql).not.toHaveBeenCalled();
@@ -635,6 +649,42 @@ describe('deleteMyContent', () => {
   it('tolerates rows that are already gone', async () => {
     m.Vote.delete.mockResolvedValue({ data: null, errors: UNAUTH });
     await expect(deleteMyContent(band(), false)).resolves.toBeUndefined();
+  });
+
+  it('also deletes the caller\'s own color label rows, once for the band (not once per set list)', async () => {
+    m.ColorLabel.listColorLabelByBand.mockResolvedValue({
+      data: [
+        { bandId: 'band-1', color: 'red', owner: 'sub-me', label: 'Ballad' },
+        { bandId: 'band-1', color: 'blue', owner: 'sub-me', label: '' },
+      ],
+      nextToken: null,
+    });
+    m.ColorLabel.delete.mockResolvedValue({ data: {} });
+    await deleteMyContent(band({ setListIds: ['sl-1', 'sl-2'], archivedSetListIds: ['sl-old'] }), false);
+    expect(m.ColorLabel.listColorLabelByBand).toHaveBeenCalledTimes(1);
+    expect(m.ColorLabel.listColorLabelByBand).toHaveBeenCalledWith(
+      { bandId: 'band-1', owner: { eq: 'sub-me' } },
+      expect.anything(),
+    );
+    expect(m.ColorLabel.delete).toHaveBeenCalledTimes(2);
+    expect(m.ColorLabel.delete).toHaveBeenCalledWith({ bandId: 'band-1', color: 'red', owner: 'sub-me' });
+    expect(m.ColorLabel.delete).toHaveBeenCalledWith({ bandId: 'band-1', color: 'blue', owner: 'sub-me' });
+  });
+
+  it('removes label rows even when the band has no set lists', async () => {
+    m.ColorLabel.listColorLabelByBand.mockResolvedValue({
+      data: [{ bandId: 'band-1', color: 'red', owner: 'sub-me', label: 'x' }],
+      nextToken: null,
+    });
+    m.ColorLabel.delete.mockResolvedValue({ data: {} });
+    await deleteMyContent(band({ setListIds: [], archivedSetListIds: [] }), false);
+    expect(m.ColorLabel.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failing label cleanup is reported, after the votes were already deleted', async () => {
+    m.ColorLabel.listColorLabelByBand.mockResolvedValue({ data: null, errors: [{ message: 'labels down' }] });
+    await expect(deleteMyContent(band(), false)).rejects.toThrow('labels down');
+    expect(m.Vote.delete).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -684,6 +734,53 @@ describe('deleteMyContent hardening', () => {
     );
     await expect(deleteMyContent(band(), false)).rejects.toThrow('throttled');
     expect(m.Vote.delete).toHaveBeenCalledTimes(3); // the other deletes were still attempted
+  });
+
+  describe('band-wide label cleanup runs alongside the per-list cleanup', () => {
+    const oneLabelRow = () => {
+      m.ColorLabel.listColorLabelByBand.mockResolvedValue({
+        data: [{ bandId: 'band-1', color: 'red', owner: 'sub-me', label: 'x' }],
+        nextToken: null,
+      });
+      m.ColorLabel.delete.mockResolvedValue({ data: {} });
+    };
+
+    it('a failing per-list cleanup does not skip the label cleanup', async () => {
+      oneLabelRow();
+      m.Vote.listVoteBySetList.mockResolvedValue({ data: null, errors: [{ message: 'votes gsi down' }] });
+      await expect(deleteMyContent(band(), false)).rejects.toThrow('votes gsi down');
+      expect(m.ColorLabel.delete).toHaveBeenCalledTimes(1);
+    });
+
+    it('a failing label cleanup does not skip the per-list cleanup (votes, songs and colors)', async () => {
+      m.Vote.listVoteBySetList.mockResolvedValue({ data: [voteRow('s1', 'sub-me', 'up')], nextToken: null });
+      m.Song.listSongBySetList.mockResolvedValue({ data: [songRow('mine', 'sub-me')], nextToken: null });
+      m.SongColor.listSongColorBySetList.mockResolvedValue({ data: [], nextToken: null });
+      m.ColorLabel.listColorLabelByBand.mockResolvedValue({ data: null, errors: [{ message: 'labels down' }] });
+      await expect(deleteMyContent(band(), true)).rejects.toThrow('labels down');
+      expect(m.Vote.delete).toHaveBeenCalledWith({ songId: 's1', owner: 'sub-me' });
+      expect(m.Song.delete).toHaveBeenCalledWith({ id: 'mine' });
+      expect(m.SongColor.listSongColorBySetList).toHaveBeenCalledTimes(1);
+    });
+
+    it('when both fail it rethrows the first failure (the per-list one) after both finished', async () => {
+      m.Vote.listVoteBySetList.mockResolvedValue({ data: null, errors: [{ message: 'votes gsi down' }] });
+      m.ColorLabel.listColorLabelByBand.mockResolvedValue({ data: null, errors: [{ message: 'labels down' }] });
+      await expect(deleteMyContent(band(), false)).rejects.toThrow('votes gsi down');
+      expect(m.ColorLabel.listColorLabelByBand).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts the label cleanup without waiting for the per-list cleanup to finish', async () => {
+      oneLabelRow();
+      let releaseVotes!: () => void;
+      m.Vote.listVoteBySetList.mockImplementation(
+        () => new Promise((resolve) => { releaseVotes = () => resolve({ data: [], nextToken: null }); }),
+      );
+      const done = deleteMyContent(band(), false);
+      await vi.waitFor(() => expect(m.ColorLabel.delete).toHaveBeenCalledTimes(1));
+      releaseVotes();
+      await done;
+    });
   });
 
   it('deletes songs only when asked, and only the caller\'s own', async () => {

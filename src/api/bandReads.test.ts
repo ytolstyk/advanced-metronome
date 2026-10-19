@@ -5,6 +5,7 @@ const { m } = vi.hoisted(() => {
     Song: { listSongBySetList: vi.fn() },
     Vote: { listVoteBySetList: vi.fn() },
     SongColor: { listSongColorBySetList: vi.fn() },
+    ColorLabel: { listColorLabelByBand: vi.fn() },
     graphql: vi.fn(),
   };
   return { m };
@@ -18,8 +19,8 @@ vi.mock('./authUtils', () => ({
   getCurrentUserSub: vi.fn(async () => 'sub-me'),
 }));
 
-import { LIST_PAGE_SIZE, MAX_LIST_PAGES } from '../bandTypes';
-import { listSongColors } from './bandReads';
+import { BAND_LIMITS, LIST_PAGE_SIZE, MAX_LIST_PAGES, SONG_COLOR_KEYS } from '../bandTypes';
+import { listColorLabels, listSongColors } from './bandReads';
 
 const colorRow = (songId: string, color = 'red', owner = 'sub-bob') => ({
   songId,
@@ -35,6 +36,7 @@ const colorRow = (songId: string, color = 'red', owner = 'sub-bob') => ({
 beforeEach(() => {
   vi.clearAllMocks();
   m.SongColor.listSongColorBySetList.mockReset();
+  m.ColorLabel.listColorLabelByBand.mockReset();
 });
 
 describe('listSongColors', () => {
@@ -91,5 +93,73 @@ describe('listSongColors', () => {
   it('fails closed when the read errors', async () => {
     m.SongColor.listSongColorBySetList.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
     await expect(listSongColors('sl-1')).rejects.toThrow('listSongColors: gsi down');
+  });
+});
+
+const labelRow = (color: string, owner = 'sub-bob', label = 'Ballad') => ({
+  bandId: 'band-1',
+  color,
+  owner,
+  label,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-02T00:00:00Z',
+  extra: 'dropped',
+});
+
+describe('listColorLabels', () => {
+  it('queries the band index with the default (signed-in) auth mode and maps the rows', async () => {
+    m.ColorLabel.listColorLabelByBand.mockResolvedValue({ data: [labelRow('red'), labelRow('blue', 'sub-bob', '')], nextToken: null });
+    const res = await listColorLabels('band-1');
+    expect(m.ColorLabel.listColorLabelByBand).toHaveBeenCalledWith(
+      { bandId: 'band-1' },
+      { limit: LIST_PAGE_SIZE, nextToken: undefined },
+    );
+    expect(res.incomplete).toBe(false);
+    expect(res.items).toEqual([
+      { bandId: 'band-1', color: 'red', owner: 'sub-bob', label: 'Ballad', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z' },
+      { bandId: 'band-1', color: 'blue', owner: 'sub-bob', label: '', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z' },
+    ]);
+  });
+
+  it('keeps rows from different members for the same color', async () => {
+    m.ColorLabel.listColorLabelByBand.mockResolvedValue({
+      data: [labelRow('red', 'sub-bob', 'A'), labelRow('red', 'sub-cat', 'B')],
+      nextToken: null,
+    });
+    const res = await listColorLabels('band-1');
+    expect(res.items.map((r) => [r.color, r.owner, r.label])).toEqual([
+      ['red', 'sub-bob', 'A'],
+      ['red', 'sub-cat', 'B'],
+    ]);
+  });
+
+  it('never sends an authMode (there is no guest read rule for labels)', async () => {
+    m.ColorLabel.listColorLabelByBand.mockResolvedValue({ data: [], nextToken: null });
+    await listColorLabels('band-1');
+    expect(m.ColorLabel.listColorLabelByBand.mock.calls[0][1]).not.toHaveProperty('authMode');
+  });
+
+  it('follows nextToken across pages and concatenates the rows', async () => {
+    m.ColorLabel.listColorLabelByBand
+      .mockResolvedValueOnce({ data: [labelRow('red')], nextToken: 't1' })
+      .mockResolvedValueOnce({ data: [labelRow('blue')], nextToken: null });
+    const res = await listColorLabels('band-1');
+    expect(res.items.map((r) => r.color)).toEqual(['red', 'blue']);
+    expect(res.incomplete).toBe(false);
+    expect(m.ColorLabel.listColorLabelByBand.mock.calls[1][1]).toMatchObject({ nextToken: 't1' });
+  });
+
+  it('stops at a tight page cap (members x palette colors, plus one page of slack) and flags incomplete', async () => {
+    m.ColorLabel.listColorLabelByBand.mockResolvedValue({ data: [], nextToken: 'more' });
+    const res = await listColorLabels('band-1');
+    const expectedPages = Math.ceil((BAND_LIMITS.maxMembers * SONG_COLOR_KEYS.length) / LIST_PAGE_SIZE) + 1;
+    expect(res.incomplete).toBe(true);
+    expect(m.ColorLabel.listColorLabelByBand).toHaveBeenCalledTimes(expectedPages);
+    expect(expectedPages).toBeLessThan(MAX_LIST_PAGES);
+  });
+
+  it('fails closed when the read errors', async () => {
+    m.ColorLabel.listColorLabelByBand.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
+    await expect(listColorLabels('band-1')).rejects.toThrow('listColorLabels: gsi down');
   });
 });

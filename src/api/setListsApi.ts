@@ -22,6 +22,7 @@ import {
 } from './bandsShared';
 import { runPool } from './paginate';
 import { listSongColors, listSongs } from './bandReads';
+import { deleteMyLabelRows } from './colorLabelsApi';
 import { deleteMyColorRows } from './songColorsApi';
 import { deleteVoteRow, listVotesByOwner, listVotesForSetList } from './songVotesApi';
 
@@ -160,18 +161,24 @@ export async function deleteMyContent(band: BandRecord, includeSongs: boolean): 
       ...band.archivedSetListIds.slice(0, BAND_LIMITS.maxArchivedSetLists),
     ]),
   ];
-  await runPool(CLEANUP_LISTS_AT_ONCE, setListIds, async (setListId) => {
-    const votes = await listVotesByOwner(setListId, owner);
-    await runPool(CLEANUP_DELETES_AT_ONCE, votes.items, (v) => deleteVoteRow(v.songId, owner));
-    if (includeSongs) {
-      const songs = await listSongs(setListId);
-      await runPool(
-        CLEANUP_DELETES_AT_ONCE,
-        songs.items.filter((s) => s.owner === owner),
-        (s) => deleteQuietly(() => client.models.Song.delete({ id: s.id }), 'deleteSong'),
-      );
-    }
-    // Last, so a failing colors read can't skip the votes and songs above.
-    await deleteMyColorRows(setListId, owner);
-  });
+  // The band-wide label cleanup runs alongside the per-list work so a failure in either can't skip the other.
+  const results = await Promise.allSettled([
+    runPool(CLEANUP_LISTS_AT_ONCE, setListIds, async (setListId) => {
+      const votes = await listVotesByOwner(setListId, owner);
+      await runPool(CLEANUP_DELETES_AT_ONCE, votes.items, (v) => deleteVoteRow(v.songId, owner));
+      if (includeSongs) {
+        const songs = await listSongs(setListId);
+        await runPool(
+          CLEANUP_DELETES_AT_ONCE,
+          songs.items.filter((s) => s.owner === owner),
+          (s) => deleteQuietly(() => client.models.Song.delete({ id: s.id }), 'deleteSong'),
+        );
+      }
+      // Last, so a failing colors read can't skip the votes and songs above.
+      await deleteMyColorRows(setListId, owner);
+    }),
+    deleteMyLabelRows(band.id, owner),
+  ]);
+  const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+  if (failed) throw failed.reason;
 }

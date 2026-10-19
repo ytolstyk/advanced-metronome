@@ -4,6 +4,7 @@ import {
   SONG_COLOR_KEYS,
   VOTE_INDEX_LAG_GRACE_MS,
   type BandRecord,
+  type ColorLabelRecord,
   type MemberRecord,
   type PendingChoice,
   type PendingVote,
@@ -308,9 +309,10 @@ export function isSongColorKey(value: string): value is SongColorKey {
   return (SONG_COLOR_KEYS as readonly string[]).includes(value);
 }
 
-const colorStamp = (r: SongColorRecord): string => r.updatedAt ?? r.createdAt ?? '';
-const isNewerColorRow = (a: SongColorRecord, b: SongColorRecord): boolean =>
-  (colorStamp(a).localeCompare(colorStamp(b)) || a.owner.localeCompare(b.owner)) > 0;
+type Stamped = { owner: string; createdAt?: string; updatedAt?: string };
+const rowStamp = (r: Stamped): string => r.updatedAt ?? r.createdAt ?? '';
+const isNewerRow = (a: Stamped, b: Stamped): boolean =>
+  (rowStamp(a).localeCompare(rowStamp(b)) || a.owner.localeCompare(b.owner)) > 0;
 
 /** Color rows that count: the song is valid, the parents match it and the writer is a valid member. */
 function countedColorRows(rows: SongColorRecord[], songs: ValidSong[], memberSubs: Set<string>): SongColorRecord[] {
@@ -335,7 +337,7 @@ export function resolveSongColors(
   for (const row of countedColorRows(rows, songs, memberSubs)) {
     if (!isSongColorKey(row.color) && row.color !== NO_SONG_COLOR) continue;
     const prev = latest.get(row.songId);
-    if (!prev || isNewerColorRow(row, prev)) latest.set(row.songId, row);
+    if (!prev || isNewerRow(row, prev)) latest.set(row.songId, row);
   }
   const colors = new Map<string, SongColorKey>();
   for (const [songId, row] of latest) if (isSongColorKey(row.color)) colors.set(songId, row.color);
@@ -345,6 +347,47 @@ export function resolveSongColors(
 /** Songs the caller has a (valid) color row for, `none` included: picks create vs update for the next write. */
 export function myColorSongIds(rows: SongColorRecord[], songs: ValidSong[], memberSubs: Set<string>, sub: string): Set<string> {
   return new Set(countedColorRows(rows, songs, memberSubs).filter((r) => r.owner === sub).map((r) => r.songId));
+}
+
+// ── Color labels ───────────────────────────────────────────────────────────
+
+export const sanitizeColorLabel = (raw: string): string => sanitizeText(raw, BAND_LIMITS.colorLabelMax);
+
+/** Label rows that count: a palette color, the band's own, a valid member's, and clean text (or empty = cleared). */
+function countedLabelRows(rows: ColorLabelRecord[], band: BandRecord, memberSubs: Set<string>): ColorLabelRecord[] {
+  return rows.filter(
+    (row) =>
+      row.bandId === band.id &&
+      isSongColorKey(row.color) &&
+      memberSubs.has(row.owner) &&
+      isCleanText(row.label, BAND_LIMITS.colorLabelMax, false),
+  );
+}
+
+/**
+ * The band's label per color: the newest row (by server `updatedAt`, then owner for a stable tie)
+ * written by a valid member; an empty newest label leaves the color unlabeled. Rows from strangers,
+ * banned users, other bands or with spoofed text never count (hidden, not repaired).
+ */
+export function resolveColorLabels(
+  rows: ColorLabelRecord[],
+  band: BandRecord,
+  memberSubs: Set<string>,
+): Map<SongColorKey, string> {
+  const latest = new Map<string, ColorLabelRecord>();
+  for (const row of countedLabelRows(rows, band, memberSubs)) {
+    const prev = latest.get(row.color);
+    if (!prev || isNewerRow(row, prev)) latest.set(row.color, row);
+  }
+  const labels = new Map<SongColorKey, string>();
+  for (const [color, row] of latest) if (row.label && isSongColorKey(color)) labels.set(color, row.label);
+  return labels;
+}
+
+/** Colors the caller has a (valid) label row for, empty ones included: picks create vs update for the next write. */
+export function myLabelColors(rows: ColorLabelRecord[], band: BandRecord, memberSubs: Set<string>, sub: string): Set<SongColorKey> {
+  const mine = countedLabelRows(rows, band, memberSubs).filter((r) => r.owner === sub);
+  return new Set(mine.map((r) => r.color).filter(isSongColorKey));
 }
 
 // ── Votes ──────────────────────────────────────────────────────────────────
