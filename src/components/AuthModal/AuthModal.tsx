@@ -12,6 +12,7 @@ import {
   DialogDescription,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { useRememberReturnPath } from '@/auth/returnPath';
 import './AuthModal.css';
 
 const FEDERATED_LABEL_RETRY_MS = 1000;
@@ -28,6 +29,8 @@ export function AuthModal() {
   const [open, setOpen] = useState(false);
 
   const isAuthenticated = authStatus === 'authenticated';
+  // Signed-in users see the account panel, which never redirects away.
+  useRememberReturnPath(open && !isAuthenticated);
 
   // Close modal after successful sign-in (async to satisfy react-hooks/set-state-in-effect)
   useEffect(() => {

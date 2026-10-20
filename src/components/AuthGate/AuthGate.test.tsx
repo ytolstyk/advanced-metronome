@@ -10,8 +10,17 @@ vi.mock('@aws-amplify/ui-react', () => ({
 
 import { AuthGate } from './AuthGate';
 
+const RETURN_KEY = 'auth-return-path';
+
+function rememberedPath(): string | null {
+  const raw = sessionStorage.getItem(RETURN_KEY);
+  return raw === null ? null : (JSON.parse(raw) as { path: string }).path;
+}
+
 beforeEach(() => {
   auth.status = 'unauthenticated';
+  sessionStorage.clear();
+  window.history.pushState({}, '', '/');
 });
 
 describe('AuthGate (default banner)', () => {
@@ -172,5 +181,67 @@ describe('AuthGate prominent heading id and dialog', () => {
     render(<AuthGate prominent />);
     fireEvent.click(screen.getByRole('button', { name: 'Sign in or create an account' }));
     expect(screen.getByRole('dialog', { name: 'Sign in or create an account' })).toBeInTheDocument();
+  });
+});
+
+describe('AuthGate return path', () => {
+  it('remembers the current page (path, query, hash) when the sign-in dialog opens', () => {
+    window.history.pushState({}, '', '/bands/b1?tab=songs#vote');
+    render(<AuthGate>x</AuthGate>);
+    expect(sessionStorage.getItem(RETURN_KEY)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+    expect(rememberedPath()).toBe('/bands/b1?tab=songs#vote');
+  });
+
+  it('remembers the page when opened from the prominent call-to-action', () => {
+    window.history.pushState({}, '', '/bands');
+    render(<AuthGate prominent />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in or create an account' }));
+    expect(rememberedPath()).toBe('/bands');
+  });
+
+  it('forgets the remembered page when the dialog is dismissed', () => {
+    window.history.pushState({}, '', '/bands');
+    render(<AuthGate>x</AuthGate>);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+    expect(rememberedPath()).toBe('/bands');
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(sessionStorage.getItem(RETURN_KEY)).toBeNull();
+  });
+
+  it('remembers the page again when the dialog is reopened after being dismissed', () => {
+    window.history.pushState({}, '', '/bands');
+    render(<AuthGate>x</AuthGate>);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+    expect(rememberedPath()).toBe('/bands');
+  });
+
+  it('stores nothing while the dialog has never been opened', () => {
+    window.history.pushState({}, '', '/bands');
+    render(<AuthGate prominent />);
+    expect(sessionStorage.getItem(RETURN_KEY)).toBeNull();
+  });
+
+  it('forgets the remembered page when the gate unmounts with the dialog open', () => {
+    window.history.pushState({}, '', '/bands');
+    const { unmount } = render(<AuthGate>x</AuthGate>);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+    expect(rememberedPath()).toBe('/bands');
+    unmount();
+    expect(sessionStorage.getItem(RETURN_KEY)).toBeNull();
+  });
+
+  it('forgets the remembered page when the user authenticates (gate swaps to children)', () => {
+    window.history.pushState({}, '', '/bands');
+    const { rerender } = render(<AuthGate>secret</AuthGate>);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+    expect(rememberedPath()).toBe('/bands');
+    act(() => { auth.status = 'authenticated'; });
+    rerender(<AuthGate>secret</AuthGate>);
+    expect(screen.getByText('secret')).toBeInTheDocument();
+    expect(sessionStorage.getItem(RETURN_KEY)).toBeNull();
   });
 });

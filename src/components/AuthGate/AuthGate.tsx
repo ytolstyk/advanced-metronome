@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useRememberReturnPath } from '@/auth/returnPath';
 import './AuthGate.css';
 
 interface AuthSignInDialogProps {
@@ -24,6 +25,8 @@ export function AuthSignInDialog({ open, onOpenChange }: AuthSignInDialogProps) 
     if (authStatus !== 'authenticated') return;
     onOpenChange(false);
   }, [authStatus, onOpenChange]);
+
+  useRememberReturnPath(open);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

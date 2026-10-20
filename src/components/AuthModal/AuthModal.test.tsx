@@ -65,9 +65,18 @@ async function openDialog() {
   await advance(0)
 }
 
+const RETURN_KEY = 'auth-return-path'
+
+function rememberedPath(): string | null {
+  const raw = sessionStorage.getItem(RETURN_KEY)
+  return raw === null ? null : (JSON.parse(raw) as { path: string }).path
+}
+
 describe('AuthModal', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    sessionStorage.clear()
+    window.history.pushState({}, '', '/')
     mockFetchUserAttributes.mockReset()
     mockSignOut.mockReset()
     setAuth({})
@@ -320,6 +329,48 @@ describe('AuthModal', () => {
       await openDialog()
       expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument()
       expect(screen.getByText('Signed in to your account.')).toBeInTheDocument()
+    })
+  })
+
+  describe('return path', () => {
+    it('remembers the current page (path, query, hash) when the sign-in dialog opens', async () => {
+      window.history.pushState({}, '', '/scales?root=D#top')
+      await renderModal()
+      expect(sessionStorage.getItem(RETURN_KEY)).toBeNull()
+      await openDialog()
+      expect(rememberedPath()).toBe('/scales?root=D#top')
+    })
+
+    it('forgets the remembered page when the sign-in dialog is dismissed', async () => {
+      window.history.pushState({}, '', '/scales')
+      await renderModal()
+      await openDialog()
+      expect(rememberedPath()).toBe('/scales')
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+      await advance(0)
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(sessionStorage.getItem(RETURN_KEY)).toBeNull()
+    })
+
+    it('does not touch the stored page when an authenticated user opens the account dialog', async () => {
+      sessionStorage.setItem(RETURN_KEY, '/kept')
+      setAuth({
+        authStatus: 'authenticated',
+        user: { userId: 'u1', signInDetails: { loginId: 'alice@example.com' } },
+      })
+      window.history.pushState({}, '', '/scales')
+      await renderModal()
+      await openDialog()
+      expect(sessionStorage.getItem(RETURN_KEY)).toBe('/kept')
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+      await advance(0)
+      expect(sessionStorage.getItem(RETURN_KEY)).toBe('/kept')
+    })
+
+    it('stores nothing until the dialog is opened', async () => {
+      window.history.pushState({}, '', '/scales')
+      await renderModal()
+      expect(sessionStorage.getItem(RETURN_KEY)).toBeNull()
     })
   })
 })

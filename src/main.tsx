@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { Authenticator } from '@aws-amplify/ui-react'
 import '@aws-amplify/ui-react/styles.css'
 import './auth/amplify'
+// Must stay a static import right after './auth/amplify': it subscribes to Amplify's OAuth result at module load.
+import { ReturnToPage } from './auth/ReturnToPage.tsx'
 import { registerJoinCodeCleanup } from './bandJoinCode.ts'
 import './index.css'
 import { DrumMachinePage } from './pages/DrumMachinePage.tsx'
@@ -54,6 +56,7 @@ createRoot(document.getElementById('root')!).render(
       <NoteColorsProvider>
       <TooltipProvider>
       <BrowserRouter>
+        <ReturnToPage />
         <ScrollToTop />
         <Nav />
         <Routes>
