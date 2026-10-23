@@ -1,5 +1,8 @@
 import { LIST_PAGE_SIZE, MAX_LIST_PAGES, type ListAllResult, type ReadAuthMode } from '../bandTypes';
 
+/** Parallel reads per band operation (bounded so a hostile band can't trigger a burst). */
+export const READS_AT_ONCE = 6;
+
 export interface PageResult<T> {
   items: T[];
   nextToken?: string | null;

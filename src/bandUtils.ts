@@ -142,7 +142,7 @@ export function isBanned(band: BandRecord, sub: string): boolean {
 }
 
 /** Earliest join first; ties broken by owner so the order is deterministic. */
-function byJoinOrder(a: MemberRecord, b: MemberRecord): number {
+export function byJoinOrder(a: MemberRecord, b: MemberRecord): number {
   return a.createdAt.localeCompare(b.createdAt) || a.owner.localeCompare(b.owner);
 }
 
@@ -309,8 +309,8 @@ export function isSongColorKey(value: string): value is SongColorKey {
   return (SONG_COLOR_KEYS as readonly string[]).includes(value);
 }
 
-type Stamped = { owner: string; createdAt?: string; updatedAt?: string };
-const rowStamp = (r: Stamped): string => r.updatedAt ?? r.createdAt ?? '';
+export type Stamped = { owner: string; createdAt?: string; updatedAt?: string };
+export const rowStamp = (r: Stamped): string => r.updatedAt ?? r.createdAt ?? '';
 const isNewerRow = (a: Stamped, b: Stamped): boolean =>
   (rowStamp(a).localeCompare(rowStamp(b)) || a.owner.localeCompare(b.owner)) > 0;
 

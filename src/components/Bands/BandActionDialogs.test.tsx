@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { BandRecord } from '../../bandTypes';
 
 vi.mock('../../api/setListsApi', () => ({ archiveSetList: vi.fn(), deleteMyContent: vi.fn() }));
+vi.mock('../../api/availabilityApi', () => ({ deleteMyAvailabilityWithin: vi.fn() }));
 vi.mock('../../api/bandsApi', () => ({
   banMember: vi.fn(),
   deleteBand: vi.fn(),
@@ -11,6 +12,7 @@ vi.mock('../../api/bandsApi', () => ({
 }));
 
 import { archiveSetList, deleteMyContent } from '../../api/setListsApi';
+import { deleteMyAvailabilityWithin } from '../../api/availabilityApi';
 import { banMember, deleteBand, dismissBand, resetInviteCode } from '../../api/bandsApi';
 import {
   ArchiveSetListDialog,
@@ -35,7 +37,7 @@ const band: BandRecord = {
 };
 
 beforeEach(() => {
-  for (const fn of [archiveSetList, deleteMyContent, banMember, deleteBand, dismissBand, resetInviteCode]) {
+  for (const fn of [archiveSetList, deleteMyContent, deleteMyAvailabilityWithin, banMember, deleteBand, dismissBand, resetInviteCode]) {
     vi.mocked(fn as (...a: never[]) => unknown).mockReset();
     vi.mocked(fn as (...a: never[]) => unknown).mockResolvedValue(undefined as never);
   }
@@ -98,13 +100,15 @@ describe('LeaveBandDialog', () => {
   it('cleans up with the checkbox choice, dismisses the band, then reports the leave', async () => {
     const order: string[] = [];
     vi.mocked(deleteMyContent).mockImplementation(async (_b, withSongs) => void order.push(`cleanup:${withSongs}`));
+    vi.mocked(deleteMyAvailabilityWithin).mockImplementation(async () => void order.push('availability'));
     vi.mocked(dismissBand).mockImplementation(async () => void order.push('dismiss'));
     const onLeft = vi.fn(() => void order.push('left'));
     render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={onLeft} />);
     expect(screen.getByLabelText('Also delete the songs I suggested')).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Leave band' }));
     await waitFor(() => expect(onLeft).toHaveBeenCalled());
-    expect(order).toEqual(['cleanup:true', 'dismiss', 'left']);
+    expect(order).toEqual(['cleanup:true', 'availability', 'dismiss', 'left']);
+    expect(deleteMyAvailabilityWithin).toHaveBeenCalledWith('band-1');
     expect(dismissBand).toHaveBeenCalledWith('band-1');
   });
 
@@ -124,12 +128,41 @@ describe('LeaveBandDialog', () => {
     const onLeft = vi.fn();
     render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={onLeft} />);
     fireEvent.click(screen.getByRole('button', { name: 'Leave band' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t remove all of your votes and songs');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t remove all of your content');
     expect(dismissBand).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'Leave anyway' }));
     await waitFor(() => expect(onLeft).toHaveBeenCalledTimes(1));
     expect(deleteMyContent).toHaveBeenCalledTimes(1);
     expect(dismissBand).toHaveBeenCalledWith('band-1');
+  });
+});
+
+describe('LeaveBandDialog availability cleanup', () => {
+  it('still removes votes and songs when the availability delete fails, then offers "Leave anyway"', async () => {
+    vi.mocked(deleteMyAvailabilityWithin).mockRejectedValue(new Error('timed out'));
+    const onLeft = vi.fn();
+    render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={onLeft} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave band' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t remove all of your content');
+    expect(deleteMyContent).toHaveBeenCalledTimes(1);
+    expect(dismissBand).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave anyway' }));
+    await waitFor(() => expect(onLeft).toHaveBeenCalledTimes(1));
+    // "Leave anyway" does not retry the cleanup.
+    expect(deleteMyAvailabilityWithin).toHaveBeenCalledTimes(1);
+  });
+
+  it('still deletes the availability row when removing votes and songs fails', async () => {
+    vi.mocked(deleteMyContent).mockRejectedValue(new Error('partial'));
+    render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave band' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(deleteMyAvailabilityWithin).toHaveBeenCalledWith('band-1');
+  });
+
+  it('says availability is removed', () => {
+    render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={() => {}} />);
+    expect(screen.getByText(/Your votes and availability are removed/)).toBeInTheDocument();
   });
 });
 

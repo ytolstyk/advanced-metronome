@@ -10,7 +10,7 @@ import {
   RemoveMemberDialog,
   ResetInviteDialog,
 } from '../components/Bands/BandActionDialogs';
-import { DangerZone, InviteSection, MembersSection, SetListsSection } from '../components/Bands/BandSections';
+import { AvailabilitySection, DangerZone, InviteSection, MembersSection, SetListsSection } from '../components/Bands/BandSections';
 import { BandsShell } from '../components/Bands/BandsShell';
 import { ConfirmDialog } from '../components/Bands/ConfirmDialog';
 import { InlineAlert } from '../components/Bands/InlineAlert';
@@ -187,6 +187,7 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
           setDialog({ kind: 'share-set-list', id, name: view.setLists.find((s) => s.id === id)?.name ?? '' });
         }}
       />
+      <AvailabilitySection bandId={band.id} />
       <MembersSection
         view={view}
         onRemove={(sub, name) => setDialog({ kind: 'remove-member', sub, name })}
@@ -243,7 +244,8 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
             <>
               Anyone with the link can view this list without signing in. Because of how the backend is secured,
               anyone with the link can also read the rest of this band’s data: the invite code, members’ display
-              names and account IDs, votes and your other set lists. “Stop sharing” hides the list in the app but
+              names and account IDs, votes, your other set lists and each member’s availability (the times they
+              marked free, which can show when they’re away). “Stop sharing” hides the list in the app but
               can’t take that access back from people who already have the link. Links and notes on the page come
               from band members and aren’t checked.
             </>

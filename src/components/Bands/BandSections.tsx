@@ -4,7 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BAND_LIMITS, type BandView } from '../../bandTypes';
-import { setListPath } from '../../bandRoutes';
+import { availabilityPath, setListPath } from '../../bandRoutes';
 import { buildInviteLink, formatInviteCode, isSetListShared } from '../../bandUtils';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { CARD_SURFACE_INTERACTIVE } from './cardStyles';
@@ -87,6 +87,25 @@ export function SetListsSection({
           })}
         </ul>
       )}
+    </section>
+  );
+}
+
+/** A link to the availability calendar; the page itself does the reading, so this costs no request. */
+export function AvailabilitySection({ bandId }: { bandId: string }) {
+  return (
+    <section aria-labelledby="availability-heading" className="mb-8">
+      <h2 id="availability-heading" className="mb-2 text-lg font-semibold text-foreground">Availability</h2>
+      <p className="mb-2 text-sm text-muted-foreground">
+        Mark when you can practice and see when everyone in the band overlaps.
+      </p>
+      <Link
+        to={availabilityPath(bandId)}
+        className={cn('flex min-h-14 items-center justify-between gap-3 rounded-lg p-3 text-foreground no-underline', CARD_SURFACE_INTERACTIVE)}
+      >
+        <span className="font-medium">Open the availability calendar</span>
+        <ChevronRight size={18} aria-hidden="true" />
+      </Link>
     </section>
   );
 }

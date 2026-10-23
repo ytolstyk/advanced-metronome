@@ -20,6 +20,7 @@ import {
 } from '../bandUtils';
 import { assembleBandView } from '../bandViews';
 import { getCurrentUserSub } from './authUtils';
+import { cleanupMyAvailability } from './availabilityRows';
 import {
   bandsClient as client,
   createIdempotent,
@@ -37,7 +38,7 @@ import {
   unwrap,
   updateBand,
 } from './bandsShared';
-import { listAll, pageOpts, runPool } from './paginate';
+import { READS_AT_ONCE, listAll, pageOpts, runPool } from './paginate';
 
 export class InviteError extends Error {
   readonly reason: InviteFailure;
@@ -50,8 +51,7 @@ export class InviteError extends Error {
 
 /** Invite-code allocation retries on a key collision (50-bit codes: this is paranoia, not load). */
 const INVITE_ATTEMPTS = 5;
-/** Parallel reads/writes per band operation (bounded so a hostile band can't trigger a burst). */
-const READS_AT_ONCE = 6;
+/** Parallel writes per band operation (bounded so a hostile band can't trigger a burst). */
 const WRITES_AT_ONCE = 4;
 /** Creates a BandInvite with a fresh code, retrying on key collision. Returns the code. */
 async function createInvite(bandId: string): Promise<string> {
@@ -125,9 +125,13 @@ export async function pruneDeadBands(bandIds: readonly string[]): Promise<void> 
 
 /**
  * Everything a band page needs, already validated. Throws on read errors (fail closed).
- * `onlySetListId` loads just that set list (the set-list page needs one, not all ten).
+ * `onlySetListId` loads just that set list (the set-list page needs one, not all ten);
+ * `skipSetLists` loads none (pages that only need the roster).
  */
-export async function loadBandView(bandId: string, options: { onlySetListId?: string } = {}): Promise<BandLoadResult> {
+export async function loadBandView(
+  bandId: string,
+  options: { onlySetListId?: string; skipSetLists?: boolean } = {},
+): Promise<BandLoadResult> {
   await requireAuth();
   const sub = await getCurrentUserSub();
   // None of these need each other, so they start together; the roster/own row are simply ignored
@@ -144,9 +148,11 @@ export async function loadBandView(bandId: string, options: { onlySetListId?: st
 
   // Only the first `maxSetLists` ids count (a hostile owner could write thousands), fetched with
   // bounded parallelism.
-  const ids = band.setListIds
-    .slice(0, BAND_LIMITS.maxSetLists)
-    .filter((id) => options.onlySetListId === undefined || id === options.onlySetListId);
+  const ids = options.skipSetLists
+    ? []
+    : band.setListIds
+        .slice(0, BAND_LIMITS.maxSetLists)
+        .filter((id) => options.onlySetListId === undefined || id === options.onlySetListId);
   const setListRows = new Array<SetListRecord | null>(ids.length).fill(null);
   await runPool(
     READS_AT_ONCE,
@@ -276,10 +282,15 @@ export async function ensureMyBandRow(bandId: string): Promise<void> {
   await createIdempotent(() => client.models.MyBand.create({ owner: sub, bandId }), 'createMyBand');
 }
 
-/** Removes the caller's own Member + MyBand rows (leave, or dismiss a removed/deleted band). */
+/**
+ * Removes the caller's own Member + MyBand rows (leave, or dismiss a removed/deleted band). Their
+ * availability row is cleaned up best-effort alongside (bounded, never rejects, not awaited): it is
+ * cosmetic next to losing membership, and a leaving member's dialog already deletes it first.
+ */
 export async function dismissBand(bandId: string): Promise<void> {
   await requireAuth();
   const sub = await getCurrentUserSub();
+  void cleanupMyAvailability(bandId);
   await Promise.all([
     deleteQuietly(() => client.models.Member.delete({ bandId, owner: sub }), 'deleteMember'),
     deleteQuietly(() => client.models.MyBand.delete({ owner: sub, bandId }), 'deleteMyBand'),

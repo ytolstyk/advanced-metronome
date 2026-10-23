@@ -402,6 +402,32 @@ const schema = a.schema({
       allow.authenticated().to(['get', 'list']),
     ]),
 
+  // A member's free practice times, one row per (band, member). `mask` is lowercase hex, 12 chars
+  // per UTC day (48 half-hour slots), bit 1 = the member marked that slot free; bit 0 of the mask is
+  // slot `startDay * 48`. Only "free" is stored, so unmarked time is never "busy". Every save writes
+  // a fixed 62-day window from today and drops past slots, so a row prunes whenever its owner saves. Read by exact key
+  // only: there is deliberately NO index (a bandId index page could be flooded or bricked by junk
+  // rows nobody else can delete) and no `list`. That is NOT a privacy barrier: the Member roster is
+  // guest-listable (so every sub is public), a shared set-list link reveals the bandId, and sign-up
+  // is open, so anyone with a band link can read every member's free times. Disclosed in the share
+  // dialog and privacy policy. Auth rules can't look inside a row, so the client parses strictly and
+  // hides anything unexpected (`format` must be 1; see `parseAvailabilityRow`). `owner` is declared
+  // only because it is part of the key. Members can delete their own row (leave-band cleanup).
+  // Signed-in reads only (no guest).
+  Availability: a.model({
+    bandId: a.string().required(),
+    owner: a.string().required(),
+    format: a.integer().required(),     // row layout version; this client only reads 1
+    startDay: a.integer().required(),   // UTC day number (days since 1970-01-01) of mask bit 0
+    mask: a.string().required(),        // lowercase hex free-slot bitmap, validated in the client
+  })
+    .identifier(['bandId', 'owner'])
+    .disableOperations(['list', 'subscriptions'])
+    .authorization(allow => [
+      allow.owner().identityClaim('sub'),
+      allow.authenticated().to(['get']),
+    ]),
+
   // One row per (song, voter). The key makes a second vote a conflict and stops key squatting.
   Vote: a.model({
     songId: a.string().required(),

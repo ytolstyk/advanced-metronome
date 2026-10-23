@@ -372,6 +372,17 @@ describe('loadBandView', () => {
     expect(res.view.setLists.map((s) => s.id)).toEqual(['sl-1']);
   });
 
+  it('reads no set lists when asked to skip them (pages that only need the roster)', async () => {
+    m.Band.get.mockResolvedValue({ data: bandRow({ setListIds: ['sl-1', 'sl-2'] }) });
+    m.Member.get.mockResolvedValue({ data: memberRow(ME) });
+    m.SetList.get.mockClear();
+    const res = await loadBandView('band-1', { skipSetLists: true });
+    if (res.status !== 'ok') throw new Error('expected ok');
+    expect(m.SetList.get).not.toHaveBeenCalled();
+    expect(res.view.setLists).toEqual([]);
+    expect(res.view.isMember).toBe(true);
+  });
+
   it('drops set lists that fail validation (forged owner, archived)', async () => {
     m.Band.get.mockResolvedValue({ data: bandRow({ setListIds: ['sl-1', 'sl-2', 'sl-3'] }) });
     m.SetList.get.mockImplementation(async ({ id }: { id: string }) => ({

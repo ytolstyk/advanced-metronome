@@ -12,6 +12,16 @@
 //     self-attestation: you must name the throwaway pool you intend to attack.
 // The users it creates are deleted when it finishes (also on Ctrl-C / SIGTERM).
 // Deploy a disposable sandbox first (`npx ampx sandbox --identifier bands-spike --outputs-out-dir ...`).
+// Setup the sandbox needs before this runs:
+//   - the identifier must be under 15 characters;
+//   - the backend reads the GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET secrets, so set placeholders
+//     first (`printf '%s' placeholder | npx ampx sandbox secret set GOOGLE_CLIENT_ID --identifier ...`;
+//     no trailing newline, the identity pool rejects one);
+//   - the user pool app client must allow the USER_PASSWORD_AUTH flow (Amplify enables only SRP by
+//     default): Cognito console > the sandbox user pool > App clients > the client > Edit > turn on
+//     "Sign in with username and password: ALLOW_USER_PASSWORD_AUTH". Leave the other settings alone.
+//   - the AWS identity running this needs cognito-idp AdminCreateUser, AdminSetUserPassword and
+//     AdminDeleteUser on that pool.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -140,13 +150,16 @@ console.log('QUERIES', Object.keys(queries).sort().join(', '));
 console.log('MUTATIONS', mutations.sort().join(', '));
 console.log('SUBSCRIPTIONS', subs.join(', ') || '(none)');
 
-for (const q of ['getBand', 'getBandInvite', 'getSetList', 'getSong', 'getVote', 'getMember', 'getMyBand', 'listMyBands', 'getSongColor', 'getColorLabel', 'listColorLabelByBand', 'listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList'])
+for (const q of ['getBand', 'getBandInvite', 'getSetList', 'getSong', 'getVote', 'getMember', 'getMyBand', 'listMyBands', 'getSongColor', 'getColorLabel', 'getAvailability', 'listColorLabelByBand', 'listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList'])
   check('G0', `query ${q} exists`, q in queries, '', true);
 for (const q of ['listBands', 'listBandInvites', 'listSetLists', 'listSongs', 'listVotes', 'listMembers', 'listSongColors', 'listColorLabels'])
   check('G1b', `plain ${q} absent`, !(q in queries), '', true);
+// Availability is read by exact key only: no list, no index of any kind (a bandId index page could be
+// flooded or bricked by junk rows nobody else can delete), so nothing starting `listAvailabilit` may exist.
+check('G1b', 'no Availability list or index query exists', !Object.keys(queries).some((q) => q.startsWith('listAvailabilit')), Object.keys(queries).filter((q) => q.startsWith('listAvailabilit')).join(','), true);
 for (const m of ['deleteBand', 'deleteSetList', 'deleteBandInvite'])
   check('G3', `mutation ${m} absent`, !mutations.includes(m), '', true);
-for (const m of ['deleteSong', 'deleteVote', 'deleteMember', 'deleteMyBand', 'deleteSongColor', 'deleteColorLabel'])
+for (const m of ['deleteSong', 'deleteVote', 'deleteMember', 'deleteMyBand', 'deleteSongColor', 'deleteColorLabel', 'deleteAvailability'])
   check('G0', `mutation ${m} present`, mutations.includes(m));
 check('G0', 'subscriptions absent/empty', subs.length === 0, subs.join(','));
 // No owner-partitioned query on public-read models (cross-band pivot).
@@ -164,6 +177,7 @@ const FIELDS = {
   Vote: 'songId owner value bandId setListId createdAt',
   SongColor: 'songId owner color bandId setListId createdAt updatedAt',
   ColorLabel: 'bandId color owner label createdAt updatedAt',
+  Availability: 'bandId owner format startDay mask createdAt updatedAt',
 };
 const create = (u, model, input) =>
   gql(u, `mutation($input: Create${model}Input!){ create${model}(input:$input){ ${FIELDS[model]} } }`, { input });
@@ -259,6 +273,84 @@ r = await gql(A, `mutation($input: DeleteColorLabelInput!){ deleteColorLabel(inp
 check('G3', 'A cannot delete B\'s ColorLabel row', !r.data?.deleteColorLabel, errType(r), true);
 r = await getById(A, 'ColorLabel', { bandId, color: 'red', owner: B.sub });
 check('G1', 'A can read B\'s ColorLabel row (signed in)', !!r.data?.getColorLabel, errType(r));
+
+// ---------- availability (one row per member per band, read by exact key only) ----------
+const MASK = '0'.repeat(11) + '8'; // one UTC day, one slot free
+const avail = (owner, over = {}) => ({ bandId, owner, format: 1, startDay: 20000, mask: MASK, ...over });
+r = await create(B, 'Availability', avail(A.sub));
+check('G2', 'B cannot create an Availability row as A', !r.data?.createAvailability, errType(r), true);
+r = await create(A, 'Availability', avail(A.sub));
+check('G2', 'A creates own Availability row', !!r.data?.createAvailability, errType(r), true);
+r = await create(B, 'Availability', avail(B.sub));
+check('G2', 'B creates own Availability row', !!r.data?.createAvailability, errType(r), true);
+r = await update(A, 'Availability', { bandId, owner: B.sub, mask: '1'.repeat(12) });
+check('G3', 'A cannot update B\'s Availability row', !r.data?.updateAvailability, errType(r), true);
+r = await gql(A, `mutation($input: DeleteAvailabilityInput!){ deleteAvailability(input:$input){ bandId } }`, { input: { bandId, owner: B.sub } });
+check('G3', 'A cannot delete B\'s Availability row', !r.data?.deleteAvailability, errType(r), true);
+r = await getById(A, 'Availability', { bandId, owner: B.sub });
+check('G1', 'A can read B\'s Availability row by key (signed in)', !!r.data?.getAvailability, errType(r), true);
+r = await getById(C, 'Availability', { bandId, owner: B.sub });
+check('G1', 'outsider C can read B\'s Availability row by key (documented exposure: bandId + sub is the capability)', !!r.data?.getAvailability, errType(r));
+// "Last saved" is shown from the server's updatedAt. If a client can set it, it is advisory only.
+// A clean row comes first so a rejected forgery can't pass for the wrong reason (no row at all).
+const FORGED = '2999-01-01T00:00:00.000Z';
+const forged = (v) => String(v ?? '').startsWith('2999');
+r = await create(C, 'Availability', avail(C.sub));
+check('G2', 'C creates own Availability row (control for the forgery checks)', !!r.data?.createAvailability, errType(r), true);
+{
+  const forgedBand = randomUUID();
+  r = await create(C, 'Availability', avail(C.sub, { bandId: forgedBand, updatedAt: FORGED, createdAt: FORGED }));
+  const created = r.data?.createAvailability;
+  check('G2', 'a client-supplied updatedAt/createdAt on create is rejected or ignored ("last saved" is trustworthy)', !created || (!forged(created.updatedAt) && !forged(created.createdAt)), errType(r));
+  if (created) {
+    const back = await getById(C, 'Availability', { bandId: forgedBand, owner: C.sub });
+    check('G2', 'the stored row does not keep a forged timestamp', !forged(back.data?.getAvailability?.updatedAt) && !forged(back.data?.getAvailability?.createdAt), `${back.data?.getAvailability?.updatedAt}`);
+  }
+}
+r = await update(C, 'Availability', { bandId, owner: C.sub, updatedAt: FORGED });
+{
+  const back = await getById(C, 'Availability', { bandId, owner: C.sub });
+  check('G2', 'a client-supplied updatedAt on update is rejected or ignored', !forged(r.data?.updateAvailability?.updatedAt) && !forged(back.data?.getAvailability?.updatedAt), errType(r));
+}
+// Roster order for the participant cap uses Member.createdAt; if a client can backdate it, a hostile
+// joiner could jump the queue. Own throwaway band, so the roster checks below are unaffected.
+r = await create(C, 'Member', { bandId: randomUUID(), owner: C.sub, displayName: 'Backdated', createdAt: '2001-01-01T00:00:00.000Z' });
+info('G3', 'client can supply Member.createdAt (participant cap order)', r.data?.createMember ? `accepted: ${r.data.createMember.createdAt}` : `rejected: ${errType(r)}`);
+// Read-after-write: the editor trusts the row it just wrote; a stale keyed get would flicker marks back.
+{
+  let stale = 0;
+  for (let i = 1; i <= 6; i++) {
+    const mask = i.toString(16).repeat(12);
+    await update(B, 'Availability', { bandId, owner: B.sub, mask });
+    const got = await getById(B, 'Availability', { bandId, owner: B.sub });
+    if (got.data?.getAvailability?.mask !== mask) stale++;
+  }
+  check('G5', 'a keyed get right after an update returns the new row (read-after-write)', stale === 0, `${stale}/6 stale reads`);
+}
+// The save loop re-branches on these; record the exact error shapes the backend returns.
+const missingBand = randomUUID();
+r = await update(B, 'Availability', { bandId: missingBand, owner: B.sub, mask: MASK });
+info('G5', 'update of a missing own Availability row', r.data?.updateAvailability ? 'ACCEPTED (upserted?!)' : `rejected: ${errType(r)}`);
+r = await gql(B, `mutation($input: DeleteAvailabilityInput!){ deleteAvailability(input:$input){ bandId } }`, { input: { bandId: missingBand, owner: B.sub } });
+info('G5', 'delete of a missing own Availability row', r.data?.deleteAvailability === null && !r.errors ? 'ok (null)' : r.data?.deleteAvailability ? 'ok (row returned)' : `rejected: ${errType(r)}`);
+r = await create(B, 'Availability', avail(B.sub));
+info('G5', 'second create of an existing own row (createIdempotent maps this to "exists")', r.data?.createAvailability ? 'ACCEPTED (overwrote?!)' : `rejected: ${errType(r)}`);
+// Cost of one hostile oversized row (nothing server-side caps it; the client hides it, but every viewer downloads it).
+{
+  const big = '0'.repeat(300_000);
+  const bigBand = randomUUID();
+  const t0 = Date.now();
+  r = await create(C, 'Availability', avail(C.sub, { bandId: bigBand, mask: big }));
+  const wrote = !!r.data?.createAvailability;
+  info('G5', 'a ~300 KB Availability mask can be written', wrote ? `accepted in ${Date.now() - t0} ms` : `rejected: ${errType(r)}`);
+  if (wrote) {
+    const t1 = Date.now();
+    const got = await gql(C, `query($b:String!,$o:String!){ getAvailability(bandId:$b, owner:$o){ mask } }`, { b: bigBand, o: C.sub });
+    info('G5', 'reading it back by key', `${Date.now() - t1} ms, ${String(got.data?.getAvailability?.mask ?? '').length} chars`);
+    // Leave no multi-hundred-KB row behind in the sandbox.
+    await gql(C, `mutation($input: DeleteAvailabilityInput!){ deleteAvailability(input:$input){ bandId } }`, { input: { bandId: bigBand, owner: C.sub } });
+  }
+}
 
 // ---------- Band root of trust ----------
 r = await update(B, 'Band', { id: bandId, bannedSubs: [A.sub] });
@@ -395,6 +487,8 @@ r = await G(`query($s:String!){ listSongColorBySetList(setListId:$s){ items{ son
 check('G6', 'guest cannot list song colors (signed-in only)', !r.data?.listSongColorBySetList, errType(r), true);
 r = await G(`query($b:String!){ listColorLabelByBand(bandId:$b){ items{ color } } }`, { b: bandId });
 check('G6', 'guest cannot list color labels (signed-in only)', !r.data?.listColorLabelByBand, errType(r), true);
+r = await G(`query($b:String!,$o:String!){ getAvailability(bandId:$b, owner:$o){ mask } }`, { b: bandId, o: B.sub });
+check('G6', 'guest cannot get an Availability row (signed-in only)', !r.data?.getAvailability && denied(r), errType(r), true);
 
 // Guests never write, and never reach the private models.
 const guestWrites = [

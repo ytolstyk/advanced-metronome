@@ -31,6 +31,40 @@ export const BAND_LIMITS = {
   colorLabelMax: 20,
 } as const;
 
+const AVAILABILITY_SLOTS_PER_DAY = 48;
+const AVAILABILITY_HORIZON_DAYS = 60;
+
+/**
+ * Availability calendar: a member's free time as a UTC-anchored bitmask of 30-minute slots, one row
+ * per (band, member). Client-enforced like the other limits: a row outside these bounds is hidden.
+ * `formatVersion`, `slotMs`, `slotsPerDay` and `hexPerDay` are the stored bit layout: changing any
+ * of them corrupts every row already written, so they need a new `formatVersion`. The rest are
+ * product tunables, and the derived ones keep the horizon and the writer window from drifting apart.
+ */
+export const AVAILABILITY_LIMITS = {
+  /** The only row `format` this client reads or writes. */
+  formatVersion: 1,
+  slotMs: 30 * 60 * 1000,
+  slotsPerDay: AVAILABILITY_SLOTS_PER_DAY,
+  /** 4 slots per hex character. */
+  hexPerDay: AVAILABILITY_SLOTS_PER_DAY / 4,
+  /** How many local days ahead a member can mark (today included). */
+  horizonDays: AVAILABILITY_HORIZON_DAYS,
+  /**
+   * Every save writes exactly this many UTC days. Local days are offset from UTC by up to a day
+   * either way, so covering `horizonDays` local days takes `horizonDays + 2` UTC days.
+   */
+  writerMaxDays: AVAILABILITY_HORIZON_DAYS + 2,
+  /** Rows up to this long are still read, leaving headroom over anything the writer emits. */
+  parserMaxDays: 96,
+  /** Default shortest window "Best times" suggests (2 hours). */
+  defaultMinSlots: 4,
+  /** Read bound: members beyond this (join order, owner and caller first) are not fetched. */
+  maxParticipants: 30,
+  /** A row saved longer ago than this is flagged "may be out of date". */
+  staleDays: 14,
+} as const;
+
 /**
  * Names written into rows. `deletedName` doubles as the "already scrubbed" marker that makes
  * `deleteBand` re-runnable, so every writer and checker must use this constant.
@@ -134,6 +168,43 @@ export interface ColorLabelRecord {
   label: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface AvailabilityRecord {
+  bandId: string;
+  owner: string;
+  /** Row layout version; only `AVAILABILITY_LIMITS.formatVersion` is readable. */
+  format: number;
+  /** UTC day number (days since 1970-01-01) of mask bit 0. */
+  startDay: number;
+  /** Lowercase hex, 12 characters per UTC day; bit = 1 means the member marked that slot free. */
+  mask: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** The outcome of reading one member's availability row by key. */
+export type AvailabilityRead = { status: 'ok'; row: AvailabilityRecord | null } | { status: 'failed' };
+
+/** Why a participant is not free for a whole window. */
+export type MissingReason =
+  /** Has data for the window but didn't mark all of it free. */
+  | 'not-marked'
+  /** Their saved row doesn't reach the window. */
+  | 'no-data'
+  /** No row (or an expired one). */
+  | 'not-responded'
+  /** Their row couldn't be read. */
+  | 'unreadable';
+
+/** A time range (end exclusive, in slots) that several members are all free for. */
+export interface BestWindow {
+  startSlot: number;
+  endSlot: number;
+  /** Members free for the whole window, in participant order. */
+  subs: string[];
+  /** Everyone else, with why. */
+  missing: { sub: string; reason: MissingReason }[];
 }
 
 export interface VoteRecord {

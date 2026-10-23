@@ -2,7 +2,7 @@ import { LegalPage } from '@/components/LegalPage/LegalPage';
 
 export function PrivacyPolicyPage() {
   return (
-    <LegalPage title="Privacy Policy" lastUpdated="October 14, 2026">
+    <LegalPage title="Privacy Policy" lastUpdated="October 23, 2026">
       <p>
         This Privacy Policy explains what information Advanced Metronome (the &ldquo;Service&rdquo;)
         collects, how it is used, and the choices you have.
@@ -41,6 +41,16 @@ export function PrivacyPolicyPage() {
           for someone who already has the link.
         </li>
         <li>
+          <strong>Band availability:</strong> if you mark times you can practice, those times (and
+          when you last saved them) are stored in the cloud under your account&rsquo;s internal user ID.
+          Only the times you mark free are stored. Anyone with an account who has the band&rsquo;s link
+          can read them, because member IDs are visible to anyone with the link. That includes a link
+          to a shared set list, and patterns of free time can reveal when you are away. You can delete
+          your availability at any time from the availability page. It is also deleted when you leave
+          a band, if that deletion succeeds. If the owner removes you, or the band is deleted, your
+          availability may remain readable until you dismiss the band, and if you never do, until you delete it or ask us to.
+        </li>
+        <li>
           <strong>Microphone (local analysis only):</strong> the tuner and fret memorizer can use your
           microphone. Pitch detection runs in your browser and the audio is not uploaded. You must
           grant permission first and can revoke it at any time.
@@ -76,14 +86,14 @@ export function PrivacyPolicyPage() {
         Local data can be cleared via your browser settings. To request deletion of your account and
         cloud-stored data, contact us using the details below. Deleting a published tab removes it
         from the public library. When you leave a band you can also delete your own votes and songs
-        in it. Deleted bands are closed and their name, invite code and member bans are cleared, but
+        in it, and we try to delete your availability too. Deleted bands are closed and their name, invite code and member bans are cleared, but
         songs and votes written by other members may remain until those members remove them.
       </p>
 
       <h2>Cookies and local storage</h2>
       <p>
         We use localStorage and authentication session storage that are necessary for the Service to
-        function. If you open a band invite link while signed out, the invite code is kept in your
+        function, including your availability page preferences and whether you have seen its notice. If you open a band invite link while signed out, the invite code is kept in your
         browser&rsquo;s session storage until you finish joining, dismiss it or sign out. We do not
         use advertising cookies.
       </p>

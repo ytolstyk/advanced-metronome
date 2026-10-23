@@ -109,6 +109,19 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe('BandPage availability link', () => {
+  it('a member can open the availability calendar for this band', async () => {
+    load(makeView());
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    const section = screen.getByRole('region', { name: 'Availability' });
+    expect(within(section).getByRole('link', { name: /Open the availability calendar/ })).toHaveAttribute(
+      'href',
+      '/bands/band-1/availability',
+    );
+  });
+});
+
 describe('BandPage states', () => {
   it('not found', async () => {
     vi.mocked(loadBandView).mockResolvedValue({ status: 'not-found' });
@@ -228,7 +241,7 @@ describe('BandPage as a member', () => {
     await screen.findByRole('heading', { name: 'The Band' });
     await openLeaveDialog();
     confirmLeave();
-    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t remove all of your votes and songs');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t remove all of your content');
     expect(dismissBand).not.toHaveBeenCalled(); // still a member until they choose
     expect(screen.getByTestId('where')).toHaveTextContent('/bands/band-1');
 
@@ -365,6 +378,8 @@ describe('BandPage as the owner', () => {
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('invite code');
     expect(dialog).toHaveTextContent('can’t take that access back');
+    // The exposure includes members' availability, so the owner is told before agreeing.
+    expect(dialog).toHaveTextContent('each member’s availability');
     expect(setSetListShared).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Share' }));
     await waitFor(() => expect(setSetListShared).toHaveBeenCalledWith('band-1', 'sl-1', true));

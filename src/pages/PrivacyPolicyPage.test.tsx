@@ -27,4 +27,24 @@ describe('PrivacyPolicyPage', () => {
     render(<PrivacyPolicyPage />);
     expect(screen.getByText(/the names you give a band.s colors \(any member can change them\)/)).toBeInTheDocument();
   });
+
+  it('discloses stored availability, who can read it, and how it is deleted', () => {
+    render(<PrivacyPolicyPage />);
+    const item = screen.getByText('Band availability:').closest('li')!;
+    expect(item).toHaveTextContent(/Only the times you mark free are stored/);
+    expect(item).toHaveTextContent(/Anyone with an account who has the band.s link can read them/);
+    expect(item).toHaveTextContent(/shared set list/);
+    expect(item).toHaveTextContent(/delete your availability at any time/);
+    expect(item).toHaveTextContent(/may remain readable until you dismiss the band, and if you never do, until you delete it or ask us to/);
+  });
+
+  it('says leaving a band also deletes availability', () => {
+    render(<PrivacyPolicyPage />);
+    expect(screen.getByText(/and we try to delete your availability too/)).toBeInTheDocument();
+  });
+
+  it('lists the availability preferences kept in local storage', () => {
+    render(<PrivacyPolicyPage />);
+    expect(screen.getByText(/including your availability page preferences and whether you have seen its notice/)).toBeInTheDocument();
+  });
 });

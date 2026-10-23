@@ -40,6 +40,7 @@ import { ArpeggiosPage } from './pages/ArpeggiosPage.tsx'
 import { BandsPage } from './pages/BandsPage.tsx'
 import { BandPage } from './pages/BandPage.tsx'
 import { SetListPage } from './pages/SetListPage.tsx'
+import { AvailabilityPage } from './pages/AvailabilityPage.tsx'
 import { SharedSetListPage } from './pages/SharedSetListPage.tsx'
 import { ScrollToTop } from './components/ScrollToTop/ScrollToTop.tsx'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage.tsx'
@@ -84,6 +85,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/arpeggios" element={<ArpeggiosPage />} />
           <Route path="/bands" element={<BandsPage />} />
           <Route path="/bands/:bandId" element={<BandPage />} />
+          <Route path="/bands/:bandId/availability" element={<AvailabilityPage />} />
           <Route path="/bands/:bandId/setlists/:setListId" element={<SetListPage />} />
           <Route path="/shared/:setListId" element={<SharedSetListPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
