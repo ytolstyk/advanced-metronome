@@ -68,6 +68,7 @@ const bandRow = (over: Partial<BandRow> = {}): BandRow => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  inviteTtlDays: 1,
   ...over,
 });
 
@@ -227,6 +228,7 @@ describe('row mappers', () => {
       bannedSubs: [],
       hiddenSongIds: [],
       sharedSetListIds: [],
+      inviteTtlDays: 1,
     });
   });
 

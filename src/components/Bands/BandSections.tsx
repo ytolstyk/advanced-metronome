@@ -1,14 +1,11 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BAND_LIMITS, type BandView } from '../../bandTypes';
 import { availabilityPath, setListPath } from '../../bandRoutes';
-import { buildInviteLink, formatInviteCode, isSetListShared } from '../../bandUtils';
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { isSetListShared } from '../../bandUtils';
 import { CARD_SURFACE_INTERACTIVE } from './cardStyles';
-import { InlineAlert } from './InlineAlert';
 import { CopyShareLinkButton } from './CopyShareLinkButton';
 import { MemberList } from './MemberList';
 
@@ -138,45 +135,6 @@ export function MembersSection({
             ))}
           </ul>
         </div>
-      )}
-    </section>
-  );
-}
-
-export function InviteSection({ view, onReset }: { view: BandView; onReset: () => void }) {
-  const [copied, copy] = useCopyToClipboard();
-  const [copyFailed, setCopyFailed] = useState(false);
-  const link = buildInviteLink(window.location.origin, view.band.inviteCode);
-  return (
-    <section aria-labelledby="invite-heading" className="mb-8">
-      <h2 id="invite-heading" className="mb-2 text-lg font-semibold text-foreground">Invite</h2>
-      <p className="mb-2 text-sm text-muted-foreground">
-        Anyone with this code or link can join instantly. Share it only with people you trust.
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <code className="rounded-md bg-card px-3 py-2 font-mono text-base tracking-wider text-foreground">
-          {link ? formatInviteCode(view.band.inviteCode) : '—'}
-        </code>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!link}
-          onClick={async () => {
-            if (link) setCopyFailed(!(await copy(link)));
-          }}
-        >
-          {copied ? 'Copied!' : 'Copy invite link'}
-        </Button>
-        {view.isOwner && (
-          <Button variant="ghost" size="sm" onClick={onReset}>
-            Reset code
-          </Button>
-        )}
-      </div>
-      {copyFailed && (
-        <InlineAlert tone="warning" className="mt-2">
-          Couldn’t copy automatically. Select the code and copy it by hand.
-        </InlineAlert>
       )}
     </section>
   );

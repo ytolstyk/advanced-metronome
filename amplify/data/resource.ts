@@ -282,6 +282,7 @@ const schema = a.schema({
     bannedSubs: a.string().array(),
     hiddenSongIds: a.string().array(),
     sharedSetListIds: a.string().array(), // owner-written: set lists anyone with the link may read
+    inviteTtlDays: a.integer(),         // owner-written: days an invite link works (1-7; empty = 1)
   })
     .disableOperations(['delete', 'list', 'subscriptions'])
     .authorization(allow => [
@@ -291,6 +292,7 @@ const schema = a.schema({
     ]),
 
   // Invite code → bandId lookup. Rows are never deleted (a retired code can't be re-created).
+  // An invite also expires `Band.inviteTtlDays` after its server-set `createdAt` (checked client-side).
   BandInvite: a.model({
     code: a.string().required(),
     bandId: a.string().required(),

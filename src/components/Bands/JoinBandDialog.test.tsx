@@ -42,6 +42,21 @@ describe('JoinBandDialog', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
   });
 
+  it('opens on the confirm step when the link was already looked up', () => {
+    setup({ initialCode: 'ABCDEFGHJK', initialPreview: preview });
+    expect(screen.getByText(/Cream/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Invite code')).not.toBeInTheDocument();
+    expect(lookupInvite).not.toHaveBeenCalled();
+  });
+
+  it('shows a failure carried in from the landing check, and drops it on the next lookup', async () => {
+    setup({ initialCode: 'ABCDEFGHJK', initialError: 'You were removed from this band.' });
+    expect(screen.getByRole('alert')).toHaveTextContent('You were removed from this band.');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByText(/Cream/);
+    expect(screen.queryByText('You were removed from this band.')).not.toBeInTheDocument();
+  });
+
   it('looks the code up exactly as typed and moves to the confirm step', async () => {
     setup();
     fireEvent.change(screen.getByLabelText('Invite code'), { target: { value: 'abcde fghjk' } });

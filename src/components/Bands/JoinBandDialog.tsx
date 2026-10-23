@@ -21,22 +21,36 @@ interface JoinBandDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Code from a shared link (`/bands?join=CODE`). */
   initialCode?: string;
+  /** The code was already looked up (see `useInviteLinkCheck`): open straight on the confirm step. */
+  initialPreview?: InvitePreview | null;
+  /** Why that lookup failed, shown until the person looks something up again. */
+  initialError?: string | null;
   defaultDisplayName: string;
   onJoined: (bandId: string) => void;
 }
 
-export function JoinBandDialog({ open, onOpenChange, initialCode = '', defaultDisplayName, onJoined }: JoinBandDialogProps) {
+export function JoinBandDialog({
+  open,
+  onOpenChange,
+  initialCode = '',
+  initialPreview = null,
+  initialError = null,
+  defaultDisplayName,
+  onJoined,
+}: JoinBandDialogProps) {
   const codeId = useId();
   const [code, setCode] = useState(initialCode);
   // Step 2 ("confirm") is the presence of a preview; closing the dialog goes back to step 1.
-  const [preview, setPreview] = useState<InvitePreview | null>(null);
+  const [preview, setPreview] = useState<InvitePreview | null>(initialPreview);
   const { run, busy, error, clearError } = useAsyncAction();
+  const [carriedError, setCarriedError] = useState(initialError);
 
   const handleOpenChange = (next: boolean) => {
     if (busy) return;
     if (!next) {
       setPreview(null);
       clearError();
+      setCarriedError(null);
     }
     onOpenChange(next);
   };
@@ -44,6 +58,7 @@ export function JoinBandDialog({ open, onOpenChange, initialCode = '', defaultDi
   const lookup = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
+    setCarriedError(null);
     let found: InvitePreview | null = null;
     const ok = await run(async () => {
       found = await withInviteErrors(() => lookupInvite(code));
@@ -56,7 +71,9 @@ export function JoinBandDialog({ open, onOpenChange, initialCode = '', defaultDi
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Join a band</DialogTitle>
-          <DialogDescription>Enter the invite code the band owner gave you.</DialogDescription>
+          <DialogDescription>
+            {preview ? 'Check the band, then confirm.' : 'Enter the invite code the band owner gave you.'}
+          </DialogDescription>
         </DialogHeader>
         {preview ? (
           <JoinConfirm
@@ -84,7 +101,7 @@ export function JoinBandDialog({ open, onOpenChange, initialCode = '', defaultDi
                 autoFocus
               />
             </div>
-            {error && <InlineAlert tone="error">{error}</InlineAlert>}
+            {(error ?? carriedError) && <InlineAlert tone="error">{error ?? carriedError}</InlineAlert>}
             <Button type="submit" disabled={busy || !code.trim()} className="justify-self-start">
               {busy ? 'Looking up…' : 'Continue'}
             </Button>

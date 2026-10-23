@@ -40,11 +40,14 @@ import {
   joinBand,
   loadBandView,
   loadMyBands,
+  ensureFreshInvite,
+  getInviteIssuedAt,
   lookupInvite,
   previewBand,
   pruneDeadBands,
   renameBand,
   resetInviteCode,
+  setInviteTtlDays,
   unbanMember,
 } from './bandsApi';
 import { BandConflictError } from './bandsShared';
@@ -65,6 +68,7 @@ const bandRow = (over: Record<string, unknown> = {}) => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  inviteTtlDays: 1,
   ...over,
 });
 const memberRow = (owner: string, over: Record<string, unknown> = {}) => ({
@@ -155,6 +159,7 @@ describe('createBand', () => {
     m.Band.create.mockImplementation(async (i: Record<string, unknown>) => ({ data: bandRow({ ...i, owner: ME }) }));
     const band = await createBand('The Band', 'Alice');
     expect(m.Band.create.mock.calls[0][0]).toHaveProperty('sharedSetListIds', []);
+    expect(m.Band.create.mock.calls[0][0]).toHaveProperty('inviteTtlDays', 1);
     expect(band.sharedSetListIds).toEqual([]);
   });
 
@@ -234,7 +239,7 @@ describe('createBand', () => {
 
 describe('lookupInvite', () => {
   const invite = (over: Record<string, unknown> = {}) => ({
-    data: { code: 'ABCDEFGHJK', bandId: 'band-1', revokedAt: null, ...over },
+    data: { code: 'ABCDEFGHJK', bandId: 'band-1', revokedAt: null, createdAt: new Date(Date.now() - 60_000).toISOString(), ...over },
   });
   const reason = async (input: string) => {
     try {
@@ -263,6 +268,33 @@ describe('lookupInvite', () => {
     expect(await reason('ABCDE-FGHJK')).toBe('revoked');
   });
 
+  it('rejects an invite older than the band\u2019s lifetime, and honours a longer lifetime', async () => {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    m.BandInvite.get.mockResolvedValue(invite({ createdAt: threeDaysAgo }));
+    m.Member.listMemberByBandId.mockResolvedValue({ data: [memberRow('sub-owner')], nextToken: null });
+
+    m.Band.get.mockResolvedValue({ data: bandRow() }); // default lifetime: 1 day
+    expect(await reason('ABCDE-FGHJK')).toBe('expired');
+    m.Band.get.mockResolvedValue({ data: bandRow({ inviteTtlDays: 2 }) });
+    expect(await reason('ABCDE-FGHJK')).toBe('expired');
+    m.Band.get.mockResolvedValue({ data: bandRow({ inviteTtlDays: 7 }) });
+    expect(await reason('ABCDE-FGHJK')).toBe('ok');
+  });
+
+  it('treats a band with no stored lifetime, or a bad one, as 1 day', async () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    m.BandInvite.get.mockResolvedValue(invite({ createdAt: twoDaysAgo }));
+    for (const inviteTtlDays of [null, 99, 0]) {
+      m.Band.get.mockResolvedValue({ data: bandRow({ inviteTtlDays }) });
+      expect(await reason('ABCDE-FGHJK')).toBe('expired');
+    }
+  });
+
+  it('fails closed when the invite has no issue time', async () => {
+    m.BandInvite.get.mockResolvedValue(invite({ createdAt: null }));
+    expect(await reason('ABCDE-FGHJK')).toBe('expired');
+  });
+
   it('rejects deleted bands, missing bands and banned users', async () => {
     m.BandInvite.get.mockResolvedValue(invite());
     m.Band.get.mockResolvedValue({ data: null });
@@ -283,6 +315,15 @@ describe('lookupInvite', () => {
 
     m.Member.listMemberByBandId.mockResolvedValue({ data: [...full.slice(0, 14), memberRow(ME)], nextToken: null });
     await expect(lookupInvite('ABCDE-FGHJK')).resolves.toMatchObject({ alreadyMember: true, memberCount: 15 });
+  });
+
+  it('hides a band whose name sanitising would change (bidi/zero-width/padding), like every other view', async () => {
+    m.BandInvite.get.mockResolvedValue(invite());
+    m.Member.listMemberByBandId.mockResolvedValue({ data: [memberRow('sub-owner')], nextToken: null });
+    for (const name of ['Evil\u202eBand', 'Zero\u200bWidth', '  Padded  ']) {
+      m.Band.get.mockResolvedValue({ data: bandRow({ name }) });
+      expect(await reason('ABCDE-FGHJK')).toBe('not-found');
+    }
   });
 
   it('returns the preview for a good code', async () => {
@@ -596,6 +637,148 @@ describe('resetInviteCode', () => {
     expect(band.inviteCode).not.toBe('ABCDEFGHJK');
     expect(m.BandInvite.update.mock.calls[0][0]).toMatchObject({ code: 'ABCDEFGHJK' });
     expect(m.BandInvite.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('getInviteIssuedAt', () => {
+  it('returns the invite\u2019s server time, or null for a missing or retired invite', async () => {
+    m.BandInvite.get.mockResolvedValue({ data: { code: 'ABCDEFGHJK', revokedAt: null, createdAt: '2026-03-01T00:00:00.000Z' } });
+    await expect(getInviteIssuedAt('ABCDEFGHJK')).resolves.toBe('2026-03-01T00:00:00.000Z');
+    m.BandInvite.get.mockResolvedValue({ data: { code: 'ABCDEFGHJK', revokedAt: '2026-03-02T00:00:00Z', createdAt: '2026-03-01T00:00:00.000Z' } });
+    await expect(getInviteIssuedAt('ABCDEFGHJK')).resolves.toBeNull();
+    m.BandInvite.get.mockResolvedValue({ data: null });
+    await expect(getInviteIssuedAt('ABCDEFGHJK')).resolves.toBeNull();
+  });
+
+  it('surfaces read errors', async () => {
+    m.BandInvite.get.mockResolvedValue({ data: null, errors: UNAUTH });
+    await expect(getInviteIssuedAt('ABCDEFGHJK')).rejects.toThrow('getInvite');
+  });
+});
+
+describe('ensureFreshInvite', () => {
+  const issuedAgo = (ms: number) => ({
+    data: { code: 'ABCDEFGHJK', revokedAt: null, createdAt: new Date(Date.now() - ms).toISOString() },
+  });
+  const HOUR = 60 * 60 * 1000;
+  const asOwner = (over: Record<string, unknown> = {}) => bandRow({ owner: ME, ...over });
+  beforeEach(() => m.Band.get.mockResolvedValue({ data: asOwner() }));
+
+  it('returns the band untouched while the invite is still good (no rotation without need)', async () => {
+    m.BandInvite.get.mockResolvedValue(issuedAgo(2 * HOUR));
+    const band = await ensureFreshInvite('band-1');
+    expect(band.inviteCode).toBe('ABCDEFGHJK');
+    expect(m.BandInvite.create).not.toHaveBeenCalled();
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('rotates an expired invite (new code, band switched, old retired)', async () => {
+    m.BandInvite.get.mockResolvedValue(issuedAgo(25 * HOUR));
+    m.BandInvite.create.mockResolvedValue({ data: {} });
+    m.BandInvite.update.mockResolvedValue({ data: {} });
+    echoBandUpdates(asOwner());
+    const band = await ensureFreshInvite('band-1');
+    expect(band.inviteCode).toBe(m.BandInvite.create.mock.calls[0][0].code);
+    expect(band.inviteCode).not.toBe('ABCDEFGHJK');
+    expect(m.BandInvite.update.mock.calls[0][0]).toMatchObject({ code: 'ABCDEFGHJK' });
+  });
+
+  it('keeps an invite that is past 1 day but inside a longer lifetime', async () => {
+    m.Band.get.mockResolvedValue({ data: asOwner({ inviteTtlDays: 7 }) });
+    m.BandInvite.get.mockResolvedValue(issuedAgo(25 * HOUR));
+    expect((await ensureFreshInvite('band-1')).inviteCode).toBe('ABCDEFGHJK');
+    expect(m.BandInvite.create).not.toHaveBeenCalled();
+  });
+
+  it('rotates when the invite row is missing or retired', async () => {
+    m.BandInvite.create.mockResolvedValue({ data: {} });
+    m.BandInvite.update.mockResolvedValue({ data: {} });
+    echoBandUpdates(asOwner());
+    m.BandInvite.get.mockResolvedValue({ data: null });
+    expect((await ensureFreshInvite('band-1')).inviteCode).not.toBe('ABCDEFGHJK');
+  });
+
+  it('when another session already rotated, keeps THEIR code and retires only its own unused row', async () => {
+    m.BandInvite.get.mockResolvedValue(issuedAgo(25 * HOUR));
+    m.BandInvite.create.mockResolvedValue({ data: {} });
+    m.BandInvite.update.mockResolvedValue({ data: {} });
+    // the first read (the expiry decision) sees the old code; the locked re-read sees the other session's
+    m.Band.get
+      .mockResolvedValueOnce({ data: asOwner() })
+      .mockResolvedValue({ data: asOwner({ inviteCode: 'OTHERCODE2', version: 2 }) });
+    const band = await ensureFreshInvite('band-1');
+    expect(band.inviteCode).toBe('OTHERCODE2');
+    expect(m.graphql).not.toHaveBeenCalled();
+    const retired = m.BandInvite.update.mock.calls.map((c) => (c[0] as { code: string }).code);
+    expect(retired).toEqual([m.BandInvite.create.mock.calls[0][0].code]);
+  });
+
+  it('does not rotate when the invite cannot be read, and refuses deleted or missing bands', async () => {
+    m.BandInvite.get.mockResolvedValue({ data: null, errors: UNAUTH });
+    await expect(ensureFreshInvite('band-1')).rejects.toThrow('getInvite');
+    expect(m.BandInvite.create).not.toHaveBeenCalled();
+
+    m.Band.get.mockResolvedValue({ data: asOwner({ deletedAt: '2026-02-01T00:00:00Z' }) });
+    await expect(ensureFreshInvite('band-1')).rejects.toThrow('deleted');
+    m.Band.get.mockResolvedValue({ data: null });
+    await expect(ensureFreshInvite('band-1')).rejects.toThrow('not found');
+  });
+
+  it('refuses a non-owner before creating any invite row', async () => {
+    m.Band.get.mockResolvedValue({ data: bandRow() }); // owned by sub-owner, caller is sub-me
+    await expect(ensureFreshInvite('band-1')).rejects.toThrow('Only the band owner');
+    expect(m.BandInvite.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('setInviteTtlDays', () => {
+  const HOUR = 60 * 60 * 1000;
+  const invite = (ageMs: number) => ({
+    data: { code: 'ABCDEFGHJK', revokedAt: null, createdAt: new Date(Date.now() - ageMs).toISOString() },
+  });
+
+  it('writes only the new lifetime', async () => {
+    echoBandUpdates();
+    m.BandInvite.get.mockResolvedValue(invite(HOUR));
+    const band = await setInviteTtlDays('band-1', 5);
+    expect(band.inviteTtlDays).toBe(5);
+    expect(m.graphql.mock.calls[0][0].variables.input).toEqual({ id: 'band-1', version: 2, inviteTtlDays: 5 });
+    expect(m.BandInvite.create).not.toHaveBeenCalled();
+  });
+
+  it('skips the write when nothing changes', async () => {
+    echoBandUpdates(bandRow({ inviteTtlDays: 3 }));
+    await setInviteTtlDays('band-1', 3);
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('a longer lifetime renews a link that had already expired, so it is not brought back to life', async () => {
+    echoBandUpdates();
+    m.BandInvite.get.mockResolvedValue(invite(30 * HOUR));
+    m.BandInvite.create.mockResolvedValue({ data: {} });
+    m.BandInvite.update.mockResolvedValue({ data: {} });
+    const band = await setInviteTtlDays('band-1', 7);
+    expect(band.inviteTtlDays).toBe(7);
+    expect(band.inviteCode).toBe(m.BandInvite.create.mock.calls[0][0].code);
+    expect(m.BandInvite.update.mock.calls[0][0]).toMatchObject({ code: 'ABCDEFGHJK' });
+  });
+
+  it('a shorter lifetime never rotates, and a longer one leaves a still-good link alone', async () => {
+    echoBandUpdates(bandRow({ inviteTtlDays: 7 }));
+    m.BandInvite.get.mockResolvedValue(invite(30 * HOUR));
+    await setInviteTtlDays('band-1', 2);
+    expect(m.BandInvite.create).not.toHaveBeenCalled();
+
+    echoBandUpdates();
+    m.BandInvite.get.mockResolvedValue(invite(2 * HOUR));
+    await setInviteTtlDays('band-1', 4);
+    expect(m.BandInvite.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects anything outside 1 to 7 whole days without touching the API', async () => {
+    for (const bad of [0, 8, 2.5, NaN]) await expect(setInviteTtlDays('band-1', bad)).rejects.toThrow('1 to 7 days');
+    expect(m.graphql).not.toHaveBeenCalled();
+    expect(m.Band.get).not.toHaveBeenCalled();
   });
 });
 

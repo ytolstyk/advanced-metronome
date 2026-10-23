@@ -14,6 +14,9 @@ import {
   isBandAlive,
   isBandOwner,
   isBanned,
+  isCleanText,
+  isInviteExpired,
+  isValidInviteTtlDays,
   normalizeInviteCode,
   requireDisplayName,
   requireName,
@@ -216,6 +219,7 @@ export async function createBand(nameInput: string, displayNameInput: string): P
         bannedSubs: [],
         hiddenSongIds: [],
         sharedSetListIds: [], // nothing is public until the owner shares it
+        inviteTtlDays: BAND_LIMITS.inviteTtlDaysDefault,
       }),
       'createBand',
     );
@@ -229,7 +233,9 @@ export async function createBand(nameInput: string, displayNameInput: string): P
 
 /**
  * Validates a typed/linked invite code and returns what the join dialog should show. The code is
- * only trusted if the Band itself carries it (forged or rotated invites are rejected).
+ * only trusted if the Band itself carries it (forged or rotated invites are rejected), and only
+ * while it is younger than the band's invite lifetime (`Band.inviteTtlDays` after the invite row's
+ * server-set `createdAt`). This stops stale links, not people who already hold the band id.
  */
 export async function lookupInvite(codeInput: string): Promise<InvitePreview> {
   await requireAuth();
@@ -246,10 +252,13 @@ export async function lookupInvite(codeInput: string): Promise<InvitePreview> {
   if (!band) throw new InviteError('not-found');
   if (!isBandAlive(band)) throw new InviteError('deleted');
   if (band.inviteCode !== code) throw new InviteError('revoked');
+  if (isInviteExpired(invite.data.createdAt, band.inviteTtlDays, Date.now())) throw new InviteError('expired');
   return previewFor(band, sub);
 }
 
 async function previewFor(band: BandRecord, sub: string): Promise<InvitePreview> {
+  // Same rule as every other place a band name is shown: a name that sanitising would change is hidden.
+  if (!isCleanText(band.name, BAND_LIMITS.nameMax, true)) throw new InviteError('not-found');
   if (isBanned(band, sub)) throw new InviteError('banned');
   const roster = await listRoster(band.id);
   const members = filterValidMembers(roster.rows, band);
@@ -345,18 +354,69 @@ export function renameBand(bandId: string, nameInput: string): Promise<BandRecor
 /**
  * New code first, then the Band switches to it (join checks `Band.inviteCode`, so the old code is
  * dead from that moment), then the old invite row is retired best-effort (never deleted). Stops
- * NEW joiners only.
+ * NEW joiners only. With `onlyIfCode`, it renews only while that is still the band's code: if
+ * another session already rotated, the new row is retired unused and the band as it now stands is
+ * returned, so two sessions never revoke each other's fresh link.
  */
-export async function resetInviteCode(bandId: string): Promise<BandRecord> {
+export async function resetInviteCode(bandId: string, onlyIfCode?: string): Promise<BandRecord> {
   await requireAuth();
   const newCode = await createInvite(bandId);
-  let oldCode = '';
+  let replaced = '';
   const updated = await updateBand(bandId, (band) => {
-    oldCode = band.inviteCode; // read inside the lock: the code actually being replaced
+    if (onlyIfCode !== undefined && band.inviteCode !== onlyIfCode) return null;
+    replaced = band.inviteCode; // read inside the lock: the code actually being replaced
     return band.inviteCode === newCode ? null : { inviteCode: newCode };
   });
-  if (oldCode && oldCode !== newCode) await revokeInvite(oldCode).catch(() => undefined);
+  if (updated.inviteCode !== newCode) await revokeInvite(newCode).catch(() => undefined);
+  else if (replaced && replaced !== newCode) await revokeInvite(replaced).catch(() => undefined);
   return updated;
+}
+
+/**
+ * When the invite `code` was issued (ISO), or null if it has no row or the row is retired. Any
+ * signed-in user may read an invite by code; members use this to show when the link expires.
+ */
+export async function getInviteIssuedAt(code: string): Promise<string | null> {
+  await requireAuth();
+  const res = await client.models.BandInvite.get({ code });
+  throwOnError(res, 'getInvite');
+  return res.data && !res.data.revokedAt ? (res.data.createdAt ?? null) : null;
+}
+
+/**
+ * The band with an invite that still works. Rotates (via `resetInviteCode`) only when the current
+ * invite has expired, is retired, has no row or no readable issue time, so a good link is never
+ * rotated. A failed read throws instead of rotating. Owner only. The expiry check uses this
+ * device's clock against the invite's server-set time.
+ */
+export async function ensureFreshInvite(bandId: string): Promise<BandRecord> {
+  await requireAuth();
+  const sub = await getCurrentUserSub();
+  const band = await getBand(bandId);
+  if (!band) throw new Error('Band not found');
+  if (!isBandAlive(band)) throw new Error('This band was deleted');
+  if (!isBandOwner(band, sub)) throw new Error('Only the band owner can renew the invite');
+  const issuedAt = await getInviteIssuedAt(band.inviteCode);
+  return isInviteExpired(issuedAt, band.inviteTtlDays, Date.now()) ? resetInviteCode(bandId, band.inviteCode) : band;
+}
+
+/**
+ * Sets how many days an invite link works. It applies to the current link too (its age is
+ * unchanged), except that a link which had already expired is renewed when the lifetime grows, so
+ * a longer setting never brings a dead link back to life.
+ */
+export async function setInviteTtlDays(bandId: string, days: number): Promise<BandRecord> {
+  if (!isValidInviteTtlDays(days)) {
+    throw new Error(`Invite links can last ${BAND_LIMITS.inviteTtlDaysMin} to ${BAND_LIMITS.inviteTtlDaysMax} days`);
+  }
+  await requireAuth();
+  const before = await getBand(bandId);
+  if (!before) throw new Error('Band not found');
+  const revives =
+    days > before.inviteTtlDays &&
+    isInviteExpired(await getInviteIssuedAt(before.inviteCode), before.inviteTtlDays, Date.now());
+  const updated = await updateBand(bandId, (band) => (band.inviteTtlDays === days ? null : { inviteTtlDays: days }));
+  return revives ? resetInviteCode(bandId, before.inviteCode) : updated;
 }
 
 export type DeleteStep = 'set-lists' | 'tombstone' | 'invite' | 'done';

@@ -11,16 +11,13 @@ import {
   type LocalDay,
 } from '../../availabilityCalendar';
 import { isSlotEditable } from '../../availabilitySlots';
+import { FIELD_LABEL_CLASS, SELECT_CLASS } from './cardStyles';
 
 /** Whole weeks the repeat tool offers; the last is `repeatWeekday`'s cap. */
 const REPEAT_WEEK_CHOICES = [1, 2, 3, 4, 6, 8];
 const DEFAULT_REPEAT_WEEKS = 4;
 /** The range tool's starting length: two hours. */
 const DEFAULT_RANGE_SLOTS = 4;
-
-const selectClass =
-  'min-h-11 rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50';
-const fieldLabelClass = 'grid gap-1 text-xs text-muted-foreground';
 
 /** "8 AM", "10 PM" for a whole local hour. */
 const hourText = (hour: number): string => `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'}`;
@@ -62,9 +59,9 @@ export function AvailabilityDayTools({ days, lastVisibleSlot, timeZone, locale, 
       <p className="text-xs text-muted-foreground">
         Practice is {hourText(PRACTICE_START_HOUR)} to {hourText(PRACTICE_END_HOUR)}. The tools below work on one day:
       </p>
-      <label className={fieldLabelClass}>
+      <label className={FIELD_LABEL_CLASS}>
         Day
-        <select className={selectClass} disabled={disabled} value={toolDay.key} onChange={(e) => setDayChoice(e.target.value)}>
+        <select className={SELECT_CLASS} disabled={disabled} value={toolDay.key} onChange={(e) => setDayChoice(e.target.value)}>
           {days.map((day) => (
             <option key={day.key} value={day.key}>
               {formatDayLabel(day.slots[0], timeZone, locale)}
@@ -122,10 +119,10 @@ function RangeTool({
 
   return (
     <div className="flex flex-wrap items-end gap-2" role="group" aria-label="Mark a range of times">
-      <label className={fieldLabelClass}>
+      <label className={FIELD_LABEL_CLASS}>
         From
         <select
-          className={selectClass}
+          className={SELECT_CLASS}
           disabled={disabled || start === null}
           value={start ?? ''}
           onChange={(e) => setStartChoice(Number(e.target.value))}
@@ -137,10 +134,10 @@ function RangeTool({
           ))}
         </select>
       </label>
-      <label className={fieldLabelClass}>
+      <label className={FIELD_LABEL_CLASS}>
         Until
         <select
-          className={selectClass}
+          className={SELECT_CLASS}
           disabled={disabled || start === null}
           value={lengthInSlots}
           onChange={(e) => setLengthChoice(Number(e.target.value))}
@@ -185,9 +182,9 @@ function RepeatTool({
   };
   return (
     <div className="flex flex-wrap items-end gap-2" role="group" aria-label="Repeat this day">
-      <label className={fieldLabelClass}>
+      <label className={FIELD_LABEL_CLASS}>
         Repeat this day’s times weekly for
-        <select className={selectClass} disabled={disabled} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))}>
+        <select className={SELECT_CLASS} disabled={disabled} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))}>
           {REPEAT_WEEK_CHOICES.map((n) => (
             <option key={n} value={n}>
               {n === 1 ? '1 week' : `${n} weeks`}

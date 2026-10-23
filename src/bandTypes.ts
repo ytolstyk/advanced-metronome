@@ -25,6 +25,10 @@ export const BAND_LIMITS = {
   maxHiddenSongs: 1000,
   maxOwnedBands: 10,
   inviteCodeLength: 10,
+  /** An invite link stops working this many days after it was issued; the owner picks within the range. */
+  inviteTtlDaysMin: 1,
+  inviteTtlDaysMax: 7,
+  inviteTtlDaysDefault: 1,
   /** Longest song key we accept ("F#m"). */
   keyMax: 3,
   /** Longest label a band can give a song color ("Fast thrash"). */
@@ -117,6 +121,8 @@ export interface BandRecord {
   hiddenSongIds: string[];
   /** Set lists anyone with the link may read, signed in or not (owner-written; a subset of `setListIds`). */
   sharedSetListIds: string[];
+  /** Days an invite link works after it is issued (owner-written, always 1-7: bad stored values read as the default). */
+  inviteTtlDays: number;
 }
 
 export interface MemberRecord {
@@ -238,7 +244,10 @@ export interface ListAllResult<T> {
   incomplete: boolean;
 }
 
-export type InviteFailure = 'invalid-code' | 'not-found' | 'revoked' | 'deleted' | 'banned' | 'full';
+export type InviteFailure = 'invalid-code' | 'not-found' | 'revoked' | 'expired' | 'deleted' | 'banned' | 'full';
+
+/** Failures that mean "this link is dead, get a new one" (as opposed to banned, full, offline ...). */
+export type DeadLinkReason = Extract<InviteFailure, 'expired' | 'revoked'>;
 
 export interface InvitePreview {
   bandId: string;

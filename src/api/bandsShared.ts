@@ -10,6 +10,7 @@ import type {
   SongRecord,
   VoteRecord,
 } from '../bandTypes';
+import { normalizeInviteTtlDays } from '../bandUtils';
 import { getSignedInSub, isAuthenticated } from './authUtils';
 import { listAll, pageOpts } from './paginate';
 
@@ -175,6 +176,7 @@ const BAND_FIELDS = [
   'bannedSubs',
   'hiddenSongIds',
   'sharedSetListIds',
+  'inviteTtlDays',
 ] as const;
 
 export type { ReadAuthMode };
@@ -194,6 +196,7 @@ export function toBand(r: BandRow): BandRecord {
     bannedSubs: strings(r.bannedSubs),
     hiddenSongIds: strings(r.hiddenSongIds),
     sharedSetListIds: strings(r.sharedSetListIds),
+    inviteTtlDays: normalizeInviteTtlDays(r.inviteTtlDays),
   };
 }
 
@@ -313,6 +316,7 @@ export type BandPatch = Partial<
     | 'bannedSubs'
     | 'hiddenSongIds'
     | 'sharedSetListIds'
+    | 'inviteTtlDays'
   >
 >;
 

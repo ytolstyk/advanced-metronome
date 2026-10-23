@@ -24,6 +24,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: ['sl-1'],
+  inviteTtlDays: 1,
   ...over,
 });
 const setListRow: SetListRecord = { id: 'sl-1', owner: OWNER, bandId: 'band-1', name: 'Main Set', archivedAt: null };

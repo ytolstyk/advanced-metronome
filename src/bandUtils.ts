@@ -20,6 +20,7 @@ import {
   type VoteRecord,
   type VoteValue,
 } from './bandTypes';
+import { DAY_MS } from './availabilitySlots';
 
 /**
  * Pure, synchronous logic for the Bands feature: invite codes, text sanitising, read-time
@@ -64,6 +65,33 @@ export function buildInviteLink(origin: string, code: string): string | null {
   const canonical = normalizeInviteCode(code);
   return canonical ? `${origin}/bands?join=${canonical}` : null;
 }
+
+/** The stored lifetime if it is a whole number in range, else the default (never repaired to a nearby value). */
+export function normalizeInviteTtlDays(value: unknown): number {
+  return isValidInviteTtlDays(value) ? value : BAND_LIMITS.inviteTtlDaysDefault;
+}
+
+export function isValidInviteTtlDays(value: unknown): value is number {
+  const { inviteTtlDaysMin: min, inviteTtlDaysMax: max } = BAND_LIMITS;
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+}
+
+export type InviteStatus = { kind: 'valid'; expiresAt: number } | { kind: 'expired' };
+
+/**
+ * THE expiry rule, shared by the join check, the owner's renewal and the band page. `now` is the
+ * caller's clock against the server-set issue time. Fails closed: an invite with no readable issue
+ * time is expired, and it ends exactly `ttlDays` after it was issued.
+ */
+export function inviteStatus(issuedAt: string | null | undefined, ttlDays: number, now: number): InviteStatus {
+  const issued = issuedAt ? Date.parse(issuedAt) : NaN;
+  if (Number.isNaN(issued)) return { kind: 'expired' };
+  const expiresAt = issued + ttlDays * DAY_MS;
+  return now >= expiresAt ? { kind: 'expired' } : { kind: 'valid', expiresAt };
+}
+
+export const isInviteExpired = (issuedAt: string | null | undefined, ttlDays: number, now: number): boolean =>
+  inviteStatus(issuedAt, ttlDays, now).kind === 'expired';
 
 // ── Text sanitising ────────────────────────────────────────────────────────
 

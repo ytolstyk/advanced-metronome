@@ -25,7 +25,9 @@ import {
   formatInviteCode,
   generateInviteCode,
   isBanned,
+  inviteStatus,
   isCleanText,
+  isInviteExpired,
   isSetListShared,
   isSongColorKey,
   isVoteValue,
@@ -34,6 +36,7 @@ import {
   myVotes,
   normalizeHttpUrl,
   normalizeInviteCode,
+  normalizeInviteTtlDays,
   parseSongInput,
   partitionSongs,
   requireDisplayName,
@@ -71,6 +74,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  inviteTtlDays: 1,
   ...over,
 });
 const member = (owner: string, over: Partial<MemberRecord> = {}): MemberRecord => ({
@@ -637,6 +641,36 @@ describe('buildInviteLink', () => {
     expect(buildInviteLink('https://x.test', 'nope')).toBeNull();
     expect(buildInviteLink('https://x.test', 'ABCDEFGHJK&x=1')).toBeNull();
     expect(buildInviteLink('https://x.test', '')).toBeNull();
+  });
+});
+
+describe('invite lifetime', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const issued = '2026-03-01T00:00:00.000Z';
+  const issuedMs = Date.parse(issued);
+
+  it('accepts whole days from 1 to 7 and reads anything else as the default (1 day)', () => {
+    for (const d of [1, 2, 7]) expect(normalizeInviteTtlDays(d)).toBe(d);
+    for (const bad of [0, 8, -1, 1.5, NaN, Infinity, '3', null, undefined]) expect(normalizeInviteTtlDays(bad)).toBe(1);
+  });
+
+  it('expires exactly ttl days after the issue time', () => {
+    expect(inviteStatus(issued, 3, issuedMs)).toEqual({ kind: 'valid', expiresAt: issuedMs + 3 * DAY });
+    expect(inviteStatus(issued, 1, issuedMs + DAY)).toEqual({ kind: 'expired' });
+    expect(isInviteExpired(issued, 1, issuedMs + DAY - 1)).toBe(false);
+    expect(isInviteExpired(issued, 1, issuedMs + DAY)).toBe(true);
+    expect(isInviteExpired(issued, 7, issuedMs + 6 * DAY)).toBe(false);
+  });
+
+  it('a clock slightly behind the server (issue time in the future) is not expired', () => {
+    expect(isInviteExpired(issued, 1, issuedMs - 5_000)).toBe(false);
+  });
+
+  it('fails closed when the issue time is missing or unreadable', () => {
+    for (const bad of [null, undefined, '', 'not a date']) {
+      expect(inviteStatus(bad, 1, issuedMs)).toEqual({ kind: 'expired' });
+      expect(isInviteExpired(bad, 7, issuedMs)).toBe(true);
+    }
   });
 });
 

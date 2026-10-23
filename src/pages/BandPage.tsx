@@ -10,7 +10,8 @@ import {
   RemoveMemberDialog,
   ResetInviteDialog,
 } from '../components/Bands/BandActionDialogs';
-import { AvailabilitySection, DangerZone, InviteSection, MembersSection, SetListsSection } from '../components/Bands/BandSections';
+import { AvailabilitySection, DangerZone, MembersSection, SetListsSection } from '../components/Bands/BandSections';
+import { InviteSection } from '../components/Bands/InviteSection';
 import { BandsShell } from '../components/Bands/BandsShell';
 import { ConfirmDialog } from '../components/Bands/ConfirmDialog';
 import { InlineAlert } from '../components/Bands/InlineAlert';
@@ -193,7 +194,7 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
         onRemove={(sub, name) => setDialog({ kind: 'remove-member', sub, name })}
         onRestore={(sub) => void act(() => unbanMember(band.id, sub))}
       />
-      <InviteSection view={view} onReset={() => setDialog({ kind: 'reset-code' })} />
+      <InviteSection view={view} onReset={() => setDialog({ kind: 'reset-code' })} onChanged={settled} />
       <DangerZone isOwner={isOwner} onClick={() => setDialog({ kind: isOwner ? 'delete-band' : 'leave' })} />
 
       {dialog?.kind === 'new-set-list' && (

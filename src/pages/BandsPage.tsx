@@ -5,6 +5,7 @@ import { AuthGate } from '../components/AuthGate/AuthGate';
 import { BandCard } from '../components/Bands/BandCard';
 import { BandsShell } from '../components/Bands/BandsShell';
 import { CreateBandDialog } from '../components/Bands/CreateBandDialog';
+import { ExpiredInviteNotice } from '../components/Bands/ExpiredInviteNotice';
 import { InlineAlert } from '../components/Bands/InlineAlert';
 import { JoinBandDialog } from '../components/Bands/JoinBandDialog';
 import { LoaderBoundary } from '../components/Bands/LoaderBoundary';
@@ -12,8 +13,9 @@ import { loadMyBands, pruneDeadBands } from '../api/bandsApi';
 import { loadFromStorage, saveToStorage } from '../api/storageUtils';
 import { clearJoinCode, readJoinCode, storeJoinCode } from '../bandJoinCode';
 import { bandPath } from '../bandRoutes';
-import type { MyBandEntry } from '../bandTypes';
+import type { InvitePreview, MyBandEntry } from '../bandTypes';
 import { useDefaultDisplayName } from '../hooks/useDefaultDisplayName';
+import { useInviteLinkCheck } from '../hooks/useInviteLinkCheck';
 import { useLoader } from '../hooks/useLoader';
 
 const ONLY_MY_BANDS_KEY = 'bands-only-mine';
@@ -103,11 +105,53 @@ function BandList({ entries, failedCount, onlyMine, onDismissed }: BandListProps
   );
 }
 
+/**
+ * A shared invite link is checked before anything else is shown, so a dead one gets its own page
+ * (not a flash of the band list, and no buttons that do nothing while the lookup runs).
+ */
 function BandsContent({ initialJoinCode }: { initialJoinCode: string }) {
+  const linkCheck = useInviteLinkCheck(initialJoinCode);
+  const [leftNotice, setLeftNotice] = useState<'back' | 'enter' | null>(null);
+  const isDead = linkCheck.status === 'dead';
+  useEffect(() => {
+    if (isDead) clearJoinCode(); // a dead code is worth nothing; the notice does not need it
+  }, [isDead]);
+
+  if (linkCheck.status === 'checking') return <p className="text-sm text-muted-foreground">Checking your invite link…</p>;
+  if (linkCheck.status === 'dead' && leftNotice === null) {
+    return (
+      <ExpiredInviteNotice
+        reason={linkCheck.reason}
+        onEnterCode={() => setLeftNotice('enter')}
+        onDismiss={() => setLeftNotice('back')}
+      />
+    );
+  }
+  return (
+    <BandsHome
+      joinCode={isDead ? '' : initialJoinCode}
+      joinPreview={linkCheck.status === 'good' ? linkCheck.preview : null}
+      joinError={linkCheck.status === 'other' ? linkCheck.message : null}
+      initialJoinOpen={leftNotice === 'enter' || linkCheck.status === 'good' || linkCheck.status === 'other'}
+    />
+  );
+}
+
+interface BandsHomeProps {
+  /** Code for the join dialog (empty when there is no usable link). */
+  joinCode: string;
+  /** The link was already looked up: the join dialog opens on its confirm step. */
+  joinPreview: InvitePreview | null;
+  /** Why the link's lookup failed, shown in the join dialog. */
+  joinError: string | null;
+  initialJoinOpen: boolean;
+}
+
+function BandsHome({ joinCode, joinPreview, joinError, initialJoinOpen }: BandsHomeProps) {
   const navigate = useNavigate();
   const { state, refreshing, refreshError, reload } = useLoader(loadMyBands);
   const [createOpen, setCreateOpen] = useState(false);
-  const [joinOpen, setJoinOpen] = useState(initialJoinCode !== '');
+  const [joinOpen, setJoinOpen] = useState(initialJoinOpen);
   const defaultName = useDefaultDisplayName();
   // Checked: only bands you are in (owner or member). Unchecked: also bands you were removed from.
   const [onlyMine, setOnlyMine] = useState(loadOnlyMine);
@@ -162,7 +206,7 @@ function BandsContent({ initialJoinCode }: { initialJoinCode: string }) {
         )}
       </LoaderBoundary>
 
-      {/* Mounted once the suggested name is known, so seeded fields are never reset under the user. */}
+      {/* Mounted once the suggested name is known (and, for a shared link, after its check), so seeded fields are never reset under the user. */}
       {defaultName !== null && (
         <>
           <CreateBandDialog open={createOpen} onOpenChange={setCreateOpen} defaultDisplayName={defaultName} onCreated={openBand} />
@@ -172,7 +216,9 @@ function BandsContent({ initialJoinCode }: { initialJoinCode: string }) {
               setJoinOpen(open);
               if (!open) clearJoinCode();
             }}
-            initialCode={initialJoinCode}
+            initialCode={joinCode}
+            initialPreview={joinPreview}
+            initialError={joinError}
             defaultDisplayName={defaultName}
             onJoined={openBand}
           />

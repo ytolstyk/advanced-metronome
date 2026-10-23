@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { BandRecord, BandView, ValidSetList } from '../../bandTypes';
-import { DangerZone, InviteSection, MembersSection, SetListsSection } from './BandSections';
+import { DangerZone, MembersSection, SetListsSection } from './BandSections';
 
 const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   id: 'b1',
@@ -16,6 +16,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  inviteTtlDays: 1,
   ...over,
 });
 const setList = (id: string, name: string): ValidSetList =>
@@ -211,49 +212,6 @@ describe('MembersSection', () => {
     render(<MembersSection view={view({ ...base, isOwner: true })} onRemove={onRemove} onRestore={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Remove Amy' }));
     expect(onRemove).toHaveBeenCalledWith('sub-amy', 'Amy');
-  });
-});
-
-describe('InviteSection', () => {
-  const writeText = vi.fn();
-  beforeEach(() => {
-    writeText.mockReset();
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-  });
-
-  it('shows the code split in two groups and copies the full join link', async () => {
-    writeText.mockResolvedValue(undefined);
-    render(<InviteSection view={view()} onReset={() => {}} />);
-    expect(screen.getByText('ABCDE-FGHJK')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Copy invite link' }));
-    expect(await screen.findByRole('button', { name: 'Copied!' })).toBeInTheDocument();
-    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/bands?join=ABCDEFGHJK`);
-  });
-
-  it('cannot copy a malformed stored code: shows a dash and disables the button', () => {
-    render(<InviteSection view={view({ band: band({ inviteCode: 'bad' }) })} onReset={() => {}} />);
-    expect(screen.getByText('—')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copy invite link' })).toBeDisabled();
-  });
-
-  it('warns when the browser refuses the copy, and clears the warning after a later success', async () => {
-    writeText.mockRejectedValueOnce(new Error('denied')).mockResolvedValueOnce(undefined);
-    render(<InviteSection view={view()} onReset={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Copy invite link' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('Couldn’t copy automatically');
-    expect(screen.queryByRole('button', { name: 'Copied!' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Copy invite link' }));
-    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
-  });
-
-  it('only the owner can reset the code', () => {
-    const onReset = vi.fn();
-    const { unmount } = render(<InviteSection view={view({ isOwner: false })} onReset={onReset} />);
-    expect(screen.queryByRole('button', { name: 'Reset code' })).not.toBeInTheDocument();
-    unmount();
-    render(<InviteSection view={view({ isOwner: true })} onReset={onReset} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Reset code' }));
-    expect(onReset).toHaveBeenCalledTimes(1);
   });
 });
 

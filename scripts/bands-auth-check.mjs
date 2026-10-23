@@ -168,8 +168,8 @@ for (const q of ['listMemberByBandId', 'listSongBySetList', 'listVoteBySetList',
 
 // ---------- helpers ----------
 const FIELDS = {
-  Band: 'id owner name inviteCode deletedAt version setListIds archivedSetListIds bannedSubs hiddenSongIds sharedSetListIds createdAt updatedAt',
-  BandInvite: 'code bandId revokedAt owner',
+  Band: 'id owner name inviteCode deletedAt version setListIds archivedSetListIds bannedSubs hiddenSongIds sharedSetListIds inviteTtlDays createdAt updatedAt',
+  BandInvite: 'code bandId revokedAt owner createdAt',
   MyBand: 'owner bandId',
   Member: 'bandId owner displayName createdAt',
   SetList: 'id owner bandId name archivedAt',
@@ -355,12 +355,17 @@ info('G5', 'second create of an existing own row (createIdempotent maps this to 
 // ---------- Band root of trust ----------
 r = await update(B, 'Band', { id: bandId, bannedSubs: [A.sub] });
 check('G3', 'non-owner cannot update Band arrays', !r.data?.updateBand, errType(r), true);
+r = await update(B, 'Band', { id: bandId, inviteTtlDays: 7 });
+check('G3', 'non-owner cannot change Band.inviteTtlDays', !r.data?.updateBand, errType(r), true);
+r = await update(A, 'Band', { id: bandId, inviteTtlDays: 3 });
+check('G3', 'owner can set Band.inviteTtlDays', r.data?.updateBand?.inviteTtlDays === 3, errType(r));
 r = await update(B, 'Band', { id: bandId, name: 'pwned' });
 check('G3', 'non-owner cannot rename Band', !r.data?.updateBand, errType(r), true);
 r = await getById(B, 'Band', { id: bandId });
 check('G1b', 'non-member get Band returns the row (capability)', r.data?.getBand?.id === bandId, errType(r));
 r = await getById(B, 'BandInvite', { code });
 check('G0', 'any authenticated user can get BandInvite by code', r.data?.getBandInvite?.bandId === bandId, errType(r));
+check('G0', 'a BandInvite carries a server createdAt (invite expiry is measured from it)', Number.isFinite(Date.parse(r.data?.getBandInvite?.createdAt)), `createdAt=${r.data?.getBandInvite?.createdAt}`);
 r = await create(C, 'BandInvite', { code, bandId: randomUUID() });
 check('G3', 'C cannot re-create existing invite code (squat)', !r.data?.createBandInvite, errType(r), true);
 r = await update(C, 'BandInvite', { code, bandId: randomUUID() });

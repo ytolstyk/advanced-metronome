@@ -24,6 +24,9 @@ vi.mock('../api/bandsApi', () => ({
   renameBand: vi.fn(),
   resetInviteCode: vi.fn(),
   deleteBand: vi.fn(),
+  getInviteIssuedAt: vi.fn().mockResolvedValue(new Date().toISOString()),
+  ensureFreshInvite: vi.fn(),
+  setInviteTtlDays: vi.fn(),
 }));
 vi.mock('../api/setListsApi', () => ({
   createSetList: vi.fn(),
@@ -44,6 +47,7 @@ import {
   previewBand,
   renameBand,
   resetInviteCode,
+  setInviteTtlDays,
   unbanMember,
 } from '../api/bandsApi';
 import { archiveSetList, createSetList, deleteMyContent, renameSetList, setSetListShared } from '../api/setListsApi';
@@ -64,6 +68,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  inviteTtlDays: 1,
   ...over,
 });
 
@@ -338,6 +343,24 @@ describe('BandPage as the owner', () => {
     expect(await screen.findByText(/only stops people who don’t already have/)).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'Reset code' }).at(-1)!);
     await waitFor(() => expect(resetInviteCode).toHaveBeenCalledWith('band-1'));
+  });
+
+  it('the owner changes how long invite links work, and the page reloads', async () => {
+    load(ownerView());
+    vi.mocked(setInviteTtlDays).mockResolvedValue(band({ inviteTtlDays: 4 }));
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    const loadsBefore = vi.mocked(loadBandView).mock.calls.length;
+    fireEvent.change(screen.getByLabelText('Invite links work for'), { target: { value: '4' } });
+    await waitFor(() => expect(setInviteTtlDays).toHaveBeenCalledWith('band-1', 4));
+    await waitFor(() => expect(vi.mocked(loadBandView).mock.calls.length).toBeGreaterThan(loadsBefore));
+  });
+
+  it('members do not get the lifetime setting', async () => {
+    load(makeView());
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    expect(screen.queryByLabelText('Invite links work for')).not.toBeInTheDocument();
   });
 
   it('creates, renames and archives set lists', async () => {

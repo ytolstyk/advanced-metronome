@@ -34,6 +34,7 @@ const band: BandRecord = {
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  inviteTtlDays: 1,
 };
 
 beforeEach(() => {

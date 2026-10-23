@@ -52,7 +52,7 @@ export function ResetInviteDialog({ bandId, onClose, onSettled }: BaseProps & { 
       open
       onOpenChange={(open) => !open && onClose()}
       title="Reset the invite code?"
-      description="A new code is created and the old one stops working. This only stops people who don’t already have the old code or this page’s link; existing members keep access."
+      description="A new code is created (with a fresh expiry) and the old one stops working. This only stops people who don’t already have the old code or this page’s link; existing members keep access."
       confirmLabel="Reset code"
       onConfirm={async () => void (await resetInviteCode(bandId))}
       onSettled={onSettled}

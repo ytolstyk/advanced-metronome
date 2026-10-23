@@ -40,6 +40,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  inviteTtlDays: 1,
   ...over,
 });
 const entry = (over: Partial<MyBandEntry> = {}): MyBandEntry => ({ band: band(), status: 'active', isOwner: false, ...over });
@@ -89,6 +90,103 @@ describe('BandsPage signed out', () => {
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/bands$/));
     expect(sessionStorage.getItem('band-join-code')).toBe('ABCDE-FGHJK');
     expect(localStorage.getItem('band-join-code')).toBeNull();
+  });
+});
+
+describe('BandsPage shared invite link', () => {
+  const failWith = (reason: string) => vi.mocked(lookupInvite).mockRejectedValue(Object.assign(new Error(reason), { reason }));
+  const preview = { bandId: 'band-9', bandName: 'Cream', memberCount: 2, alreadyMember: false };
+
+  it('an expired link gets a friendly page telling them to ask the owner for a new one', async () => {
+    failWith('expired');
+    renderAt('/bands?join=ABCDE-FGHJK');
+    expect(await screen.findByRole('heading', { name: 'This invite link has expired' })).toBeInTheDocument();
+    expect(screen.getByText(/Ask the band owner to send you a new link/)).toBeInTheDocument();
+    expect(lookupInvite).toHaveBeenCalledWith('ABCDE-FGHJK');
+    expect(sessionStorage.getItem('band-join-code')).toBeNull(); // a dead code is forgotten at once
+    // the notice replaces the list and the join dialog is not opened over it
+    expect(screen.queryByRole('button', { name: 'Create a band' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('a link the owner replaced gets the same page with its own wording', async () => {
+    failWith('revoked');
+    renderAt('/bands?join=ABCDE-FGHJK');
+    expect(await screen.findByRole('heading', { name: 'This invite link is no longer valid' })).toBeInTheDocument();
+    expect(screen.getByText(/replaced this link with a newer one/)).toBeInTheDocument();
+  });
+
+  it('"Back to my bands" shows the normal page and forgets the dead code', async () => {
+    failWith('expired');
+    vi.mocked(loadMyBands).mockResolvedValue(result([entry({ band: band({ name: 'Alpha' }) })]));
+    renderAt('/bands?join=ABCDE-FGHJK');
+    fireEvent.click(await screen.findByRole('button', { name: 'Back to my bands' }));
+    expect(await screen.findByRole('link', { name: /Alpha/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'This invite link has expired' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(sessionStorage.getItem('band-join-code')).toBeNull();
+  });
+
+  it('"Enter a new code" opens the join dialog with an empty code', async () => {
+    failWith('expired');
+    renderAt('/bands?join=ABCDE-FGHJK');
+    fireEvent.click(await screen.findByRole('button', { name: 'Enter a new code' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByLabelText('Invite code')).toHaveValue('');
+    expect(sessionStorage.getItem('band-join-code')).toBeNull();
+  });
+
+  it('a good link goes straight to "Join <band>?" without asking for the code again', async () => {
+    vi.mocked(lookupInvite).mockResolvedValue(preview);
+    renderAt('/bands?join=ABCDE-FGHJK');
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(await screen.findByText(/Cream/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Invite code')).not.toBeInTheDocument();
+    expect(lookupInvite).toHaveBeenCalledTimes(1);
+  });
+
+  it('other failures (banned, full, offline) open the dialog with the code filled in AND the reason shown', async () => {
+    failWith('banned');
+    renderAt('/bands?join=ABCDE-FGHJK');
+    expect(await screen.findByLabelText('Invite code')).toHaveValue('ABCDE-FGHJK');
+    expect(screen.getByRole('alert')).toHaveTextContent('You were removed from this band.');
+    expect(screen.queryByRole('heading', { name: /invite link/ })).not.toBeInTheDocument();
+    expect(lookupInvite).toHaveBeenCalledTimes(1); // the failure is shown, not re-fetched
+  });
+
+  it('shows nothing clickable (and no flash of the band list) while the link is being checked', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue(result([entry({ band: band({ name: 'Alpha' }) })]));
+    let finish: (e: unknown) => void = () => {};
+    vi.mocked(lookupInvite).mockReturnValue(new Promise((_, reject) => { finish = reject; }));
+    renderAt('/bands?join=ABCDE-FGHJK');
+    expect(await screen.findByText('Checking your invite link…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create a band' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Alpha/ })).not.toBeInTheDocument();
+    finish(Object.assign(new Error('x'), { reason: 'expired' }));
+    expect(await screen.findByRole('heading', { name: 'This invite link has expired' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Alpha/ })).not.toBeInTheDocument();
+  });
+
+  it('the notice is a second-level heading under the page\u2019s own title', async () => {
+    failWith('expired');
+    renderAt('/bands?join=ABCDE-FGHJK');
+    expect(await screen.findByRole('heading', { level: 2, name: 'This invite link has expired' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('no link means no lookup and no dialog', async () => {
+    renderAt('/bands');
+    expect(await screen.findByRole('button', { name: 'Create a band' })).toBeInTheDocument();
+    expect(lookupInvite).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('a code kept across sign-in is checked too', async () => {
+    sessionStorage.setItem('band-join-code', 'ABCDEFGHJK');
+    failWith('expired');
+    renderAt('/bands');
+    expect(await screen.findByRole('heading', { name: 'This invite link has expired' })).toBeInTheDocument();
+    expect(lookupInvite).toHaveBeenCalledWith('ABCDEFGHJK');
   });
 });
 

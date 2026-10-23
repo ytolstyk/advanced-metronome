@@ -31,7 +31,9 @@ export function PrivacyPolicyPage() {
           list of removed members&rsquo; IDs. Vote records (an ID, the song and your up/down choice,
           never names or titles) can also be looked up by anyone, signed in or not, who knows the set
           list&rsquo;s ID. Removing someone from a band hides them in the app but does not stop
-          someone who already has the band&rsquo;s ID from reading it. The band&rsquo;s owner can
+          someone who already has the band&rsquo;s ID from reading it. Invite links expire after a period
+          the owner picks (1 to 7 days), but the app alone applies that: it does not stop anyone who already
+          has the band&rsquo;s ID, or who has an old link or code and uses the service directly, from joining. The band&rsquo;s owner can
           share a set list: anyone with its link can then view it without signing in. The page shows
           its songs, links and vote totals, not member names. The records behind it are not scoped to
           that list, though: the signed-out read access applies to every band, not only shared lists,

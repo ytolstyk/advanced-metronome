@@ -19,6 +19,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  inviteTtlDays: 1,
   ...over,
 });
 const member = (owner: string, displayName = owner, createdAt = '2026-01-01T00:00:00Z'): MemberRecord => ({
