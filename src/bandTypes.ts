@@ -31,6 +31,8 @@ export const BAND_LIMITS = {
   inviteTtlDaysDefault: 1,
   /** Longest song key we accept ("F#m"). */
   keyMax: 3,
+  /** Longest custom tuning we accept ("Drop C# half-step down"). */
+  tuningMax: 30,
   /** Longest label a band can give a song color ("Fast thrash"). */
   colorLabelMax: 20,
 } as const;
@@ -129,6 +131,8 @@ export interface MemberRecord {
   bandId: string;
   owner: string;
   displayName: string;
+  /** Instrument keys (`bandInstruments.ts`); absent on rows from before the field existed. */
+  instruments?: string[];
   createdAt: string;
 }
 
@@ -148,6 +152,8 @@ export interface SongRecord {
   title: string;
   artist: string | null;
   key: string | null;
+  /** Guitar tuning; `null` on songs from before the field existed (read as the default). */
+  tuning?: string | null;
   bpm: number | null;
   notes: string | null;
   songUrl: string | null;

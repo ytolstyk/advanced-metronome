@@ -22,19 +22,36 @@ const song = (over: Partial<ValidSong> = {}): ValidSong =>
   }) as ValidSong;
 
 describe('SongDetails', () => {
-  it('renders just the title for a bare song (no artist line, links or notes)', () => {
+  it('renders just the title and the default tuning for a bare song (no artist, links or notes)', () => {
     const { container } = render(<SongDetails song={song()} />);
     expect(screen.getByText('Wonderwall')).toBeInTheDocument();
-    expect(container.querySelectorAll('p')).toHaveLength(1);
+    expect(container.querySelectorAll('p')).toHaveLength(2);
+    expect(screen.getByText('E Standard')).toBeInTheDocument();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
-  it('joins artist, key and BPM with a middle dot, skipping a BPM of 0', () => {
+  it('joins artist, key, BPM and tuning with a middle dot, skipping a BPM of 0', () => {
     const { rerender } = render(<SongDetails song={song({ artist: 'Oasis', key: 'F#m', bpm: 87 })} />);
-    expect(screen.getByText('Oasis · F#m · 87 BPM')).toBeInTheDocument();
+    expect(screen.getByText('Oasis · F#m · 87 BPM · E Standard')).toBeInTheDocument();
     rerender(<SongDetails song={song({ artist: 'Oasis', bpm: 0 })} />);
-    expect(screen.getByText('Oasis')).toBeInTheDocument();
+    expect(screen.getByText('Oasis · E Standard')).toBeInTheDocument();
     expect(screen.queryByText(/BPM/)).not.toBeInTheDocument();
+  });
+
+  it('always shows the tuning last: a stored preset or custom value as is', () => {
+    const { rerender } = render(<SongDetails song={song({ tuning: 'Drop D' })} />);
+    expect(screen.getByText('Drop D')).toBeInTheDocument();
+    rerender(<SongDetails song={song({ artist: 'Oasis', key: 'Am', bpm: 120, tuning: 'D G D G B D' })} />);
+    expect(screen.getByText('Oasis · Am · 120 BPM · D G D G B D')).toBeInTheDocument();
+  });
+
+  it('reads a missing tuning (songs from before the field existed: null, blank or absent) as E Standard', () => {
+    const { rerender } = render(<SongDetails song={song({ tuning: null })} />);
+    expect(screen.getByText('E Standard')).toBeInTheDocument();
+    rerender(<SongDetails song={song({ tuning: '' })} />);
+    expect(screen.getByText('E Standard')).toBeInTheDocument();
+    rerender(<SongDetails song={song({ tuning: undefined })} />);
+    expect(screen.getByText('E Standard')).toBeInTheDocument();
   });
 
   it('renders song and tab links as new-tab links showing their host, only for safe http(s) URLs', () => {

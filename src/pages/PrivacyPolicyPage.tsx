@@ -25,9 +25,9 @@ export function PrivacyPolicyPage() {
         </li>
         <li>
           <strong>Bands:</strong> if you create or join a band, the name you choose for it, your
-          display name, the songs you suggest, your up/down votes, the colors you give songs, the names you give a band&rsquo;s colors (any member can change them) and your account&rsquo;s internal
+          display name, the instruments you say you play, the songs you suggest (with their tuning), your up/down votes, the colors you give songs, the names you give a band&rsquo;s colors (any member can change them) and your account&rsquo;s internal
           user ID are stored in the cloud. Anyone who has a band&rsquo;s link or ID can read that
-          band&rsquo;s set lists, members&rsquo; display names and IDs, songs and votes, and the
+          band&rsquo;s set lists, members&rsquo; display names, instruments and IDs, songs and votes, and the
           list of removed members&rsquo; IDs. Vote records (an ID, the song and your up/down choice,
           never names or titles) can also be looked up by anyone, signed in or not, who knows the set
           list&rsquo;s ID. Removing someone from a band hides them in the app but does not stop

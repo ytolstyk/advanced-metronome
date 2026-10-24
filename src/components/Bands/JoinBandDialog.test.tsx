@@ -92,7 +92,7 @@ describe('JoinBandDialog', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Join band' }));
     await waitFor(() => expect(onJoined).toHaveBeenCalledWith('band-9'));
     expect(onOpenChange).toHaveBeenCalledWith(false);
-    expect(joinBand).toHaveBeenCalledWith('band-9', 'Alice');
+    expect(joinBand).toHaveBeenCalledWith('band-9', 'Alice', []);
   });
 
   it('reopening after closing from the confirm step goes back to the code step', async () => {

@@ -49,6 +49,7 @@ import {
   resetInviteCode,
   setInviteTtlDays,
   unbanMember,
+  updateMyProfile,
 } from './bandsApi';
 import { BandConflictError } from './bandsShared';
 import { isAuthenticated } from './authUtils';
@@ -149,6 +150,19 @@ describe('createBand', () => {
     expect(m.Member.create.mock.calls[0][0]).toMatchObject({ owner: ME, displayName: 'Alice' });
     expect(m.MyBand.create.mock.calls[0][0]).toMatchObject({ owner: ME });
     expect(band).toMatchObject({ name: 'The Band', owner: ME, version: 1, inviteCode: bandInput.inviteCode });
+  });
+
+  it('writes the owner Member row with the chosen instruments (none by default)', async () => {
+    m.SetList.create.mockResolvedValue({ data: setListRow() });
+    m.BandInvite.create.mockResolvedValue({ data: {} });
+    m.MyBand.create.mockResolvedValue({ data: {} });
+    m.Member.create.mockResolvedValue({ data: {} });
+    m.Band.create.mockImplementation(async (i: Record<string, unknown>) => ({ data: bandRow({ ...i, owner: ME }) }));
+    await createBand('The Band', 'Alice');
+    expect(m.Member.create.mock.calls[0][0]).toEqual({ bandId: expect.any(String), owner: ME, displayName: 'Alice', instruments: [] });
+    m.Member.create.mockClear();
+    await createBand('The Band', 'Alice', ['keys', 'drums', 'nope']);
+    expect(m.Member.create.mock.calls[0][0]).toMatchObject({ displayName: 'Alice', instruments: ['drums', 'keys'] });
   });
 
   it('creates the Band with nothing publicly shared (sharing is opt-in by the owner)', async () => {
@@ -343,8 +357,27 @@ describe('joinBand', () => {
     m.Member.create.mockResolvedValue({ data: {} });
     m.MyBand.create.mockResolvedValue({ data: {} });
     await joinBand('band-1', '  Bob  ');
-    expect(m.Member.create).toHaveBeenCalledWith({ bandId: 'band-1', owner: ME, displayName: 'Bob' });
+    expect(m.Member.create).toHaveBeenCalledWith({ bandId: 'band-1', owner: ME, displayName: 'Bob', instruments: [] });
     expect(m.MyBand.create).toHaveBeenCalledWith({ owner: ME, bandId: 'band-1' });
+  });
+
+  it('passes the chosen instruments into the Member row, cleaned (known keys, once each, palette order)', async () => {
+    m.Member.create.mockResolvedValue({ data: {} });
+    m.MyBand.create.mockResolvedValue({ data: {} });
+    await joinBand('band-1', 'Bob', ['vocals', 'guitar', 'guitar', 'kazoo']);
+    expect(m.Member.create).toHaveBeenCalledWith({
+      bandId: 'band-1',
+      owner: ME,
+      displayName: 'Bob',
+      instruments: ['guitar', 'vocals'],
+    });
+  });
+
+  it('still enforces ban / deleted / full before writing anything, whatever the instruments', async () => {
+    m.Band.get.mockResolvedValue({ data: bandRow({ bannedSubs: [ME] }) });
+    await expect(joinBand('band-1', 'Bob', ['drums'])).rejects.toMatchObject({ reason: 'banned' });
+    expect(m.Member.create).not.toHaveBeenCalled();
+    expect(m.MyBand.create).not.toHaveBeenCalled();
   });
 
   it('is idempotent: "already exists" counts as success', async () => {
@@ -373,6 +406,96 @@ describe('joinBand', () => {
     m.Band.get.mockResolvedValue({ data: bandRow() });
     await expect(joinBand('band-1', '  ')).rejects.toThrow('display name');
     expect(m.Member.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateMyProfile', () => {
+  it('updates the caller own Member row with a trimmed name and cleaned instruments', async () => {
+    m.Member.get.mockResolvedValue({ data: memberRow(ME) });
+    m.Member.update.mockResolvedValue({ data: {} });
+    await updateMyProfile('band-1', '  Bobby  ', ['vocals', 'guitar', 'guitar', 'kazoo']);
+    expect(m.Member.get).toHaveBeenCalledWith({ bandId: 'band-1', owner: ME });
+    expect(m.Member.update).toHaveBeenCalledWith({
+      bandId: 'band-1',
+      owner: ME,
+      displayName: 'Bobby',
+      instruments: ['guitar', 'vocals'],
+    });
+    expect(m.Member.create).not.toHaveBeenCalled();
+  });
+
+  it('can clear every instrument', async () => {
+    m.Member.get.mockResolvedValue({ data: memberRow(ME) });
+    m.Member.update.mockResolvedValue({ data: {} });
+    await updateMyProfile('band-1', 'Bob', []);
+    expect(m.Member.update).toHaveBeenCalledWith(expect.objectContaining({ instruments: [] }));
+  });
+
+  it('creates the owner own row when the owner has none (idempotently)', async () => {
+    m.Band.get.mockResolvedValue({ data: bandRow({ owner: ME }) });
+    m.Member.get.mockResolvedValue({ data: null });
+    m.Member.create.mockResolvedValue({ data: {} });
+    await updateMyProfile('band-1', 'Owner', ['bass']);
+    expect(m.Member.create).toHaveBeenCalledWith({ bandId: 'band-1', owner: ME, displayName: 'Owner', instruments: ['bass'] });
+    expect(m.Member.update).not.toHaveBeenCalled();
+
+    m.Member.create.mockResolvedValue({ data: null, errors: CONFLICT });
+    await expect(updateMyProfile('band-1', 'Owner', ['bass'])).resolves.toBeUndefined();
+  });
+
+  it('never joins anyone: a non-member non-owner is told to join first and nothing is written', async () => {
+    m.Member.get.mockResolvedValue({ data: null });
+    await expect(updateMyProfile('band-1', 'Bob', ['guitar'])).rejects.toThrow('Join the band first');
+    expect(m.Member.create).not.toHaveBeenCalled();
+    expect(m.Member.update).not.toHaveBeenCalled();
+    expect(m.MyBand.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['not found', 'Band not found', () => m.Band.get.mockResolvedValue({ data: null })],
+    ['deleted', 'This band was deleted', () => m.Band.get.mockResolvedValue({ data: bandRow({ deletedAt: '2026-02-01T00:00:00Z' }) })],
+    ['banned', 'You were removed from this band', () => m.Band.get.mockResolvedValue({ data: bandRow({ bannedSubs: [ME] }) })],
+  ])('refuses a %s band with a plain message (not an invite error) and writes nothing', async (_name, message, arrange) => {
+    arrange();
+    m.Member.get.mockResolvedValue({ data: memberRow(ME) });
+    const err = await updateMyProfile('band-1', 'Bob', ['guitar']).catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(InviteError);
+    expect((err as Error).message).toBe(message);
+    expect(m.Member.update).not.toHaveBeenCalled();
+    expect(m.Member.create).not.toHaveBeenCalled();
+  });
+
+  it('the owner is never treated as banned, even if a hostile bannedSubs lists them', async () => {
+    m.Band.get.mockResolvedValue({ data: bandRow({ owner: ME, bannedSubs: [ME] }) });
+    m.Member.get.mockResolvedValue({ data: null });
+    m.Member.create.mockResolvedValue({ data: {} });
+    await expect(updateMyProfile('band-1', 'Owner', [])).resolves.toBeUndefined();
+    expect(m.Member.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a blank display name before reading or writing anything', async () => {
+    await expect(updateMyProfile('band-1', '   ', ['guitar'])).rejects.toThrow('display name');
+    expect(m.Band.get).not.toHaveBeenCalled();
+    expect(m.Member.get).not.toHaveBeenCalled();
+    expect(m.Member.update).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the own-row read errors (never falls through to creating or "Join first")', async () => {
+    m.Band.get.mockResolvedValue({ data: bandRow({ owner: ME }) });
+    m.Member.get.mockResolvedValue({ data: null, errors: [{ message: 'transient' }] });
+    await expect(updateMyProfile('band-1', 'Owner', [])).rejects.toThrow('getMember');
+    expect(m.Member.create).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a failed update', async () => {
+    m.Member.get.mockResolvedValue({ data: memberRow(ME) });
+    m.Member.update.mockResolvedValue({ data: null, errors: UNAUTH });
+    await expect(updateMyProfile('band-1', 'Bob', [])).rejects.toThrow('updateMember');
+  });
+
+  it('requires sign-in before anything else (even before validating the name)', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+    await expect(updateMyProfile('band-1', ' ', [])).rejects.toThrow('Not authenticated');
   });
 });
 
@@ -920,6 +1043,7 @@ describe('auth gating (every cloud call checks sign-in first)', () => {
     ['previewBand', () => previewBand('band-1')],
     ['lookupInvite', () => lookupInvite('ABCDE-FGHJK')],
     ['joinBand', () => joinBand('band-1', 'Bob')],
+    ['updateMyProfile', () => updateMyProfile('band-1', 'Bob', ['guitar'])],
     ['dismissBand', () => dismissBand('band-1')],
     ['ensureMyBandRow', () => ensureMyBandRow('band-1')],
     ['createBand', () => createBand('Band', 'Alice')],

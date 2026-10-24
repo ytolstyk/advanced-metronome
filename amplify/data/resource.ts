@@ -319,6 +319,7 @@ const schema = a.schema({
     bandId: a.string().required(),
     owner: a.string().required(),
     displayName: a.string().required(),
+    instruments: a.string().array(),    // instrument keys the member plays (validated in the client)
   })
     .identifier(['bandId', 'owner'])
     .secondaryIndexes(index => [index('bandId').queryField('listMemberByBandId')])
@@ -348,6 +349,7 @@ const schema = a.schema({
     title: a.string().required(),
     artist: a.string(),
     key: a.string(),
+    tuning: a.string(),                 // preset name or free text (validated in the client)
     bpm: a.integer(),
     notes: a.string(),
     songUrl: a.string(),                // http(s) link to the song (validated in the client)

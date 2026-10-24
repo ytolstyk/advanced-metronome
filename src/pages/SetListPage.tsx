@@ -20,6 +20,7 @@ import { deleteSong, fetchSetListRows, suggestSong, updateSong } from '../api/se
 import { BAND_GONE_TITLES, BAND_LIMITS, type BandLoadResult, type BandView, type SetListView, type ValidSong } from '../bandTypes';
 import { bandPath } from '../bandRoutes';
 import { assembleSetListView } from '../bandViews';
+import { tuningOrDefault } from '../bandTunings';
 import { useColorLabels } from '../hooks/useColorLabels';
 import { useActionThenReload } from '../hooks/useAsyncAction';
 import { useLoader } from '../hooks/useLoader';
@@ -248,6 +249,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
             title: editing.title,
             artist: editing.artist ?? '',
             key: editing.key ?? '',
+            tuning: tuningOrDefault(editing.tuning),
             bpm: editing.bpm ?? '',
             notes: editing.notes ?? '',
             songUrl: editing.songUrl ?? '',

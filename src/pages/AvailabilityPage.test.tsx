@@ -354,3 +354,71 @@ describe('preferences', () => {
     expect(await screen.findByRole('radio', { name: '2 hours' })).toBeChecked();
   });
 });
+
+describe('instruments on the group view', () => {
+  /** The default three-member view with instruments set on each member (by sub). */
+  function viewWith(instruments: Record<string, unknown[]>) {
+    const base = makeView();
+    return makeView({
+      members: base.members.map((m) => ({ ...m, instruments: instruments[m.owner] })) as typeof base.members,
+    });
+  }
+  const bestTimes = () => screen.getByRole('region', { name: 'Best times' });
+
+  it('shows what each member plays beside their name and a coverage line for the window', async () => {
+    load(pageData({ view: viewWith({ [OWNER]: ['guitar'], [ME]: ['bass'], [BOB]: ['drums'] }) }, { [ME]: ok(row(ME, evening)) }));
+    renderPage();
+    await screen.findByRole('radio', { name: 'Group' });
+    const free = within(bestTimes()).getByText(/3 of 3 free:/);
+    expect(within(free).getByRole('img', { name: 'plays Guitar' })).toBeInTheDocument();
+    expect(within(free).getByRole('img', { name: 'plays Bass' })).toBeInTheDocument();
+    expect(within(free).getByRole('img', { name: 'plays Drums' })).toBeInTheDocument();
+    expect(within(bestTimes()).getByText(/^Instruments free:/)).toHaveTextContent('Instruments free: Guitar, Bass, Drums');
+  });
+
+  it('names an instrument no one free plays when a member is not free', async () => {
+    // Bob is the only drummer and has no overlap with the others' evening.
+    const reads = { [ME]: ok(row(ME, evening)), [BOB]: ok(row(BOB, [at(10), at(10, 30), at(11), at(11, 30)])) };
+    load(pageData({ view: viewWith({ [OWNER]: ['guitar'], [ME]: ['guitar'], [BOB]: ['drums'] }) }, reads));
+    renderPage();
+    await screen.findByRole('radio', { name: 'Group' });
+    expect(within(bestTimes()).getByText(/^Instruments free:/)).toHaveTextContent(
+      'Instruments free: Guitar · No one free plays: Drums',
+    );
+  });
+
+  it('shows the instruments of the people free at a selected slot', async () => {
+    load(pageData({ view: viewWith({ [OWNER]: ['vocals'], [ME]: ['keys'], [BOB]: ['strings'] }) }, { [ME]: ok(row(ME, evening)) }));
+    renderPage();
+    await screen.findByRole('radio', { name: 'Group' });
+    fireEvent.click(screen.getByRole('button', { name: time('Wed, Nov 4, 7:00 PM') }));
+    const detail = screen.getByRole('heading', { name: /Wed, Nov 4, 7:00\sPM/ }).parentElement!;
+    expect(within(detail).getByText(/^Instruments free:/)).toHaveTextContent('Instruments free: Vocals, Keys, Strings');
+    expect(within(detail).getByRole('img', { name: 'plays Vocals' })).toBeInTheDocument();
+  });
+
+  it('cleans a stored list: unknown keys dropped, duplicates merged, palette order', async () => {
+    load(pageData({ view: viewWith({ [OWNER]: ['bass', 'theremin', 'guitar', 'bass', 7], [ME]: [], [BOB]: [] }) }, { [ME]: ok(row(ME, evening)) }));
+    renderPage();
+    await screen.findByRole('radio', { name: 'Group' });
+    expect(within(bestTimes()).getByRole('img', { name: 'plays Guitar, Bass' })).toBeInTheDocument();
+    expect(within(bestTimes()).queryByRole('img', { name: /theremin/i })).not.toBeInTheDocument();
+  });
+
+  it('shows no icons and no coverage line when nobody in the band listed an instrument', async () => {
+    load(pageData({ view: viewWith({}) }, { [ME]: ok(row(ME, evening)) }));
+    renderPage();
+    await screen.findByRole('radio', { name: 'Group' });
+    expect(within(bestTimes()).queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Instruments free/)).not.toBeInTheDocument();
+    expect(within(bestTimes()).getByText(/3 of 3 free: Olivia, Me, Bob/)).toBeInTheDocument();
+  });
+
+  it('treats a member with no instrument entry as playing nothing, while others show theirs', async () => {
+    load(pageData({ view: viewWith({ [OWNER]: ['guitar'] }) }, { [ME]: ok(row(ME, evening)) }));
+    renderPage();
+    await screen.findByRole('radio', { name: 'Group' });
+    const free = within(bestTimes()).getByText(/3 of 3 free:/);
+    expect(within(free).getAllByRole('img')).toHaveLength(1);
+  });
+});

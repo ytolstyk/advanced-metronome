@@ -318,12 +318,22 @@ describe('suggestSong', () => {
       title: 'Wonderwall',
       artist: 'Oasis',
       key: 'F#m',
+      tuning: 'E Standard',
       bpm: 87,
       notes: null,
       songUrl: null,
       tabUrl: null,
     });
     expect(created.id).toBe('new');
+  });
+
+  it('sends a chosen tuning, trimmed, and rejects one over the limit before any write', async () => {
+    m.Song.create.mockResolvedValue({ data: songRow('new', 'sub-me') });
+    await suggestSong(makeView(), 'sl-1', { title: 'x', tuning: ' Drop D ' }, 0);
+    expect(m.Song.create).toHaveBeenCalledWith(expect.objectContaining({ tuning: 'Drop D' }));
+    m.Song.create.mockClear();
+    await expect(suggestSong(makeView(), 'sl-1', { title: 'x', tuning: 'x'.repeat(31) }, 0)).rejects.toThrow('Tuning');
+    expect(m.Song.create).not.toHaveBeenCalled();
   });
 
   it('normalizes song and tab links before sending them', async () => {
@@ -371,12 +381,24 @@ describe('updateSong / deleteSong', () => {
       title: 'New',
       artist: null,
       key: null,
+      tuning: 'E Standard',
       bpm: 100,
       notes: null,
       songUrl: null,
       tabUrl: null,
     });
     await expect(updateSong('s1', { title: '' })).rejects.toThrow('Title');
+  });
+
+  it('sends the tuning on update (default when blank) and rejects an over-long one', async () => {
+    m.Song.update.mockResolvedValue({ data: {} });
+    await updateSong('s1', { title: 'x', tuning: 'DADGAD' });
+    expect(m.Song.update).toHaveBeenCalledWith(expect.objectContaining({ tuning: 'DADGAD' }));
+    await updateSong('s1', { title: 'x', tuning: '  ' });
+    expect(m.Song.update).toHaveBeenLastCalledWith(expect.objectContaining({ tuning: 'E Standard' }));
+    m.Song.update.mockClear();
+    await expect(updateSong('s1', { title: 'x', tuning: 'x'.repeat(31) })).rejects.toThrow('Tuning');
+    expect(m.Song.update).not.toHaveBeenCalled();
   });
 
   it('sends normalized links on update, and null when cleared', async () => {

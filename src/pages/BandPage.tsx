@@ -14,6 +14,7 @@ import { AvailabilitySection, DangerZone, MembersSection, SetListsSection } from
 import { InviteSection } from '../components/Bands/InviteSection';
 import { BandsShell } from '../components/Bands/BandsShell';
 import { ConfirmDialog } from '../components/Bands/ConfirmDialog';
+import { EditProfileDialog } from '../components/Bands/EditProfileDialog';
 import { InlineAlert } from '../components/Bands/InlineAlert';
 import { JoinConfirm } from '../components/Bands/JoinConfirm';
 import { LoaderBoundary } from '../components/Bands/LoaderBoundary';
@@ -131,6 +132,7 @@ type OpenDialog =
   | { kind: 'share-set-list'; id: string; name: string }
   | { kind: 'rename-band' }
   | { kind: 'remove-member'; sub: string; name: string }
+  | { kind: 'edit-profile' }
   | { kind: 'reset-code' }
   | { kind: 'leave' }
   | { kind: 'delete-band' };
@@ -141,6 +143,7 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
   const { act, error: actionError } = useActionThenReload(reload);
   const close = () => setDialog(null);
+  const myMember = view.members.find((m) => m.owner === view.sub);
   const settled = () => void reload();
 
   // Repairs a missing private "my bands" row (e.g. the second write of a join failed).
@@ -193,6 +196,7 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
         view={view}
         onRemove={(sub, name) => setDialog({ kind: 'remove-member', sub, name })}
         onRestore={(sub) => void act(() => unbanMember(band.id, sub))}
+        onEditProfile={() => setDialog({ kind: 'edit-profile' })}
       />
       <InviteSection view={view} onReset={() => setDialog({ kind: 'reset-code' })} onChanged={settled} />
       <DangerZone isOwner={isOwner} onClick={() => setDialog({ kind: isOwner ? 'delete-band' : 'leave' })} />
@@ -245,7 +249,7 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
             <>
               Anyone with the link can view this list without signing in. Because of how the backend is secured,
               anyone with the link can also read the rest of this band’s data: the invite code, members’ display
-              names and account IDs, votes, your other set lists and each member’s availability (the times they
+              names, instruments and account IDs, votes, your other set lists and each member’s availability (the times they
               marked free, which can show when they’re away). “Stop sharing” hides the list in the app but
               can’t take that access back from people who already have the link. Links and notes on the page come
               from band members and aren’t checked.
@@ -261,6 +265,16 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
       )}
       {dialog?.kind === 'remove-member' && (
         <RemoveMemberDialog bandId={band.id} sub={dialog.sub} name={dialog.name} onClose={close} onSettled={settled} />
+      )}
+      {dialog?.kind === 'edit-profile' && (
+        <EditProfileDialog
+          bandId={band.id}
+          bandName={band.name}
+          initialName={myMember?.displayName ?? ''}
+          initialInstruments={myMember?.instruments ?? []}
+          onClose={close}
+          onSettled={settled}
+        />
       )}
       {dialog?.kind === 'reset-code' && <ResetInviteDialog bandId={band.id} onClose={close} onSettled={settled} />}
       {dialog?.kind === 'leave' && <LeaveBandDialog band={band} onClose={close} onLeft={() => navigate('/bands')} />}

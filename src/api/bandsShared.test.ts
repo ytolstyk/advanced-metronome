@@ -274,6 +274,7 @@ describe('row mappers', () => {
       title: 'T',
       artist: null,
       key: null,
+      tuning: null,
       bpm: null,
       notes: null,
       songUrl: null,
@@ -281,6 +282,9 @@ describe('row mappers', () => {
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-02T00:00:00Z',
     });
+    // A stored tuning passes through untouched (the validators judge it, absent stays null).
+    expect(toSong({ ...base, tuning: 'Drop D' } as unknown as Parameters<typeof toSong>[0]).tuning).toBe('Drop D');
+    expect(toSong({ ...base, tuning: '' } as unknown as Parameters<typeof toSong>[0]).tuning).toBe('');
     // ?? (not ||) so a 0 / empty string coming from the API is preserved for the validators to judge.
     const falsy = toSong({ ...base, bpm: 0, notes: '', artist: '' } as unknown as Parameters<typeof toSong>[0]);
     expect(falsy.bpm).toBe(0);
@@ -290,6 +294,16 @@ describe('row mappers', () => {
     const linked = toSong({ ...base, songUrl: 'https://a.example/x', tabUrl: 'https://b.example/y' } as unknown as Parameters<typeof toSong>[0]);
     expect(linked.songUrl).toBe('https://a.example/x');
     expect(linked.tabUrl).toBe('https://b.example/y');
+  });
+
+  it('toMember keeps known instruments once each in palette order and drops unknown keys, not the member', () => {
+    const row = (instruments: unknown) =>
+      ({ bandId: 'b', owner: 'u', displayName: 'Al', createdAt: 'c', instruments }) as unknown as Parameters<typeof toMember>[0];
+    expect(toMember(row(['vocals', 'guitar', 'guitar', 'laser-harp', 7, null, '', 'Guitar'])).instruments).toEqual(['guitar', 'vocals']);
+    expect(toMember(row(['laser-harp'])).instruments).toEqual([]);
+    expect(toMember(row(null)).instruments).toEqual([]);
+    expect(toMember(row(undefined)).instruments).toEqual([]);
+    expect(toMember(row(['laser-harp', 'drums'])).displayName).toBe('Al');
   });
 
   it('toSetList maps a null owner and null archivedAt', () => {
@@ -304,7 +318,7 @@ describe('row mappers', () => {
     const member = { bandId: 'b', owner: 'u', displayName: 'Al', createdAt: 'c', extra: 1 } as unknown as Parameters<
       typeof toMember
     >[0];
-    expect(toMember(member)).toEqual({ bandId: 'b', owner: 'u', displayName: 'Al', createdAt: 'c' });
+    expect(toMember(member)).toEqual({ bandId: 'b', owner: 'u', displayName: 'Al', instruments: [], createdAt: 'c' });
     const vote = {
       songId: 's',
       owner: 'u',

@@ -182,20 +182,36 @@ describe('MembersSection', () => {
 
   it('the owner sees removed members and can restore one by sub', () => {
     const onRestore = vi.fn();
-    render(<MembersSection view={view({ isOwner: true, removedMembers: removed })} onRemove={() => {}} onRestore={onRestore} />);
+    render(<MembersSection view={view({ isOwner: true, removedMembers: removed })} onRemove={() => {}} onRestore={onRestore} onEditProfile={() => {}} />);
     expect(screen.getByRole('heading', { name: 'Removed' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Restore Bob' }));
     expect(onRestore).toHaveBeenCalledWith('sub-bob');
   });
 
   it('a non-owner never sees the removed section even when the data is present', () => {
-    render(<MembersSection view={view({ isOwner: false, removedMembers: removed })} onRemove={() => {}} onRestore={() => {}} />);
+    render(<MembersSection view={view({ isOwner: false, removedMembers: removed })} onRemove={() => {}} onRestore={() => {}} onEditProfile={() => {}} />);
     expect(screen.queryByRole('heading', { name: 'Removed' })).not.toBeInTheDocument();
     expect(screen.queryByText('Bob')).not.toBeInTheDocument();
   });
 
+  it('passes onEditProfile through to the current user own row', () => {
+    const onEditProfile = vi.fn();
+    const mine = { bandId: 'b1', owner: 'sub-me', displayName: 'Me', instruments: ['guitar'], createdAt: 'c' } as unknown as BandView['members'][number];
+    render(
+      <MembersSection
+        view={view({ sub: 'sub-me', members: [mine], displayNames: new Map([['sub-me', 'Me']]) })}
+        onRemove={() => {}}
+        onRestore={() => {}}
+        onEditProfile={onEditProfile}
+      />,
+    );
+    expect(screen.getByRole('list', { name: 'Me plays' })).toHaveTextContent('Guitar');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit your name and instruments' }));
+    expect(onEditProfile).toHaveBeenCalledTimes(1);
+  });
+
   it('omits the removed section when nobody was removed', () => {
-    render(<MembersSection view={view({ isOwner: true })} onRemove={() => {}} onRestore={() => {}} />);
+    render(<MembersSection view={view({ isOwner: true })} onRemove={() => {}} onRestore={() => {}} onEditProfile={() => {}} />);
     expect(screen.queryByRole('heading', { name: 'Removed' })).not.toBeInTheDocument();
   });
 
@@ -206,10 +222,10 @@ describe('MembersSection', () => {
       members: [{ bandId: 'b1', owner: 'sub-amy', displayName: 'Amy', createdAt: 'c' }] as BandView['members'],
       displayNames: new Map([['sub-amy', 'Amy']]),
     };
-    const { unmount } = render(<MembersSection view={view({ ...base, isOwner: false })} onRemove={onRemove} onRestore={() => {}} />);
+    const { unmount } = render(<MembersSection view={view({ ...base, isOwner: false })} onRemove={onRemove} onRestore={() => {}} onEditProfile={() => {}} />);
     expect(screen.queryByRole('button', { name: 'Remove Amy' })).not.toBeInTheDocument();
     unmount();
-    render(<MembersSection view={view({ ...base, isOwner: true })} onRemove={onRemove} onRestore={() => {}} />);
+    render(<MembersSection view={view({ ...base, isOwner: true })} onRemove={onRemove} onRestore={() => {}} onEditProfile={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Remove Amy' }));
     expect(onRemove).toHaveBeenCalledWith('sub-amy', 'Amy');
   });

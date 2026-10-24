@@ -10,6 +10,7 @@ import type {
   SongRecord,
   VoteRecord,
 } from '../bandTypes';
+import { normalizeInstruments } from '../bandInstruments';
 import { normalizeInviteTtlDays } from '../bandUtils';
 import { getSignedInSub, isAuthenticated } from './authUtils';
 import { listAll, pageOpts } from './paginate';
@@ -201,7 +202,13 @@ export function toBand(r: BandRow): BandRecord {
 }
 
 export function toMember(r: Row<'Member'>): MemberRecord {
-  return { bandId: r.bandId, owner: r.owner, displayName: r.displayName, createdAt: r.createdAt };
+  return {
+    bandId: r.bandId,
+    owner: r.owner,
+    displayName: r.displayName,
+    instruments: normalizeInstruments(r.instruments),
+    createdAt: r.createdAt,
+  };
 }
 
 export function toSetList(r: Row<'SetList'>): SetListRecord {
@@ -217,6 +224,7 @@ export function toSong(r: Row<'Song'>): SongRecord {
     title: r.title,
     artist: r.artist ?? null,
     key: r.key ?? null,
+    tuning: r.tuning ?? null,
     bpm: r.bpm ?? null,
     notes: r.notes ?? null,
     songUrl: r.songUrl ?? null,

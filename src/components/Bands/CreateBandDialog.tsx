@@ -11,10 +11,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { createBand } from '../../api/bandsApi';
+import type { InstrumentKey } from '../../bandInstruments';
 import { BAND_LIMITS } from '../../bandTypes';
 import { useAsyncAction } from '../../hooks/useAsyncAction';
-import { DisplayNameField } from './DisplayNameField';
 import { InlineAlert } from './InlineAlert';
+import { MemberProfileFields } from './MemberProfileFields';
 
 interface CreateBandDialogProps {
   open: boolean;
@@ -25,16 +26,16 @@ interface CreateBandDialogProps {
 
 export function CreateBandDialog({ open, onOpenChange, defaultDisplayName, onCreated }: CreateBandDialogProps) {
   const nameId = useId();
-  const displayNameId = useId();
   const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState(defaultDisplayName);
+  const [instruments, setInstruments] = useState<InstrumentKey[]>([]);
   const { run, busy, error } = useAsyncAction();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     let bandId = '';
     const ok = await run(async () => {
-      bandId = (await createBand(name, displayName)).id;
+      bandId = (await createBand(name, displayName, instruments)).id;
     });
     if (!ok) return;
     onOpenChange(false);
@@ -63,7 +64,12 @@ export function CreateBandDialog({ open, onOpenChange, defaultDisplayName, onCre
               autoFocus
             />
           </div>
-          <DisplayNameField id={displayNameId} value={displayName} onChange={setDisplayName} />
+          <MemberProfileFields
+            name={displayName}
+            onNameChange={setDisplayName}
+            instruments={instruments}
+            onInstrumentsChange={setInstruments}
+          />
           {error && <InlineAlert tone="error">{error}</InlineAlert>}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>

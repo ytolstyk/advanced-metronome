@@ -196,6 +196,11 @@ describe('filterValidMembers', () => {
   it('returns nothing for a tombstoned band', () => {
     expect(filterValidMembers([member(OWNER)], band({ deletedAt: '2026-02-01T00:00:00Z' }))).toEqual([]);
   });
+
+  it('keeps a member whose instruments are junk (instruments are cosmetic, never a reason to hide)', () => {
+    const rows = [member(BOB, { instruments: ['laser-harp', '', 'guitar'] }), member(CAT, { instruments: [] })];
+    expect(filterValidMembers(rows, band()).map((m) => m.owner).sort()).toEqual([BOB, CAT]);
+  });
 });
 
 describe('validMemberSubs', () => {
@@ -273,12 +278,33 @@ describe('filterValidSongs', () => {
       song('long-artist', BOB, { artist: 'x'.repeat(101) }),
       song('long-notes', BOB, { notes: 'x'.repeat(501) }),
       song('bad-key', BOB, { key: 'H' }),
+      song('long-tuning', BOB, { tuning: 'x'.repeat(BAND_LIMITS.tuningMax + 1) }),
       song('low-bpm', BOB, { bpm: 39 }),
       song('high-bpm', BOB, { bpm: 301 }),
       song('frac-bpm', BOB, { bpm: 120.5 }),
       song('ok', BOB, { key: 'F#m', bpm: 120, artist: 'Someone', notes: 'capo 2' }),
     ];
     expect(world(b, members, [setList()], rows).validSongs.map((s) => s.id)).toEqual(['ok']);
+  });
+
+  it('hides a song whose tuning changes when sanitised (control or bidi characters, padding)', () => {
+    const rows = [
+      song('bidi', BOB, { tuning: `Drop D${String.fromCharCode(0x202e)}` }),
+      song('control', BOB, { tuning: `Dr${String.fromCharCode(0)}op D` }),
+      song('padded', BOB, { tuning: ' Drop D ' }),
+      song('ok', BOB, { tuning: 'Drop D' }),
+    ];
+    expect(world(b, members, [setList()], rows).validSongs.map((s) => s.id)).toEqual(['ok']);
+  });
+
+  it('shows songs with no tuning (null, blank or absent: rows from before the field existed)', () => {
+    const rows = [
+      song('null', BOB, { tuning: null }),
+      song('blank', BOB, { tuning: '' }),
+      song('absent', BOB),
+      song('custom', BOB, { tuning: 'D G D G B D' }),
+    ];
+    expect(world(b, members, [setList()], rows).validSongs.map((s) => s.id)).toEqual(['null', 'blank', 'absent', 'custom']);
   });
 
   it('accepts all 12-note key spellings', () => {
@@ -415,13 +441,13 @@ describe('buildDisplayNames', () => {
 describe('parseSongInput', () => {
   it('normalizes a full valid form', () => {
     expect(parseSongInput({ title: '  Wonderwall ', artist: ' Oasis ', key: 'F#m', bpm: '87', notes: ' capo 2 ' })).toEqual({
-      value: { title: 'Wonderwall', artist: 'Oasis', key: 'F#m', bpm: 87, notes: 'capo 2', songUrl: null, tabUrl: null },
+      value: { title: 'Wonderwall', artist: 'Oasis', key: 'F#m', tuning: 'E Standard', bpm: 87, notes: 'capo 2', songUrl: null, tabUrl: null },
     });
   });
 
   it('treats blank optional fields as null and accepts numeric bpm', () => {
     expect(parseSongInput({ title: 'x', artist: ' ', key: '', bpm: '', notes: '' })).toEqual({
-      value: { title: 'x', artist: null, key: null, bpm: null, notes: null, songUrl: null, tabUrl: null },
+      value: { title: 'x', artist: null, key: null, tuning: 'E Standard', bpm: null, notes: null, songUrl: null, tabUrl: null },
     });
     expect(parseSongInput({ title: 'x', bpm: 120 })).toMatchObject({ value: { bpm: 120 } });
     expect(parseSongInput({ title: 'x', bpm: null })).toMatchObject({ value: { bpm: null } });
@@ -452,8 +478,35 @@ describe('parseSongInput', () => {
     const dirty = `Ti${String.fromCharCode(0)}tle${String.fromCharCode(0x202e)}`;
     expect(bs).toBe('\\');
     expect(parseSongInput({ title: dirty })).toEqual({
-      value: { title: 'Title', artist: null, key: null, bpm: null, notes: null, songUrl: null, tabUrl: null },
+      value: { title: 'Title', artist: null, key: null, tuning: 'E Standard', bpm: null, notes: null, songUrl: null, tabUrl: null },
     });
+  });
+});
+
+describe('parseSongInput tuning', () => {
+  it('defaults a blank, whitespace-only or absent tuning to E Standard', () => {
+    for (const tuning of [undefined, '', '   ']) {
+      expect(parseSongInput({ title: 'x', tuning })).toMatchObject({ value: { tuning: 'E Standard' } });
+    }
+  });
+
+  it('keeps a chosen preset or custom tuning, trimmed', () => {
+    expect(parseSongInput({ title: 'x', tuning: 'Drop D' })).toMatchObject({ value: { tuning: 'Drop D' } });
+    expect(parseSongInput({ title: 'x', tuning: '  D G D G B D ' })).toMatchObject({ value: { tuning: 'D G D G B D' } });
+  });
+
+  it('strips control and bidi characters from the tuning, falling back to the default if nothing is left', () => {
+    expect(parseSongInput({ title: 'x', tuning: `Dr${String.fromCharCode(0)}op D${String.fromCharCode(0x202e)}` })).toMatchObject({
+      value: { tuning: 'Drop D' },
+    });
+    expect(parseSongInput({ title: 'x', tuning: String.fromCharCode(0x202e) })).toMatchObject({ value: { tuning: 'E Standard' } });
+  });
+
+  it('rejects a tuning over the limit but accepts one at the limit', () => {
+    expect(parseSongInput({ title: 'x', tuning: 'x'.repeat(BAND_LIMITS.tuningMax + 1) })).toEqual({
+      error: `Tuning must be at most ${BAND_LIMITS.tuningMax} characters`,
+    });
+    expect(parseSongInput({ title: 'x', tuning: 'x'.repeat(BAND_LIMITS.tuningMax) })).toHaveProperty('value');
   });
 });
 
@@ -596,6 +649,21 @@ describe('songFieldError (one definition of the bounds for forms and validators)
     expect(songFieldError({ title: 'x', key: 'H' })).toContain('Key');
     expect(songFieldError({ title: 'x', bpm: 39 })).toContain('BPM');
     expect(songFieldError({ title: 'x', bpm: Number.NaN })).toContain('BPM');
+  });
+
+  it('bounds the tuning at tuningMax characters (absent and blank are fine)', () => {
+    expect(songFieldError({ title: 'x', tuning: 'x'.repeat(BAND_LIMITS.tuningMax) })).toBeNull();
+    expect(songFieldError({ title: 'x', tuning: 'x'.repeat(BAND_LIMITS.tuningMax + 1) })).toBe(
+      `Tuning must be at most ${BAND_LIMITS.tuningMax} characters`,
+    );
+    expect(songFieldError({ title: 'x', tuning: '' })).toBeNull();
+    expect(songFieldError({ title: 'x', tuning: null })).toBeNull();
+    expect(songFieldError({ title: 'x' })).toBeNull();
+  });
+
+  it('counts an emoji in a tuning as one character', () => {
+    expect(songFieldError({ title: 'x', tuning: SMILE.repeat(BAND_LIMITS.tuningMax) })).toBeNull();
+    expect(songFieldError({ title: 'x', tuning: SMILE.repeat(BAND_LIMITS.tuningMax + 1) })).toContain('Tuning');
   });
 
   it('counts emoji as one character', () => {

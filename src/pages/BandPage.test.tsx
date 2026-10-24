@@ -21,6 +21,7 @@ vi.mock('../api/bandsApi', () => ({
   ensureMyBandRow: vi.fn().mockResolvedValue(undefined),
   banMember: vi.fn(),
   unbanMember: vi.fn(),
+  updateMyProfile: vi.fn(),
   renameBand: vi.fn(),
   resetInviteCode: vi.fn(),
   deleteBand: vi.fn(),
@@ -49,6 +50,7 @@ import {
   resetInviteCode,
   setInviteTtlDays,
   unbanMember,
+  updateMyProfile,
 } from '../api/bandsApi';
 import { archiveSetList, createSetList, deleteMyContent, renameSetList, setSetListShared } from '../api/setListsApi';
 
@@ -164,7 +166,7 @@ describe('BandPage states', () => {
     expect(screen.queryByRole('heading', { name: 'Members' })).not.toBeInTheDocument();
     fireEvent.change(await screen.findByLabelText('Your name in this band'), { target: { value: 'Bob' } });
     fireEvent.click(screen.getByRole('button', { name: 'Join band' }));
-    await waitFor(() => expect(joinBand).toHaveBeenCalledWith('band-1', 'Bob'));
+    await waitFor(() => expect(joinBand).toHaveBeenCalledWith('band-1', 'Bob', []));
     await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2)); // reloads in place
   });
 
@@ -302,6 +304,81 @@ describe('BandPage as a member', () => {
     load(makeView({ incomplete: true }));
     renderPage();
     expect(await screen.findByRole('status')).toHaveTextContent('Some members may be missing');
+  });
+});
+
+describe('BandPage profile', () => {
+  const withProfile = (instruments?: string[]): BandView => {
+    const view = makeView();
+    return {
+      ...view,
+      members: view.members.map((m) => (m.owner === ME ? ({ ...m, instruments } as ValidMember) : m)),
+    };
+  };
+  const roster = () => screen.getByRole('region', { name: 'Members' });
+
+  it('shows members instruments in the roster', async () => {
+    load(withProfile(['guitar', 'vocals']));
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    expect(within(roster()).getByRole('list', { name: 'Me plays' })).toHaveTextContent('GuitarVocals');
+  });
+
+  it('opens a dialog prefilled from my own Member row, saves, then reloads in place', async () => {
+    load(withProfile(['bass']));
+    vi.mocked(updateMyProfile).mockResolvedValue(undefined);
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    fireEvent.click(within(roster()).getByRole('button', { name: 'Edit your name and instruments' }));
+    expect(await screen.findByRole('heading', { name: 'Your profile in The Band' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Your name in this band')).toHaveValue('Me');
+    expect(screen.getByRole('button', { name: 'Bass' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.change(screen.getByLabelText('Your name in this band'), { target: { value: 'Mo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Drums' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(updateMyProfile).toHaveBeenCalledWith('band-1', 'Mo', ['bass', 'drums']));
+    await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Your profile in The Band' })).not.toBeInTheDocument());
+  });
+
+  it('a member with no instruments gets an "Add instruments" entry point and an empty picker', async () => {
+    load(withProfile(undefined));
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    fireEvent.click(within(roster()).getByRole('button', { name: 'Add instruments to your profile' }));
+    expect(await screen.findByRole('heading', { name: 'Your profile in The Band' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
+  });
+
+  it('only my own row has the edit button (never other members)', async () => {
+    load(withProfile(['keys']));
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    expect(within(roster()).getAllByRole('button', { name: 'Edit your name and instruments' })).toHaveLength(1);
+  });
+
+  it('starts with an empty name (never a disambiguated label) when the viewer (the owner) has no Member row', async () => {
+    const view = ownerView();
+    load({
+      ...view,
+      members: view.members.filter((m) => m.owner !== OWNER),
+      displayNames: new Map([[OWNER, 'Owner Olivia'], [BOB, 'Bob']]),
+    });
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    fireEvent.click(within(roster()).getByRole('button', { name: 'Add instruments to your profile' }));
+    expect(await screen.findByLabelText('Your name in this band')).toHaveValue('');
+  });
+
+  it('a failed save stays open with the message and still reloads the page data', async () => {
+    load(withProfile(['bass']));
+    vi.mocked(updateMyProfile).mockRejectedValue(new Error('Join the band first'));
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    fireEvent.click(within(roster()).getByRole('button', { name: 'Edit your name and instruments' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent('Join the band first');
+    expect(screen.getByRole('heading', { name: 'Your profile in The Band' })).toBeInTheDocument();
   });
 });
 

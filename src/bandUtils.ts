@@ -21,6 +21,7 @@ import {
   type VoteValue,
 } from './bandTypes';
 import { DAY_MS } from './availabilitySlots';
+import { DEFAULT_TUNING } from './bandTunings';
 
 /**
  * Pure, synchronous logic for the Bands feature: invite codes, text sanitising, read-time
@@ -260,6 +261,7 @@ interface SongFields {
   title: string;
   artist?: string | null;
   key?: string | null;
+  tuning?: string | null;
   bpm?: number | null;
   notes?: string | null;
   songUrl?: string | null;
@@ -273,6 +275,7 @@ export function songFieldError(f: SongFields): string | null {
   if (textLength(f.artist ?? '') > BAND_LIMITS.artistMax) return `Artist must be at most ${BAND_LIMITS.artistMax} characters`;
   if (textLength(f.notes ?? '') > BAND_LIMITS.notesMax) return `Notes must be at most ${BAND_LIMITS.notesMax} characters`;
   if (!isValidSongKey(f.key)) return 'Key must look like C, F#, Bb or Am';
+  if (textLength(f.tuning ?? '') > BAND_LIMITS.tuningMax) return `Tuning must be at most ${BAND_LIMITS.tuningMax} characters`;
   if (!isStoredUrl(f.songUrl)) return `Song link must be a web address (http or https) of at most ${BAND_LIMITS.urlMax} characters`;
   if (!isStoredUrl(f.tabUrl)) return `Tab link must be a web address (http or https) of at most ${BAND_LIMITS.urlMax} characters`;
   if (f.bpm != null && (!Number.isInteger(f.bpm) || f.bpm < BAND_LIMITS.bpmMin || f.bpm > BAND_LIMITS.bpmMax)) {
@@ -286,6 +289,7 @@ function songRowIsWellFormed(song: SongRecord): boolean {
     songFieldError(song) === null &&
     isCleanText(song.title, BAND_LIMITS.titleMax, true) &&
     isCleanText(song.artist, BAND_LIMITS.artistMax, false) &&
+    isCleanText(song.tuning, BAND_LIMITS.tuningMax, false) &&
     (song.notes ?? '') === sanitizeNotes(song.notes ?? '')
   );
 }
@@ -542,6 +546,7 @@ export interface SongInput {
   title: string;
   artist: string | null;
   key: string | null;
+  tuning: string;
   bpm: number | null;
   notes: string | null;
   songUrl: string | null;
@@ -552,6 +557,8 @@ export interface RawSongInput {
   title: string;
   artist?: string;
   key?: string;
+  /** Empty means the default tuning. */
+  tuning?: string;
   bpm?: string | number | null;
   notes?: string;
   songUrl?: string;
@@ -582,6 +589,7 @@ export function parseSongInput(raw: RawSongInput): { value: SongInput } | { erro
   const title = stripUnsafeText(raw.title);
   const artist = stripUnsafeText(raw.artist ?? '');
   const key = stripUnsafeText(raw.key ?? '');
+  const tuning = stripUnsafeText(raw.tuning ?? '') || DEFAULT_TUNING;
   const notes = sanitizeNotes(raw.notes ?? '');
   const bpmText = typeof raw.bpm === 'number' ? String(raw.bpm) : (raw.bpm ?? '').trim();
   const bpm = bpmText === '' ? null : Number(bpmText);
@@ -589,10 +597,10 @@ export function parseSongInput(raw: RawSongInput): { value: SongInput } | { erro
   const songUrl = parseLinkInput(raw.songUrl);
   const tabUrl = parseLinkInput(raw.tabUrl);
 
-  const error = songFieldError({ title, artist, key, bpm, notes, songUrl, tabUrl });
+  const error = songFieldError({ title, artist, key, tuning, bpm, notes, songUrl, tabUrl });
   if (error) return { error };
   return {
-    value: { title, artist: artist || null, key: key || null, bpm, notes: notes || null, songUrl: songUrl || null, tabUrl: tabUrl || null },
+    value: { title, artist: artist || null, key: key || null, tuning, bpm, notes: notes || null, songUrl: songUrl || null, tabUrl: tabUrl || null },
   };
 }
 

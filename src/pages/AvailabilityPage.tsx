@@ -14,6 +14,7 @@ import { LoaderBoundary } from '../components/Bands/LoaderBoundary';
 import { StatusNotice } from '../components/Bands/StatusNotice';
 import { loadAvailabilityPage, type AvailabilityPageOk, type AvailabilityPageResult } from '../api/availabilityApi';
 import { bandPath } from '../bandRoutes';
+import { normalizeInstruments } from '../bandInstruments';
 import { BAND_GONE_TITLES, type AvailabilityRead } from '../bandTypes';
 import { getViewerTimeZone, practiceSlots, type LocalDay } from '../availabilityCalendar';
 import { SLOTS_PER_HOUR, slotOf } from '../availabilitySlots';
@@ -156,6 +157,11 @@ function AvailabilityBody({ data, refreshing, reload }: { data: AvailabilityPage
   });
 
   const nameOf = (who: string) => view.displayNames.get(who) ?? (who === view.band.owner ? 'Owner' : 'A member');
+  const instrumentsBySub = useMemo(
+    () => new Map(view.members.map((m) => [m.owner, normalizeInstruments(m.instruments)])),
+    [view.members],
+  );
+  const instrumentsOf = (who: string) => instrumentsBySub.get(who) ?? [];
   const nowSlot = slotOf(nowMs);
   const total = resolution.participants.length;
   const note = (d: LocalDay) =>
@@ -239,6 +245,7 @@ function AvailabilityBody({ data, refreshing, reload }: { data: AvailabilityPage
           timeZone={timeZone}
           nowMs={nowMs}
           nameOf={nameOf}
+          instrumentsOf={instrumentsOf}
         />
       )}
     </>

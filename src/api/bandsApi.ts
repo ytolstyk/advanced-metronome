@@ -1,4 +1,5 @@
 import {
+  BAND_GONE_TITLES,
   BAND_LIMITS,
   BAND_TEXT,
   type BandLoadResult,
@@ -8,6 +9,7 @@ import {
   type SetListRecord,
   type MyBandEntry,
 } from '../bandTypes';
+import { normalizeInstruments } from '../bandInstruments';
 import {
   filterValidMembers,
   generateInviteCode,
@@ -73,9 +75,17 @@ async function revokeInvite(code: string): Promise<void> {
 }
 
 /** Own Member row + private MyBand row (both idempotent; each is keyed by the caller's sub). */
-async function ensureMembership(bandId: string, sub: string, displayName: string): Promise<void> {
+async function ensureMembership(
+  bandId: string,
+  sub: string,
+  displayName: string,
+  instruments: readonly string[],
+): Promise<void> {
   await Promise.all([
-    createIdempotent(() => client.models.Member.create({ bandId, owner: sub, displayName }), 'createMember'),
+    createIdempotent(
+      () => client.models.Member.create({ bandId, owner: sub, displayName, instruments: normalizeInstruments(instruments) }),
+      'createMember',
+    ),
     createIdempotent(() => client.models.MyBand.create({ owner: sub, bandId }), 'createMyBand'),
   ]);
 }
@@ -185,7 +195,11 @@ export async function loadBandView(
  * Every earlier row is inert until the Band exists, so a crash never leaves a band that looks
  * valid but is half-built.
  */
-export async function createBand(nameInput: string, displayNameInput: string): Promise<BandRecord> {
+export async function createBand(
+  nameInput: string,
+  displayNameInput: string,
+  instruments: readonly string[] = [],
+): Promise<BandRecord> {
   await requireAuth();
   const sub = await getCurrentUserSub();
   const name = requireName(nameInput);
@@ -205,7 +219,7 @@ export async function createBand(nameInput: string, displayNameInput: string): P
     client.models.SetList.create({ id: setListId, bandId, name: BAND_TEXT.defaultSetListName }).then((res) =>
       unwrap(res, 'createSetList'),
     ),
-    ensureMembership(bandId, sub, displayName),
+    ensureMembership(bandId, sub, displayName, instruments),
   ]);
   try {
     const created = unwrap(
@@ -277,11 +291,42 @@ export async function previewBand(bandId: string): Promise<InvitePreview> {
   return previewFor(band, sub);
 }
 
-/** Joins instantly (idempotent): own Member row + private MyBand row. */
-export async function joinBand(bandId: string, displayNameInput: string): Promise<void> {
+/** Joins instantly (idempotent): own Member row + private MyBand row. Someone already in keeps their profile. */
+export async function joinBand(
+  bandId: string,
+  displayNameInput: string,
+  instruments: readonly string[] = [],
+): Promise<void> {
   const displayName = requireDisplayName(displayNameInput);
   await previewBand(bandId); // also enforces ban / deleted / full
-  await ensureMembership(bandId, await getCurrentUserSub(), displayName);
+  await ensureMembership(bandId, await getCurrentUserSub(), displayName, instruments);
+}
+
+/**
+ * Changes the caller's own name and instruments in a band (the one write members make to their own
+ * Member row). Never joins anyone: only a member, or the owner whose row is missing, can use it.
+ */
+export async function updateMyProfile(
+  bandId: string,
+  displayNameInput: string,
+  instrumentsInput: readonly string[],
+): Promise<void> {
+  await requireAuth();
+  const sub = await getCurrentUserSub();
+  const displayName = requireDisplayName(displayNameInput);
+  const instruments = normalizeInstruments(instrumentsInput);
+  const [band, own] = await Promise.all([getBand(bandId), client.models.Member.get({ bandId, owner: sub })]);
+  if (!band) throw new Error(BAND_GONE_TITLES['not-found']);
+  if (!isBandAlive(band)) throw new Error(BAND_GONE_TITLES.deleted);
+  if (isBanned(band, sub)) throw new Error(BAND_GONE_TITLES.removed);
+  throwOnError(own, 'getMember');
+  if (own.data) {
+    unwrap(await client.models.Member.update({ bandId, owner: sub, displayName, instruments }), 'updateMember');
+  } else if (isBandOwner(band, sub)) {
+    await createIdempotent(() => client.models.Member.create({ bandId, owner: sub, displayName, instruments }), 'createMember');
+  } else {
+    throw new Error('Join the band first');
+  }
 }
 
 /** Repairs a missing private "my bands" row for a band the caller is already a member of. */

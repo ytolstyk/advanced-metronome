@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { SongLinkMetadata } from '../../api/songMetadataApi';
 import { NotSignedInError } from '../../api/bandsShared';
 import { SONG_COLOR_KEYS, type SongColorKey } from '../../bandTypes';
@@ -37,7 +38,7 @@ describe('SuggestSongDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit).toHaveBeenCalledWith(
-      { title: 'Wonderwall', artist: 'Oasis', key: 'F#m', bpm: '87', notes: '', songUrl: '', tabUrl: '' },
+      { title: 'Wonderwall', artist: 'Oasis', key: 'F#m', tuning: 'E Standard', bpm: '87', notes: '', songUrl: '', tabUrl: '' },
       null, // no color chosen
     );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
@@ -119,6 +120,77 @@ describe('SuggestSongDialog', () => {
     });
     expect(screen.getByLabelText('Song link (optional)')).toHaveValue('https://a.example/s');
     expect(screen.getByLabelText('Tab link (optional)')).toHaveValue('https://b.example/t');
+  });
+
+  describe('tuning', () => {
+    // Radix Select leans on pointer-capture and scrolling APIs jsdom does not implement.
+    beforeAll(() => {
+      Element.prototype.hasPointerCapture = vi.fn(() => false);
+      Element.prototype.setPointerCapture = vi.fn();
+      Element.prototype.releasePointerCapture = vi.fn();
+      Element.prototype.scrollIntoView = vi.fn();
+    });
+    const tuningTrigger = () => screen.getByRole('combobox', { name: 'Tuning' });
+    const suggest = () => fireEvent.click(screen.getByRole('button', { name: 'Suggest' }));
+
+    it('defaults a new song to E Standard', () => {
+      setup();
+      expect(tuningTrigger()).toHaveTextContent('E Standard');
+      expect(screen.queryByRole('textbox', { name: 'Custom tuning' })).not.toBeInTheDocument();
+    });
+
+    it('submits a preset picked from the dropdown', async () => {
+      const user = userEvent.setup();
+      const { onSubmit } = setup();
+      type('Title', 'Song');
+      await user.click(tuningTrigger());
+      await user.click(await screen.findByRole('option', { name: 'Drop D' }));
+      suggest();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0]).toMatchObject({ tuning: 'Drop D' });
+    });
+
+    it('submits a custom tuning typed after choosing Custom…', async () => {
+      const user = userEvent.setup();
+      const { onSubmit } = setup();
+      type('Title', 'Song');
+      await user.click(tuningTrigger());
+      await user.click(await screen.findByRole('option', { name: 'Custom…' }));
+      type('Custom tuning', 'D G D G B D');
+      suggest();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0]).toMatchObject({ tuning: 'D G D G B D' });
+    });
+
+    it('blocks a custom tuning that is blank (the required input), without calling the API', async () => {
+      const user = userEvent.setup();
+      const { onSubmit } = setup();
+      type('Title', 'Song');
+      await user.click(tuningTrigger());
+      await user.click(await screen.findByRole('option', { name: 'Custom…' }));
+      expect(screen.getByRole('textbox', { name: 'Custom tuning' })).toBeRequired();
+      suggest();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('edit mode shows the song own preset', () => {
+      setup({ initial: { title: 'Old', tuning: 'Open G' } });
+      expect(tuningTrigger()).toHaveTextContent('Open G');
+    });
+
+    it('edit mode opens a non-preset tuning in Custom with its text', () => {
+      setup({ initial: { title: 'Old', tuning: 'Half step down + capo 2' } });
+      expect(tuningTrigger()).toHaveTextContent('Custom…');
+      expect(screen.getByRole('textbox', { name: 'Custom tuning' })).toHaveValue('Half step down + capo 2');
+    });
+
+    it('edit mode keeps the existing tuning when only the title changes', async () => {
+      const { onSubmit } = setup({ initial: { title: 'Old', tuning: 'DADGAD' } });
+      type('Title', 'New');
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0]).toMatchObject({ title: 'New', tuning: 'DADGAD' });
+    });
   });
 
   describe('color choice', () => {

@@ -111,16 +111,18 @@ export function MembersSection({
   view,
   onRemove,
   onRestore,
+  onEditProfile,
 }: {
   view: BandView;
   onRemove: (sub: string, name: string) => void;
   onRestore: (sub: string) => void;
+  onEditProfile: () => void;
 }) {
   const { isOwner } = view;
   return (
     <section aria-labelledby="members-heading" className="mb-8">
       <h2 id="members-heading" className="mb-2 text-lg font-semibold text-foreground">Members</h2>
-      <MemberList view={view} onRemove={isOwner ? onRemove : undefined} />
+      <MemberList view={view} onRemove={isOwner ? onRemove : undefined} onEditProfile={onEditProfile} />
       {isOwner && view.removedMembers.length > 0 && (
         <div className="mt-4">
           <h3 className="mb-1 text-sm font-medium text-muted-foreground">Removed</h3>

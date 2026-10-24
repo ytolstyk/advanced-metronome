@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { normalizeHttpUrl } from '../../bandUtils';
 import type { ValidSong } from '../../bandTypes';
+import { tuningOrDefault } from '../../bandTunings';
 import { LinkifiedText } from './LinkifiedText';
 
 /** A song updated this long after it was created shows an "edited" note. */
@@ -41,7 +42,7 @@ function ExternalAnchor({ url, label, songTitle }: { url: string; label: string;
 
 /** Title, artist/key/BPM, links and notes of one song: shared by the members' row and the public one. */
 export function SongDetails({ song, children }: { song: ValidSong; children?: ReactNode }) {
-  const meta = [song.key, song.bpm ? `${song.bpm} BPM` : null].filter(Boolean);
+  const meta = [song.key, song.bpm ? `${song.bpm} BPM` : null, tuningOrDefault(song.tuning)].filter(Boolean);
   return (
     <div className="min-w-0">
       <p className="break-words font-medium text-foreground">

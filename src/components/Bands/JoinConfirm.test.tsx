@@ -54,7 +54,41 @@ describe('JoinConfirm', () => {
     fireEvent.change(screen.getByLabelText('Your name in this band'), { target: { value: 'Al' } });
     fireEvent.click(screen.getByRole('button', { name: 'Join band' }));
     await waitFor(() => expect(onJoined).toHaveBeenCalledWith('band-9'));
-    expect(joinBand).toHaveBeenCalledWith('band-9', 'Al');
+    expect(joinBand).toHaveBeenCalledWith('band-9', 'Al', []);
+  });
+
+  it('joins with the instruments the person picked', async () => {
+    const { onJoined } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Guitar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Vocals' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Join band' }));
+    await waitFor(() => expect(onJoined).toHaveBeenCalledWith('band-9'));
+    expect(joinBand).toHaveBeenCalledWith('band-9', 'Alice', ['guitar', 'vocals']);
+  });
+
+  it('lets a picked instrument be unpicked again before joining', async () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Drums' }));
+    expect(screen.getByRole('button', { name: 'Drums' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Drums' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Join band' }));
+    await waitFor(() => expect(joinBand).toHaveBeenCalledWith('band-9', 'Alice', []));
+  });
+
+  it('hides the name and instrument fields for someone already in the band and opens it without writing, even with no default name', async () => {
+    const { onJoined } = setup(preview({ alreadyMember: true }), '');
+    expect(screen.queryByLabelText('Your name in this band')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Guitar' })).not.toBeInTheDocument();
+    expect(screen.queryByText('What do you play? (optional)')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open band' }));
+    await waitFor(() => expect(onJoined).toHaveBeenCalledWith('band-9'));
+    expect(joinBand).not.toHaveBeenCalled();
+  });
+
+  it('shows the instrument picker for a new member', () => {
+    setup();
+    expect(screen.getByText('What do you play? (optional)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Guitar' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('translates an invite failure into friendly text and does not report a join', async () => {

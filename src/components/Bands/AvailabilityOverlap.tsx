@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from 'react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -12,7 +13,10 @@ import {
 } from '../../availabilityUtils';
 import type { BestWindow, MissingReason } from '../../bandTypes';
 import { MIN_LENGTH_CHOICES, type BestWindows } from '../../availabilityWindows';
+import type { InstrumentKey } from '../../bandInstruments';
+import { instrumentCoverage } from '../../instrumentCoverage';
 import { AvailabilityWeekGrid } from './AvailabilityWeekGrid';
+import { InstrumentIcons, InstrumentLabels } from './InstrumentBadges';
 
 /** From this share of members free the cell is dark enough to need light text. */
 const HEAT_LIGHT_TEXT_FROM = 55;
@@ -43,6 +47,46 @@ interface Props {
   locale?: string;
   nowMs: number;
   nameOf: (sub: string) => string;
+  /** What each member plays; omitted (or empty) shows names alone. */
+  instrumentsOf?: (sub: string) => readonly InstrumentKey[];
+}
+
+/** A person as a name (or a longer note about them) with what they play beside it. */
+type PersonNode = (sub: string, text?: string) => ReactNode;
+
+/** People separated by commas. */
+function listPeople(people: ReactNode[]): ReactNode {
+  return people.map((person, i) => (
+    <Fragment key={i}>
+      {i > 0 && ', '}
+      {person}
+    </Fragment>
+  ));
+}
+
+/** Which instruments can jam, from the people who are free. Nothing when no one has listed an instrument. */
+function InstrumentLine({
+  freeSubs,
+  allSubs,
+  instrumentsOf,
+}: {
+  freeSubs: readonly string[];
+  allSubs: readonly string[];
+  instrumentsOf?: (sub: string) => readonly InstrumentKey[];
+}) {
+  if (!instrumentsOf || freeSubs.length === 0) return null;
+  const { covered, missing, unknown } = instrumentCoverage(freeSubs, allSubs, instrumentsOf);
+  if (unknown) return null;
+  return (
+    <p className="text-foreground/80">
+      Instruments free: {covered.length > 0 ? <InstrumentLabels instruments={covered} /> : 'none'}
+      {missing.length > 0 && (
+        <span className="text-muted-foreground">
+          {' · '}No one free plays: <InstrumentLabels instruments={missing} />
+        </span>
+      )}
+    </p>
+  );
 }
 
 /**
@@ -65,9 +109,21 @@ export function AvailabilityOverlap({
   locale,
   nowMs,
   nameOf,
+  instrumentsOf,
 }: Props) {
   const total = resolution.participants.length;
   const names = (subs: string[]) => subs.map(nameOf).join(', ');
+  const person: PersonNode = (sub, text = nameOf(sub)) => {
+    const instruments = instrumentsOf?.(sub) ?? [];
+    // No nowrap: `text` can carry a long note ("last saved 3 days ago, may be out of date") that must wrap on a phone.
+    return instruments.length > 0 ? (
+      <span>
+        {text} <InstrumentIcons instruments={instruments} />
+      </span>
+    ) : (
+      text
+    );
+  };
   /** "Name" plus a note when their saved times may be stale. */
   const withStale = (sub: string) => (availableStatus(resolution, sub)?.outOfDate ? `${nameOf(sub)} (may be out of date)` : nameOf(sub));
 
@@ -110,6 +166,9 @@ export function AvailabilityOverlap({
               locale={locale}
               nameOf={nameOf}
               withStale={withStale}
+              person={person}
+              participants={resolution.participants}
+              instrumentsOf={instrumentsOf}
               onShow={onShowWindow}
             />
           )}
@@ -123,6 +182,9 @@ export function AvailabilityOverlap({
                 locale={locale}
                 nameOf={nameOf}
                 withStale={withStale}
+                person={person}
+                participants={resolution.participants}
+                instrumentsOf={instrumentsOf}
                 onShow={onShowWindow}
               />
             </div>
@@ -179,6 +241,8 @@ export function AvailabilityOverlap({
             locale={locale}
             nowMs={nowMs}
             nameOf={nameOf}
+            person={person}
+            instrumentsOf={instrumentsOf}
           />
         )}
       </div>
@@ -186,13 +250,13 @@ export function AvailabilityOverlap({
       {notResponded.length > 0 && (
         <p className="mt-3 text-sm text-muted-foreground">
           Not responded yet:{' '}
-          {notResponded
-            .map((sub) => {
+          {listPeople(
+            notResponded.map((sub) => {
               const status = resolution.statuses.get(sub);
               const age = status?.kind === 'not-responded' && status.expired ? describeAge(status.lastSaved, nowMs) : null;
-              return age ? `${nameOf(sub)} (last saved ${age}, expired)` : nameOf(sub);
-            })
-            .join(', ')}
+              return person(sub, age ? `${nameOf(sub)} (last saved ${age}, expired)` : nameOf(sub));
+            }),
+          )}
         </p>
       )}
     </div>
@@ -206,6 +270,9 @@ function WindowList({
   locale,
   nameOf,
   withStale,
+  person,
+  participants,
+  instrumentsOf,
   onShow,
 }: {
   windows: BestWindow[];
@@ -214,6 +281,9 @@ function WindowList({
   locale?: string;
   nameOf: (sub: string) => string;
   withStale: (sub: string) => string;
+  person: PersonNode;
+  participants: readonly string[];
+  instrumentsOf?: (sub: string) => readonly InstrumentKey[];
   onShow: (startSlot: number) => void;
 }) {
   return (
@@ -227,11 +297,12 @@ function WindowList({
             </Button>
           </div>
           <p className="text-foreground/80">
-            {w.subs.length} of {total} free: {w.subs.map(withStale).join(', ')}
+            {w.subs.length} of {total} free: {listPeople(w.subs.map((sub) => person(sub, withStale(sub))))}
           </p>
+          <InstrumentLine freeSubs={w.subs} allSubs={participants} instrumentsOf={instrumentsOf} />
           {w.missing.length > 0 && (
             <p className="text-muted-foreground">
-              Not free: {w.missing.map((m) => `${nameOf(m.sub)} (${MISSING_TEXT[m.reason]})`).join(', ')}
+              Not free: {listPeople(w.missing.map((m) => person(m.sub, `${nameOf(m.sub)} (${MISSING_TEXT[m.reason]})`)))}
             </p>
           )}
         </li>
@@ -248,6 +319,8 @@ function SlotDetail({
   locale,
   nowMs,
   nameOf,
+  person,
+  instrumentsOf,
 }: {
   slot: number;
   overlap: Overlap;
@@ -256,6 +329,8 @@ function SlotDetail({
   locale?: string;
   nowMs: number;
   nameOf: (sub: string) => string;
+  person: PersonNode;
+  instrumentsOf?: (sub: string) => readonly InstrumentKey[];
 }) {
   const detail = describeSlot(overlap, slot);
   /** "Name — last saved 3 days ago" for members who have saved times. */
@@ -263,13 +338,13 @@ function SlotDetail({
     const status = availableStatus(resolution, sub);
     const age = describeAge(status?.lastSaved ?? null, nowMs);
     const bits = [age ? `last saved ${age}` : null, status?.outOfDate ? 'may be out of date' : null].filter(Boolean);
-    return bits.length ? `${nameOf(sub)} (${bits.join(', ')})` : nameOf(sub);
+    return person(sub, bits.length ? `${nameOf(sub)} (${bits.join(', ')})` : nameOf(sub));
   };
-  const lines: Array<[string, string[]]> = [
+  const lines: Array<[string, ReactNode[]]> = [
     ['Free', detail.free.map(saved)],
     ['Not marked', detail.notMarked.map(saved)],
-    ['No data for this time', detail.noData.map(nameOf)],
-    ['Couldn’t be read', detail.unreadable.map(nameOf)],
+    ['No data for this time', detail.noData.map((sub) => person(sub))],
+    ['Couldn’t be read', detail.unreadable.map((sub) => person(sub))],
   ];
   return (
     <div className="rounded-lg border border-border bg-card p-3 text-sm">
@@ -280,10 +355,11 @@ function SlotDetail({
           .map(([label, who]) => (
             <div key={label} className="flex flex-wrap gap-x-2">
               <dt className="font-medium text-foreground">{label}:</dt>
-              <dd className="text-foreground/80">{who.join(', ')}</dd>
+              <dd className="text-foreground/80">{listPeople(who)}</dd>
             </div>
           ))}
       </dl>
+      <InstrumentLine freeSubs={detail.free} allSubs={resolution.participants} instrumentsOf={instrumentsOf} />
     </div>
   );
 }

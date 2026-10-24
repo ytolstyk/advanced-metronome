@@ -12,11 +12,13 @@ import {
 } from '@/components/ui/dialog';
 import type { ColorLabels } from '../../bandSongColors';
 import { BAND_LIMITS, type SongColorKey } from '../../bandTypes';
+import { DEFAULT_TUNING } from '../../bandTunings';
 import { parseSongInput, type RawSongInput } from '../../bandUtils';
 import { useAsyncAction } from '../../hooks/useAsyncAction';
 import { useSongLinkAutofill } from '../../hooks/useSongLinkAutofill';
 import { InlineAlert } from './InlineAlert';
 import { SongColorChoice } from './SongColorChoice';
+import { TuningField } from './TuningField';
 
 interface SuggestSongDialogProps {
   open: boolean;
@@ -29,11 +31,11 @@ interface SuggestSongDialogProps {
   colorLabels?: ColorLabels;
 }
 
-const EMPTY: RawSongInput = { title: '', artist: '', key: '', bpm: '', notes: '', songUrl: '', tabUrl: '' };
+const EMPTY: RawSongInput = { title: '', artist: '', key: '', tuning: DEFAULT_TUNING, bpm: '', notes: '', songUrl: '', tabUrl: '' };
 
 export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit, colorLabels }: SuggestSongDialogProps) {
   const editing = initial !== undefined;
-  const ids = { title: useId(), artist: useId(), key: useId(), bpm: useId(), notes: useId(), songUrl: useId(), tabUrl: useId(), color: useId() };
+  const ids = { title: useId(), artist: useId(), key: useId(), tuning: useId(), bpm: useId(), notes: useId(), songUrl: useId(), tabUrl: useId(), color: useId() };
   // The parent mounts this with a key per song, so the initial values seed state once.
   const [form, setForm] = useState<RawSongInput>({ ...EMPTY, ...initial });
   const [color, setColor] = useState<SongColorKey | null>(null);
@@ -101,6 +103,10 @@ export function SuggestSongDialog({ open, onOpenChange, initial, onSubmit, color
                 placeholder={`${BAND_LIMITS.bpmMin}–${BAND_LIMITS.bpmMax}`}
               />
             </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor={ids.tuning}>Tuning</Label>
+            <TuningField id={ids.tuning} value={form.tuning ?? ''} onChange={(tuning) => setForm((f) => ({ ...f, tuning }))} />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor={ids.songUrl}>Song link (optional)</Label>

@@ -33,11 +33,16 @@ describe('SharedSongRow', () => {
     renderRow();
     expect(screen.getByLabelText('Rank 2')).toHaveTextContent('2');
     expect(screen.getByText('Wonderwall')).toBeInTheDocument();
-    expect(screen.getByText('Oasis · F#m · 87 BPM')).toBeInTheDocument();
+    expect(screen.getByText('Oasis · F#m · 87 BPM · E Standard')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Song link for Wonderwall/ })).toHaveAttribute(
       'href',
       'https://open.spotify.com/track/1',
     );
+  });
+
+  it('shows the song tuning to signed-out readers too', () => {
+    renderRow(undefined, song({ tuning: 'Drop C' }));
+    expect(screen.getByText('Oasis · F#m · 87 BPM · Drop C')).toBeInTheDocument();
   });
 
   it('exposes the score to screen readers as one phrase, with up and down counts', () => {

@@ -1,10 +1,11 @@
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { joinBand } from '../../api/bandsApi';
+import type { InstrumentKey } from '../../bandInstruments';
 import type { InvitePreview } from '../../bandTypes';
 import { useAsyncAction } from '../../hooks/useAsyncAction';
-import { DisplayNameField } from './DisplayNameField';
 import { InlineAlert } from './InlineAlert';
+import { MemberProfileFields } from './MemberProfileFields';
 import { withInviteErrors } from './inviteMessages';
 
 interface JoinConfirmProps {
@@ -15,13 +16,18 @@ interface JoinConfirmProps {
 
 /** "Join <band>?" step shared by the invite-code dialog and the shared-link panel. */
 export function JoinConfirm({ preview, defaultDisplayName, onJoined }: JoinConfirmProps) {
-  const nameId = useId();
   const [displayName, setDisplayName] = useState(defaultDisplayName);
+  const [instruments, setInstruments] = useState<InstrumentKey[]>([]);
   const { run, busy, error } = useAsyncAction();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ok = await run(() => withInviteErrors(() => joinBand(preview.bandId, displayName)));
+    // Already in: nothing to write (the band page repairs a missing "my bands" row), and there is no name to require.
+    if (preview.alreadyMember) {
+      onJoined(preview.bandId);
+      return;
+    }
+    const ok = await run(() => withInviteErrors(() => joinBand(preview.bandId, displayName, instruments)));
     if (ok) onJoined(preview.bandId);
   };
 
@@ -31,7 +37,15 @@ export function JoinConfirm({ preview, defaultDisplayName, onJoined }: JoinConfi
         Join <strong className="text-foreground">{preview.bandName}</strong>? It has {preview.memberCount}{' '}
         {preview.memberCount === 1 ? 'member' : 'members'}.
       </p>
-      <DisplayNameField id={nameId} value={displayName} onChange={setDisplayName} autoFocus />
+      {!preview.alreadyMember && (
+        <MemberProfileFields
+          name={displayName}
+          onNameChange={setDisplayName}
+          instruments={instruments}
+          onInstrumentsChange={setInstruments}
+          autoFocus
+        />
+      )}
       {error && <InlineAlert tone="error">{error}</InlineAlert>}
       <Button type="submit" disabled={busy} className="justify-self-start">
         {busy ? 'Joining…' : preview.alreadyMember ? 'Open band' : 'Join band'}

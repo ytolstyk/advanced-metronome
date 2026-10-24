@@ -464,7 +464,7 @@ describe('BandsPage signed in', () => {
     fireEvent.change(await screen.findByLabelText('Band name'), { target: { value: 'My Band' } });
     await waitFor(() => expect(screen.getByLabelText('Your name in this band')).toHaveValue('Alice'));
     fireEvent.click(screen.getByRole('button', { name: 'Create band' }));
-    await waitFor(() => expect(createBand).toHaveBeenCalledWith('My Band', 'Alice'));
+    await waitFor(() => expect(createBand).toHaveBeenCalledWith('My Band', 'Alice', []));
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/bands/new-band'));
   });
 
@@ -490,7 +490,7 @@ describe('BandsPage signed in', () => {
     expect(screen.getByText(/3 members/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Your name in this band'), { target: { value: 'Bob' } });
     fireEvent.click(screen.getByRole('button', { name: 'Join band' }));
-    await waitFor(() => expect(joinBand).toHaveBeenCalledWith('band-9', 'Bob'));
+    await waitFor(() => expect(joinBand).toHaveBeenCalledWith('band-9', 'Bob', []));
     expect(lookupInvite).toHaveBeenCalledWith('abcde-fghjk');
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/bands/band-9'));
   });

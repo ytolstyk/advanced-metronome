@@ -57,25 +57,32 @@ describe('SongRow', () => {
   });
 
   describe('details line', () => {
-    it('is omitted entirely when there is no artist, key or BPM', () => {
+    it('shows only the default tuning when there is no artist, key or BPM', () => {
       setup();
+      expect(screen.getByText('E Standard')).toBeInTheDocument();
       expect(screen.queryByText(/BPM/)).not.toBeInTheDocument();
       expect(screen.queryByText(/·/)).not.toBeInTheDocument();
     });
 
-    it('joins artist, key and BPM with a middle dot', () => {
+    it('joins artist, key, BPM and tuning with a middle dot', () => {
       setup({ artist: 'Oasis', key: 'F#m', bpm: 87 });
-      expect(screen.getByText('Oasis · F#m · 87 BPM')).toBeInTheDocument();
+      expect(screen.getByText('Oasis · F#m · 87 BPM · E Standard')).toBeInTheDocument();
     });
 
-    it('shows key/BPM alone when there is no artist', () => {
+    it('shows key/BPM/tuning when there is no artist', () => {
       setup({ key: 'Am', bpm: 120 });
-      expect(screen.getByText('Am · 120 BPM')).toBeInTheDocument();
+      expect(screen.getByText('Am · 120 BPM · E Standard')).toBeInTheDocument();
     });
 
-    it('shows the artist alone when key and BPM are missing', () => {
+    it('shows the artist and tuning when key and BPM are missing', () => {
       setup({ artist: 'Oasis' });
-      expect(screen.getByText('Oasis')).toBeInTheDocument();
+      expect(screen.getByText('Oasis · E Standard')).toBeInTheDocument();
+    });
+
+    it('shows the song own tuning instead of the default', () => {
+      setup({ artist: 'Oasis', tuning: 'Drop D' });
+      expect(screen.getByText('Oasis · Drop D')).toBeInTheDocument();
+      expect(screen.queryByText(/E Standard/)).not.toBeInTheDocument();
     });
 
     it('does not render a BPM of 0', () => {

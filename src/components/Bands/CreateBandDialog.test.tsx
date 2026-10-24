@@ -38,8 +38,26 @@ describe('CreateBandDialog', () => {
     fireEvent.change(screen.getByLabelText('Your name in this band'), { target: { value: 'Jimmy' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create band' }));
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith('new-band'));
-    expect(createBand).toHaveBeenCalledWith('Led Zep', 'Jimmy');
+    expect(createBand).toHaveBeenCalledWith('Led Zep', 'Jimmy', []);
     expect(order).toEqual(['open:false', 'created:new-band']);
+  });
+
+  it('creates the band with the instruments the owner picked', async () => {
+    const { onCreated } = setup();
+    fireEvent.change(screen.getByLabelText('Band name'), { target: { value: 'Led Zep' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bass' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keys' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create band' }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith('new-band'));
+    expect(createBand).toHaveBeenCalledWith('Led Zep', 'Alice', ['bass', 'keys']);
+  });
+
+  it('offers the optional instrument picker with every instrument unselected', () => {
+    setup();
+    expect(screen.getByText('What do you play? (optional)')).toBeInTheDocument();
+    for (const name of ['Guitar', 'Bass', 'Drums', 'Vocals', 'Keys', 'Strings', 'Winds & brass', 'Other']) {
+      expect(screen.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'false');
+    }
   });
 
   it('shows the failure inline and neither closes nor reports a band', async () => {
