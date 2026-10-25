@@ -128,6 +128,24 @@ describe('AvailabilityOverlap instruments: icons beside names', () => {
     expect(screen.getByRole('button', { name: /^Wed, Nov 4, 7:00\sPM, 3 of 3 free: owner, bob, cat$/ })).toBeInTheDocument();
   });
 
+  it('shows the instruments of the free members inside a heat map cell, hidden from assistive tech', () => {
+    mount({ instrumentsOf: playsOf(plays) });
+    const cell = screen.getByRole('button', { name: /^Wed, Nov 4, 7:00\sPM, 3 of 3 free/ });
+    // guitar + bass + drums + vocals = 4 instruments, 3 icons and "+1".
+    expect(cell.querySelectorAll('svg')).toHaveLength(3);
+    expect(cell).toHaveTextContent('3+1');
+    expect(cell.querySelector('[aria-hidden]')).not.toBeNull();
+  });
+
+  it('shows only the instruments of who is free in that cell, and none in an empty cell', () => {
+    mount({ instrumentsOf: playsOf(plays) });
+    const partial = screen.getByRole('button', { name: /^Wed, Nov 4, 7:30\sPM, 2 of 3 free/ });
+    expect(partial.querySelectorAll('svg')).toHaveLength(3); // guitar, bass, drums; vocals is not free
+    expect(partial).not.toHaveTextContent('+');
+    const empty = screen.getByRole('button', { name: /^Wed, Nov 4, 9:00\sPM, 0 of 3 free/ });
+    expect(empty.querySelectorAll('svg')).toHaveLength(0);
+  });
+
   it('shows the stale note and the icon together', () => {
     const reads = new Map<string, AvailabilityRead>([
       [OWNER, ok(row(OWNER, four))],

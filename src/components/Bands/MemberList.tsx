@@ -40,12 +40,12 @@ export function MemberList({ view, onRemove, onEditProfile }: MemberListProps) {
                 {isSelf && <span className="ml-2 rounded bg-primary/20 px-1.5 py-0.5 text-xs text-primary">You</span>}
               </span>
               {instruments.length > 0 && (
-                <ul aria-label={`${name} plays`} className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                <ul aria-label={`${name} plays`} className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   {instruments.map(({ key, label }) => {
                     const Icon = INSTRUMENT_ICONS[key];
                     return (
-                      <li key={key} className="inline-flex items-center gap-1">
-                        <Icon size={12} aria-hidden />
+                      <li key={key} className="inline-flex items-center gap-1.5">
+                        <Icon size={20} aria-hidden />
                         {label}
                       </li>
                     );

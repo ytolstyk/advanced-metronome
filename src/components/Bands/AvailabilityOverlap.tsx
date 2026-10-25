@@ -13,13 +13,17 @@ import {
 } from '../../availabilityUtils';
 import type { BestWindow, MissingReason } from '../../bandTypes';
 import { MIN_LENGTH_CHOICES, type BestWindows } from '../../availabilityWindows';
-import type { InstrumentKey } from '../../bandInstruments';
+import { instrumentOptionsFor, type InstrumentKey } from '../../bandInstruments';
+import { INSTRUMENT_ICONS } from './instrumentIcons';
 import { instrumentCoverage } from '../../instrumentCoverage';
 import { AvailabilityWeekGrid } from './AvailabilityWeekGrid';
 import { InstrumentIcons, InstrumentLabels } from './InstrumentBadges';
 
 /** From this share of members free the cell is dark enough to need light text. */
 const HEAT_LIGHT_TEXT_FROM = 55;
+
+/** Instrument icons a grid cell shows before collapsing the rest into "+n"; the full list is in the detail card. */
+const CELL_ICON_LIMIT = 3;
 
 const MISSING_TEXT: Record<MissingReason, string> = {
   'not-marked': 'not marked',
@@ -204,7 +208,7 @@ export function AvailabilityOverlap({
           const share = total > 0 ? Math.round((100 * free.length) / total) : 0;
           const past = slot <= resolution.nowSlot;
           const selected = slot === selectedSlot;
-          return (
+          const playing = instrumentsOf ? instrumentOptionsFor(free.flatMap((sub) => [...instrumentsOf(sub)])) : [];          return (
             <button
               type="button"
               aria-pressed={selected}
@@ -222,13 +226,22 @@ export function AvailabilityOverlap({
               )}
             >
               {free.length > 0 ? free.length : ''}
+              {playing.length > 0 && (
+                <span aria-hidden className="ml-1 flex items-center gap-px overflow-hidden">
+                  {playing.slice(0, CELL_ICON_LIMIT).map(({ key }) => {
+                    const Icon = INSTRUMENT_ICONS[key];
+                    return <Icon key={key} size={12} />;
+                  })}
+                  {playing.length > CELL_ICON_LIMIT && <span className="text-[10px]">+{playing.length - CELL_ICON_LIMIT}</span>}
+                </span>
+              )}
             </button>
           );
         }}
       />
       <p className="mt-2 text-xs text-muted-foreground">
         The number is how many of {total} {total === 1 ? 'member is' : 'members are'} free. Time nobody marked shows as
-        “not marked”, not busy.
+        “not marked”, not busy.{instrumentsOf && ' The icons show which instruments those members play.'}
       </p>
 
       <div aria-live="polite" className="sticky bottom-2 z-10 mt-3">
