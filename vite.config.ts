@@ -11,7 +11,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      injectRegister: false,
       manifest: {
         name: 'Drumma Llama',
         short_name: 'Drumma',
@@ -29,6 +29,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Set explicitly: the plugin only implies these while injectRegister is 'auto'.
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,woff,woff2,eot,otf,svg,png,ico}'],
         globIgnores: ['**/soundfont/**', '**/og-image.png', '**/drummallama*.jpg', '**/screenshot.png'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,

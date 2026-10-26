@@ -7,6 +7,7 @@ import './auth/amplify'
 // Must stay a static import right after './auth/amplify': it subscribes to Amplify's OAuth result at module load.
 import { ReturnToPage } from './auth/ReturnToPage.tsx'
 import { registerJoinCodeCleanup } from './bandJoinCode.ts'
+import { registerServiceWorker } from './registerServiceWorker.ts'
 import './index.css'
 import { DrumMachinePage } from './pages/DrumMachinePage.tsx'
 import { WelcomePage } from './pages/WelcomePage.tsx'
@@ -48,6 +49,7 @@ import { TermsOfServicePage } from './pages/TermsOfServicePage.tsx'
 import { Github } from 'lucide-react'
 
 registerJoinCodeCleanup()
+registerServiceWorker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
