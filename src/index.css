@@ -23,6 +23,9 @@
   --color-muted-foreground: hsl(237 22% 70%);
   --color-accent: hsl(235 18% 25%);
   --color-accent-foreground: hsl(240 20% 92%);
+  /* "Free" marks on the availability calendar: bright green with dark text on it (AA). */
+  --color-free: hsl(152 65% 45%);
+  --color-free-foreground: hsl(152 80% 8%);
   --color-destructive: hsl(0 62% 52%);
   --color-destructive-foreground: hsl(0 0% 100%);
   --color-border: hsl(237 18% 36%);

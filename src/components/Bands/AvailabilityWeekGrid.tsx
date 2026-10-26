@@ -117,18 +117,26 @@ export function AvailabilityWeekGrid({ days, timeZone, locale, todayKey, label, 
           const gutterLabel = owner?.labels.get(owner.slots[row]);
           return (
             <Fragment key={row}>
-              <div className="whitespace-nowrap pr-2 text-right text-xs leading-none text-muted-foreground">{hourStart ? gutterLabel : ''}</div>
+              <div className="whitespace-nowrap pr-2 pt-1 text-right text-xs leading-none text-muted-foreground">{hourStart ? gutterLabel : ''}</div>
               {columns.map((column, col) => {
                 const slot = column.slots[row];
-                const border = hourStart ? 'border-t border-border' : 'border-t border-dashed border-border/40';
-                if (slot === undefined) return <div key={column.day.key} aria-hidden="true" className={border} />;
+                // One solid hairline on every cell, empty ones included, so the grid has no gaps; the line under
+                // each hour is a touch stronger than the one under its half hour.
+                const lines = cn(
+                  'border-b border-r',
+                  hourStart ? 'border-b-border/40' : 'border-b-border',
+                  'border-r-border/60',
+                  col === 0 && 'border-l border-l-border/60',
+                  row === 0 && 'border-t border-t-border',
+                );
+                if (slot === undefined) return <div key={column.day.key} aria-hidden="true" className={lines} />;
                 const focus: CellFocus = {
                   tabIndex: stop?.col === col && stop.row === row ? 0 : -1,
                   'data-col': col,
                   'data-row': row,
                 };
                 return (
-                  <div key={column.day.key} className={cn('border-l border-border/60 p-px', border)}>
+                  <div key={column.day.key} className={cn('p-0.5', lines)}>
                     {renderCell({ slot, col, row, timeLabel: column.labels.get(slot) ?? '', dayLabel: column.dayLabel }, focus)}
                   </div>
                 );

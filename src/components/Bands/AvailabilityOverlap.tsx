@@ -19,8 +19,11 @@ import { instrumentCoverage } from '../../instrumentCoverage';
 import { AvailabilityWeekGrid } from './AvailabilityWeekGrid';
 import { InstrumentIcons, InstrumentLabels } from './InstrumentBadges';
 
-/** From this share of members free the cell is dark enough to need light text. */
-const HEAT_LIGHT_TEXT_FROM = 55;
+/** The faintest tint a cell with anyone free gets, so a single person is still easy to see. */
+const HEAT_FLOOR_PERCENT = 40;
+
+/** From this share of members free the cell is bright enough to need dark text. */
+const HEAT_DARK_TEXT_FROM = 35;
 
 /** Instrument icons a grid cell shows before collapsing the rest into "+n"; the full list is in the detail card. */
 const CELL_ICON_LIMIT = 3;
@@ -216,12 +219,12 @@ export function AvailabilityOverlap({
               {...focus}
               onClick={() => onSelectSlot(selected ? null : slot)}
               style={
-                free.length > 0 ? { backgroundColor: `color-mix(in srgb, var(--color-primary) ${share}%, var(--color-card))` } : undefined
+                free.length > 0 ? { backgroundColor: `color-mix(in srgb, var(--color-free) ${HEAT_FLOOR_PERCENT + ((100 - HEAT_FLOOR_PERCENT) * share) / 100}%, var(--color-card))` } : undefined
               }
               className={cn(
                 'flex h-full min-h-8 w-full [@media(pointer:coarse)]:min-h-11 items-center justify-center rounded-sm border text-xs font-semibold transition-colors',
-                share >= HEAT_LIGHT_TEXT_FROM ? 'text-primary-foreground' : 'text-foreground',
-                selected ? 'border-foreground ring-1 ring-foreground' : 'border-transparent bg-card',
+                share >= HEAT_DARK_TEXT_FROM ? 'text-free-foreground' : 'text-foreground',
+                selected ? 'border-foreground ring-2 ring-foreground' : 'border-transparent bg-card',
                 past && 'opacity-40',
               )}
             >

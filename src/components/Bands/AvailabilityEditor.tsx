@@ -114,12 +114,12 @@ const SlotToggleButton = memo(function SlotToggleButton({
       onPointerEnter={(e) => painting.enter(isFree, e.buttons, onMark)}
       onClick={() => painting.click(isFree, onMark)}
       className={cn(
-        'flex h-full min-h-8 w-full [@media(pointer:coarse)]:min-h-11 select-none items-center justify-center rounded-sm border text-primary-foreground transition-colors',
-        isFree ? 'border-primary bg-primary' : 'border-transparent bg-card hover:bg-muted',
+        'flex h-full min-h-8 w-full [@media(pointer:coarse)]:min-h-11 select-none items-center justify-center rounded-sm border transition-colors',
+        isFree ? 'border-free bg-free text-free-foreground' : 'border-transparent bg-card hover:bg-muted',
         !editable && 'cursor-not-allowed opacity-40 hover:bg-card',
       )}
     >
-      {isFree && <Check size={14} aria-hidden="true" />}
+      {isFree && <Check size={16} strokeWidth={3} aria-hidden="true" />}
     </button>
   );
 });

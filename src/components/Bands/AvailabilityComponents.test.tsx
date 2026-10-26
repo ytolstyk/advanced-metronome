@@ -542,9 +542,9 @@ describe('AvailabilityOverlap', () => {
     expect(screen.queryByText(/Couldn’t read the times of/)).not.toBeInTheDocument();
   });
 
-  it('uses light text on dark cells so the number stays readable', () => {
+  it('uses dark text on bright cells and light text on faint ones so the number stays readable', () => {
     setup();
-    expect(heat('7:00 PM')).toHaveClass('text-primary-foreground');
+    expect(heat('7:00 PM')).toHaveClass('text-free-foreground');
     expect(heat('9:00 PM')).toHaveClass('text-foreground');
   });
 
