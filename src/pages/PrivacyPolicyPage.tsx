@@ -53,6 +53,15 @@ export function PrivacyPolicyPage() {
           availability may remain readable until you dismiss the band, and if you never do, until you delete it or ask us to.
         </li>
         <li>
+          <strong>Band gear and rig diagrams:</strong> if you add equipment (names, ports, specs) or
+          draw rig diagrams, they are stored in the cloud under your account&rsquo;s internal user ID.
+          Anyone with an account who has the band&rsquo;s link can read them, because member IDs are
+          visible to anyone with the link. That includes a link to a shared set list. Only you can
+          change or delete your own. They are deleted when you leave a band, if that deletion
+          succeeds; if the owner removes you, or the band is deleted, they may remain readable until
+          you dismiss the band, and if you never do, until you delete them or ask us to.
+        </li>
+        <li>
           <strong>Microphone (local analysis only):</strong> the tuner and fret memorizer can use your
           microphone. Pitch detection runs in your browser and the audio is not uploaded. You must
           grant permission first and can revoke it at any time.
@@ -88,7 +97,7 @@ export function PrivacyPolicyPage() {
         Local data can be cleared via your browser settings. To request deletion of your account and
         cloud-stored data, contact us using the details below. Deleting a published tab removes it
         from the public library. When you leave a band you can also delete your own votes and songs
-        in it, and we try to delete your availability too. Deleted bands are closed and their name, invite code and member bans are cleared, but
+        in it, and we try to delete your availability, gear and rig diagrams too. Deleted bands are closed and their name, invite code and member bans are cleared, but
         songs and votes written by other members may remain until those members remove them.
       </p>
 

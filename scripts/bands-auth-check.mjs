@@ -150,16 +150,18 @@ console.log('QUERIES', Object.keys(queries).sort().join(', '));
 console.log('MUTATIONS', mutations.sort().join(', '));
 console.log('SUBSCRIPTIONS', subs.join(', ') || '(none)');
 
-for (const q of ['getBand', 'getBandInvite', 'getSetList', 'getSong', 'getVote', 'getMember', 'getMyBand', 'listMyBands', 'getSongColor', 'getColorLabel', 'getAvailability', 'listColorLabelByBand', 'listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList'])
+for (const q of ['getBand', 'getBandInvite', 'getSetList', 'getSong', 'getVote', 'getMember', 'getMyBand', 'listMyBands', 'getSongColor', 'getColorLabel', 'getAvailability', 'getBandRig', 'listColorLabelByBand', 'listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList'])
   check('G0', `query ${q} exists`, q in queries, '', true);
 for (const q of ['listBands', 'listBandInvites', 'listSetLists', 'listSongs', 'listVotes', 'listMembers', 'listSongColors', 'listColorLabels'])
   check('G1b', `plain ${q} absent`, !(q in queries), '', true);
 // Availability is read by exact key only: no list, no index of any kind (a bandId index page could be
 // flooded or bricked by junk rows nobody else can delete), so nothing starting `listAvailabilit` may exist.
 check('G1b', 'no Availability list or index query exists', !Object.keys(queries).some((q) => q.startsWith('listAvailabilit')), Object.keys(queries).filter((q) => q.startsWith('listAvailabilit')).join(','), true);
+// BandRig is read by exact key only, like Availability: no list, no index of any kind.
+check('G1b', 'no BandRig list or index query exists', !Object.keys(queries).some((q) => q.startsWith('listBandRig')), Object.keys(queries).filter((q) => q.startsWith('listBandRig')).join(','), true);
 for (const m of ['deleteBand', 'deleteSetList', 'deleteBandInvite'])
   check('G3', `mutation ${m} absent`, !mutations.includes(m), '', true);
-for (const m of ['deleteSong', 'deleteVote', 'deleteMember', 'deleteMyBand', 'deleteSongColor', 'deleteColorLabel', 'deleteAvailability'])
+for (const m of ['deleteSong', 'deleteVote', 'deleteMember', 'deleteMyBand', 'deleteSongColor', 'deleteColorLabel', 'deleteAvailability', 'deleteBandRig', 'createBandRig', 'updateBandRig'])
   check('G0', `mutation ${m} present`, mutations.includes(m));
 check('G0', 'subscriptions absent/empty', subs.length === 0, subs.join(','));
 // No owner-partitioned query on public-read models (cross-band pivot).
@@ -178,6 +180,7 @@ const FIELDS = {
   SongColor: 'songId owner color bandId setListId createdAt updatedAt',
   ColorLabel: 'bandId color owner label createdAt updatedAt',
   Availability: 'bandId owner format startDay mask createdAt updatedAt',
+  BandRig: 'bandId owner format rev gear diagrams createdAt updatedAt',
 };
 const create = (u, model, input) =>
   gql(u, `mutation($input: Create${model}Input!){ create${model}(input:$input){ ${FIELDS[model]} } }`, { input });
@@ -352,6 +355,64 @@ info('G5', 'second create of an existing own row (createIdempotent maps this to 
   }
 }
 
+// ---------- gear and rigs (one row per member per band, read by exact key only) ----------
+// The client saves with a RAW conditional mutation (UpdateBandRig + ModelBandRigConditionInput): this
+// section proves the schema accepts exactly that, and records the error shapes the save loop branches on.
+const rig = (owner, over = {}) => ({ bandId, owner, format: 1, rev: 1, gear: '[]', diagrams: '[]', ...over });
+const UPDATE_RIG = `mutation($input: UpdateBandRigInput!, $condition: ModelBandRigConditionInput){ updateBandRig(input:$input, condition:$condition){ ${FIELDS.BandRig} } }`;
+const isConditionFailure = (res) => !!res.errors?.some((e) => /ConditionalCheckFailed/i.test(`${e.errorType ?? ''} ${e.message ?? ''}`));
+r = await create(B, 'BandRig', rig(A.sub));
+check('G2', 'B cannot create a BandRig row as A', !r.data?.createBandRig, errType(r), true);
+r = await create(A, 'BandRig', rig(A.sub));
+check('G2', 'A creates own BandRig row', r.data?.createBandRig?.rev === 1, errType(r), true);
+r = await create(B, 'BandRig', rig(B.sub, { gear: '[{"id":"gear0001"}]' }));
+check('G2', 'B creates own BandRig row', !!r.data?.createBandRig, errType(r), true);
+r = await update(A, 'BandRig', { bandId, owner: B.sub, gear: '[]' });
+check('G3', 'A cannot update B\'s BandRig row', !r.data?.updateBandRig, errType(r), true);
+r = await gql(A, UPDATE_RIG, { input: { bandId, owner: B.sub, gear: '[]', rev: 2 }, condition: { rev: { eq: 1 } } });
+check('G3', 'A cannot update B\'s BandRig row even with a matching condition', !r.data?.updateBandRig, errType(r), true);
+r = await gql(A, `mutation($input: DeleteBandRigInput!){ deleteBandRig(input:$input){ bandId } }`, { input: { bandId, owner: B.sub } });
+check('G3', 'A cannot delete B\'s BandRig row', !r.data?.deleteBandRig, errType(r), true);
+r = await getById(A, 'BandRig', { bandId, owner: B.sub });
+check('G1', 'A can read B\'s BandRig row by key (signed in)', !!r.data?.getBandRig, errType(r), true);
+r = await getById(C, 'BandRig', { bandId, owner: B.sub });
+check('G1', 'outsider C can read B\'s BandRig row by key (documented exposure: bandId + sub is the capability)', !!r.data?.getBandRig, errType(r));
+// The exact mutation the client sends: write rev+1 only if rev is still what it loaded.
+r = await gql(A, UPDATE_RIG, { input: { bandId, owner: A.sub, format: 1, rev: 2, gear: '[]', diagrams: '[]' }, condition: { rev: { eq: 1 } } });
+check('G5', 'conditional update with a matching rev succeeds and stores rev+1', r.data?.updateBandRig?.rev === 2, errType(r), true);
+r = await gql(A, UPDATE_RIG, { input: { bandId, owner: A.sub, format: 1, rev: 2, gear: '[]', diagrams: '[]' }, condition: { rev: { eq: 1 } } });
+check('G5', 'a stale conditional update is refused with ConditionalCheckFailed (client maps it to "changed elsewhere")', !r.data?.updateBandRig && isConditionFailure(r), errType(r), true);
+r = await gql(A, `query($b:String!,$o:String!){ getBandRig(bandId:$b, owner:$o){ rev } }`, { b: bandId, o: A.sub });
+check('G5', 'the refused write changed nothing (rev is still 2)', r.data?.getBandRig?.rev === 2, `rev=${r.data?.getBandRig?.rev}`, true);
+// Error shapes the save loop branches on.
+const missingRig = randomUUID();
+r = await gql(B, UPDATE_RIG, { input: { bandId: missingRig, owner: B.sub, rev: 2 }, condition: { rev: { eq: 1 } } });
+info('G5', 'conditional update of a missing own BandRig row (client treats Unauthorized/ConditionalCheckFailed as "changed elsewhere")', r.data?.updateBandRig ? 'ACCEPTED (upserted?!)' : `rejected: ${errType(r)}`);
+r = await create(B, 'BandRig', rig(B.sub));
+info('G5', 'second create of an existing own BandRig row (client maps this to "exists" or a conflict)', r.data?.createBandRig ? 'ACCEPTED (overwrote?!)' : `rejected: ${errType(r)}`);
+{
+  // "Last saved" must be the server's. Control row first, so a rejected forgery can't pass for the wrong reason.
+  const forgedRigBand = randomUUID();
+  r = await create(C, 'BandRig', rig(C.sub, { bandId: forgedRigBand, createdAt: '2999-01-01T00:00:00.000Z', updatedAt: '2999-01-01T00:00:00.000Z' }));
+  const created = r.data?.createBandRig;
+  check('G2', 'a client-supplied createdAt/updatedAt on BandRig is rejected or ignored', !created || (!String(created.updatedAt).startsWith('2999') && !String(created.createdAt).startsWith('2999')), errType(r));
+}
+// Cost of one hostile oversized row (nothing server-side caps it; the client refuses to read it, but every viewer downloads it).
+{
+  const bigBand = randomUUID();
+  const t0 = Date.now();
+  r = await create(C, 'BandRig', rig(C.sub, { bandId: bigBand, gear: '"' + 'x'.repeat(300_000) + '"' }));
+  const wrote = !!r.data?.createBandRig;
+  info('G5', 'a ~300 KB BandRig row can be written', wrote ? `accepted in ${Date.now() - t0} ms` : `rejected: ${errType(r)}`);
+  if (wrote) {
+    const t1 = Date.now();
+    const got = await gql(C, `query($b:String!,$o:String!){ getBandRig(bandId:$b, owner:$o){ gear } }`, { b: bigBand, o: C.sub });
+    info('G5', 'reading it back by key', `${Date.now() - t1} ms, ${String(got.data?.getBandRig?.gear ?? '').length} chars`);
+    // Leave no multi-hundred-KB row behind in the sandbox.
+    await gql(C, `mutation($input: DeleteBandRigInput!){ deleteBandRig(input:$input){ bandId } }`, { input: { bandId: bigBand, owner: C.sub } });
+  }
+}
+
 // ---------- Band root of trust ----------
 r = await update(B, 'Band', { id: bandId, bannedSubs: [A.sub] });
 check('G3', 'non-owner cannot update Band arrays', !r.data?.updateBand, errType(r), true);
@@ -494,6 +555,8 @@ r = await G(`query($b:String!){ listColorLabelByBand(bandId:$b){ items{ color } 
 check('G6', 'guest cannot list color labels (signed-in only)', !r.data?.listColorLabelByBand, errType(r), true);
 r = await G(`query($b:String!,$o:String!){ getAvailability(bandId:$b, owner:$o){ mask } }`, { b: bandId, o: B.sub });
 check('G6', 'guest cannot get an Availability row (signed-in only)', !r.data?.getAvailability && denied(r), errType(r), true);
+r = await G(`query($b:String!,$o:String!){ getBandRig(bandId:$b, owner:$o){ rev } }`, { b: bandId, o: B.sub });
+check('G6', 'guest cannot get a BandRig row (signed-in only)', !r.data?.getBandRig && denied(r), errType(r), true);
 
 // Guests never write, and never reach the private models.
 const guestWrites = [
@@ -508,6 +571,7 @@ const guestWrites = [
   ['createMember', 'CreateMemberInput', { bandId, owner: 'guest', displayName: 'g' }, 'bandId'],
   ['createMyBand', 'CreateMyBandInput', { owner: 'guest', bandId }, 'bandId'],
   ['createBandInvite', 'CreateBandInviteInput', { code: 'GUESTCODE1', bandId }, 'code'],
+  ['createBandRig', 'CreateBandRigInput', { bandId, owner: 'guest', format: 1, rev: 1, gear: '[]', diagrams: '[]' }, 'bandId'],
 ];
 // A denial must be an authorization error: a typo, bad signature or expired credential also returns
 // no data and must not read as "the rule held". The G6 reads above (same signer) are the positive control.

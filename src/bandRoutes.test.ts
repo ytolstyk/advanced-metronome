@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandPath, setListPath, sharedSetListPath } from './bandRoutes';
+import { availabilityPath, bandPath, rigPath, setListPath, sharedSetListPath } from './bandRoutes';
 
 describe('bandRoutes', () => {
   it('builds plain paths for normal ids', () => {
@@ -11,6 +11,12 @@ describe('bandRoutes', () => {
     expect(bandPath('../tab-editor')).toBe('/bands/..%2Ftab-editor');
     expect(bandPath('x?join=ABC#frag')).toBe('/bands/x%3Fjoin%3DABC%23frag');
     expect(setListPath('b', 'a/b')).toBe('/bands/b/setlists/a%2Fb');
+  });
+
+  it('builds the gear and rig path under the band, encoded', () => {
+    expect(rigPath('abc-123')).toBe('/bands/abc-123/rig');
+    expect(rigPath('../tab-editor')).toBe('/bands/..%2Ftab-editor/rig');
+    expect(availabilityPath('abc-123')).toBe('/bands/abc-123/availability');
   });
 
   it('builds the public shared path from the set list id only (no band id leaks into the URL)', () => {

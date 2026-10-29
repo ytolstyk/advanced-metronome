@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BAND_LIMITS, type BandView } from '../../bandTypes';
-import { availabilityPath, setListPath } from '../../bandRoutes';
+import { availabilityPath, rigPath, setListPath } from '../../bandRoutes';
 import { isSetListShared } from '../../bandUtils';
 import { CARD_SURFACE_INTERACTIVE } from './cardStyles';
 import { CopyShareLinkButton } from './CopyShareLinkButton';
@@ -101,6 +101,25 @@ export function AvailabilitySection({ bandId }: { bandId: string }) {
         className={cn('flex min-h-14 items-center justify-between gap-3 rounded-lg p-3 text-foreground no-underline', CARD_SURFACE_INTERACTIVE)}
       >
         <span className="font-medium">Open the availability calendar</span>
+        <ChevronRight size={18} aria-hidden="true" />
+      </Link>
+    </section>
+  );
+}
+
+/** A link to the band's gear and rig diagrams; the page itself does the reading, so this costs no request. */
+export function RigSection({ bandId }: { bandId: string }) {
+  return (
+    <section aria-labelledby="rig-heading" className="mb-8">
+      <h2 id="rig-heading" className="mb-2 text-lg font-semibold text-foreground">Gear &amp; rigs</h2>
+      <p className="mb-2 text-sm text-muted-foreground">
+        List the band’s equipment and draw how it is wired together for a jam or a gig.
+      </p>
+      <Link
+        to={rigPath(bandId)}
+        className={cn('flex min-h-14 items-center justify-between gap-3 rounded-lg p-3 text-foreground no-underline', CARD_SURFACE_INTERACTIVE)}
+      >
+        <span className="font-medium">Open gear and rig diagrams</span>
         <ChevronRight size={18} aria-hidden="true" />
       </Link>
     </section>

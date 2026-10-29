@@ -4,6 +4,7 @@ import type { BandRecord } from '../../bandTypes';
 
 vi.mock('../../api/setListsApi', () => ({ archiveSetList: vi.fn(), deleteMyContent: vi.fn() }));
 vi.mock('../../api/availabilityApi', () => ({ deleteMyAvailabilityWithin: vi.fn() }));
+vi.mock('../../api/rigApi', () => ({ deleteMyRigWithin: vi.fn() }));
 vi.mock('../../api/bandsApi', () => ({
   banMember: vi.fn(),
   deleteBand: vi.fn(),
@@ -13,6 +14,7 @@ vi.mock('../../api/bandsApi', () => ({
 
 import { archiveSetList, deleteMyContent } from '../../api/setListsApi';
 import { deleteMyAvailabilityWithin } from '../../api/availabilityApi';
+import { deleteMyRigWithin } from '../../api/rigApi';
 import { banMember, deleteBand, dismissBand, resetInviteCode } from '../../api/bandsApi';
 import {
   ArchiveSetListDialog,
@@ -38,7 +40,7 @@ const band: BandRecord = {
 };
 
 beforeEach(() => {
-  for (const fn of [archiveSetList, deleteMyContent, deleteMyAvailabilityWithin, banMember, deleteBand, dismissBand, resetInviteCode]) {
+  for (const fn of [archiveSetList, deleteMyContent, deleteMyAvailabilityWithin, deleteMyRigWithin, banMember, deleteBand, dismissBand, resetInviteCode]) {
     vi.mocked(fn as (...a: never[]) => unknown).mockReset();
     vi.mocked(fn as (...a: never[]) => unknown).mockResolvedValue(undefined as never);
   }
@@ -161,9 +163,29 @@ describe('LeaveBandDialog availability cleanup', () => {
     expect(deleteMyAvailabilityWithin).toHaveBeenCalledWith('band-1');
   });
 
-  it('says availability is removed', () => {
+  it('says availability, gear and rigs are removed', () => {
     render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={() => {}} />);
-    expect(screen.getByText(/Your votes and availability are removed/)).toBeInTheDocument();
+    expect(screen.getByText(/Your votes, availability, gear and rig diagrams are removed/)).toBeInTheDocument();
+  });
+
+  it('deletes the gear and rig row along with the rest', async () => {
+    const onLeft = vi.fn();
+    render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={onLeft} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave band' }));
+    await waitFor(() => expect(onLeft).toHaveBeenCalledTimes(1));
+    expect(deleteMyRigWithin).toHaveBeenCalledWith('band-1');
+  });
+
+  it('a failed rig cleanup offers "Leave anyway" and does not retry it', async () => {
+    vi.mocked(deleteMyRigWithin).mockRejectedValue(new Error('rig boom'));
+    const onLeft = vi.fn();
+    render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={onLeft} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave band' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(onLeft).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave anyway' }));
+    await waitFor(() => expect(onLeft).toHaveBeenCalledTimes(1));
+    expect(deleteMyRigWithin).toHaveBeenCalledTimes(1);
   });
 });
 

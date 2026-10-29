@@ -64,11 +64,11 @@ export const readArgs = (authMode?: ReadAuthMode): [] | [{ authMode: ReadAuthMod
 
 // ── Result handling ────────────────────────────────────────────────────────
 
-interface GqlError {
+export interface GqlError {
   message?: string;
   errorType?: string;
 }
-interface GqlResult<T> {
+export interface GqlResult<T> {
   data: T | null;
   errors?: readonly GqlError[] | null;
 }

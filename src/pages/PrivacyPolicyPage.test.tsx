@@ -38,9 +38,20 @@ describe('PrivacyPolicyPage', () => {
     expect(item).toHaveTextContent(/may remain readable until you dismiss the band, and if you never do, until you delete it or ask us to/);
   });
 
-  it('says leaving a band also deletes availability', () => {
+  it('says leaving a band also deletes availability, gear and rig diagrams', () => {
     render(<PrivacyPolicyPage />);
-    expect(screen.getByText(/and we try to delete your availability too/)).toBeInTheDocument();
+    expect(screen.getByText(/and we try to delete your availability, gear and rig diagrams too/)).toBeInTheDocument();
+  });
+
+  it('discloses stored gear and rig diagrams, who can read them, and how they are deleted', () => {
+    render(<PrivacyPolicyPage />);
+    const item = screen.getByText('Band gear and rig diagrams:').closest('li')!;
+    expect(item).toHaveTextContent(/equipment \(names, ports, specs\)/);
+    expect(item).toHaveTextContent(/Anyone with an account who has the band.s link can read them/);
+    expect(item).toHaveTextContent(/shared set list/);
+    expect(item).toHaveTextContent(/Only you can change or delete your own/);
+    expect(item).toHaveTextContent(/deleted when you leave a band/);
+    expect(item).toHaveTextContent(/may remain readable until you dismiss the band/);
   });
 
   it('lists the availability preferences kept in local storage', () => {

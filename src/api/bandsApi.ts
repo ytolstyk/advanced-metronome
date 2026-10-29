@@ -26,6 +26,7 @@ import {
 import { assembleBandView } from '../bandViews';
 import { getCurrentUserSub } from './authUtils';
 import { cleanupMyAvailability } from './availabilityRows';
+import { cleanupMyRig } from './rigRows';
 import {
   bandsClient as client,
   createIdempotent,
@@ -345,6 +346,7 @@ export async function dismissBand(bandId: string): Promise<void> {
   await requireAuth();
   const sub = await getCurrentUserSub();
   void cleanupMyAvailability(bandId);
+  void cleanupMyRig(bandId);
   await Promise.all([
     deleteQuietly(() => client.models.Member.delete({ bandId, owner: sub }), 'deleteMember'),
     deleteQuietly(() => client.models.MyBand.delete({ owner: sub, bandId }), 'deleteMyBand'),

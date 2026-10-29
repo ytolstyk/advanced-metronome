@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { archiveSetList, deleteMyContent } from '../../api/setListsApi';
 import { deleteMyAvailabilityWithin } from '../../api/availabilityApi';
+import { deleteMyRigWithin } from '../../api/rigApi';
 import { banMember, deleteBand, dismissBand, resetInviteCode, type DeleteStep } from '../../api/bandsApi';
 import type { BandRecord } from '../../bandTypes';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -68,15 +69,16 @@ export function LeaveBandDialog({ band, onClose, onLeft }: Pick<BaseProps, 'onCl
       open
       onOpenChange={(open) => !open && onClose()}
       title="Leave this band?"
-      description="Your votes and availability are removed. You can rejoin later with an invite code."
+      description="Your votes, availability, gear and rig diagrams are removed. You can rejoin later with an invite code."
       confirmLabel={cleanupFailed ? 'Leave anyway' : 'Leave band'}
       destructive
       onConfirm={async () => {
         if (!cleanupFailed) {
-          // Both run to the end, so a failure in one can't skip the other.
+          // All run to the end, so a failure in one can't skip the others.
           const results = await Promise.allSettled([
             deleteMyContent(band, alsoDeleteSongs),
             deleteMyAvailabilityWithin(band.id),
+            deleteMyRigWithin(band.id),
           ]);
           if (results.some((r) => r.status === 'rejected')) {
             // Offer to leave without the cleanup instead of silently leaving data behind.

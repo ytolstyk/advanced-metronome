@@ -3,6 +3,8 @@ export const bandPath = (bandId: string): string => `/bands/${encodeURIComponent
 
 export const availabilityPath = (bandId: string): string => `${bandPath(bandId)}/availability`;
 
+export const rigPath = (bandId: string): string => `${bandPath(bandId)}/rig`;
+
 export const setListPath = (bandId: string, setListId: string): string =>
   `${bandPath(bandId)}/setlists/${encodeURIComponent(setListId)}`;
 

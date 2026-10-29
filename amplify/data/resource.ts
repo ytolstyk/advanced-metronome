@@ -432,6 +432,33 @@ const schema = a.schema({
       allow.authenticated().to(['get']),
     ]),
 
+  // A member's gear and rig diagrams, one row per (band, member): `gear` is a JSON array of the
+  // member's equipment (ports, specs) and `diagrams` a JSON array of wiring diagrams that use that
+  // gear by id. Read by exact key only, like Availability, and for the same reason: there is
+  // deliberately NO index (a bandId index page could be flooded or bricked by junk rows nobody else
+  // can delete) and no `list`. Not a privacy barrier either: the Member roster is guest-listable and a
+  // shared set-list link reveals the bandId, so anyone with an account and a band link can read every
+  // member's gear and rigs (disclosed on the page and in the privacy policy). Auth rules can't look
+  // inside a row, so the client parses strictly and hides anything unexpected (`format` must be 1, the
+  // JSON is size-capped and validated; see `parseRigRow`). `rev` is bumped on every save and
+  // conditioned on by the client (raw UpdateBandRig mutation), so a stale tab can't silently overwrite
+  // newer work. `owner` is declared only because it is part of the key. Members delete their own row
+  // when they leave. Signed-in reads only (no guest).
+  BandRig: a.model({
+    bandId: a.string().required(),
+    owner: a.string().required(),
+    format: a.integer().required(),     // row layout version; this client only reads 1
+    rev: a.integer().required(),        // save counter, the optimistic-concurrency token
+    gear: a.string().required(),        // JSON array, size-capped and validated in the client
+    diagrams: a.string().required(),    // JSON array, size-capped and validated in the client
+  })
+    .identifier(['bandId', 'owner'])
+    .disableOperations(['list', 'subscriptions'])
+    .authorization(allow => [
+      allow.owner().identityClaim('sub'),
+      allow.authenticated().to(['get']),
+    ]),
+
   // One row per (song, voter). The key makes a second vote a conflict and stops key squatting.
   Vote: a.model({
     songId: a.string().required(),

@@ -29,6 +29,10 @@ vi.mock('../api/bandsApi', () => ({
   ensureFreshInvite: vi.fn(),
   setInviteTtlDays: vi.fn(),
 }));
+vi.mock('../api/rigRows', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api/rigRows')>()),
+  isRigAvailable: vi.fn(() => true),
+}));
 vi.mock('../api/setListsApi', () => ({
   createSetList: vi.fn(),
   renameSetList: vi.fn(),
@@ -37,6 +41,7 @@ vi.mock('../api/setListsApi', () => ({
   deleteMyContent: vi.fn(),
 }));
 
+import { isRigAvailable } from '../api/rigRows';
 import { BandPage } from './BandPage';
 import {
   banMember,
@@ -126,6 +131,24 @@ describe('BandPage availability link', () => {
       'href',
       '/bands/band-1/availability',
     );
+  });
+});
+
+describe('BandPage gear and rigs link', () => {
+  it('a member can open the gear and rig diagrams for this band', async () => {
+    load(makeView());
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    const section = screen.getByRole('region', { name: 'Gear & rigs' });
+    expect(within(section).getByRole('link', { name: /Open gear and rig diagrams/ })).toHaveAttribute('href', '/bands/band-1/rig');
+  });
+
+  it('hides the link while the backend does not have the feature yet', async () => {
+    vi.mocked(isRigAvailable).mockReturnValueOnce(false);
+    load(makeView());
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    expect(screen.queryByRole('region', { name: 'Gear & rigs' })).not.toBeInTheDocument();
   });
 });
 
@@ -480,6 +503,7 @@ describe('BandPage as the owner', () => {
     expect(dialog).toHaveTextContent('can’t take that access back');
     // The exposure includes members' availability, so the owner is told before agreeing.
     expect(dialog).toHaveTextContent('each member’s availability');
+    expect(dialog).toHaveTextContent('gear and rig diagrams');
     expect(setSetListShared).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Share' }));
     await waitFor(() => expect(setSetListShared).toHaveBeenCalledWith('band-1', 'sl-1', true));
