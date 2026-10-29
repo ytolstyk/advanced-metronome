@@ -27,9 +27,11 @@ import { RigBlockedError, RigConflictError, loadRigPage, saveMyRig } from '../ap
 import type { RigPageResult } from '../api/rigApi';
 import { BOB, ME, OWNER, makeView } from '../availabilityTestHelpers';
 import { BAND_GONE_TITLES } from '../bandTypes';
-import { RIG_FORMAT, assembleRigMembers, serializeDraft } from '../rigData';
+import { RIG_FORMAT, assembleRigMembers, resolveNodes, serializeDraft } from '../rigData';
 import type { RigDraft, RigRead, RigRowRecord } from '../rigData';
 import { JAM_STATION_DIAGRAM, JAM_STATION_GEAR } from '../rigPresets';
+import { computeRigLayout } from '../rigRouting';
+import { RIG_LIMITS } from '../rigTypes';
 import type { RigDiagram } from '../rigTypes';
 import { RigPage } from './RigPage';
 
@@ -124,6 +126,182 @@ describe('RigPage content', () => {
     expect(within(schedule).getByText(/Electric Guitar \(Output\) ➔ Focusrite Scarlett 18i8 \(Ch 1 · Guitar\)/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+  });
+
+  const cardOrder = () =>
+    screen.getAllByRole('button', { name: /^Select / }).map((b) => b.getAttribute('aria-label')!.replace('Select ', ''));
+  const ptr = (x: number, y: number) => ({ clientX: x, clientY: y, pointerId: 1, isPrimary: true, button: 0, buttons: 1, pointerType: 'mouse' });
+
+  it('reorders a card by dragging it, as an unsaved edit', async () => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, x: 0, y: 0, width: 1200, height: 1000, right: 1200, bottom: 1000, toJSON: () => ({}) } as DOMRect);
+    load(pageData(mine(JAM)));
+    renderPage();
+    await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+    expect(cardOrder().slice(0, 3)).toEqual(['Electric Guitar', 'Electric Bass', 'Alesis Nitro Max']);
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Select Electric Guitar' }), ptr(10, 10));
+    fireEvent.pointerMove(window, ptr(40, 40));
+    // the very bottom of the diagram, in the first column: below every card
+    const bottom = computeRigLayout(resolveNodes(JAM_STATION_DIAGRAM, JAM_STATION_GEAR), JAM_STATION_DIAGRAM.cables, 4).height;
+    fireEvent.pointerMove(window, ptr(0, bottom));
+    fireEvent.pointerUp(window, ptr(0, bottom));
+    expect(cardOrder().slice(0, 3)).toEqual(['Electric Bass', 'Alesis Nitro Max', 'Electric Guitar']);
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    vi.restoreAllMocks();
+  });
+
+  it('adds new gear right after the selected card instead of at the end', async () => {
+    load(pageData(mine(JAM)));
+    renderPage();
+    await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+    expect(screen.getByRole('button', { name: 'Add to diagram' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Electric Guitar' }));
+    fireEvent.change(screen.getByLabelText('Add gear to this diagram'), {
+      target: { value: JAM_STATION_GEAR.find((g) => g.name === 'Electric Bass')!.id },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add after Electric Guitar' }));
+    expect(cardOrder().slice(0, 4)).toEqual(['Electric Guitar', 'Electric Bass', 'Electric Bass', 'Alesis Nitro Max']);
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
+  describe('adding gear next to the selection', () => {
+    const bassId = JAM_STATION_GEAR.find((g) => g.name === 'Electric Bass')!.id;
+    const addButton = () => screen.getByRole('button', { name: /^Add (after .+|to diagram)$/ });
+    const choose = (gearId: string) => fireEvent.change(screen.getByLabelText('Add gear to this diagram'), { target: { value: gearId } });
+    const open = async (draft: RigDraft = JAM) => {
+      load(pageData(mine(draft)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+    };
+
+    it('names the selected card on the button, follows the selection, and goes back when it is cleared', async () => {
+      await open();
+      expect(addButton()).toHaveTextContent('Add to diagram');
+      fireEvent.click(screen.getByRole('button', { name: 'Select Electric Guitar' }));
+      expect(addButton()).toHaveTextContent('Add after Electric Guitar');
+      fireEvent.click(screen.getByRole('button', { name: 'Select Focusrite Scarlett 18i8' }));
+      expect(addButton()).toHaveTextContent('Add after Focusrite Scarlett 18i8');
+      // selecting the selected card again clears it
+      fireEvent.click(screen.getByRole('button', { name: 'Select Focusrite Scarlett 18i8' }));
+      expect(addButton()).toHaveTextContent('Add to diagram');
+    });
+
+    it('goes back to "Add to diagram" when the selected card is removed from the diagram', async () => {
+      await open();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Electric Guitar' }));
+      fireEvent.click(screen.getByRole('button', { name: /Remove from diagram/ }));
+      expect(addButton()).toHaveTextContent('Add to diagram');
+    });
+
+    it('selecting a cable instead of a card goes back to "Add to diagram"', async () => {
+      await open();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Electric Guitar' }));
+      fireEvent.click(screen.getByRole('button', { name: /Cable 1:/ }));
+      expect(addButton()).toHaveTextContent('Add to diagram');
+    });
+
+    it('is disabled until gear is chosen, whatever is selected', async () => {
+      await open();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Electric Guitar' }));
+      expect(addButton()).toBeDisabled();
+      choose(bassId);
+      expect(addButton()).toBeEnabled();
+      choose('');
+      expect(addButton()).toBeDisabled();
+    });
+
+    it('with nothing selected, adds the gear at the end of the diagram', async () => {
+      await open();
+      choose(bassId);
+      fireEvent.click(addButton());
+      const order = cardOrder();
+      expect(order).toHaveLength(7);
+      expect(order[6]).toBe('Electric Bass');
+      expect(order.slice(0, 3)).toEqual(['Electric Guitar', 'Electric Bass', 'Alesis Nitro Max']);
+      expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    });
+
+    it('puts the gear under the selected card in that card’s own column', async () => {
+      await open();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Focusrite Scarlett 18i8' }));
+      choose(bassId);
+      fireEvent.click(addButton());
+      expect(cardOrder().slice(3, 6)).toEqual(['Focusrite Scarlett 18i8', 'Electric Bass', 'Laptop (DAW or amp sims)']);
+      const saved = vi.mocked(saveMyRig);
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
+      const nodes = saved.mock.calls[0][1].diagrams[0].nodes;
+      expect(nodes.find((n) => n.gearId === bassId && n.id !== 'nbass')!.col).toBe(1);
+    });
+
+    it('keeps the selection and empties the picker after adding, so the next add stacks below', async () => {
+      await open();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Electric Guitar' }));
+      choose(bassId);
+      fireEvent.click(addButton());
+      expect(addButton()).toHaveTextContent('Add after Electric Guitar');
+      expect(addButton()).toBeDisabled();
+      expect(screen.getByLabelText('Add gear to this diagram')).toHaveValue('');
+      expect(screen.getByRole('button', { name: 'Select Electric Guitar' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('says why when the diagram is full, and changes nothing', async () => {
+      const filler = Array.from({ length: RIG_LIMITS.nodesMax - JAM_STATION_DIAGRAM.nodes.length }, (_, i) => ({
+        id: `fill${String(i).padStart(4, '0')}`, gearId: bassId, col: 3,
+      }));
+      await open({ gear: JAM_STATION_GEAR, diagrams: [{ ...JAM_STATION_DIAGRAM, nodes: [...JAM_STATION_DIAGRAM.nodes, ...filler] }] });
+      fireEvent.click(screen.getByRole('button', { name: 'Select Electric Guitar' }));
+      choose(bassId);
+      fireEvent.click(addButton());
+      expect(screen.getByText(new RegExp(`up to ${RIG_LIMITS.nodesMax} pieces of gear`))).toBeInTheDocument();
+      expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+      expect(cardOrder()).toHaveLength(RIG_LIMITS.nodesMax);
+      // the choice stays, so it can be retried after making room
+      expect(screen.getByLabelText('Add gear to this diagram')).toHaveValue(bassId);
+    });
+
+    it('forgets the selection when you switch to another diagram', async () => {
+      const second: RigDiagram = { id: 'garage01', name: 'Garage', nodes: [], cables: [] };
+      await open({ gear: JAM_STATION_GEAR, diagrams: [JAM_STATION_DIAGRAM, second] });
+      fireEvent.click(screen.getByRole('button', { name: 'Select Electric Guitar' }));
+      expect(addButton()).toHaveTextContent('Add after Electric Guitar');
+      fireEvent.change(screen.getByLabelText('Diagram'), { target: { value: `${ME}:garage01` } });
+      expect(await screen.findByText(/This diagram is empty/)).toBeInTheDocument();
+      expect(addButton()).toHaveTextContent('Add to diagram');
+      fireEvent.change(screen.getByLabelText('Diagram'), { target: { value: `${ME}:jamstation` } });
+      expect(addButton()).toHaveTextContent('Add to diagram');
+    });
+
+    it('is not offered on someone else’s diagram', async () => {
+      load(pageData({ [BOB]: { status: 'ok', row: rowOf(BOB, JAM) } }));
+      renderPage();
+      await screen.findByText(/Bob’s diagram/);
+      expect(screen.queryByRole('button', { name: /^Add (after .+|to diagram)$/ })).not.toBeInTheDocument();
+    });
+  });
+
+  it('moves a card into the spare stage by dragging, and saves its new column', async () => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, x: 0, y: 0, width: 1200, height: 1000, right: 1200, bottom: 1000, toJSON: () => ({}) } as DOMRect);
+    try {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      const wide = computeRigLayout(resolveNodes(JAM_STATION_DIAGRAM, JAM_STATION_GEAR), JAM_STATION_DIAGRAM.cables, 4);
+      expect(screen.queryByText('Stage 4')).not.toBeInTheDocument();
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Select Electric Guitar' }), ptr(10, 10));
+      fireEvent.pointerMove(window, ptr(40, 40));
+      expect(screen.getByText('Stage 4')).toBeInTheDocument(); // the spare column only exists while dragging
+      fireEvent.pointerUp(window, ptr(wide.colXs[3] + 20, 100));
+      expect(screen.getByText('Stage 4')).toBeInTheDocument(); // the card now lives there
+      expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(saveMyRig).toHaveBeenCalledTimes(1));
+      const nodes = vi.mocked(saveMyRig).mock.calls[0][1].diagrams[0].nodes;
+      expect(nodes.find((n) => n.id === 'nguitar')!.col).toBe(3);
+      expect(nodes.filter((n) => n.id !== 'nguitar')).toEqual(JAM_STATION_DIAGRAM.nodes.filter((n) => n.id !== 'nguitar'));
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it('shows someone else’s diagram read-only, with their name', async () => {

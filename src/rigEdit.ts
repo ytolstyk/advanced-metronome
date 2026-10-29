@@ -191,6 +191,17 @@ export function addNode(draft: RigDraft, diagramId: string, gearId: string, col 
   return ok(mapDiagram(draft, diagramId, (d) => ({ ...d, nodes: [...d.nodes, node] })));
 }
 
+/** Adds a piece of gear right below `afterNodeId` in its column, so it can go in the middle of a chain. */
+export function addNodeAfter(draft: RigDraft, diagramId: string, gearId: string, afterNodeId: string): EditResult<RigDraft> {
+  const after = draft.diagrams.find((d) => d.id === diagramId)?.nodes.find((n) => n.id === afterNodeId);
+  const added = addNode(draft, diagramId, gearId, after?.col ?? 0);
+  if (!added.ok || !after) return added;
+  const diagram = added.value.diagrams.find((d) => d.id === diagramId)!;
+  const column = diagram.nodes.filter((n) => n.col === after.col);
+  const position = column.findIndex((n) => n.id === afterNodeId) + 1;
+  return ok(placeNode(added.value, diagramId, diagram.nodes[diagram.nodes.length - 1].id, after.col, position));
+}
+
 export const removeNode = (draft: RigDraft, diagramId: string, nodeId: string): RigDraft =>
   mapDiagram(draft, diagramId, (d) => ({
     ...d,
@@ -201,27 +212,41 @@ export const removeNode = (draft: RigDraft, diagramId: string, nodeId: string): 
 export type MoveDirection = 'left' | 'right' | 'up' | 'down';
 
 /**
- * Left/right change the column (the node goes to the end of that column); up/down swap with the
- * neighbour in the same column (array order within a column is the stacking order).
+ * Puts a node into column `col` at position `index` among the column's other cards (0 = top; past
+ * the end, or not a number, means the bottom), which is what dragging a card does. `index` counts
+ * cards as drawn, which is every node in the draft: parsing and `removeGear` prune the rest. Returns
+ * the same draft when nothing would change.
  */
-export function moveNode(draft: RigDraft, diagramId: string, nodeId: string, dir: MoveDirection): RigDraft {
+export function placeNode(draft: RigDraft, diagramId: string, nodeId: string, col: number, index: number): RigDraft {
   return mapDiagram(draft, diagramId, (d) => {
-    const idx = d.nodes.findIndex((n) => n.id === nodeId);
-    if (idx < 0) return d;
-    const node = d.nodes[idx];
-    if (dir === 'left' || dir === 'right') {
-      const col = node.col + (dir === 'left' ? -1 : 1);
-      if (col < 0 || col >= RIG_COLS) return d;
-      return { ...d, nodes: [...d.nodes.filter((n) => n.id !== nodeId), { ...node, col }] };
-    }
-    const sameCol = d.nodes.map((n, i) => ({ n, i })).filter((x) => x.n.col === node.col);
-    const pos = sameCol.findIndex((x) => x.i === idx);
-    const swapWith = sameCol[pos + (dir === 'up' ? -1 : 1)];
-    if (!swapWith) return d;
-    const nodes = [...d.nodes];
-    [nodes[idx], nodes[swapWith.i]] = [nodes[swapWith.i], nodes[idx]];
-    return { ...d, nodes };
+    const node = d.nodes.find((n) => n.id === nodeId);
+    if (!node || !Number.isInteger(col) || col < 0 || col >= RIG_COLS) return d;
+    const rest = d.nodes.filter((n) => n.id !== nodeId);
+    const columnMates = rest.filter((n) => n.col === col);
+    const slot = Number.isNaN(index) ? columnMates.length : Math.min(columnMates.length, Math.max(0, Math.floor(index)));
+    const successor = columnMates[slot]; // the card that ends up directly below the placed one
+    const predecessor = columnMates[slot - 1]; // directly above it (none at the top)
+    const insertAt = successor
+      ? rest.indexOf(successor)
+      : predecessor
+        ? rest.indexOf(predecessor) + 1
+        : rest.length; // empty column: anywhere
+    const placed = node.col === col ? node : { ...node, col };
+    const nodes = [...rest.slice(0, insertAt), placed, ...rest.slice(insertAt)];
+    return nodes.every((n, i) => n === d.nodes[i]) ? d : { ...d, nodes };
   });
+}
+
+/** Left/right change the column (the node goes to the bottom of it); up/down swap with the neighbour in the column. */
+export function moveNode(draft: RigDraft, diagramId: string, nodeId: string, dir: MoveDirection): RigDraft {
+  const node = draft.diagrams.find((d) => d.id === diagramId)?.nodes.find((n) => n.id === nodeId);
+  if (!node) return draft;
+  if (dir === 'left' || dir === 'right') return placeNode(draft, diagramId, nodeId, node.col + (dir === 'left' ? -1 : 1), Infinity);
+  const position = draft.diagrams
+    .find((d) => d.id === diagramId)!
+    .nodes.filter((n) => n.col === node.col)
+    .findIndex((n) => n.id === nodeId);
+  return placeNode(draft, diagramId, nodeId, node.col, position + (dir === 'up' ? -1 : 1));
 }
 
 // ── Cables ─────────────────────────────────────────────────────────────────

@@ -5,10 +5,12 @@ import {
   addExampleDiagram,
   addGear,
   addNode,
+  addNodeAfter,
   copyGearToMine,
   gearImpact,
   hasImpact,
   moveNode,
+  placeNode,
   removeCable,
   removeDiagram,
   removeGear,
@@ -186,7 +188,7 @@ describe('nodes', () => {
   it('moves a node between columns, to the end of the target column', () => {
     const right = moveNode(JAM, D, 'nguitar', 'right');
     expect(diagramOf(right).nodes.find((n) => n.id === 'nguitar')!.col).toBe(1);
-    expect(diagramOf(right).nodes.at(-1)!.id).toBe('nguitar');
+    expect(diagramOf(right).nodes.filter((n) => n.col === 1).at(-1)!.id).toBe('nguitar');
     expect(diagramOf(moveNode(JAM, D, 'nguitar', 'left'))).toEqual(diagramOf(JAM)); // already in the first column
     const far = moveNode(moveNode(moveNode(JAM, D, 'nlaptop', 'right'), D, 'nlaptop', 'right'), D, 'nlaptop', 'right');
     expect(diagramOf(far).nodes.find((n) => n.id === 'nlaptop')!.col).toBe(3); // clamped at the last column
@@ -199,6 +201,93 @@ describe('nodes', () => {
     expect(diagramOf(moveNode(JAM, D, 'nguitar', 'up'))).toEqual(diagramOf(JAM));
     expect(diagramOf(moveNode(JAM, D, 'ndrums', 'down'))).toEqual(diagramOf(JAM));
     expect(diagramOf(moveNode(JAM, D, 'unknown1', 'down'))).toEqual(diagramOf(JAM));
+  });
+});
+
+describe('placing nodes (drag and drop)', () => {
+  const nodes = () => diagramOf(JAM).nodes;
+  const colOrder = (d: RigDraft, col: number) => diagramOf(d).nodes.filter((n) => n.col === col).map((n) => n.id);
+
+  it('moves a card up within its column', () => {
+    const [a, b, c] = colOrder(JAM, 0);
+    expect(colOrder(placeNode(JAM, D, c, 0, 0), 0)).toEqual([c, a, b]);
+    expect(colOrder(placeNode(JAM, D, c, 0, 1), 0)).toEqual([a, c, b]);
+  });
+
+  it('moves a card down to the end of its column', () => {
+    const [a, b, c] = colOrder(JAM, 0);
+    expect(colOrder(placeNode(JAM, D, a, 0, 2), 0)).toEqual([b, c, a]);
+    expect(colOrder(placeNode(JAM, D, a, 0, 99), 0)).toEqual([b, c, a]);
+  });
+
+  it('moves a card into the middle of another column', () => {
+    const [a] = colOrder(JAM, 0);
+    const [x, y] = colOrder(JAM, 2);
+    const moved = placeNode(JAM, D, a, 2, 1);
+    expect(colOrder(moved, 2)).toEqual([x, a, y]);
+    expect(diagramOf(moved).nodes.find((n) => n.id === a)!.col).toBe(2);
+    expect(colOrder(moved, 0)).toHaveLength(2);
+  });
+
+  it('moves a card into an empty column', () => {
+    const [a] = colOrder(JAM, 0);
+    const moved = placeNode(JAM, D, a, 3, 0);
+    expect(colOrder(moved, 3)).toEqual([a]);
+  });
+
+  it('keeps every node and cable, and the result still parses', () => {
+    const [a] = colOrder(JAM, 0);
+    const moved = placeNode(JAM, D, a, 1, 0);
+    expect(diagramOf(moved).nodes).toHaveLength(nodes().length);
+    expect(diagramOf(moved).nodes.map((n) => n.id).sort()).toEqual(nodes().map((n) => n.id).sort());
+    expect(diagramOf(moved).cables).toBe(diagramOf(JAM).cables);
+    expectParses(moved);
+  });
+
+  it('returns the same draft when the card would stay where it is', () => {
+    const [a, b] = colOrder(JAM, 0);
+    expect(placeNode(JAM, D, a, 0, 0)).toBe(JAM);
+    expect(placeNode(JAM, D, b, 0, 1)).toBe(JAM);
+  });
+
+  it('ignores an unknown node, diagram or column', () => {
+    const [a] = colOrder(JAM, 0);
+    expect(placeNode(JAM, D, 'nope', 0, 0)).toBe(JAM);
+    expect(placeNode(JAM, 'nope', a, 0, 0)).toBe(JAM);
+    expect(placeNode(JAM, D, a, -1, 0)).toBe(JAM);
+    expect(placeNode(JAM, D, a, 4, 0)).toBe(JAM);
+    expect(placeNode(JAM, D, a, 1.5, 0)).toBe(JAM);
+  });
+
+  it('inserts a new node right after a given one, in its column', () => {
+    const [a, b, c] = colOrder(JAM, 0);
+    const added = value(addNodeAfter(JAM, D, JAM_STATION_GEAR[0].id, a));
+    const ids = colOrder(added, 0);
+    expect(ids).toHaveLength(4);
+    expect([ids[0], ids[2], ids[3]]).toEqual([a, b, c]);
+    expect(diagramOf(added).nodes.find((n) => n.id === ids[1])!.col).toBe(0);
+    expectParses(added);
+  });
+
+  it('puts a new node at the end of the column when it follows the last card', () => {
+    const ids = colOrder(JAM, 2);
+    const added = value(addNodeAfter(JAM, D, JAM_STATION_GEAR[0].id, ids[ids.length - 1]));
+    expect(colOrder(added, 2).slice(0, ids.length)).toEqual(ids);
+    expect(colOrder(added, 2)).toHaveLength(ids.length + 1);
+  });
+
+  it('adds at the end of the first column when the node to follow is gone', () => {
+    const added = value(addNodeAfter(JAM, D, JAM_STATION_GEAR[0].id, 'gone'));
+    expect(colOrder(added, 0).at(-1)).toBe(diagramOf(added).nodes.at(-1)!.id);
+  });
+
+  it('refuses at the node cap and for unknown gear, like addNode', () => {
+    expect(reason(addNodeAfter(JAM, D, 'nope', colOrder(JAM, 0)[0]))).toMatch(/no longer exists/);
+  });
+
+  it('treats a NaN index as the bottom of the column', () => {
+    const [a, b, c] = colOrder(JAM, 0);
+    expect(colOrder(placeNode(JAM, D, a, 0, NaN), 0)).toEqual([b, c, a]);
   });
 });
 

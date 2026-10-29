@@ -12,10 +12,12 @@ import {
   addExampleDiagram,
   addGear,
   addNode,
+  addNodeAfter,
   copyGearToMine,
   gearImpact,
   hasImpact,
   moveNode,
+  placeNode,
   portAt,
   removeCable,
   removeDiagram,
@@ -192,6 +194,7 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
   })();
 
   const selectedNode = current?.diagram.nodes.find((n) => n.id === selectedNodeId) ?? null;
+  const selectedName = current?.gear.find((g) => g.id === selectedNode?.gearId)?.name ?? 'selected';
   const cableInfos = current ? describeCables(current.diagram, current.gear) : [];
   const otherMembers = members.filter((m) => m.owner !== sub);
   const unreadableOthers = otherMembers.filter((m) => m.state === 'unreadable' || m.state === 'failed' || m.state === 'newer');
@@ -319,6 +322,7 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
               onSelectCable={pickCable}
               connectFrom={connectFrom}
               onPortClick={onPortClick}
+              onMoveNode={(nodeId, col, index) => rig.edit((d) => placeNode(d, current.diagram.id, nodeId, col, index))}
             />
 
             {editing && (
@@ -335,7 +339,7 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    To connect two pieces of gear, select a free port, then the port it plugs into. Select a card or a cable number to change it.
+                    Drag a card by its header to reorder it or move it to another stage. To connect two pieces of gear, select a free port, then the port it plugs into. Select a card or a cable number to change it.
                   </p>
                 )}
 
@@ -375,9 +379,14 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
                   <Button
                     className="min-h-11"
                     disabled={!addGearId}
-                    onClick={() => tryEdit((d) => addNode(d, current.diagram.id, addGearId, 0), () => setAddGearId(''))}
+                    onClick={() =>
+                      tryEdit(
+                        (d) => (selectedNode ? addNodeAfter(d, current.diagram.id, addGearId, selectedNode.id) : addNode(d, current.diagram.id, addGearId, 0)),
+                        () => setAddGearId(''),
+                      )
+                    }
                   >
-                    Add to diagram
+                    {selectedNode ? `Add after ${selectedName}` : 'Add to diagram'}
                   </Button>
                 </div>
               </div>

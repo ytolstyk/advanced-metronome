@@ -1,16 +1,21 @@
-import { useMemo } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import { GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CONNECTOR_LABEL, GEAR_KIND_COLOR, orderPorts } from '../../../rigUtils';
 import { GEO, arrowPoints, computeRigLayout } from '../../../rigRouting';
-import type { PlacedNode, PlacedPort } from '../../../rigRouting';
+import type { PlacedNode, PlacedPort, RigLayout } from '../../../rigRouting';
 import { resolveNodes } from '../../../rigData';
 import { describeCables, describePort } from '../../../rigView';
+import { columnsWhileDragging, dropMarker, dropSlotAt, isOverStage } from '../../../rigDrag';
+import { DRAG_GRIP_ATTRIBUTE, useCardDrag } from '../../../hooks/useCardDrag';
+import type { ActiveDrag, PointerStore } from '../../../hooks/useCardDrag';
 import type { RigDiagram, RigGear } from '../../../rigTypes';
 import type { PortRef } from '../../../rigEdit';
 
 const TITLE_H = 28;
 const PIN = 14;
+const MARKER_H = 4;
 
 const DIR_MARK = { in: '▸', out: '◂', io: '⇄' } as const;
 
@@ -27,11 +32,15 @@ interface RigCanvasProps {
   /** The output the person started a connection from, if any. */
   connectFrom: PortRef | null;
   onPortClick: (ref: PortRef) => void;
+  /** A card was dragged into column `col` at position `index` (0 = top). */
+  onMoveNode?: (nodeId: string, col: number, index: number) => void;
 }
 
 /**
  * A rig diagram: cards in columns, cables in the gutters between them. Geometry comes from
- * `computeRigLayout`, so a cable can never cross a card; this component only draws it.
+ * `computeRigLayout`, so a cable can never cross a card; this component only draws it. When
+ * editable, a card can be dragged by its header (or its grip, on touch) to another spot in its
+ * column or another column, with a spare column on the right while dragging.
  */
 export function RigCanvas({
   diagram,
@@ -43,8 +52,36 @@ export function RigCanvas({
   onSelectCable,
   connectFrom,
   onPortClick,
+  onMoveNode,
 }: RigCanvasProps) {
-  const layout = useMemo(() => computeRigLayout(resolveNodes(diagram, gear), diagram.cables), [diagram, gear]);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const resolved = useMemo(() => resolveNodes(diagram, gear), [diagram, gear]);
+  const draggable = editable && onMoveNode !== undefined;
+  const layoutRef = useRef<RigLayout | null>(null);
+  const { drag, pointer, begin, cancel, takeSuppressedClick } = useCardDrag({
+    stageRef,
+    onDrop: (nodeId, at) => {
+      const current = layoutRef.current;
+      // Letting go away from the diagram cancels instead of moving the card.
+      if (!draggable || !current || !isOverStage(current, at.x, at.y)) return;
+      const slot = dropSlotAt(current, nodeId, at.x, at.y);
+      onMoveNode?.(nodeId, slot.col, slot.index);
+    },
+  });
+  const dragging = draggable && drag !== null;
+  const layout = useMemo(
+    () => computeRigLayout(resolved, diagram.cables, dragging ? columnsWhileDragging(resolved) : 1),
+    [resolved, diagram.cables, dragging],
+  );
+  useLayoutEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
+  const draggedNode = dragging ? layout.nodes.find((n) => n.id === drag.nodeId) : undefined;
+  // The card was removed (a refresh, or edited elsewhere) mid-drag: there is nothing to drop any more.
+  const dragLost = dragging && !draggedNode;
+  useEffect(() => {
+    if (dragLost) cancel();
+  }, [dragLost, cancel]);
   const infos = useMemo(() => describeCables(diagram, gear), [diagram, gear]);
   const infoById = useMemo(() => new Map(infos.map((i) => [i.cable.id, i])), [infos]);
   const portColor = useMemo(() => {
@@ -76,18 +113,19 @@ export function RigCanvas({
 
   return (
     <div role="group" aria-label={`Rig diagram: ${diagram.name}`} className="overflow-x-auto rounded-xl border border-border bg-background/40 p-3">
-      <div className="relative mx-auto" style={{ width: layout.width, height: layout.height + TITLE_H }}>
+      {/* Left-aligned while editable: a centred stage would jump sideways when the spare column appears mid-drag. */}
+      <div className={cn('relative', !draggable && 'mx-auto')} style={{ width: layout.width, height: layout.height + TITLE_H }}>
         {Array.from({ length: layout.cols }, (_, c) => (
           <div
             key={c}
             className="absolute truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            style={{ left: layout.gutters[c].x + layout.gutters[c].w, top: 4, width: GEO.cardW }}
+            style={{ left: layout.colXs[c], top: 4, width: GEO.cardW }}
           >
             Stage {c + 1}
           </div>
         ))}
 
-        <div className="absolute left-0" style={{ top: TITLE_H, width: layout.width, height: layout.height }}>
+        <div ref={stageRef} className="absolute left-0" style={{ top: TITLE_H, width: layout.width, height: layout.height }}>
           <svg width={layout.width} height={layout.height} className="pointer-events-none absolute inset-0 z-10" aria-hidden="true">
             {layout.cables.map((c) => {
               const info = infoById.get(c.id);
@@ -113,10 +151,23 @@ export function RigCanvas({
               return (
                 <div
                   key={n.id}
-                  className={cn('absolute rounded-xl border bg-surface shadow-lg shadow-black/40', selected && 'ring-2 ring-primary')}
+                  className={cn(
+                    'absolute rounded-xl border bg-surface shadow-lg shadow-black/40',
+                    selected && 'ring-2 ring-primary',
+                    draggedNode?.id === n.id && 'opacity-40',
+                  )}
                   style={{ left: n.x, top: n.y, width: n.w, height: n.h, borderColor: `${tint}66` }}
                 >
-                  <HeaderTag editable={editable} selected={selected} onSelect={() => onSelectNode(selected ? null : n.id)} name={n.gear.name}>
+                  <HeaderTag
+                    editable={editable}
+                    draggable={draggable}
+                    selected={selected}
+                    onSelect={() => {
+                      if (!takeSuppressedClick()) onSelectNode(selected ? null : n.id);
+                    }}
+                    onPointerDown={(e) => begin(e, n)}
+                    name={n.gear.name}
+                  >
                     <span
                       className="block max-w-full truncate rounded border px-1.5 text-[10px] font-bold uppercase leading-4"
                       style={{ color: tint, borderColor: `${tint}66`, backgroundColor: `${tint}1f` }}
@@ -151,6 +202,8 @@ export function RigCanvas({
               );
             })}
           </div>
+
+          {draggedNode && drag && <DragOverlay layout={layout} node={draggedNode} drag={drag} pointer={pointer} />}
 
           <div className="pointer-events-none absolute inset-0 z-30">
             {layout.cables.map((c) => {
@@ -194,16 +247,53 @@ export function RigCanvas({
   );
 }
 
+/** The ghost under the pointer, the drop line and the dashed empty columns. Re-renders on every move; nothing else does. */
+function DragOverlay({ layout, node, drag, pointer }: { layout: RigLayout; node: PlacedNode; drag: ActiveDrag; pointer: PointerStore }) {
+  const at = useSyncExternalStore(pointer.subscribe, pointer.get);
+  const over = isOverStage(layout, at.x, at.y);
+  const marker = dropMarker(layout, node.id, dropSlotAt(layout, node.id, at.x, at.y));
+  // Keep the ghost inside the stage so it never adds scroll room below the diagram.
+  const top = Math.min(layout.height - GEO.headerH, Math.max(0, at.y - drag.offsetY));
+  return (
+    <div className="pointer-events-none absolute inset-0 z-40" aria-hidden="true">
+      {layout.colXs.map((x, c) =>
+        layout.nodes.some((n) => n.col === c && n.id !== node.id) ? null : (
+          <div
+            key={c}
+            className="absolute rounded-xl border-2 border-dashed border-border"
+            style={{ left: x, top: layout.colTops[c], width: GEO.cardW, height: GEO.headerH }}
+          />
+        ),
+      )}
+      {over && <div className="absolute rounded-full bg-primary" style={{ left: marker.x, top: marker.y - MARKER_H / 2, width: marker.w, height: MARKER_H }} />}
+      <div
+        className={cn(
+          'absolute left-0 top-0 flex flex-col justify-center overflow-hidden rounded-xl border bg-surface/90 px-3 shadow-xl shadow-black/50',
+          over ? 'border-primary' : 'border-border opacity-60',
+        )}
+        style={{ width: GEO.cardW, height: GEO.headerH, transform: `translate3d(${at.x - drag.offsetX}px, ${top}px, 0)` }}
+      >
+        <span className="truncate text-sm font-bold text-foreground">{node.gear.name}</span>
+        <span className="truncate text-[11px] text-surface-muted-foreground">{node.gear.kind}</span>
+      </div>
+    </div>
+  );
+}
+
 function HeaderTag({
   editable,
+  draggable,
   selected,
   onSelect,
+  onPointerDown,
   name,
   children,
 }: {
   editable: boolean;
+  draggable: boolean;
   selected: boolean;
   onSelect: () => void;
+  onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
   name: string;
   children: ReactNode;
 }) {
@@ -211,9 +301,27 @@ function HeaderTag({
   const style = { height: GEO.headerH };
   if (!editable) return <div className={cls} style={style}>{children}</div>;
   return (
-    <button type="button" className={cn(cls, 'w-full rounded-t-xl hover:bg-surface-hover')} style={style} aria-pressed={selected} aria-label={`Select ${name}`} onClick={onSelect}>
-      {children}
-    </button>
+    <div className="relative select-none" style={style} onPointerDown={draggable ? onPointerDown : undefined}>
+      <button
+        type="button"
+        className={cn(cls, 'h-full w-full rounded-t-xl hover:bg-surface-hover', draggable && 'cursor-grab pr-9')}
+        aria-pressed={selected}
+        aria-label={`Select ${name}`}
+        onClick={onSelect}
+      >
+        {children}
+      </button>
+      {draggable && (
+        <span
+          {...{ [DRAG_GRIP_ATTRIBUTE]: '' }}
+          title="Drag to move"
+          aria-hidden="true"
+          className="absolute right-1 top-1 flex h-9 w-9 cursor-grab touch-none items-center justify-center rounded text-muted-foreground"
+        >
+          <GripVertical size={16} />
+        </span>
+      )}
+    </div>
   );
 }
 

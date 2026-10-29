@@ -284,6 +284,16 @@ describe('computeRigLayout: random diagrams', () => {
     }
   });
 
+  it('stays clean with the spare empty column the editor shows while dragging (200 seeded diagrams)', () => {
+    for (let seed = 2000; seed < 2200; seed++) {
+      const { nodes, cables } = randomDiagram(mulberry32(seed), 8, 6);
+      const layout = computeRigLayout(nodes, cables, 4);
+      expect(layout.cols).toBe(4);
+      expect(layout.colXs).toHaveLength(4);
+      expectCleanLayout(layout);
+    }
+  });
+
   it('holds at the size limits', () => {
     for (let seed = 1000; seed < 1040; seed++) {
       const rand = mulberry32(seed);

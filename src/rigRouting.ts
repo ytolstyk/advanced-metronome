@@ -94,6 +94,10 @@ export interface RigLayout {
   cables: RoutedCable[];
   /** Gutter i lies left of column i; x/width in diagram pixels. */
   gutters: { x: number; w: number }[];
+  /** Where a card placed first in column c would start (also for empty columns). */
+  colTops: number[];
+  /** Left edge of the cards in column c. */
+  colXs: number[];
 }
 
 const ceilToGrid = (v: number): number => Math.ceil(v / GEO.grid) * GEO.grid;
@@ -193,10 +197,11 @@ export function arrowPoints(from: Pt, towards: Pt): string {
 
 /**
  * Lay out `nodes` (array order = order within a column) and route `cables` (assumed valid: ports
- * exist, `from` is the output side). Cables with a missing node or port are skipped.
+ * exist, `from` is the output side). Cables with a missing node or port are skipped. `minCols` keeps
+ * empty columns on the right (the editor shows a spare one to drop a card into).
  */
-export function computeRigLayout(nodes: ResolvedNode[], cables: RigCable[]): RigLayout {
-  const cols = Math.min(RIG_COLS, Math.max(1, ...nodes.map(n => Math.floor(n.col) + 1)));
+export function computeRigLayout(nodes: ResolvedNode[], cables: RigCable[], minCols = 1): RigLayout {
+  const cols = Math.min(RIG_COLS, Math.max(1, minCols, ...nodes.map(n => Math.floor(n.col) + 1)));
   const colOf = (n: ResolvedNode): number => Math.min(cols - 1, Math.max(0, Math.floor(n.col)));
   const byId = new Map(nodes.map(n => [n.id, n]));
 
@@ -230,7 +235,8 @@ export function computeRigLayout(nodes: ResolvedNode[], cables: RigCable[]): Rig
   const topBase = Math.max(GEO.grid, ceilToGrid(channelH + 16));
 
   const placedNodes: PlacedNode[] = [];
-  const cursor: number[] = Array.from({ length: cols }, (_, c) => topBase + GEO.colShift * c);
+  const colTops = Array.from({ length: cols }, (_, c) => topBase + GEO.colShift * c);
+  const cursor: number[] = [...colTops];
   for (const n of nodes) {
     const c = colOf(n);
     const h = GEO.headerH + n.gear.ports.length * GEO.rowH;
@@ -351,5 +357,7 @@ export function computeRigLayout(nodes: ResolvedNode[], cables: RigCable[]): Rig
     ports,
     cables: routed,
     gutters: gutterX.slice(0, cols + 1).map((x, i) => ({ x, w: gutterW[i] })),
+    colTops,
+    colXs: colX.slice(0, cols),
   };
 }
