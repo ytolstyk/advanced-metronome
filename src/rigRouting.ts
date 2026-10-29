@@ -34,6 +34,8 @@ export const GEO = {
   minRunForChip: 28,
   chipStubInset: 22,
   cornerR: 8,
+  /** The grab area of a connected pin in the editor (bigger than the dot so a finger can hit it). */
+  plugHit: 28,
   bottomPad: 32,
 } as const;
 

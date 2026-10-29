@@ -1,23 +1,23 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { CONNECTOR_LABEL, GEAR_KIND_COLOR, orderPorts } from '../../../rigUtils';
+import { DRAG_GRIP_ATTRIBUTE, usePointerDrag } from '../../../hooks/usePointerDrag';
+import { columnsWhileDragging, dropSlotAt, isOverStage } from '../../../rigDrag';
+import { canConnect, cableAtPort, portKey } from '../../../rigEdit';
+import type { PortRef } from '../../../rigEdit';
+import { resolveNodes } from '../../../rigData';
 import { GEO, arrowPoints, computeRigLayout } from '../../../rigRouting';
 import type { PlacedNode, PlacedPort, RigLayout } from '../../../rigRouting';
-import { resolveNodes } from '../../../rigData';
-import { describeCables, describePort } from '../../../rigView';
-import { columnsWhileDragging, dropMarker, dropSlotAt, isOverStage } from '../../../rigDrag';
-import { DRAG_GRIP_ATTRIBUTE, useCardDrag } from '../../../hooks/useCardDrag';
-import type { ActiveDrag, PointerStore } from '../../../hooks/useCardDrag';
 import type { RigDiagram, RigGear } from '../../../rigTypes';
-import type { PortRef } from '../../../rigEdit';
+import { GEAR_KIND_COLOR, RIG_PALETTE } from '../../../rigUtils';
+import { describeCables } from '../../../rigView';
+import { CardDragOverlay } from './CardDragOverlay';
+import { PortRow } from './PortRow';
+import { WireDragOverlay } from './WireDragOverlay';
+import { useWireDrag, wireWouldRemove } from './useWireDrag';
 
 const TITLE_H = 28;
-const PIN = 14;
-const MARKER_H = 4;
-
-const DIR_MARK = { in: '▸', out: '◂', io: '⇄' } as const;
 
 interface RigCanvasProps {
   diagram: RigDiagram;
@@ -34,13 +34,18 @@ interface RigCanvasProps {
   onPortClick: (ref: PortRef) => void;
   /** A card was dragged into column `col` at position `index` (0 = top). */
   onMoveNode?: (nodeId: string, col: number, index: number) => void;
+  /** The cable's end at `grabbed` was dragged onto the port `target`. */
+  onReconnectCable?: (cableId: string, grabbed: PortRef, target: PortRef) => void;
+  /** The end of a cable was let go on empty canvas: the cable is dropped. */
+  onRemoveCable?: (cableId: string) => void;
 }
 
 /**
  * A rig diagram: cards in columns, cables in the gutters between them. Geometry comes from
  * `computeRigLayout`, so a cable can never cross a card; this component only draws it. When
  * editable, a card can be dragged by its header (or its grip, on touch) to another spot in its
- * column or another column, with a spare column on the right while dragging.
+ * column or another column, with a spare column on the right while dragging. The plug at the end of a
+ * connected cable can be dragged to another port, or let go on empty canvas to remove the cable.
  */
 export function RigCanvas({
   diagram,
@@ -53,12 +58,16 @@ export function RigCanvas({
   connectFrom,
   onPortClick,
   onMoveNode,
+  onReconnectCable,
+  onRemoveCable,
 }: RigCanvasProps) {
   const stageRef = useRef<HTMLDivElement>(null);
+  const layoutRef = useRef<RigLayout | null>(null);
   const resolved = useMemo(() => resolveNodes(diagram, gear), [diagram, gear]);
   const draggable = editable && onMoveNode !== undefined;
-  const layoutRef = useRef<RigLayout | null>(null);
-  const { drag, pointer, begin, cancel, takeSuppressedClick } = useCardDrag({
+  const wiresDraggable = editable && onReconnectCable !== undefined && onRemoveCable !== undefined;
+
+  const cards = usePointerDrag({
     stageRef,
     onDrop: (nodeId, at) => {
       const current = layoutRef.current;
@@ -68,7 +77,16 @@ export function RigCanvas({
       onMoveNode?.(nodeId, slot.col, slot.index);
     },
   });
-  const dragging = draggable && drag !== null;
+  const wires = useWireDrag({
+    stageRef,
+    layoutRef,
+    diagram,
+    enabled: wiresDraggable,
+    onReconnect: (cableId, grabbed, target) => onReconnectCable?.(cableId, grabbed, target),
+    onRemove: (cableId) => onRemoveCable?.(cableId),
+  });
+
+  const dragging = draggable && cards.drag !== null;
   const layout = useMemo(
     () => computeRigLayout(resolved, diagram.cables, dragging ? columnsWhileDragging(resolved) : 1),
     [resolved, diagram.cables, dragging],
@@ -76,26 +94,35 @@ export function RigCanvas({
   useLayoutEffect(() => {
     layoutRef.current = layout;
   }, [layout]);
-  const draggedNode = dragging ? layout.nodes.find((n) => n.id === drag.nodeId) : undefined;
+  const draggedNode = dragging ? layout.nodes.find((n) => n.id === cards.drag?.payload) : undefined;
   // The card was removed (a refresh, or edited elsewhere) mid-drag: there is nothing to drop any more.
   const dragLost = dragging && !draggedNode;
+  const { cancel: cancelCardDrag } = cards;
   useEffect(() => {
-    if (dragLost) cancel();
-  }, [dragLost, cancel]);
+    if (dragLost) cancelCardDrag();
+  }, [dragLost, cancelCardDrag]);
+
   const infos = useMemo(() => describeCables(diagram, gear), [diagram, gear]);
   const infoById = useMemo(() => new Map(infos.map((i) => [i.cable.id, i])), [infos]);
+  /** Colour of the cable on each connected port. */
   const portColor = useMemo(() => {
     const map = new Map<string, string>();
     for (const i of infos) {
-      map.set(`${i.cable.from.n}:${i.cable.from.p}`, i.kind.color);
-      map.set(`${i.cable.to.n}:${i.cable.to.p}`, i.kind.color);
+      map.set(portKey(i.cable.from), i.kind.color);
+      map.set(portKey(i.cable.to), i.kind.color);
     }
     return map;
   }, [infos]);
-  const used = useMemo(() => new Set(portColor.keys()), [portColor]);
-  const fromPort = connectFrom
-    ? layout.nodes.find((n) => n.id === connectFrom.n)?.gear.ports.find((p) => p.id === connectFrom.p)
-    : undefined;
+
+  // A wire end in the air takes over from a connection being started: its fixed plug is the origin.
+  const wire = wires.active;
+  const origin: PortRef | null = wire ? wire.fixed : connectFrom;
+  const wireAnchor = wire ? layout.ports.find((p) => p.nodeId === wire.fixed.n && p.portId === wire.fixed.p) : undefined;
+  const beginWire = (e: ReactPointerEvent<HTMLElement>, nodeId: string, pin: PlacedPort) => {
+    const grabbed = { n: nodeId, p: pin.portId };
+    const cable = cableAtPort(diagram, grabbed);
+    if (cable) wires.begin(e, cable.id, grabbed, pin);
+  };
 
   if (diagram.nodes.length === 0) {
     return (
@@ -105,11 +132,8 @@ export function RigCanvas({
     );
   }
 
-  const isTarget = (n: PlacedNode, p: PlacedPort): boolean => {
-    if (!connectFrom || !fromPort || n.id === connectFrom.n) return false;
-    if (used.has(`${n.id}:${p.portId}`)) return false;
-    return orderPorts(fromPort, n.gear.ports[p.index]) !== null;
-  };
+  const isTarget = (n: PlacedNode, p: PlacedPort): boolean =>
+    origin !== null && canConnect(diagram, gear, origin, { n: n.id, p: p.portId }, wire?.cableId);
 
   return (
     <div role="group" aria-label={`Rig diagram: ${diagram.name}`} className="overflow-x-auto rounded-xl border border-border bg-background/40 p-3">
@@ -134,8 +158,8 @@ export function RigCanvas({
               const selected = c.id === selectedCableId;
               const pts = c.points;
               return (
-                <g key={c.id}>
-                  <path d={c.path} fill="none" stroke="#1e1f2c" strokeWidth={selected ? 9 : 7} strokeLinecap="round" />
+                <g key={c.id} opacity={c.id === wire?.cableId ? 0.25 : 1}>
+                  <path d={c.path} fill="none" stroke={RIG_PALETTE.casing} strokeWidth={selected ? 9 : 7} strokeLinecap="round" />
                   <path d={c.path} fill="none" stroke={color} strokeWidth={selected ? 5 : 3.5} strokeLinecap="round" />
                   <polygon points={arrowPoints(pts[pts.length - 2], pts[pts.length - 1])} fill={color} />
                   {info.kind.undirected && <polygon points={arrowPoints(pts[1], pts[0])} fill={color} />}
@@ -163,9 +187,9 @@ export function RigCanvas({
                     draggable={draggable}
                     selected={selected}
                     onSelect={() => {
-                      if (!takeSuppressedClick()) onSelectNode(selected ? null : n.id);
+                      if (!cards.takeSuppressedClick()) onSelectNode(selected ? null : n.id);
                     }}
-                    onPointerDown={(e) => begin(e, n)}
+                    onPointerDown={(e) => cards.begin(e, { payload: n.id, x: n.x, y: n.y })}
                     name={n.gear.name}
                   >
                     <span
@@ -190,12 +214,15 @@ export function RigCanvas({
                         key={p.portId}
                         node={n}
                         placed={p}
-                        color={portColor.get(`${n.id}:${p.portId}`)}
+                        color={portColor.get(portKey({ n: n.id, p: p.portId }))}
                         editable={editable}
-                        connecting={connectFrom !== null}
-                        isOrigin={connectFrom?.n === n.id && connectFrom.p === p.portId}
+                        connecting={origin !== null}
+                        isOrigin={origin?.n === n.id && origin.p === p.portId}
                         isTarget={isTarget(n, p)}
-                        onClick={() => onPortClick({ n: n.id, p: p.portId })}
+                        onClick={() => {
+                          if (!wires.takeSuppressedClick()) onPortClick({ n: n.id, p: p.portId });
+                        }}
+                        onPlugPointerDown={wiresDraggable && portColor.has(portKey({ n: n.id, p: p.portId })) ? (e) => beginWire(e, n.id, p) : undefined}
                       />
                     ))}
                 </div>
@@ -203,7 +230,16 @@ export function RigCanvas({
             })}
           </div>
 
-          {draggedNode && drag && <DragOverlay layout={layout} node={draggedNode} drag={drag} pointer={pointer} />}
+          {draggedNode && cards.drag && <CardDragOverlay layout={layout} node={draggedNode} drag={cards.drag} pointer={cards.pointer} />}
+          {wire && wireAnchor && (
+            <WireDragOverlay
+              layout={layout}
+              anchor={wireAnchor}
+              color={infoById.get(wire.cableId)?.kind.color ?? RIG_PALETTE.cableFallback}
+              pointer={wires.pointer}
+              wouldRemove={(at) => wireWouldRemove(layout, stageRef.current, wire.grabbed, at)}
+            />
+          )}
 
           <div className="pointer-events-none absolute inset-0 z-30">
             {layout.cables.map((c) => {
@@ -242,39 +278,6 @@ export function RigCanvas({
             })}
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-/** The ghost under the pointer, the drop line and the dashed empty columns. Re-renders on every move; nothing else does. */
-function DragOverlay({ layout, node, drag, pointer }: { layout: RigLayout; node: PlacedNode; drag: ActiveDrag; pointer: PointerStore }) {
-  const at = useSyncExternalStore(pointer.subscribe, pointer.get);
-  const over = isOverStage(layout, at.x, at.y);
-  const marker = dropMarker(layout, node.id, dropSlotAt(layout, node.id, at.x, at.y));
-  // Keep the ghost inside the stage so it never adds scroll room below the diagram.
-  const top = Math.min(layout.height - GEO.headerH, Math.max(0, at.y - drag.offsetY));
-  return (
-    <div className="pointer-events-none absolute inset-0 z-40" aria-hidden="true">
-      {layout.colXs.map((x, c) =>
-        layout.nodes.some((n) => n.col === c && n.id !== node.id) ? null : (
-          <div
-            key={c}
-            className="absolute rounded-xl border-2 border-dashed border-border"
-            style={{ left: x, top: layout.colTops[c], width: GEO.cardW, height: GEO.headerH }}
-          />
-        ),
-      )}
-      {over && <div className="absolute rounded-full bg-primary" style={{ left: marker.x, top: marker.y - MARKER_H / 2, width: marker.w, height: MARKER_H }} />}
-      <div
-        className={cn(
-          'absolute left-0 top-0 flex flex-col justify-center overflow-hidden rounded-xl border bg-surface/90 px-3 shadow-xl shadow-black/50',
-          over ? 'border-primary' : 'border-border opacity-60',
-        )}
-        style={{ width: GEO.cardW, height: GEO.headerH, transform: `translate3d(${at.x - drag.offsetX}px, ${top}px, 0)` }}
-      >
-        <span className="truncate text-sm font-bold text-foreground">{node.gear.name}</span>
-        <span className="truncate text-[11px] text-surface-muted-foreground">{node.gear.kind}</span>
       </div>
     </div>
   );
@@ -321,70 +324,6 @@ function HeaderTag({
           <GripVertical size={16} />
         </span>
       )}
-    </div>
-  );
-}
-
-function PortRow({
-  node,
-  placed,
-  color,
-  editable,
-  connecting,
-  isOrigin,
-  isTarget,
-  onClick,
-}: {
-  node: PlacedNode;
-  placed: PlacedPort;
-  color: string | undefined;
-  editable: boolean;
-  connecting: boolean;
-  isOrigin: boolean;
-  isTarget: boolean;
-  onClick: () => void;
-}) {
-  const port = node.gear.ports[placed.index];
-  const cls = cn(
-    'absolute left-0 right-0 flex items-center justify-between gap-2 border-t border-surface-border/60 px-3 font-mono text-[11px] text-foreground',
-    editable && 'hover:bg-surface-hover',
-    connecting && !isTarget && !isOrigin && 'opacity-50',
-    isTarget && 'bg-sky-500/15 ring-1 ring-inset ring-sky-400',
-    isOrigin && 'bg-primary/20 ring-1 ring-inset ring-primary',
-  );
-  const style = { top: GEO.headerH + placed.index * GEO.rowH, height: GEO.rowH };
-  const body = (
-    <>
-      <span className="truncate">{DIR_MARK[port.dir]} {port.label}</span>
-      <span className="max-w-[45%] shrink-0 truncate text-surface-muted-foreground">{port.note ?? CONNECTOR_LABEL[port.connector]}</span>
-      <span
-        aria-hidden="true"
-        className="absolute rounded-full border-2 border-background"
-        style={{
-          width: PIN,
-          height: PIN,
-          top: (GEO.rowH - PIN) / 2 - 2,
-          // the card and row borders are 1px each: -1 puts the pin's centre exactly on the card edge
-          [placed.side === 'L' ? 'left' : 'right']: -PIN / 2 - 1,
-          backgroundColor: color ?? '#475569',
-        }}
-      />
-    </>
-  );
-  return editable ? (
-    <button
-      type="button"
-      className={cn(cls, 'text-left')}
-      style={style}
-      title={describePort(port)}
-      aria-label={`${node.gear.name}: ${describePort(port)}${color ? ', connected' : ''}${isOrigin ? ', selected' : ''}`}
-      onClick={onClick}
-    >
-      {body}
-    </button>
-  ) : (
-    <div className={cls} style={style} title={describePort(port)}>
-      {body}
     </div>
   );
 }

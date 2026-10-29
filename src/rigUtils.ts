@@ -26,6 +26,20 @@ export const CABLE_COLOR: Record<CableType, string> = {
   other: '#94a3b8',
 };
 
+/** Colours of the editor's chrome around cables and pins (cable colours come from `CABLE_COLOR`). */
+export const RIG_PALETTE = {
+  /** The dark outline under a cable, so it reads over anything. */
+  casing: '#1e1f2c',
+  /** A pin with no cable. */
+  freePin: '#475569',
+  /** A cable whose kind is unknown. */
+  cableFallback: '#94a3b8',
+  /** A wire end that would remove its cable if let go here. */
+  remove: '#ef4444',
+  /** A wire end over something that can't take it. */
+  muted: '#64748b',
+} as const;
+
 /** Accent per kind of gear: the tint on a card's border and kind badge. */
 export const GEAR_KIND_COLOR: Record<GearKind, string> = {
   guitar: '#f97316', bass: '#f97316', drums: '#06b6d4', keys: '#06b6d4', mic: '#06b6d4',

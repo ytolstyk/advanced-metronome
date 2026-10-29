@@ -17,6 +17,8 @@ import {
   gearImpact,
   hasImpact,
   moveNode,
+  reconnectCable,
+  restoreCable,
   placeNode,
   portAt,
   removeCable,
@@ -29,7 +31,7 @@ import {
 } from '../../../rigEdit';
 import type { EditResult, Impact, MoveDirection, PortRef } from '../../../rigEdit';
 import { RIG_LIMITS } from '../../../rigTypes';
-import type { RigDiagram, RigGear } from '../../../rigTypes';
+import type { RigCable, RigDiagram, RigGear } from '../../../rigTypes';
 import { describeCables, describePort } from '../../../rigView';
 import { CARD_SURFACE, FIELD_LABEL_CLASS, SELECT_CLASS } from '../cardStyles';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -85,6 +87,8 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
   const [connectOrigin, setConnectOrigin] = useState<PortRef | null>(null);
   const [connectNote, setConnectNote] = useState<string | null>(null);
   const [editNote, setEditNote] = useState<string | null>(null);
+  /** The cable removed last (by dragging its end off, or from the schedule), so it can be put back. */
+  const [removed, setRemoved] = useState<{ diagramId: string; cable: RigCable; index: number; note: string } | null>(null);
   const [gearDialog, setGearDialog] = useState<GearDialog>(null);
   const [pendingGear, setPendingGear] = useState<{ gear: RigGear; impact: Impact } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ gear: RigGear; impact: Impact } | null>(null);
@@ -120,6 +124,7 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
     setSelectedNodeId(null);
     setSelectedCableId(null);
     setEditNote(null);
+    setRemoved(null);
   };
   const cancelConnect = () => {
     setConnectOrigin(null);
@@ -217,6 +222,36 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
     tryEdit((d) => addGear(d, gear));
   };
 
+  const onReconnectCable = (cableId: string, grabbed: PortRef, target: PortRef) => {
+    if (!current) return;
+    cancelConnect();
+    tryEdit((d) => reconnectCable(d, current.diagram.id, cableId, grabbed, target));
+  };
+
+  const removeCableById = (cableId: string) => {
+    if (!current) return;
+    const index = current.diagram.cables.findIndex((c) => c.id === cableId);
+    if (index < 0) return;
+    const note = `Cable ${index + 1} was removed.`;
+    setRemoved({ diagramId: current.diagram.id, cable: current.diagram.cables[index], index, note });
+    rig.edit((d) => removeCable(d, current.diagram.id, cableId));
+    if (selectedCableId === cableId) setSelectedCableId(null);
+    cancelConnect();
+    setEditNote(note);
+  };
+
+  const undoRemoval = () => {
+    if (!removed) return;
+    if (tryEdit((d) => restoreCable(d, removed.diagramId, removed.cable, removed.index))) setRemoved(null);
+  };
+
+  /** Throw the edits away: a removal made in them can't be undone any more either. */
+  const discardEdits = () => {
+    setRemoved(null);
+    setEditNote(null);
+    void rig.discard();
+  };
+
   const move = (dir: MoveDirection) => {
     if (!current || !selectedNodeId) return;
     rig.edit((d) => moveNode(d, current.diagram.id, selectedNodeId, dir));
@@ -256,7 +291,7 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
           <div role="alert" className="grid gap-2 rounded-md border border-amber-900/50 bg-amber-950/20 p-3 text-sm text-amber-300">
             <p>Your gear and rigs changed somewhere else since you opened this page.</p>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="min-h-11" onClick={() => void rig.discard()} disabled={rig.saving}>
+              <Button variant="outline" className="min-h-11" onClick={discardEdits} disabled={rig.saving}>
                 Reload and discard my edits
               </Button>
               <Button variant="destructive" className="min-h-11" onClick={() => void rig.overwrite()} disabled={rig.saving}>
@@ -266,7 +301,16 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
           </div>
         )}
         {rig.error && <InlineAlert tone="error">{rig.error}</InlineAlert>}
-        {editNote && <InlineAlert tone="warning">{editNote}</InlineAlert>}
+        {editNote && (
+          <InlineAlert tone="warning">
+            {editNote}
+            {removed && editNote === removed.note && (
+              <Button variant="outline" size="sm" className="ml-3 min-h-9" onClick={undoRemoval}>
+                Undo
+              </Button>
+            )}
+          </InlineAlert>
+        )}
       </div>
 
       <section aria-labelledby="diagrams-heading">
@@ -323,6 +367,8 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
               connectFrom={connectFrom}
               onPortClick={onPortClick}
               onMoveNode={(nodeId, col, index) => rig.edit((d) => placeNode(d, current.diagram.id, nodeId, col, index))}
+              onReconnectCable={onReconnectCable}
+              onRemoveCable={removeCableById}
             />
 
             {editing && (
@@ -339,7 +385,7 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    Drag a card by its header to reorder it or move it to another stage. To connect two pieces of gear, select a free port, then the port it plugs into. Select a card or a cable number to change it.
+                    Drag a card by its header to reorder it or move it to another stage. To connect two pieces of gear, select a free port, then the port it plugs into. To move a cable, drag its dot onto another port, or let go on empty space to remove it. Select a card or a cable number to change it.
                   </p>
                 )}
 
@@ -397,10 +443,7 @@ export function RigWorkspace({ data, own, refreshing, reload }: RigWorkspaceProp
               editable={editing}
               selectedCableId={selectedCableId}
               onSelect={pickCable}
-              onRemove={(id) => {
-                rig.edit((d) => removeCable(d, current.diagram.id, id));
-                setSelectedCableId(null);
-              }}
+              onRemove={removeCableById}
               onLabel={(id, label) => rig.edit((d) => setCableLabel(d, current.diagram.id, id, label))}
             />
           </>

@@ -253,7 +253,11 @@ export function moveNode(draft: RigDraft, diagramId: string, nodeId: string, dir
 
 export type PortRef = RigPortRef;
 
-const portKey = (r: PortRef): string => `${r.n}:${r.p}`;
+/** The key of a port in sets and maps of this diagram's ports. */
+export const portKey = (r: PortRef): string => `${r.n}:${r.p}`;
+
+/** Order-free key of the two ports a cable joins. */
+const pairKey = (a: PortRef, b: PortRef): string => [portKey(a), portKey(b)].sort().join('|');
 
 /** The port a ref points at in this diagram, if it is still there. */
 export function portAt(diagram: RigDiagram, gear: readonly RigGear[], ref: PortRef): RigPort | undefined {
@@ -261,9 +265,20 @@ export function portAt(diagram: RigDiagram, gear: readonly RigGear[], ref: PortR
   return node ? gear.find((g) => g.id === node.gearId)?.ports.find((p) => p.id === ref.p) : undefined;
 }
 
-/** Ports of the diagram that already carry a cable (one cable per port). */
-export const usedPorts = (diagram: RigDiagram): Set<string> =>
-  new Set(diagram.cables.flatMap((c) => [portKey(c.from), portKey(c.to)]));
+/** Ports of the diagram that already carry a cable (one cable per port), leaving out `exceptCableId`'s own two. */
+export const usedPorts = (diagram: RigDiagram, exceptCableId?: string): Set<string> =>
+  new Set(diagram.cables.filter((c) => c.id !== exceptCableId).flatMap((c) => [portKey(c.from), portKey(c.to)]));
+
+/** The cable plugged into this port, if any. */
+export const cableAtPort = (diagram: RigDiagram, ref: PortRef): RigCable | undefined =>
+  diagram.cables.find((c) => portKey(c.from) === portKey(ref) || portKey(c.to) === portKey(ref));
+
+/**
+ * Whether `a` and `b` could be joined: the one rule behind connecting, reconnecting and highlighting
+ * the ports a cable can be dropped on. `exceptCableId`'s own ports count as free (it is being moved).
+ */
+export const canConnect = (diagram: RigDiagram, gear: readonly RigGear[], a: PortRef, b: PortRef, exceptCableId?: string): boolean =>
+  connectionEnds(diagram, gear, a, b, usedPorts(diagram, exceptCableId)).ok;
 
 /**
  * Connects two ports. Click order doesn't matter: the stored cable always runs from the output.
@@ -273,20 +288,63 @@ export function addCable(draft: RigDraft, diagramId: string, a: PortRef, b: Port
   const diagram = draft.diagrams.find((d) => d.id === diagramId);
   if (!diagram) return fail('That diagram no longer exists');
   if (diagram.cables.length >= RIG_LIMITS.cablesMax) return fail(`A diagram holds up to ${RIG_LIMITS.cablesMax} cables`);
+  const ends = connectionEnds(diagram, draft.gear, a, b, usedPorts(diagram));
+  if (!ends.ok) return ends;
+  const cable: RigCable = { id: newRigId(), ...ends.value };
+  return ok(mapDiagram(draft, diagramId, (d) => ({ ...d, cables: [...d.cables, cable] })));
+}
+
+/**
+ * Moves one end of a cable (the one at `grabbed`) to another port (dragging a wire end); the other end
+ * stays plugged in. The cable keeps its id, label and place in the list, so its number doesn't change.
+ * Plugging it back where it was is a no-op (the same draft).
+ */
+export function reconnectCable(draft: RigDraft, diagramId: string, cableId: string, grabbed: PortRef, target: PortRef): EditResult<RigDraft> {
+  const diagram = draft.diagrams.find((d) => d.id === diagramId);
+  const cable = diagram?.cables.find((c) => c.id === cableId);
+  if (!diagram || !cable) return fail('That cable no longer exists');
+  const fixed = portKey(grabbed) === portKey(cable.from) ? cable.to : portKey(grabbed) === portKey(cable.to) ? cable.from : null;
+  if (!fixed) return fail('That cable changed');
+  const ends = connectionEnds(diagram, draft.gear, fixed, target, usedPorts(diagram, cableId));
+  if (!ends.ok) return ends;
+  // Plugged back where it was (in either order: a USB pair is stored sorted): nothing to change.
+  if (pairKey(ends.value.from, ends.value.to) === pairKey(cable.from, cable.to)) return ok(draft);
+  return ok(mapDiagram(draft, diagramId, (d) => ({ ...d, cables: d.cables.map((c) => (c.id === cableId ? { ...c, ...ends.value } : c)) })));
+}
+
+/** Puts a removed cable back at its old place in the list, if its ports are still free. */
+export function restoreCable(draft: RigDraft, diagramId: string, cable: RigCable, index: number): EditResult<RigDraft> {
+  const diagram = draft.diagrams.find((d) => d.id === diagramId);
+  if (!diagram) return fail('That diagram no longer exists');
+  if (diagram.cables.length >= RIG_LIMITS.cablesMax) return fail(`A diagram holds up to ${RIG_LIMITS.cablesMax} cables`);
+  if (diagram.cables.some((c) => c.id === cable.id)) return ok(draft);
+  const ends = connectionEnds(diagram, draft.gear, cable.from, cable.to, usedPorts(diagram));
+  if (!ends.ok) return ends;
+  const at = Math.min(diagram.cables.length, Math.max(0, index));
+  const restored: RigCable = { ...cable, ...ends.value };
+  return ok(mapDiagram(draft, diagramId, (d) => ({ ...d, cables: [...d.cables.slice(0, at), restored, ...d.cables.slice(at)] })));
+}
+
+/** The stored ends (output first) of a cable between `a` and `b`, or why they can't be joined. `taken` are ports already carrying a cable. */
+function connectionEnds(
+  diagram: RigDiagram,
+  gear: readonly RigGear[],
+  a: PortRef,
+  b: PortRef,
+  taken: ReadonlySet<string>,
+): EditResult<{ from: PortRef; to: PortRef }> {
   if (a.n === b.n) return fail("A cable can't loop back to the same piece of gear");
-  const pa = portAt(diagram, draft.gear, a);
-  const pb = portAt(diagram, draft.gear, b);
+  const pa = portAt(diagram, gear, a);
+  const pb = portAt(diagram, gear, b);
   if (!pa || !pb) return fail('That port is no longer there');
-  const used = usedPorts(diagram);
-  if (used.has(portKey(a)) || used.has(portKey(b))) return fail('Each port takes one cable. Remove the existing one first');
+  if (taken.has(portKey(a)) || taken.has(portKey(b))) return fail('Each port takes one cable. Remove the existing one first');
   const problem = connectionProblem(pa, pb);
   if (problem) return fail(problem);
   const ordered = orderPorts({ ref: a, dir: pa.dir }, { ref: b, dir: pb.dir })!;
   let [from, to] = ordered.map((o) => o.ref);
   // USB/MIDI cables have no direction: store them in a fixed order so a pair always serialises the same.
   if (pa.dir === 'io' && portKey(from) > portKey(to)) [from, to] = [to, from];
-  const cable: RigCable = { id: newRigId(), from, to };
-  return ok(mapDiagram(draft, diagramId, (d) => ({ ...d, cables: [...d.cables, cable] })));
+  return ok({ from, to });
 }
 
 export const removeCable = (draft: RigDraft, diagramId: string, cableId: string): RigDraft =>

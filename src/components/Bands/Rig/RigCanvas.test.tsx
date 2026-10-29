@@ -13,10 +13,17 @@ const nameOf = (id: string) => layout.nodes.find((n) => n.id === id)!.gear.name;
 /** The stage sits at (30, 50) on screen, so a mix-up between screen and stage coordinates shows. */
 const ORIGIN = { x: 30, y: 50 };
 
+/** When set, the box the diagram scrolls in is only this big (a stage wider than the page). */
+let visibleBox: { width: number; height: number } | null = null;
+
 beforeEach(() => {
-  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
-    () => ({ left: ORIGIN.x, top: ORIGIN.y, x: ORIGIN.x, y: ORIGIN.y, width: layout.width, height: layout.height, right: 0, bottom: 0, toJSON: () => ({}) }) as DOMRect,
-  );
+  visibleBox = null;
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    const clipped = visibleBox !== null && this.getAttribute('role') === 'group';
+    const width = clipped ? visibleBox!.width : layout.width;
+    const height = clipped ? visibleBox!.height : layout.height;
+    return { left: ORIGIN.x, top: ORIGIN.y, x: ORIGIN.x, y: ORIGIN.y, width, height, right: ORIGIN.x + width, bottom: ORIGIN.y + height, toJSON: () => ({}) } as DOMRect;
+  });
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -35,6 +42,8 @@ function setup(over: Partial<Parameters<typeof RigCanvas>[0]> = {}) {
     connectFrom: null,
     onPortClick: vi.fn(),
     onMoveNode: vi.fn<(id: string, col: number, index: number) => void>(),
+    onReconnectCable: vi.fn<(cableId: string, grabbed: { n: string; p: string }, target: { n: string; p: string }) => void>(),
+    onRemoveCable: vi.fn<(cableId: string) => void>(),
     ...over,
   };
   const view = render(<RigCanvas {...props} />);
@@ -288,7 +297,7 @@ describe('RigCanvas dragging', () => {
 
   it('shows no grips without a move handler', () => {
     setup({ onMoveNode: undefined });
-    expect(document.querySelector('[data-drag-grip]')).toBeNull();
+    expect(document.querySelector('[data-drag-grip][title="Drag to move"]')).toBeNull();
   });
 
   it('is centred when it cannot be edited, left-aligned when it can', () => {
@@ -298,3 +307,228 @@ describe('RigCanvas dragging', () => {
     expect(container.querySelector('.mx-auto')).not.toBeNull();
   });
 });
+
+describe('RigCanvas wire ends', () => {
+  const layout3 = computeRigLayout(resolveNodes(JAM_STATION_DIAGRAM, JAM_STATION_GEAR), JAM_STATION_DIAGRAM.cables);
+  const pin = (nodeId: string, portId: string) => layout3.ports.find((p) => p.nodeId === nodeId && p.portId === portId)!;
+  const rowOf = (name: RegExp) => screen.getByRole('button', { name });
+  /** The plug follows its row in the card. */
+  const plugAfter = (name: RegExp) => {
+    const next = rowOf(name).nextElementSibling as HTMLElement | null;
+    return next?.getAttribute('title')?.startsWith('Drag to move this end') ? next : null;
+  };
+  const plugOf = (name: RegExp) => plugAfter(name)!;
+  const BASS_OUT = /Electric Bass: Output/;
+  const SCARLETT_CH2 = /Focusrite Scarlett 18i8: Ch 2/;
+  const bassOut = pin('nbass', 'out1');
+  const ch2 = pin('nscarlet', 'in02');
+  const spareIn = pin('nspeaker', 'in02');
+  const startWire = (name: RegExp, from: { x: number; y: number }, extra: Record<string, unknown> = {}) => {
+    fireEvent.pointerDown(plugOf(name), ptr(from.x, from.y, extra));
+    fireEvent.pointerMove(window, ptr(from.x + 30, from.y + 30, extra));
+  };
+  const release = (at: { x: number; y: number }) => fireEvent.pointerUp(window, ptr(at.x, at.y, { buttons: 0 }));
+  const overlay = () => document.querySelector('.z-40');
+
+  it('puts a plug on every connected port and none on free ones', () => {
+    setup();
+    expect(document.querySelectorAll('[title^="Drag to move this end"]')).toHaveLength(JAM_STATION_DIAGRAM.cables.length * 2);
+    expect(plugAfter(/HeadRush FRFR-108 MKII: Input 2/)).toBeNull();
+  });
+
+  it('has no plugs when read-only or without both wire handlers', () => {
+    setup({ editable: false });
+    expect(document.querySelector('[title^="Drag to move this end"]')).toBeNull();
+    document.body.innerHTML = '';
+    setup({ onRemoveCable: undefined });
+    expect(document.querySelector('[title^="Drag to move this end"]')).toBeNull();
+  });
+
+  it('moves the end it was pressed on to the port it is dropped on', () => {
+    const props = setup();
+    startWire(SCARLETT_CH2, ch2);
+    release(spareIn);
+    expect(props.onReconnectCable).toHaveBeenCalledWith('cbass', { n: 'nscarlet', p: 'in02' }, { n: 'nspeaker', p: 'in02' });
+    expect(props.onRemoveCable).not.toHaveBeenCalled();
+    expect(overlay()).toBeNull();
+  });
+
+  it('reports the port it grabbed: the output end for the output plug', () => {
+    const props = setup();
+    startWire(BASS_OUT, bassOut);
+    release(pin('ndrums', 'outl'));
+    expect(props.onReconnectCable).toHaveBeenCalledWith('cbass', { n: 'nbass', p: 'out1' }, { n: 'ndrums', p: 'outl' });
+  });
+
+  it('removes the cable when the end is let go on empty canvas', () => {
+    const props = setup();
+    startWire(SCARLETT_CH2, ch2);
+    release({ x: layout3.gutters[0].x + 4, y: layout3.height / 2 });
+    expect(props.onRemoveCable).toHaveBeenCalledWith('cbass');
+    expect(props.onReconnectCable).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when let go on a card away from a port, or away from the diagram', () => {
+    const props = setup();
+    const drums = layout3.nodes.find((n) => n.id === 'ndrums')!;
+    startWire(SCARLETT_CH2, ch2);
+    release({ x: drums.x + 40, y: drums.y + 10 });
+    startWire(SCARLETT_CH2, ch2);
+    release({ x: layout3.width + 300, y: 10 });
+    startWire(SCARLETT_CH2, ch2);
+    release({ x: 10, y: layout3.height + 300 });
+    expect(props.onReconnectCable).not.toHaveBeenCalled();
+    expect(props.onRemoveCable).not.toHaveBeenCalled();
+  });
+
+  it('draws the loose end, dims the cable, and shows a remove hint only over empty canvas', () => {
+    setup();
+    startWire(SCARLETT_CH2, ch2);
+    expect(overlay()!.querySelector('line')).not.toBeNull();
+    expect(document.querySelector('svg g[opacity="0.25"]')).not.toBeNull();
+    expect(overlay()).not.toHaveTextContent('Release to remove');
+    fireEvent.pointerMove(window, ptr(layout3.gutters[0].x + 4, layout3.height / 2));
+    expect(overlay()).toHaveTextContent('Release to remove the cable');
+    fireEvent.pointerMove(window, ptr(spareIn.x, spareIn.y));
+    expect(overlay()).not.toHaveTextContent('Release to remove');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(overlay()).toBeNull();
+    expect(document.querySelector('svg g[opacity="0.25"]')).toBeNull();
+  });
+
+  it('highlights the ports it can be dropped on, counting its own as free', () => {
+    setup();
+    startWire(SCARLETT_CH2, ch2);
+    expect(rowOf(/HeadRush FRFR-108 MKII: Input 2/).className).toContain('ring-sky-400'); // free input
+    expect(rowOf(/HeadRush FRFR-108 MKII: Input 1/).className).not.toContain('ring-sky-400'); // another cable's
+    expect(rowOf(SCARLETT_CH2).className).toContain('ring-sky-400'); // where it came from
+    expect(rowOf(/Electric Guitar: Output/).className).not.toContain('ring-sky-400'); // an output
+    expect(rowOf(BASS_OUT).className).toContain('ring-primary'); // the end that stays
+  });
+
+  it('Escape and a cancelled pointer drop nothing', () => {
+    const props = setup();
+    startWire(SCARLETT_CH2, ch2);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    release(spareIn);
+    startWire(SCARLETT_CH2, ch2);
+    fireEvent.pointerCancel(window, ptr(spareIn.x, spareIn.y));
+    release(spareIn);
+    expect(props.onReconnectCable).not.toHaveBeenCalled();
+    expect(props.onRemoveCable).not.toHaveBeenCalled();
+  });
+
+  it('is a click, not a drag, below the threshold: the port still gets its click', () => {
+    const props = setup();
+    fireEvent.pointerDown(plugOf(SCARLETT_CH2), ptr(ch2.x, ch2.y));
+    fireEvent.pointerUp(window, ptr(ch2.x, ch2.y, { buttons: 0 }));
+    fireEvent.click(rowOf(SCARLETT_CH2));
+    expect(props.onPortClick).toHaveBeenCalledTimes(1);
+    expect(props.onReconnectCable).not.toHaveBeenCalled();
+  });
+
+  it('does not treat the release click on the row as a port click after a drag', () => {
+    vi.useFakeTimers();
+    try {
+      const props = setup();
+      startWire(SCARLETT_CH2, ch2);
+      release(ch2); // back on its own port
+      fireEvent.click(rowOf(SCARLETT_CH2));
+      expect(props.onPortClick).not.toHaveBeenCalled();
+      act(() => {
+        vi.runAllTimers();
+      });
+      fireEvent.click(rowOf(SCARLETT_CH2));
+      expect(props.onPortClick).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('touch and pen can pick a plug up (it is a grip)', () => {
+    const props = setup();
+    for (const pointerType of ['touch', 'pen']) {
+      startWire(SCARLETT_CH2, ch2, { pointerType });
+      fireEvent.pointerUp(window, ptr(spareIn.x, spareIn.y, { pointerType, buttons: 0 }));
+    }
+    expect(props.onReconnectCable).toHaveBeenCalledTimes(2);
+  });
+
+  it('is cancelled when the cable disappears mid-drag', () => {
+    const { props, rerender } = setup();
+    startWire(SCARLETT_CH2, ch2);
+    expect(overlay()).not.toBeNull();
+    rerender(<RigCanvas {...props} diagram={{ ...JAM_STATION_DIAGRAM, cables: JAM_STATION_DIAGRAM.cables.filter((c) => c.id !== 'cbass') }} />);
+    expect(overlay()).toBeNull();
+    release(spareIn);
+    expect(props.onReconnectCable).not.toHaveBeenCalled();
+  });
+
+  it('lets a wire drag take over from a connection being started: the fixed plug is the origin', () => {
+    setup({ connectFrom: { n: 'ndrums', p: 'outl' } });
+    startWire(SCARLETT_CH2, ch2);
+    expect(rowOf(BASS_OUT).className).toContain('ring-primary'); // the cable's other end, not the half-made connection
+    expect(rowOf(/Alesis Nitro Max: Out L/).className).not.toContain('ring-primary');
+    const line = overlay()!.querySelector('line')!;
+    expect(Number(line.getAttribute('x1'))).toBeCloseTo(bassOut.x);
+    expect(Number(line.getAttribute('y1'))).toBeCloseTo(bassOut.y);
+  });
+
+  describe('removing is deliberate', () => {
+    const inGutter = { x: layout3.gutters[0].x + 4, y: layout3.height / 2 };
+
+    it('does not remove when let go close to where it was picked up', () => {
+      const props = setup();
+      startWire(SCARLETT_CH2, ch2);
+      release({ x: ch2.x - 20, y: ch2.y }); // empty gutter, but only 20px from the pin
+      expect(props.onRemoveCable).not.toHaveBeenCalled();
+      expect(props.onReconnectCable).not.toHaveBeenCalled();
+    });
+
+    it('does not remove when the release is outside the box the diagram scrolls in', () => {
+      visibleBox = { width: 100, height: 100 };
+      const props = setup();
+      startWire(SCARLETT_CH2, ch2);
+      release(inGutter);
+      expect(props.onRemoveCable).not.toHaveBeenCalled();
+    });
+
+    it('does not remove in the margin around the diagram, only on it', () => {
+      const props = setup();
+      startWire(SCARLETT_CH2, ch2);
+      release({ x: -20, y: 10 });
+      startWire(SCARLETT_CH2, ch2);
+      release({ x: 10, y: layout3.height + 20 });
+      expect(props.onRemoveCable).not.toHaveBeenCalled();
+      startWire(SCARLETT_CH2, ch2);
+      release(inGutter);
+      expect(props.onRemoveCable).toHaveBeenCalledTimes(1);
+    });
+
+    it('a release anywhere on the plug itself counts as the port, not as removal', () => {
+      const props = setup();
+      startWire(SCARLETT_CH2, ch2);
+      release({ x: ch2.x - GEO.plugHit / 2, y: ch2.y });
+      expect(props.onRemoveCable).not.toHaveBeenCalled();
+      expect(props.onReconnectCable).toHaveBeenCalledWith('cbass', { n: 'nscarlet', p: 'in02' }, { n: 'nscarlet', p: 'in02' });
+    });
+  });
+
+  it('is cancelled when wire dragging gets switched off mid-drag', () => {
+    const { props, rerender } = setup();
+    startWire(SCARLETT_CH2, ch2);
+    expect(overlay()).not.toBeNull();
+    rerender(<RigCanvas {...props} onRemoveCable={undefined} />);
+    expect(overlay()).toBeNull();
+    expect(document.body.style.cursor).toBe('');
+  });
+
+  it('keeps a card drag and a wire drag apart', () => {
+    const props = setup();
+    startWire(SCARLETT_CH2, ch2);
+    expect(screen.queryByText('Stage 4')).toBeNull(); // no spare column for a wire
+    release(spareIn);
+    expect(props.onMoveNode).not.toHaveBeenCalled();
+  });
+});
+

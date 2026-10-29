@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
@@ -148,6 +148,206 @@ describe('RigPage content', () => {
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     vi.restoreAllMocks();
+  });
+
+  describe('dragging a cable end', () => {
+    const layout = computeRigLayout(resolveNodes(JAM_STATION_DIAGRAM, JAM_STATION_GEAR), JAM_STATION_DIAGRAM.cables);
+    const pin = (nodeId: string, portId: string) => layout.ports.find((p) => p.nodeId === nodeId && p.portId === portId)!;
+    const scheduleItems = () => within(screen.getByRole('region', { name: 'Cable schedule' })).getAllByRole('listitem');
+    const dragPlug = (name: RegExp, from: { x: number; y: number }, to: { x: number; y: number }) => {
+      const plug = screen.getByRole('button', { name }).nextElementSibling!;
+      fireEvent.pointerDown(plug, ptr(from.x, from.y));
+      fireEvent.pointerMove(window, ptr(from.x + 30, from.y + 30));
+      fireEvent.pointerMove(window, ptr(to.x, to.y));
+      fireEvent.pointerUp(window, ptr(to.x, to.y));
+    };
+    const CH2 = /Focusrite Scarlett 18i8: Ch 2/;
+
+    beforeEach(() => {
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, x: 0, y: 0, width: layout.width, height: layout.height, right: layout.width, bottom: layout.height, toJSON: () => ({}) } as DOMRect);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    it('moves the end to a free port as an unsaved edit, and the cable keeps its number', async () => {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      const before = scheduleItems()[1].textContent;
+      expect(before).toMatch(/Ch 2 · Bass/);
+      dragPlug(CH2, pin('nscarlet', 'in02'), pin('nspeaker', 'in02'));
+      expect(scheduleItems()).toHaveLength(5);
+      expect(scheduleItems()[1]).toHaveTextContent(/Electric Bass \(Output\) ➔ HeadRush FRFR-108 MKII \(Input 2 · Spare\)/);
+      expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+
+    it('removes the cable when the end is let go on empty canvas, and says so', async () => {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      dragPlug(CH2, pin('nscarlet', 'in02'), { x: layout.gutters[0].x + 4, y: layout.height / 2 });
+      expect(scheduleItems()).toHaveLength(4);
+      expect(screen.getByText(/Cable 2 was removed/)).toBeInTheDocument();
+      expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    });
+
+    it('puts a removed cable back with Undo, at its old number', async () => {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      const before = scheduleItems().map((i) => i.textContent);
+      dragPlug(CH2, pin('nscarlet', 'in02'), { x: layout.gutters[0].x + 4, y: layout.height / 2 });
+      expect(scheduleItems()).toHaveLength(4);
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+      expect(scheduleItems().map((i) => i.textContent)).toEqual(before);
+      expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/was removed/)).not.toBeInTheDocument();
+    });
+
+    it('offers Undo for a cable removed from the schedule too', async () => {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      fireEvent.click(screen.getByRole('button', { name: /^Cable 2:/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Remove cable/i }));
+      expect(scheduleItems()).toHaveLength(4);
+      expect(screen.getByText(/Cable 2 was removed/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+      expect(scheduleItems()).toHaveLength(5);
+    });
+
+    it('drops the Undo as soon as something else is reported', async () => {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      dragPlug(CH2, pin('nscarlet', 'in02'), { x: layout.gutters[0].x + 4, y: layout.height / 2 });
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+      // the diagram re-laid out without that cable, so take positions from the new layout
+      const without = { ...JAM_STATION_DIAGRAM, cables: JAM_STATION_DIAGRAM.cables.filter((c) => c.id !== 'cbass') };
+      const next = computeRigLayout(resolveNodes(without, JAM_STATION_GEAR), without.cables);
+      const at = (nodeId: string, portId: string) => next.ports.find((p) => p.nodeId === nodeId && p.portId === portId)!;
+      dragPlug(/Focusrite Scarlett 18i8: Ch 1/, at('nscarlet', 'in01'), at('nscarlet', 'usb1')); // a port that has its own cable
+      expect(screen.getByText(/one cable/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    });
+
+    const OFF = () => ({ x: layout.gutters[0].x + 4, y: layout.height / 2 });
+
+    it('forgets the removal, and its Undo, when you switch to another diagram and back', async () => {
+      const garage: RigDiagram = { id: 'garage01', name: 'Garage', nodes: [], cables: [] };
+      load(pageData(mine({ gear: JAM_STATION_GEAR, diagrams: [JAM_STATION_DIAGRAM, garage] })));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      dragPlug(CH2, pin('nscarlet', 'in02'), OFF());
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('Diagram'), { target: { value: `${ME}:garage01` } });
+      expect(await screen.findByText(/This diagram is empty/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('Diagram'), { target: { value: `${ME}:jamstation` } });
+      expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/was removed/)).not.toBeInTheDocument();
+      // the cable stays removed: switching away only forgets how to bring it back
+      expect(scheduleItems()).toHaveLength(4);
+    });
+
+    it('only the latest removal can be undone', async () => {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      dragPlug(CH2, pin('nscarlet', 'in02'), OFF()); // cable 2 (the bass)
+      // positions change once that cable is gone
+      const without = { ...JAM_STATION_DIAGRAM, cables: JAM_STATION_DIAGRAM.cables.filter((c) => c.id !== 'cbass') };
+      const next = computeRigLayout(resolveNodes(without, JAM_STATION_GEAR), without.cables);
+      const at = (nodeId: string, portId: string) => next.ports.find((p) => p.nodeId === nodeId && p.portId === portId)!;
+      dragPlug(/Focusrite Scarlett 18i8: Ch 1/, at('nscarlet', 'in01'), { x: next.gutters[0].x + 4, y: next.height / 2 }); // the guitar's
+      expect(scheduleItems()).toHaveLength(3);
+      expect(screen.getByText(/Cable 1 was removed/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+      expect(scheduleItems()).toHaveLength(4);
+      expect(scheduleItems()[0]).toHaveTextContent(/Electric Guitar \(Output\)/);
+      expect(scheduleItems().some((i) => /Electric Bass/.test(i.textContent ?? ''))).toBe(false);
+      expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    });
+
+    it('keeps the Undo after a save, and undoing then is a new unsaved edit', async () => {
+      const without: RigDraft = { gear: JAM_STATION_GEAR, diagrams: [{ ...JAM_STATION_DIAGRAM, cables: JAM_STATION_DIAGRAM.cables.filter((c) => c.id !== 'cbass') }] };
+      load(pageData(mine(JAM, { rev: 3 })));
+      vi.mocked(saveMyRig).mockImplementation(async (_bandId, saved) => rowOf(ME, saved, { rev: 4 }));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      dragPlug(CH2, pin('nscarlet', 'in02'), OFF());
+      load(pageData(mine(without, { rev: 4 }))); // what the background refresh after the save reads back
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument());
+      expect(vi.mocked(saveMyRig).mock.calls[0][1].diagrams[0].cables).toHaveLength(4);
+      await waitFor(() => expect(loadRigPage).toHaveBeenCalledTimes(2));
+      expect(scheduleItems()).toHaveLength(4);
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+      expect(scheduleItems()).toHaveLength(5);
+      expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+
+    it('selecting a cable and then dragging its end off clears the selection', async () => {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      fireEvent.click(screen.getByRole('button', { name: /^Cable 2:/ }));
+      expect(screen.getByRole('button', { name: 'Remove cable' })).toBeInTheDocument();
+      dragPlug(CH2, pin('nscarlet', 'in02'), OFF());
+      expect(screen.queryByRole('button', { name: 'Remove cable' })).not.toBeInTheDocument();
+      expect(scheduleItems()).toHaveLength(4);
+    });
+
+    it('a half-made connection is dropped when a cable end is removed', async () => {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      fireEvent.click(port(/HeadRush FRFR-108 MKII: Input 2/));
+      expect(screen.getByRole('status')).toHaveTextContent(/Connecting from/);
+      dragPlug(CH2, pin('nscarlet', 'in02'), OFF());
+      expect(screen.queryByText(/Connecting from/)).not.toBeInTheDocument();
+      expect(scheduleItems()).toHaveLength(4);
+    });
+
+    it('a half-made connection is dropped when a cable end is moved', async () => {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      fireEvent.click(port(/HeadRush FRFR-108 MKII: Input 2/)); // the only free port in the example
+      expect(screen.getByRole('status')).toHaveTextContent(/Connecting from/);
+      dragPlug(CH2, pin('nscarlet', 'in02'), pin('nspeaker', 'in02'));
+      expect(screen.queryByText(/Connecting from/)).not.toBeInTheDocument();
+      expect(scheduleItems()[1]).toHaveTextContent(/Electric Bass \(Output\) ➔ HeadRush FRFR-108 MKII \(Input 2 · Spare\)/);
+    });
+
+    it('refuses a port that already has a cable and explains why, changing nothing', async () => {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      dragPlug(CH2, pin('nscarlet', 'in02'), pin('nscarlet', 'in01'));
+      expect(scheduleItems()).toHaveLength(5);
+      expect(screen.getByText(/Each port takes one cable/)).toBeInTheDocument();
+      expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+    });
+
+    it('does nothing when the end goes back on its own port', async () => {
+      load(pageData(mine(JAM)));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      dragPlug(CH2, pin('nscarlet', 'in02'), pin('nscarlet', 'in02'));
+      expect(scheduleItems()).toHaveLength(5);
+      expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+    });
+
+    it('cannot be dragged on someone else’s diagram', async () => {
+      load(pageData({ [BOB]: { status: 'ok', row: rowOf(BOB, JAM) } }));
+      renderPage();
+      await screen.findByRole('group', { name: 'Rig diagram: Jam Station' });
+      expect(document.querySelector('[title^="Drag to move this end"]')).toBeNull();
+    });
   });
 
   it('adds new gear right after the selected card instead of at the end', async () => {

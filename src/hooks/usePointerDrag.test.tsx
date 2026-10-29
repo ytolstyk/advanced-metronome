@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, renderHook } from '@testing-library/react';
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
-import { DRAG_GRIP_ATTRIBUTE, useCardDrag } from './useCardDrag';
+import { DRAG_GRIP_ATTRIBUTE, usePointerDrag } from './usePointerDrag';
 
 /** The stage sits at (100, 200) on screen, so a mix-up between screen and stage coordinates shows. */
 const ORIGIN = { x: 100, y: 200 };
-const NODE = { id: 'node-a', x: 40, y: 60 };
+const NODE = { payload: 'node-a', x: 40, y: 60 };
 
 function makeStage(): RefObject<HTMLElement | null> {
   const el = document.createElement('div');
@@ -24,8 +24,8 @@ function down(x: number, y: number, extra: Record<string, unknown> = {}, target:
 }
 
 function setup(stage: RefObject<HTMLElement | null> = makeStage()) {
-  const onDrop = vi.fn<(nodeId: string, at: { x: number; y: number }) => void>();
-  const hook = renderHook((props: { onDrop: typeof onDrop }) => useCardDrag({ stageRef: stage, onDrop: props.onDrop }), {
+  const onDrop = vi.fn<(payload: string, at: { x: number; y: number }) => void>();
+  const hook = renderHook((props: { onDrop: typeof onDrop }) => usePointerDrag({ stageRef: stage, onDrop: props.onDrop }), {
     initialProps: { onDrop },
   });
   return { ...hook, onDrop, stage };
@@ -46,7 +46,7 @@ afterEach(() => {
   document.body.style.removeProperty('cursor');
 });
 
-describe('useCardDrag', () => {
+describe('usePointerDrag', () => {
   it('starts idle', () => {
     const h = setup();
     expect(h.result.current.drag).toBeNull();
@@ -69,7 +69,7 @@ describe('useCardDrag', () => {
       const h = setup();
       press(h, 50, 70); // 10px right of and 10px below the card's corner at (40, 60)
       move(90, 120);
-      expect(h.result.current.drag).toEqual({ nodeId: 'node-a', offsetX: 10, offsetY: 10 });
+      expect(h.result.current.drag).toEqual({ payload: 'node-a', offsetX: 10, offsetY: 10 });
       expect(document.body.style.cursor).toBe('grabbing');
     });
 

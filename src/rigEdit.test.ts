@@ -11,6 +11,11 @@ import {
   hasImpact,
   moveNode,
   placeNode,
+  reconnectCable,
+  restoreCable,
+  canConnect,
+  cableAtPort,
+  portKey,
   removeCable,
   removeDiagram,
   removeGear,
@@ -288,6 +293,111 @@ describe('placing nodes (drag and drop)', () => {
   it('treats a NaN index as the bottom of the column', () => {
     const [a, b, c] = colOrder(JAM, 0);
     expect(colOrder(placeNode(JAM, D, a, 0, NaN), 0)).toEqual([b, c, a]);
+  });
+});
+
+describe('reconnecting a cable end', () => {
+  const cableOf = (d: RigDraft, id: string) => diagramOf(d).cables.find((c) => c.id === id)!;
+  const SPARE = { n: 'nspeaker', p: 'in02' };
+  const BASS_OUT = { n: 'nbass', p: 'out1' };
+  const CH2 = { n: 'nscarlet', p: 'in02' };
+
+  it('moves the grabbed input end to a free port, keeping the cable id, label and place in the list', () => {
+    const labelled = setCableLabel(JAM, D, 'cbass', 'Bass lead');
+    const next = value(reconnectCable(labelled, D, 'cbass', CH2, SPARE));
+    expect(cableOf(next, 'cbass')).toEqual({ id: 'cbass', from: BASS_OUT, to: SPARE, label: 'Bass lead' });
+    expect(diagramOf(next).cables.map((c) => c.id)).toEqual(diagramOf(JAM).cables.map((c) => c.id));
+    expectParses(next);
+  });
+
+  it('moves the grabbed output end to another output port, keeping the output first', () => {
+    const freed = removeCable(JAM, D, 'cbass');
+    const next = value(reconnectCable(freed, D, 'cspeaker', { n: 'nscarlet', p: 'out1' }, BASS_OUT));
+    expect(cableOf(next, 'cspeaker')).toMatchObject({ from: BASS_OUT, to: { n: 'nspeaker', p: 'in01' } });
+    expectParses(next);
+  });
+
+  it('is a no-op (the same draft) when the end goes back where it was', () => {
+    expect(value(reconnectCable(JAM, D, 'cbass', CH2, CH2))).toBe(JAM);
+    expect(value(reconnectCable(JAM, D, 'cbass', BASS_OUT, BASS_OUT))).toBe(JAM);
+  });
+
+  it('refuses a port that already has another cable', () => {
+    expect(reason(reconnectCable(JAM, D, 'cbass', CH2, { n: 'nscarlet', p: 'in01' }))).toMatch(/one cable/);
+  });
+
+  it('refuses an end that would break the direction rules, or loop back on the same gear', () => {
+    expect(reason(reconnectCable(JAM, D, 'cbass', CH2, { n: 'ndrums', p: 'outl' }))).toBeTruthy(); // out to out
+    expect(reason(reconnectCable(JAM, D, 'cbass', CH2, { n: 'nbass', p: 'out1' }))).toMatch(/loop back/);
+  });
+
+  it('refuses a port that is gone, a cable that is gone, or a grabbed end that is not on the cable', () => {
+    expect(reason(reconnectCable(JAM, D, 'cbass', CH2, { n: 'nspeaker', p: 'nope' }))).toMatch(/no longer there/);
+    expect(reason(reconnectCable(JAM, D, 'gone', CH2, SPARE))).toMatch(/no longer exists/);
+    expect(reason(reconnectCable(JAM, D, 'cbass', { n: 'ndrums', p: 'outl' }, SPARE))).toMatch(/changed/);
+    expect(reason(reconnectCable(JAM, 'nope', 'cbass', CH2, SPARE))).toMatch(/no longer exists/);
+  });
+
+  it('treats plugging a USB cable back where it was as a no-op, whichever order it is stored in', () => {
+    expect(value(reconnectCable(JAM, D, 'cusb', { n: 'nlaptop', p: 'usb1' }, { n: 'nlaptop', p: 'usb1' }))).toBe(JAM);
+    expect(value(reconnectCable(JAM, D, 'cusb', { n: 'nscarlet', p: 'usb1' }, { n: 'nscarlet', p: 'usb1' }))).toBe(JAM);
+  });
+});
+
+describe('port helpers', () => {
+  const CH2 = { n: 'nscarlet', p: 'in02' };
+  const SPARE = { n: 'nspeaker', p: 'in02' };
+
+  it('portKey is the key usedPorts uses, and usedPorts can leave one cable out', () => {
+    const used = usedPorts(diagramOf(JAM));
+    expect(used.has(portKey(CH2))).toBe(true);
+    expect(used.has(portKey(SPARE))).toBe(false);
+    expect(usedPorts(diagramOf(JAM), 'cbass').has(portKey(CH2))).toBe(false);
+    expect(usedPorts(diagramOf(JAM), 'cbass').has(portKey({ n: 'nscarlet', p: 'in01' }))).toBe(true);
+  });
+
+  it('cableAtPort finds the cable on either end of a port, or none', () => {
+    expect(cableAtPort(diagramOf(JAM), CH2)?.id).toBe('cbass');
+    expect(cableAtPort(diagramOf(JAM), { n: 'nbass', p: 'out1' })?.id).toBe('cbass');
+    expect(cableAtPort(diagramOf(JAM), SPARE)).toBeUndefined();
+  });
+
+  it('canConnect answers what connecting, reconnecting and highlighting share', () => {
+    const d = diagramOf(JAM);
+    const bassOut = { n: 'nbass', p: 'out1' };
+    expect(canConnect(d, JAM.gear, bassOut, SPARE)).toBe(false); // the bass output already has its cable
+    expect(canConnect(d, JAM.gear, bassOut, SPARE, 'cbass')).toBe(true); // ...unless that cable is the one moving
+    expect(canConnect(d, JAM.gear, { n: 'nlaptop', p: 'usb1' }, { n: 'nscarlet', p: 'usb1' }, 'cusb')).toBe(true);
+    expect(canConnect(d, JAM.gear, bassOut, { n: 'nscarlet', p: 'in01' })).toBe(false); // taken
+    expect(canConnect(d, JAM.gear, bassOut, CH2)).toBe(false); // taken by its own cable...
+    expect(canConnect(d, JAM.gear, bassOut, CH2, 'cbass')).toBe(true); // ...which is free while it moves
+    expect(canConnect(d, JAM.gear, bassOut, { n: 'ndrums', p: 'outl' })).toBe(false); // out to out
+    expect(canConnect(d, JAM.gear, bassOut, bassOut)).toBe(false); // same gear
+  });
+});
+
+describe('restoring a removed cable', () => {
+  const cable = diagramOf(JAM).cables[1];
+
+  it('puts it back at its old place with its label', () => {
+    const labelled = setCableLabel(JAM, D, cable.id, 'Bass lead');
+    const original = diagramOf(labelled).cables[1];
+    const removed = removeCable(labelled, D, cable.id);
+    const back = value(restoreCable(removed, D, original, 1));
+    expect(diagramOf(back)).toEqual(diagramOf(labelled));
+    expectParses(back);
+  });
+
+  it('is a no-op when the cable is already there', () => {
+    expect(value(restoreCable(JAM, D, cable, 1))).toBe(JAM);
+  });
+
+  it('clamps the place, and refuses when its ports have been taken or the diagram is gone', () => {
+    const removed = removeCable(JAM, D, cable.id);
+    expect(diagramOf(value(restoreCable(removed, D, cable, 99))).cables.at(-1)!.id).toBe(cable.id);
+    const taken = value(addCable(removed, D, { n: 'nbass', p: 'out1' }, { n: 'nspeaker', p: 'in02' }));
+    expect(reason(restoreCable(taken, D, cable, 1))).toMatch(/one cable/);
+    expect(reason(restoreCable(removed, 'nope', cable, 1))).toMatch(/no longer exists/);
   });
 });
 

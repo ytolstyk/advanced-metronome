@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { columnsWhileDragging, dropMarker, dropSlotAt, isOverStage } from './rigDrag';
+import { columnsWhileDragging, dropMarker, dropSlotAt, dropTargetAt, isOverStage, isWithinStage, releaseRemoves } from './rigDrag';
 import { GEO, computeRigLayout } from './rigRouting';
 import { resolveNodes } from './rigData';
 import { JAM_STATION_DIAGRAM, JAM_STATION_GEAR } from './rigPresets';
@@ -110,5 +110,62 @@ describe('columnsWhileDragging', () => {
     expect(columnsWhileDragging(resolved)).toBe(4);
     expect(computeRigLayout(resolved, JAM_STATION_DIAGRAM.cables, columnsWhileDragging(resolved)).cols).toBe(4);
     expect(computeRigLayout(resolved, JAM_STATION_DIAGRAM.cables, columnsWhileDragging([{ col: 3 }])).cols).toBe(4);
+  });
+});
+
+describe('dropTargetAt', () => {
+  const [guitar] = inCol(0);
+  const rowY = (i: number) => guitar.y + GEO.headerH + i * GEO.rowH + GEO.rowH / 2;
+
+  it('finds the port row under the pointer', () => {
+    expect(dropTargetAt(layout, guitar.x + 40, rowY(0))).toEqual({ kind: 'port', ref: { n: guitar.id, p: guitar.gear.ports[0].id } });
+  });
+
+  it('counts a pin, which sits half outside the card, as the port', () => {
+    expect(dropTargetAt(layout, guitar.x + GEO.cardW + 8, rowY(0))).toMatchObject({ kind: 'port' });
+    expect(dropTargetAt(layout, guitar.x - 8, rowY(0))).toMatchObject({ kind: 'port' });
+  });
+
+  it('is the card for its header, and for a row that does not exist', () => {
+    expect(dropTargetAt(layout, guitar.x + 40, guitar.y + 10)).toEqual({ kind: 'card' });
+    expect(dropTargetAt(layout, guitar.x + 40, guitar.y + guitar.h - 1 + 0)).toMatchObject({ kind: 'port' });
+  });
+
+  it('is empty in a gutter, above or below the cards, and beside the pin reach', () => {
+    expect(dropTargetAt(layout, guitar.x + GEO.cardW + 40, rowY(0))).toEqual({ kind: 'empty' });
+    expect(dropTargetAt(layout, guitar.x + 40, guitar.y - 10)).toEqual({ kind: 'empty' });
+    expect(dropTargetAt(layout, guitar.x + 40, layout.height + 10)).toEqual({ kind: 'empty' });
+  });
+
+  it('resolves every port of every card to itself', () => {
+    for (const p of layout.ports) {
+      expect(dropTargetAt(layout, p.x, p.y)).toEqual({ kind: 'port', ref: { n: p.nodeId, p: p.portId } });
+    }
+  });
+});
+
+describe('removing a cable by letting its end go', () => {
+  it('isWithinStage has no margin', () => {
+    expect(isWithinStage(layout, 0, 0)).toBe(true);
+    expect(isWithinStage(layout, layout.width, layout.height)).toBe(true);
+    expect(isWithinStage(layout, -1, 10)).toBe(false);
+    expect(isWithinStage(layout, 10, layout.height + 1)).toBe(false);
+  });
+
+  it('removes only on empty canvas on the diagram', () => {
+    const [guitar] = inCol(0);
+    expect(releaseRemoves(layout, layout.gutters[0].x + 2, layout.height / 2)).toBe(true);
+    expect(releaseRemoves(layout, guitar.x + 40, guitar.y + 10)).toBe(false); // a card
+    expect(releaseRemoves(layout, guitar.x + 40, guitar.y + GEO.headerH + 10)).toBe(false); // a port
+    expect(releaseRemoves(layout, -20, 10)).toBe(false); // in the margin around the diagram
+    expect(releaseRemoves(layout, 10, layout.height + 20)).toBe(false);
+  });
+
+  it('counts the whole grab area of a pin as the port', () => {
+    const [guitar] = inCol(0);
+    const pin = layout.ports.find((p) => p.nodeId === guitar.id)!;
+    const reach = GEO.plugHit / 2;
+    expect(dropTargetAt(layout, pin.x + reach, pin.y)).toMatchObject({ kind: 'port' });
+    expect(dropTargetAt(layout, pin.x - reach, pin.y)).toMatchObject({ kind: 'port' });
   });
 });
