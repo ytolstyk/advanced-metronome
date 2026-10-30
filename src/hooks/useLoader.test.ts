@@ -19,6 +19,18 @@ describe('useLoader', () => {
     await waitFor(() => expect(result.current.state).toEqual({ status: 'error', message: 'boom' }));
   });
 
+  it('quietly retries a momentary "No current user" instead of showing it', async () => {
+    let n = 0;
+    const load = vi.fn(async () => {
+      if (++n === 1) throw Object.assign(new Error('No current user'), { name: 'NoSignedUser' });
+      return 'ok';
+    });
+    const { result } = renderHook(() => useLoader(load));
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'ready', data: 'ok' }));
+    expect(result.current.refreshError).toBeNull();
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the last good data when a refresh fails, and says so', async () => {
     let n = 0;
     const load = vi.fn(async () => {

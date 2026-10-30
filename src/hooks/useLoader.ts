@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { errorMessage } from '../lib/errors';
+import { retryTransientAuth } from '../lib/transientAuth';
 
 export type LoaderState<T> =
   | { status: 'loading' }
@@ -13,7 +14,7 @@ export const FOCUS_REFETCH_MS = 30_000;
  * Loads data on mount, again on tab focus (throttled, never while a load is in flight) and on
  * `reload()`. Keeps the last good data on screen while refreshing and when a refresh fails (the
  * failure is reported in `refreshError`; `focusRefetchMs` raises the refetch throttle for public pages); a failed *first* load is an error state, never an
- * empty-looking page. Mount it with a `key` per resource so state resets by remount.
+ * empty-looking page. A signed-in person's momentary "No current user" (token refresh race) is retried quietly first. Mount it with a `key` per resource so state resets by remount.
  */
 export function useLoader<T>(load: () => Promise<T>, { focusRefetchMs = FOCUS_REFETCH_MS }: { focusRefetchMs?: number } = {}) {
   const [state, setState] = useState<LoaderState<T>>({ status: 'loading' });
@@ -39,7 +40,7 @@ export function useLoader<T>(load: () => Promise<T>, { focusRefetchMs = FOCUS_RE
     lastStartedAt.current = Date.now();
     if (isRefresh) setRefreshing(true);
     try {
-      const data = await loadRef.current();
+      const data = await retryTransientAuth(() => loadRef.current());
       if (id !== requestId.current) return;
       setState({ status: 'ready', data });
       setRefreshError(null);
