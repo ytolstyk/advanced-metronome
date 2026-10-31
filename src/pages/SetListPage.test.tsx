@@ -954,18 +954,59 @@ describe('song click tracks', () => {
     withTrack();
     await screen.findByText('Song a');
     fireEvent.click(strip('Song a').getByRole('button', { name: /Download click track for Song a/ }));
-    await waitFor(() => expect(exportClickTrack).toHaveBeenCalledWith([piece()], 100, 'Song a-click.wav'));
+    await waitFor(() => expect(exportClickTrack).toHaveBeenCalledWith([piece()], 100, 'Song a-click.wav', 'wav', expect.any(AbortSignal)));
   });
 
-  it('Download refuses a track over five minutes and says what to do instead', async () => {
-    vi.mocked(getSongTrack).mockResolvedValue(okRead([piece({ repeats: 99, bpm: 60 })])); // 396 s
+  it('the MP3 button renders the track at 100% into an MP3 named after the song', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
     withTrack();
     await screen.findByText('Song a');
-    fireEvent.click(strip('Song a').getByRole('button', { name: /Download click track for Song a/ }));
-    expect(await screen.findByText(/Too long to download here/)).toBeInTheDocument();
-    expect(exportClickTrack).not.toHaveBeenCalled();
-    // and the button now stays disabled for that track
-    expect(strip('Song a').getByRole('button', { name: /Download click track for Song a/ })).toBeDisabled();
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download compressed click track \(MP3\) for Song a/ }));
+    await waitFor(() => expect(exportClickTrack).toHaveBeenCalledWith([piece()], 100, 'Song a-click.mp3', 'mp3', expect.any(AbortSignal)));
+    expect(exportClickTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed MP3 render shows its error instead of failing silently', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    vi.mocked(exportClickTrack).mockRejectedValueOnce(new Error('encoder failed to load'));
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download compressed click track \(MP3\) for Song a/ }));
+    expect(await screen.findByText('encoder failed to load')).toBeInTheDocument();
+  });
+
+  it('passes the page\'s abort signal to the export, and aborts it when the page goes away', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    let finish!: (err: unknown) => void;
+    vi.mocked(exportClickTrack).mockImplementationOnce(() => new Promise<void>((_, reject) => { finish = reject; }));
+    const view = withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download compressed click track \(MP3\) for Song a/ }));
+    await waitFor(() => expect(exportClickTrack).toHaveBeenCalledTimes(1));
+    const signal = vi.mocked(exportClickTrack).mock.calls[0]![4];
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal!.aborted).toBe(false);
+
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    view.unmount();
+    expect(signal!.aborted).toBe(true);
+    // the exporter rejects with the abort reason after unmount: nothing should blow up or warn about state updates
+    finish(signal!.reason);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
+  });
+
+  it('Download renders a long track in full: there is no length cap', async () => {
+    const long = piece({ repeats: 99, bpm: 60 }); // 396 s, over the old five-minute limit
+    vi.mocked(getSongTrack).mockResolvedValue(okRead([long]));
+    withTrack();
+    await screen.findByText('Song a');
+    const download = strip('Song a').getByRole('button', { name: /Download click track for Song a/ });
+    expect(download).toBeEnabled();
+    fireEvent.click(download);
+    await waitFor(() => expect(exportClickTrack).toHaveBeenCalledWith([long], 100, 'Song a-click.wav', 'wav', expect.any(AbortSignal)));
+    expect(screen.queryByText(/Too long to download/)).not.toBeInTheDocument();
   });
 
   it('shows a failed render instead of failing silently', async () => {
@@ -1138,15 +1179,13 @@ describe('song click tracks', () => {
     expect(getSongTrack).toHaveBeenCalledTimes(1);
   });
 
-  it('Download of a click-heavy track is refused too (each click is an audio node in the render)', async () => {
-    // 4/4 sixteenths x 99 repeats x 20 pieces = 7,920 clicks, well inside five minutes at 300 BPM
+  it('Download of a click-heavy track is not refused either', async () => {
     const pieces = Array.from({ length: 20 }, (_, i) => piece({ id: `p${i}`, subdivision: 'sixteenth', bpm: 300, repeats: 99 }));
     vi.mocked(getSongTrack).mockResolvedValue(okRead(pieces));
     withTrack();
     await screen.findByText('Song a');
     fireEvent.click(strip('Song a').getByRole('button', { name: /Download click track for Song a/ }));
-    expect(await screen.findByText(/Too long to download here/)).toBeInTheDocument();
-    expect(exportClickTrack).not.toHaveBeenCalled();
+    await waitFor(() => expect(exportClickTrack).toHaveBeenCalledWith(pieces, 100, 'Song a-click.wav', 'wav', expect.any(AbortSignal)));
   });
 
   it('stops the engine when the page goes away', async () => {

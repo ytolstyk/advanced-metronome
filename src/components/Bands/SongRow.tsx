@@ -19,10 +19,10 @@ export interface SongClickTrackControls {
   busy: boolean;
   /** Why the track can't be played (unreadable / newer app); Play, Download and Open are then disabled. */
   problem?: string;
-  /** Why Download alone is unavailable (track too long). */
-  downloadBlocked?: string;
   onPlay: () => void;
   onDownload: () => void;
+  /** The much smaller MP3 download. */
+  onDownloadCompressed: () => void;
   onOpen: () => void;
   onRemove: () => void;
 }
@@ -139,11 +139,20 @@ function SongClickTrackStrip({ songTitle, track }: { songTitle: string; track: S
           variant="ghost"
           size="sm"
           onClick={track.onDownload}
-          disabled={!usable || track.busy || !!track.downloadBlocked}
-          title={track.downloadBlocked}
+          disabled={!usable || track.busy}
           aria-label={`Download click track for ${songTitle}`}
         >
-          <Download size={14} className="mr-1" /> Download
+          <Download size={14} className="mr-1" /> WAV
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={track.onDownloadCompressed}
+          disabled={!usable || track.busy}
+          title="Much smaller file that plays everywhere. For practice: MP3 adds a short delay, so use the WAV to line it up with other audio"
+          aria-label={`Download compressed click track (MP3) for ${songTitle}`}
+        >
+          <Download size={14} className="mr-1" /> MP3
         </Button>
         <Button
           variant="ghost"
@@ -159,7 +168,6 @@ function SongClickTrackStrip({ songTitle, track }: { songTitle: string; track: S
         </Button>
       </div>
       {track.problem && <p className="mt-1 text-xs text-destructive">{track.problem}</p>}
-      {!track.problem && track.downloadBlocked && <p className="mt-1 text-xs text-muted-foreground">{track.downloadBlocked}</p>}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn } from '@/lib/utils';
 import { ClickTrackEngine, getBpmAtRepetition } from '@/audio/ClickTrackEngine';
 import type { TrackPiece, SubdivisionLabel, LoopRampConfig } from '@/audio/ClickTrackEngine';
+import type { ClickExportFormat } from '@/audio/clickExportSinks';
 import { exportClickTrack } from '@/audio/exportClickTrack';
 import { saveCloudClickTrack, loadCloudClickTracks, deleteCloudClickTrack } from '@/api/clickTrackApi';
 import type { SegmentGroup, CloudClickTrack } from '@/api/clickTrackApi';
@@ -424,6 +425,13 @@ export function ClickTrackPage() {
   const [importIntroOpen, setImportIntroOpen] = useState(false);
   const [persistFailed, setPersistFailed] = useState(false);
   const [exportFailed, setExportFailed] = useState(false);
+  /** Cancels a running export when the page is left, so it doesn't download afterwards. */
+  const exportAbort = useRef<AbortController | null>(null);
+  useEffect(() => {
+    exportAbort.current = new AbortController();
+    const controller = exportAbort.current;
+    return () => controller.abort();
+  }, []);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [showDrumExportConfirm, setShowDrumExportConfirm] = useState(false);
   const [drumImportBanner, setDrumImportBanner] = useState<boolean>(() => {
@@ -954,15 +962,17 @@ export function ClickTrackPage() {
   }
 
   // ── Export ─────────────────────────────────────────────────────────────
-  async function doExport() {
+  async function doExport(format: ClickExportFormat = 'wav') {
+    exportAbort.current ??= new AbortController();
+    const { signal } = exportAbort.current;
     setExporting(true);
     setExportFailed(false);
     try {
-      await exportClickTrack(pieces, speedPercent);
+      await exportClickTrack(pieces, speedPercent, undefined, format, signal);
     } catch {
-      setExportFailed(true); // typically the browser running out of memory for a very long track
+      if (!signal.aborted) setExportFailed(true); // typically the browser running out of memory for a very long track
     } finally {
-      setExporting(false);
+      if (!signal.aborted) setExporting(false);
     }
   }
 
@@ -1082,11 +1092,20 @@ export function ClickTrackPage() {
           </Button>
           <Button
             size="sm" variant="outline"
-            onClick={doExport}
+            onClick={() => void doExport()}
             disabled={pieces.length === 0 || isPlaying || exporting}
             className="gap-1 text-xs"
           >
             <Download size={13} /> {exporting ? 'Exporting…' : 'Download WAV'}
+          </Button>
+          <Button
+            size="sm" variant="outline"
+            onClick={() => void doExport('mp3')}
+            disabled={pieces.length === 0 || isPlaying || exporting}
+            title="Much smaller file that plays everywhere. For practice: MP3 adds a short delay, so use the WAV to line it up with other audio"
+            className="gap-1 text-xs"
+          >
+            <Download size={13} /> {exporting ? 'Exporting…' : 'Download MP3'}
           </Button>
           <Button
             size="sm" variant="outline"
@@ -1133,7 +1152,7 @@ export function ClickTrackPage() {
       )}
       {exportFailed && (
         <div className="ct-warning-banner" role="alert">
-          Couldn&apos;t render the WAV file. The track may be too long for this browser to render; try a shorter or faster section.
+          Couldn&apos;t create the audio file. The track may be too long for this browser to render, or the MP3 encoder couldn&apos;t load; try WAV, or a shorter or faster section.
         </div>
       )}
       {shareTooLargeFor === pieces && <ShareTooLargeNotice />}

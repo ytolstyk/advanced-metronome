@@ -29,7 +29,7 @@ const MAX_TEMPO_CHANGES_PER_BAR = 500
 export const MAX_PLAYED_BARS = 2000
 /** Wall-clock budget for expanding the song; a typical song takes well under 300 ms. */
 export const DEFAULT_BUDGET_MS = 3000
-/** The longest click track we build: WAV export renders it in memory (~10 MB per minute of stereo float audio). */
+/** The longest click track we build: export renders it in short slices and holds the finished file in memory (about 2.65 MB per minute as mono WAV). */
 export const MAX_SECONDS = 1800
 export const MAX_PIECES = 400
 /** Roughly where a share link stops fitting (~390 URL characters per imported segment against an 8000 limit). */

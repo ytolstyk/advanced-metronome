@@ -147,9 +147,9 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
       playing: tracks.isPlaying(song.id),
       busy: tracks.busy,
       problem: tracks.problemFor(song),
-      downloadBlocked: tracks.downloadBlocked(song),
       onPlay: () => void tracks.play(song),
       onDownload: () => void tracks.download(song),
+      onDownloadCompressed: () => void tracks.download(song, 'mp3'),
       onOpen: () => void tracks.open(song),
       onRemove: () => setRemovingTrack(song),
     };

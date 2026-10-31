@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@aws-amplify/ui-react": "^6.15.7",
+    "@breezystack/lamejs": "1.2.7",
     "@coderline/alphatab": "^1.8.2",
     "@google/generative-ai": "^0.24.1",
     "@radix-ui/react-dialog": "^1.1.15",

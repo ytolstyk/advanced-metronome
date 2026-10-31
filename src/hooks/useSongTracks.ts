@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearSongTrack, getSongTrack, type SongTrackRead } from '../api/songTracksApi';
 import { ClickTrackEngine } from '../audio/ClickTrackEngine';
+import { CLICK_EXPORT_EXTENSION, type ClickExportFormat } from '../audio/clickExportSinks';
 import { exportClickTrack } from '../audio/exportClickTrack';
-import { measureTrack } from '../audio/clickMath';
-import { BAND_TRACK_FORMAT, BAND_TRACK_HANDOFF_KEY, BAND_TRACK_LIMITS, serializeBandTrackHandoff } from '../clickTrackBand';
+import { BAND_TRACK_FORMAT, BAND_TRACK_HANDOFF_KEY, serializeBandTrackHandoff } from '../clickTrackBand';
 import type { SetListView, SongRecord, SongTrackSummary, ValidSong } from '../bandTypes';
 import { errorMessage } from '../lib/errors';
 import { sanitizeText } from '../utils/sanitizeText';
@@ -13,18 +13,11 @@ import { useOptimisticChoice } from './useOptimisticChoice';
 type OkRead = Extract<SongTrackRead, { status: 'ok' }>;
 
 const NEWER_FORMAT_PROBLEM = 'Made by a newer version of the app; update to use it.';
-const DOWNLOAD_TOO_LONG = 'Too long to download here; use Open, then Download in the editor.';
 
-/** What we know about a fetched track without keeping its pieces: enough to gate Download. */
-type Measured = { seconds: number; clicks: number };
-
-const tooBigToDownload = ({ seconds, clicks }: Measured): boolean =>
-  seconds > BAND_TRACK_LIMITS.downloadMaxSeconds || clicks > BAND_TRACK_LIMITS.downloadMaxClicks;
-
-/** A WAV file name from a song title (`[\w -]` only, at most 50 characters). */
-export function trackFileName(title: string): string {
+/** A download file name from a song title (`[\w -]` only, at most 50 characters). */
+export function trackFileName(title: string, format: ClickExportFormat = 'wav'): string {
   const base = sanitizeText(title.replace(/[^\p{L}\p{N}_ -]/gu, ''), 50).trim();
-  return `${base || 'click-track'}-click.wav`;
+  return `${base || 'click-track'}-click.${CLICK_EXPORT_EXTENSION[format]}`;
 }
 
 const identity = (song: Pick<SongRecord, 'id'>, shown: SongTrackSummary) => `${song.id}:${shown.owner}:${shown.stamp}`;
@@ -46,15 +39,18 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
   const [error, setError] = useState<string | null>(null);
   /** Why a shown track can't be used (unreadable payload), keyed by song + author + row stamp so a new save clears it. */
   const [problems, setProblems] = useState<Record<string, string>>({});
-  /** Size of tracks we have fetched, so Download can be disabled for long or click-heavy ones. */
-  const [measures, setMeasures] = useState<Record<string, Measured>>({});
   /** Fetched tracks by song + author + row stamp: a new save changes the stamp, so a stale entry is simply never asked for. */
   const payloads = useRef(new Map<string, OkRead>());
 
+  /** Cancels a running export when the page goes away, so it doesn't download after the person has left. */
+  const exportAbort = useRef<AbortController | null>(null);
+
   useEffect(() => {
     mounted.current = true;
+    exportAbort.current = new AbortController();
     return () => {
       mounted.current = false;
+      exportAbort.current?.abort();
       engineRef.current?.destroy();
       engineRef.current = null;
     };
@@ -85,12 +81,6 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
     return problems[identity(song, shown)];
   };
 
-  const downloadBlocked = (song: Pick<SongRecord, 'id'>): string | undefined => {
-    const shown = trackFor(song.id);
-    const measured = shown ? measures[identity(song, shown)] : undefined;
-    return measured && tooBigToDownload(measured) ? DOWNLOAD_TOO_LONG : undefined;
-  };
-
   /** Fetches the payload and turns every non-playable outcome into a message. Null = nothing to use. */
   async function fetchUsable(song: ValidSong, shown: SongTrackSummary): Promise<OkRead | null> {
     const cached = payloads.current.get(identity(song, shown));
@@ -100,9 +90,6 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
     switch (read.status) {
       case 'ok': {
         const key = identity(song, shown);
-        const measured = measureTrack(read.pieces);
-        // A stale read is a newer row than this key names: its size would be recorded under the wrong version.
-        if (!read.stale) setMeasures((prev) => (prev[key] ? prev : { ...prev, [key]: measured }));
         if (read.stale) void reload(); // someone saved since the page loaded: refresh quietly, use what we fetched
         else {
           // A stale read is for a newer row than this key names: don't cache it under it. Otherwise keep only
@@ -169,11 +156,9 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
     });
   };
 
-  const download = (song: ValidSong): Promise<void> =>
-    withTrack(song, 'Could not create the WAV', async ({ pieces }) => {
-      // The fetched length is already recorded, so the strip now explains why Download is unavailable.
-      if (tooBigToDownload(measureTrack(pieces))) return;
-      await exportClickTrack(pieces, 100, trackFileName(song.title));
+  const download = (song: ValidSong, format: ClickExportFormat = 'wav'): Promise<void> =>
+    withTrack(song, `Could not create the ${format.toUpperCase()}`, async ({ pieces }) => {
+      await exportClickTrack(pieces, 100, trackFileName(song.title, format), format, exportAbort.current?.signal);
     });
 
   const open = (song: ValidSong): Promise<void> =>
@@ -194,5 +179,5 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
     await choices.run(song.id, 'removed', () => clearSongTrack(song, hasOwnRow));
   };
 
-  return { trackFor, problemFor, downloadBlocked, isPlaying: (id: string) => playingId === id, busy: busyId !== null, play, download, open, remove, error };
+  return { trackFor, problemFor, isPlaying: (id: string) => playingId === id, busy: busyId !== null, play, download, open, remove, error };
 }

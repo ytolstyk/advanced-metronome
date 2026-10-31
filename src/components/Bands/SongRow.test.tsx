@@ -358,6 +358,7 @@ describe('SongRow click track strip', () => {
     busy: false,
     onPlay: vi.fn(),
     onDownload: vi.fn(),
+    onDownloadCompressed: vi.fn(),
     onOpen: vi.fn(),
     onRemove: vi.fn(),
     ...over,
@@ -380,16 +381,18 @@ describe('SongRow click track strip', () => {
     expect(screen.getByText('Click track · by Alice')).toBeInTheDocument();
   });
 
-  it('wires all four actions to their callbacks with song-specific labels', async () => {
+  it('wires all five actions to their callbacks with song-specific labels', async () => {
     const c = controls();
     setup({}, { clickTrack: c });
     const user = userEvent.setup();
     await user.click(btn(/^Play click track for Wonderwall$/));
     await user.click(btn(/^Download click track for Wonderwall$/));
+    await user.click(btn(/^Download compressed click track \(MP3\) for Wonderwall$/));
     await user.click(btn(/^Open click track for Wonderwall in the editor$/));
     await user.click(btn(/^Remove click track for Wonderwall$/));
     expect(c.onPlay).toHaveBeenCalledTimes(1);
     expect(c.onDownload).toHaveBeenCalledTimes(1);
+    expect(c.onDownloadCompressed).toHaveBeenCalledTimes(1);
     expect(c.onOpen).toHaveBeenCalledTimes(1);
     expect(c.onRemove).toHaveBeenCalledTimes(1);
   });
@@ -401,6 +404,7 @@ describe('SongRow click track strip', () => {
     expect(stop).toBeEnabled();
     expect(screen.queryByRole('button', { name: /^Play click track/ })).not.toBeInTheDocument();
     expect(btn(/^Download click track/)).toBeDisabled();
+    expect(btn(/^Download compressed click track/)).toBeDisabled();
     expect(btn(/^Open click track/)).toBeDisabled();
     expect(btn(/^Remove click track/)).toBeDisabled();
   });
@@ -409,6 +413,7 @@ describe('SongRow click track strip', () => {
     setup({}, { clickTrack: controls({ busy: true }) });
     expect(btn(/^Play click track/)).toBeDisabled();
     expect(btn(/^Download click track/)).toBeDisabled();
+    expect(btn(/^Download compressed click track/)).toBeDisabled();
     expect(btn(/^Open click track/)).toBeDisabled();
     expect(btn(/^Remove click track/)).toBeDisabled();
   });
@@ -417,30 +422,31 @@ describe('SongRow click track strip', () => {
     setup({}, { clickTrack: controls({ problem: 'Made by a newer version of the app.' }) });
     expect(btn(/^Play click track/)).toBeDisabled();
     expect(btn(/^Download click track/)).toBeDisabled();
+    expect(btn(/^Download compressed click track/)).toBeDisabled();
     expect(btn(/^Open click track/)).toBeDisabled();
     expect(btn(/^Remove click track/)).toBeEnabled();
     expect(screen.getByText('Made by a newer version of the app.')).toBeInTheDocument();
-  });
-
-  it('shows only the problem when both a problem and a download block are set', () => {
-    setup({}, { clickTrack: controls({ problem: 'Unreadable.', downloadBlocked: 'Too long to download.' }) });
-    expect(screen.getByText('Unreadable.')).toBeInTheDocument();
-    expect(screen.queryByText('Too long to download.')).not.toBeInTheDocument();
-  });
-
-  it('with downloadBlocked: disables only Download, titles it and shows the hint', () => {
-    setup({}, { clickTrack: controls({ downloadBlocked: 'Too long to download.' }) });
-    const dl = btn(/^Download click track/);
-    expect(dl).toBeDisabled();
-    expect(dl).toHaveAttribute('title', 'Too long to download.');
-    expect(btn(/^Play click track/)).toBeEnabled();
-    expect(btn(/^Open click track/)).toBeEnabled();
-    expect(screen.getByText('Too long to download.')).toBeInTheDocument();
   });
 
   it('has no hint text and no title when everything is fine', () => {
     setup({}, { clickTrack: controls() });
     expect(btn(/^Download click track/)).not.toHaveAttribute('title');
     expect(btn(/^Download click track/)).toBeEnabled();
+  });
+
+  it('labels the two downloads WAV and MP3, and hints that the MP3 is small but adds a delay', () => {
+    setup({}, { clickTrack: controls() });
+    expect(btn(/^Download click track/)).toHaveTextContent('WAV');
+    const mp3 = btn(/^Download compressed click track/);
+    expect(mp3).toHaveTextContent('MP3');
+    expect(mp3).toBeEnabled();
+    expect(mp3).toHaveAttribute('title', expect.stringMatching(/smaller file.*MP3 adds a short delay.*WAV/));
+  });
+
+  it('does not fire the MP3 callback when the button is disabled by a problem', async () => {
+    const c = controls({ problem: 'Made by a newer version of the app.' });
+    setup({}, { clickTrack: c });
+    await userEvent.setup().click(btn(/^Download compressed click track/));
+    expect(c.onDownloadCompressed).not.toHaveBeenCalled();
   });
 });

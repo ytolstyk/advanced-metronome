@@ -67,6 +67,37 @@ describe('PrivacyPolicyPage', () => {
     expect(item).toHaveTextContent(/saved click tracks \(not attached to a band\) stay private/);
   });
 
+  it('shows the October 31, 2026 last-updated date', () => {
+    render(<PrivacyPolicyPage />);
+    expect(screen.getByText('Last updated: October 31, 2026')).toBeInTheDocument();
+  });
+
+  it('says playing or downloading a click track as WAV or MP3 happens in the browser and is not uploaded', () => {
+    render(<PrivacyPolicyPage />);
+    const item = screen.getByText('Band click tracks:').closest('li')!;
+    expect(item).toHaveTextContent(/Playing a click track, or downloading it as a WAV or MP3 file, happens in your browser/);
+    expect(item).toHaveTextContent(/the audio is made on your device and is not uploaded/);
+  });
+
+  it('discloses that imported Guitar Pro and AlphaTex files stay local and only saved, published or attached content reaches the cloud', () => {
+    render(<PrivacyPolicyPage />);
+    const item = screen.getByText('Files you import (local only):').closest('li')!;
+    expect(item).toHaveTextContent(/Guitar Pro and AlphaTex files/);
+    expect(item).toHaveTextContent(/read in your browser and are not uploaded/);
+    expect(item).toHaveTextContent(/Only what you then choose to save, publish or attach to a band is stored in the cloud/);
+  });
+
+  it('lists open-source browser libraries under third-party services and points to the Terms for licences', () => {
+    render(<PrivacyPolicyPage />);
+    const item = screen.getByText(/Open-source libraries, such as the LAME MP3 encoder/).closest('li')!;
+    expect(item).toHaveTextContent(/alphaTab/);
+    expect(item).toHaveTextContent(/run in your browser and send nothing anywhere/);
+    expect(item).toHaveTextContent(/Their licences are listed in the Terms of Service/);
+    const heading = screen.getByRole('heading', { level: 2, name: 'Third-party services' });
+    const list = heading.nextElementSibling!;
+    expect(list).toContainElement(item);
+  });
+
   it('lists the availability preferences kept in local storage', () => {
     render(<PrivacyPolicyPage />);
     expect(screen.getByText(/including your availability page preferences and whether you have seen its notice/)).toBeInTheDocument();

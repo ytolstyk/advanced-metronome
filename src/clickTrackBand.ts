@@ -31,12 +31,8 @@ export const BAND_TRACK_LIMITS = {
   stepMeasuresMax: 99,
   /** Longest track that can be saved and played (the editor itself allows 30 minutes). */
   maxSeconds: 20 * 60,
-  /** Longest track the set list page will render to a WAV (a stereo 44.1 kHz buffer, about 106 MB at this length). */
-  downloadMaxSeconds: 5 * 60,
-  /** Clicks in the whole track. Play schedules lazily, so this only bounds parse work and live scheduling. */
+  /** Clicks in the whole track. Play schedules lazily and Download renders a minute at a time, so this bounds parse work and the number of render slices. */
   maxClicks: 30_000,
-  /** Most clicks the set list page will render to a WAV: each click is an oscillator and a gain in an offline graph. */
-  downloadMaxClicks: 6_000,
   /** A hand-off from the set list page to the editor is ignored once it is older than this. */
   handoffMaxAgeMs: 60_000,
 } as const;

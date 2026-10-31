@@ -10,7 +10,7 @@ import { loadBandView, loadMyBands } from '@/api/bandsApi';
 import { fetchSongTargets } from '@/api/setListsApi';
 import { saveSongTrack } from '@/api/songTracksApi';
 import { bandPath, setListPath } from '@/bandRoutes';
-import type { BandView, MyBandEntry } from '@/bandTypes';
+import { BAND_LIMITS, type BandView, type MyBandEntry } from '@/bandTypes';
 import type { SongTargets } from '@/bandViews';
 import { encodeBandTrack } from '@/clickTrackBand';
 import { errorMessage } from '@/lib/errors';
@@ -47,6 +47,15 @@ function useRemote<T>(key: string | null, load: () => Promise<T>): Remote<T> {
   return state.key === key ? state.remote : { status: 'loading' };
 }
 
+/** The id of the band's only set list, or null when there are several or some may have failed to load. */
+function soleSetListId(view: BandView): string | null {
+  const known = view.band.setListIds
+    .slice(0, BAND_LIMITS.maxSetLists)
+    .filter((id) => !view.band.archivedSetListIds.includes(id));
+  const [only] = view.setLists;
+  return known.length === 1 && view.setLists.length === 1 && only!.id === known[0] ? only!.id : null;
+}
+
 interface SaveToBandDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -56,9 +65,11 @@ interface SaveToBandDialogProps {
 
 /** Picks band -> set list -> song and attaches the current track to that song for the whole band. */
 export function SaveToBandDialog({ open, onOpenChange, pieces, groups }: SaveToBandDialogProps) {
-  const [bandId, setBandId] = useState<string | null>(null);
-  const [setListId, setSetListId] = useState<string | null>(null);
-  const [songId, setSongId] = useState<string | null>(null);
+  // What the person picked. The shown choice falls back to the only option when there is just one
+  // (`bandId` etc. below), so the common case of one band, set list and song needs no clicks.
+  const [pickedBandId, setPickedBandId] = useState<string | null>(null);
+  const [pickedSetListId, setPickedSetListId] = useState<string | null>(null);
+  const [pickedSongId, setPickedSongId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedTo, setSavedTo] = useState<{ bandId: string; setListId: string; title: string } | null>(null);
@@ -80,6 +91,9 @@ export function SaveToBandDialog({ open, onOpenChange, pieces, groups }: SaveToB
 
   const bands = useRemote(open ? `${epoch}:bands` : null, loadMyBands);
   const activeBands: MyBandEntry[] = bands.status === 'ready' ? bands.value.entries.filter((e) => e.status === 'active') : [];
+  // A band that failed to load might be the one meant, so only a complete list of one is filled in.
+  const bandId =
+    pickedBandId ?? (bands.status === 'ready' && bands.value.failedCount === 0 && activeBands.length === 1 ? activeBands[0]!.band.id : null);
 
   const bandView = useRemote<BandView | 'unavailable'>(bandId ? `${epoch}:${bandId}` : null, async () => {
     const result = await loadBandView(bandId!);
@@ -87,19 +101,26 @@ export function SaveToBandDialog({ open, onOpenChange, pieces, groups }: SaveToB
   });
   const view = bandView.status === 'ready' && bandView.value !== 'unavailable' ? bandView.value : null;
 
+  // `view.setLists` silently drops lists whose read failed or whose row is invalid, so one shown list is only
+  // "the only one" when the band's own (non-archived) ids agree.
+  const setListId = pickedSetListId ?? (view ? soleSetListId(view) : null);
+
   const targets = useRemote<SongTargets>(view && setListId ? `${epoch}:${setListId}` : null, () =>
     fetchSongTargets(view!, setListId!),
   );
   const songs = targets.status === 'ready' ? targets.value : null;
+  // Never fill in a song from a partial load: its "has a click track" marks may be missing, and Save would
+  // then replace another member's track without the warning.
+  const songId = pickedSongId ?? (songs && !songs.incomplete && songs.songs.length === 1 ? songs.songs[0]!.id : null);
   const song = songs?.songs.find((s) => s.id === songId) ?? null;
   const existing = song && songs ? songs.tracks.get(song.id) : undefined;
 
   const reset = () => {
     session.current += 1;
     setEpoch((n) => n + 1);
-    setBandId(null);
-    setSetListId(null);
-    setSongId(null);
+    setPickedBandId(null);
+    setPickedSetListId(null);
+    setPickedSongId(null);
     setSaving(false);
     setSaveError(null);
     setSavedTo(null);
@@ -166,9 +187,9 @@ export function SaveToBandDialog({ open, onOpenChange, pieces, groups }: SaveToB
                 <Select
                   value={bandId ?? ''}
                   onValueChange={(next) => {
-                    setBandId(next);
-                    setSetListId(null);
-                    setSongId(null);
+                    setPickedBandId(next);
+                    setPickedSetListId(null);
+                    setPickedSongId(null);
                   }}
                 >
                   <SelectTrigger id="save-band" aria-label="Band">
@@ -202,8 +223,8 @@ export function SaveToBandDialog({ open, onOpenChange, pieces, groups }: SaveToB
                   <Select
                     value={setListId ?? ''}
                     onValueChange={(next) => {
-                      setSetListId(next);
-                      setSongId(null);
+                      setPickedSetListId(next);
+                      setPickedSongId(null);
                     }}
                   >
                     <SelectTrigger id="save-setlist" aria-label="Set list">
@@ -233,7 +254,7 @@ export function SaveToBandDialog({ open, onOpenChange, pieces, groups }: SaveToB
                   </p>
                 )}
                 {songs && songs.songs.length > 0 && (
-                  <Select value={songId ?? ''} onValueChange={setSongId}>
+                  <Select value={songId ?? ''} onValueChange={setPickedSongId}>
                     <SelectTrigger id="save-song" aria-label="Song">
                       <SelectValue placeholder="Choose a song" />
                     </SelectTrigger>

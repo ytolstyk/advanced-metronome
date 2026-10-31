@@ -6,7 +6,7 @@
 
 ![Drumma Llama screenshot](public/screenshot.png)
 
-Drumma Llama is a browser-based drum machine, step sequencer, metronome, click track builder, guitar tab editor, guitar tuner, fretboard trainer, ear training tool, chord library, chord progression builder, arpeggio library, scale visualizer, CAGED system visualizer, interval trainer, practice session tracker, and music theory tool built with React 19, TypeScript, and the Web Audio API. No plugins, no dependencies on your patience — just beats.
+Drumma Llama is a browser-based drum machine, step sequencer, metronome, click track builder, guitar tab editor, guitar tuner, fretboard trainer, ear training tool, chord library, chord progression builder, arpeggio library, scale visualizer, CAGED system visualizer, interval trainer, practice session tracker, band tools (set lists, availability, gear and rigs), and music theory tool built with React 19, TypeScript, and the Web Audio API. No plugins, no dependencies on your patience — just beats.
 
 ---
 
@@ -201,8 +201,10 @@ Navigate to the **Click Track** tab to build and export tempo-change sequences.
 - **Subdivision options** — whole, half, quarter, eighth, sixteenth, quarter triplet, eighth triplet
 - **Color-coded segments** — 8-color palette for visual organization
 - **Drag-and-drop reordering** — rearrange segments on the fly
-- **WAV export** — render the full click track to a downloadable audio file
+- **WAV or MP3 export** — render the full click track to a downloadable file, however long it is. Files are mono at 22.05 kHz: about 53 MB as a WAV or about 5 MB as an MP3 for 20 minutes. The MP3 encoder adds a short delay, so use the WAV to line a click up with other audio
+- **Import tempo map** — build a track from a Guitar Pro (`.gp`) or AlphaTex file, with repeats and tempo changes expanded the way the file plays them. Read entirely in your browser
 - **Cloud save/load** — save and share click tracks (requires sign-in)
+- **Save to Band** — attach a click track to a song in a band's set list so every member can play, download or open it (requires sign-in; if you only have one band, set list and song, they are pre-selected)
 - **Send to Drum Machine** — convert a click track to drum machine measures
 
 ---
@@ -265,6 +267,22 @@ Navigate to the **Practice** tab to plan, time, and log your practice sessions.
 
 ---
 
+## Bands
+
+Navigate to the **Bands** tab to organise a band. Everything here is cloud-only and requires sign-in.
+
+- **Create or join** — start a band, or join one with an invite link or code (links expire after 1 to 7 days, the owner's choice)
+- **Set lists** — members suggest songs straight onto a set list and vote them up or down. Paste a Spotify, YouTube, Apple Music or SoundCloud link to fill in the title and artist
+- **Click tracks on songs** — attach a click track to a song; every member can play it, download it as a WAV or MP3, or open it in the click track editor
+- **Availability calendar** — mark the half hours you can practice (8 AM to 10 PM) and see who overlaps and the best windows
+- **Gear and rigs** — list your equipment (ports, specs) and draw wiring diagrams; everyone in the band can see them, only you can edit yours
+- **Public sharing** — the owner can share a set list through a link that works without signing in
+- **Moderation** — the owner can hide songs, remove or ban members, and delete the band
+
+Anyone who has a band's link can read more than the page shows; see the [Privacy Policy](https://drummallama.com/privacy) for exactly what is visible to whom.
+
+---
+
 ## Tab Editor
 
 Navigate to the **Tab Editor** tab to write and play back guitar tablature.
@@ -319,6 +337,8 @@ Navigate to the **Lessons** tab for structured guitar technique and theory lesso
 - **shadcn/ui** — Radix UI-based component primitives
 - **AWS Amplify** — authentication (sign-in/sign-up) for cloud features
 - **localStorage** — auto-saves your current loop, user presets, and lesson progress
+- **alphaTab** (MPL-2.0) — tab rendering, Guitar Pro import/export and score parsing
+- **lamejs** (`@breezystack/lamejs`, LGPL-3.0) — MP3 encoding for click track downloads, loaded on demand
 - **Cloud API** — save/load click tracks, fret memorizer scores, chord progressions, CAGED prefs, metronome prefs, practice sessions, published tabs, and interval trainer scores (authenticated users)
 
 ---
@@ -359,7 +379,9 @@ src/
 │   ├── drumSynths.ts        # Per-instrument synthesis functions
 │   ├── exportAudio.ts       # WAV export via OfflineAudioContext
 │   ├── ClickTrackEngine.ts  # Click track segment sequencer
-│   ├── exportClickTrack.ts  # Click track WAV export
+│   ├── exportClickTrack.ts  # Click track export: renders mono 22.05 kHz in short slices, WAV or MP3
+│   ├── clickExportSinks.ts  # WAV and MP3 (lamejs, lazy-loaded) writers for the export
+│   ├── wavEncoder.ts        # WAV header + 16-bit PCM helpers
 │   ├── pianoSynth.ts        # Piano synthesis
 │   ├── pianoPresets.ts      # Piano preset definitions
 │   └── pluckString.ts       # Plucked string sound for fret memorizer
@@ -423,6 +445,12 @@ src/
 ├── tabEditorTypes.ts    # TabTrack, Measure, Beat, TabNote, TabCursor, NoteModifiers, etc.
 └── tabEditorState.ts    # Tab editor reducer, localStorage persistence, overflow logic
 ```
+
+---
+
+## Open-source licences
+
+Drumma Llama uses open-source libraries under their own licences, including [alphaTab](https://github.com/CoderLine/alphaTab) (MPL-2.0) and the [LAME](https://lame.sourceforge.net/) MP3 encoder through [lamejs](https://github.com/zhuker/lamejs) (LGPL-3.0, used unmodified as a separate lazy-loaded chunk). The in-app credits are on the [Terms of Service](https://drummallama.com/terms) page; the rest are listed in `package.json`.
 
 ---
 

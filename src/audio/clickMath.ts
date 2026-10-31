@@ -51,7 +51,7 @@ export interface TimedPiece extends TempoPiece {
 
 /**
  * Playing time (seconds, at 100% speed) and the number of clicks `exportClickTrack` schedules for a
- * track. One definition for the exporter's gate and the band track limits, so they can't drift apart.
+ * track. One definition for the band track limits that mirrors the exporter, so they can't drift apart.
  */
 export function measureTrack(pieces: readonly TimedPiece[]): { seconds: number; clicks: number } {
   let seconds = 0;

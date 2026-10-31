@@ -2,7 +2,7 @@ import { LegalPage } from '@/components/LegalPage/LegalPage';
 
 export function TermsOfServicePage() {
   return (
-    <LegalPage title="Terms of Service" lastUpdated="October 12, 2026">
+    <LegalPage title="Terms of Service" lastUpdated="October 31, 2026">
       <p>
         By using Advanced Metronome (the &ldquo;Service&rdquo;) you agree to these Terms. If you do not
         agree, please do not use the Service.
@@ -24,13 +24,48 @@ export function TermsOfServicePage() {
       <p>
         You retain ownership of content you create. If you publish a tab, you grant us a non-exclusive
         license to host and display it to other users. You must have the right to share what you
-        publish and must not post unlawful, infringing, or abusive content. We may remove content at
-        our discretion.
+        publish and must not post unlawful, infringing, or abusive content. Only import or attach files
+        and songs you have the right to use. We may remove content at our discretion.
       </p>
 
       <h2>AI-generated output</h2>
       <p>
         AI features may produce inaccurate or incomplete results. Review them before relying on them.
+      </p>
+
+      <h2>Open-source software</h2>
+      <p>
+        The Service includes open-source software, used under its own licences:
+      </p>
+      <ul>
+        <li>
+          MP3 downloads use the{' '}
+          <a href="https://lame.sourceforge.net/" target="_blank" rel="noopener noreferrer">
+            LAME
+          </a>{' '}
+          MP3 encoder through lamejs (by Alex Zhukov;{' '}
+          <a href="https://github.com/zhuker/lamejs" target="_blank" rel="noopener noreferrer">
+            source
+          </a>
+          ), published for the web as <code>@breezystack/lamejs</code>, under the GNU Lesser General
+          Public License v3.0 (LGPL-3.0). We use it unmodified, as a separate file the app loads only
+          when you ask for an MP3.
+        </li>
+        <li>
+          Tab display, playback and Guitar Pro import use{' '}
+          <a href="https://github.com/CoderLine/alphaTab" target="_blank" rel="noopener noreferrer">
+            alphaTab
+          </a>
+          , under the Mozilla Public License 2.0 (MPL-2.0).
+        </li>
+      </ul>
+      <p>
+        The Service&rsquo;s own source code is on{' '}
+        <a href="https://github.com/ytolstyk/advanced-metronome" target="_blank" rel="noopener noreferrer">
+          GitHub
+        </a>
+        . Other libraries are used under their own licences, listed in the project&rsquo;s{' '}
+        <code>package.json</code>.
       </p>
 
       <h2>Availability and changes</h2>

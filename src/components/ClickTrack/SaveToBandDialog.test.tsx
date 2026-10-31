@@ -292,3 +292,228 @@ describe('SaveToBandDialog', () => {
     expect(loadMyBands).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('SaveToBandDialog pre-selection of a sole option', () => {
+  const soleBand = () =>
+    vi.mocked(loadMyBands).mockResolvedValue({ entries: [entry('band-1', 'The Band')], failedCount: 0, deadBandIds: [] });
+  const soleSong = () => vi.mocked(fetchSongTargets).mockResolvedValue(targets({ songs: [song('s1', 'Black Dog')] }));
+  const secondSetList = { id: 'sl-2', owner: 'sub-owner', bandId: 'band-1', name: 'Encore', archivedAt: null } as unknown as ValidSetList;
+
+  it('picks the only band, then its only set list, then its only song, and enables Save without any clicks', async () => {
+    soleBand();
+    soleSong();
+    const { user } = setup();
+
+    expect(await screen.findByRole('combobox', { name: 'Band' })).toHaveTextContent('The Band');
+    expect(await screen.findByRole('combobox', { name: 'Set list' })).toHaveTextContent('Main Set');
+    expect(await screen.findByRole('combobox', { name: 'Song' })).toHaveTextContent('Black Dog');
+    expect(loadBandView).toHaveBeenCalledWith('band-1');
+    expect(fetchSongTargets).toHaveBeenCalledWith(expect.objectContaining({ sub: ME }), 'sl-1');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saveSongTrack).toHaveBeenCalledTimes(1));
+    const [bandView, target, , , exists] = vi.mocked(saveSongTrack).mock.calls[0]!;
+    expect(bandView.band.id).toBe('band-1');
+    expect(target).toMatchObject({ id: 's1', title: 'Black Dog' });
+    expect(exists).toBe(false);
+    expect(await screen.findByText(/Saved to “Black Dog”/)).toBeInTheDocument();
+  });
+
+  it('warns about replacing a track when the pre-selected song already has one', async () => {
+    soleBand();
+    vi.mocked(fetchSongTargets).mockResolvedValue(
+      targets({ songs: [song('s1', 'Black Dog')], tracks: new Map([['s1', { owner: BOB, format: 1, bytes: 300, stamp: 's' }]]) }),
+    );
+    setup();
+    expect(await screen.findByRole('status')).toHaveTextContent('This replaces Bob’s click track');
+    expect(await screen.findByRole('button', { name: 'Replace' })).toBeEnabled();
+  });
+
+  it('does not pick a band when there are two', async () => {
+    setup(); // default fixture: two active bands
+    expect(await screen.findByRole('combobox', { name: 'Band' })).toHaveTextContent('Choose a band');
+    expect(loadBandView).not.toHaveBeenCalled();
+    expect(screen.queryByRole('combobox', { name: 'Set list' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('does not pick a set list when there are two, but still picks the band', async () => {
+    soleBand();
+    vi.mocked(loadBandView).mockResolvedValue({ status: 'ok', view: view({ setLists: [...setLists, secondSetList] }) });
+    setup();
+    expect(await screen.findByRole('combobox', { name: 'Band' })).toHaveTextContent('The Band');
+    expect(await screen.findByRole('combobox', { name: 'Set list' })).toHaveTextContent('Choose a set list');
+    expect(fetchSongTargets).not.toHaveBeenCalled();
+    expect(screen.queryByRole('combobox', { name: 'Song' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('does not pick a set list when the band lists two ids but only one loaded', async () => {
+    soleBand();
+    const bandRow = { ...band('band-1', 'The Band'), setListIds: ['sl-1', 'sl-2'] };
+    vi.mocked(loadBandView).mockResolvedValue({ status: 'ok', view: view({ band: bandRow }) }); // sl-2 failed to load
+    setup();
+    expect(await screen.findByRole('combobox', { name: 'Set list' })).toHaveTextContent('Choose a set list');
+    expect(fetchSongTargets).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('picks the only set list when the other one the band lists is archived', async () => {
+    soleBand();
+    const bandRow = { ...band('band-1', 'The Band'), setListIds: ['sl-1', 'sl-2'], archivedSetListIds: ['sl-2'] };
+    vi.mocked(loadBandView).mockResolvedValue({ status: 'ok', view: view({ band: bandRow }) });
+    setup();
+    expect(await screen.findByRole('combobox', { name: 'Set list' })).toHaveTextContent('Main Set');
+    await waitFor(() => expect(fetchSongTargets).toHaveBeenCalledWith(expect.anything(), 'sl-1'));
+  });
+
+  it('applies the sole-option fallback again below a band the person switches to', async () => {
+    const setListFor = (id: string, name: string, bandId: string) =>
+      ({ id, owner: 'sub-owner', bandId, name, archivedSetListIds: [], archivedAt: null }) as unknown as ValidSetList;
+    vi.mocked(loadBandView).mockImplementation(async (id: string) =>
+      id === 'band-2'
+        ? { status: 'ok', view: view({ band: { ...band('band-2', 'Other Band'), setListIds: ['sl-b'] }, setLists: [setListFor('sl-b', 'Other Set', 'band-2')] }) }
+        : { status: 'ok', view: view() },
+    );
+    vi.mocked(fetchSongTargets).mockImplementation(async (_view, id) =>
+      targets({ songs: [id === 'sl-b' ? song('x1', 'Other Song') : song('s1', 'Black Dog')] }),
+    );
+    const { user } = setup();
+    await choose(user, 'Band', 'The Band');
+    expect(await screen.findByRole('combobox', { name: 'Song' })).toHaveTextContent('Black Dog');
+
+    await choose(user, 'Band', 'Other Band');
+    expect(await screen.findByRole('combobox', { name: 'Set list' })).toHaveTextContent('Other Set');
+    expect(await screen.findByRole('combobox', { name: 'Song' })).toHaveTextContent('Other Song');
+    expect(fetchSongTargets).toHaveBeenLastCalledWith(expect.anything(), 'sl-b');
+    await user.click(await screen.findByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saveSongTrack).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(saveSongTrack).mock.calls[0]![1]).toMatchObject({ id: 'x1' });
+  });
+
+  it('does not pick a song when there are two', async () => {
+    soleBand(); // one band and one set list, but two songs (the default fixture)
+    setup();
+    expect(await screen.findByRole('combobox', { name: 'Song' })).toHaveTextContent('Choose a song');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(saveSongTrack).not.toHaveBeenCalled();
+  });
+
+  it('still lets the person choose a song by hand after the band and set list were filled in', async () => {
+    soleBand();
+    const { user } = setup();
+    await choose(user, 'Song', 'Kashmir');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saveSongTrack).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(saveSongTrack).mock.calls[0]![1]).toMatchObject({ id: 's2', title: 'Kashmir' });
+  });
+
+  it('lets a manual set list choice win over the sole-band fill-in and resets the song below it', async () => {
+    soleBand();
+    vi.mocked(loadBandView).mockResolvedValue({ status: 'ok', view: view({ setLists: [...setLists, secondSetList] }) });
+    const { user } = setup();
+    await choose(user, 'Set list', 'Encore');
+    expect(fetchSongTargets).toHaveBeenCalledWith(expect.anything(), 'sl-2');
+    expect(await screen.findByRole('combobox', { name: 'Song' })).toHaveTextContent('Choose a song');
+  });
+
+  it('does not fill in a sole band that is not active', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue({ entries: [entry('band-1', 'Kicked Band', 'removed')], failedCount: 0, deadBandIds: [] });
+    setup();
+    expect(await screen.findByText(/not in a band yet/)).toBeInTheDocument();
+    expect(loadBandView).not.toHaveBeenCalled();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('fills in the one active band even when the person was also removed from another', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue({
+      entries: [entry('band-1', 'The Band'), entry('band-9', 'Kicked Band', 'removed')],
+      failedCount: 0,
+      deadBandIds: [],
+    });
+    setup();
+    expect(await screen.findByRole('combobox', { name: 'Set list' })).toHaveTextContent('Main Set');
+    expect(loadBandView).toHaveBeenCalledWith('band-1');
+  });
+
+  it('does not fill in the band when some bands failed to load, since the failed one might be the intended one', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue({ entries: [entry('band-1', 'The Band')], failedCount: 1, deadBandIds: [] });
+    setup();
+    expect(await screen.findByText(/Some of your bands couldn’t be loaded/)).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Band' })).toHaveTextContent('Choose a band');
+    expect(loadBandView).not.toHaveBeenCalled();
+    expect(screen.queryByRole('combobox', { name: 'Set list' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('still lets the person pick the band by hand when some bands failed to load', async () => {
+    vi.mocked(loadMyBands).mockResolvedValue({ entries: [entry('band-1', 'The Band')], failedCount: 1, deadBandIds: [] });
+    const { user } = setup();
+    await choose(user, 'Band', 'The Band');
+    expect(loadBandView).toHaveBeenCalledWith('band-1');
+  });
+
+  it('does not fill in a sole song when the set list loaded only partly', async () => {
+    soleBand();
+    vi.mocked(fetchSongTargets).mockResolvedValue(targets({ songs: [song('s1', 'Black Dog')], incomplete: true }));
+    const { user } = setup();
+    expect(await screen.findByText(/too long to load completely/)).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Song' })).toHaveTextContent('Choose a song');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    // choosing it by hand still works
+    await choose(user, 'Song', 'Black Dog');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saveSongTrack).toHaveBeenCalledTimes(1));
+  });
+
+  it('pre-fills nothing when the band view cannot be loaded', async () => {
+    soleBand();
+    vi.mocked(loadBandView).mockRejectedValue(new Error('band down'));
+    setup();
+    expect(await screen.findByRole('alert')).toHaveTextContent('band down');
+    expect(screen.queryByRole('combobox', { name: 'Set list' })).not.toBeInTheDocument();
+    expect(fetchSongTargets).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('pre-fills no song when the songs cannot be loaded', async () => {
+    soleBand();
+    vi.mocked(fetchSongTargets).mockRejectedValue(new Error('songs down'));
+    setup();
+    expect(await screen.findByRole('alert')).toHaveTextContent('songs down');
+    expect(screen.queryByRole('combobox', { name: 'Song' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('pre-fills nothing for a sole band the person cannot write to', async () => {
+    soleBand();
+    vi.mocked(loadBandView).mockResolvedValue({ status: 'ok', view: view({ isMember: false }) });
+    setup();
+    expect(await screen.findByText(/can’t add to this band right now/)).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Set list' })).not.toBeInTheDocument();
+  });
+
+  it('starts again from the sole option after the dialog is closed and reopened', async () => {
+    soleBand();
+    soleSong();
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <MemoryRouter>
+          <button onClick={() => setOpen(true)}>reopen</button>
+          <SaveToBandDialog open={open} onOpenChange={setOpen} pieces={[piece()]} groups={[]} />
+        </MemoryRouter>
+      );
+    }
+    const user = userEvent.setup();
+    render(<Harness />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'reopen' }));
+    expect(await screen.findByRole('combobox', { name: 'Song' })).toHaveTextContent('Black Dog');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+    expect(loadMyBands).toHaveBeenCalledTimes(2);
+  });
+});
