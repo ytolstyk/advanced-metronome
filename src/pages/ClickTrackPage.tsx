@@ -16,6 +16,7 @@ import { saveCloudClickTrack, loadCloudClickTracks, deleteCloudClickTrack } from
 import type { SegmentGroup, CloudClickTrack } from '@/api/clickTrackApi';
 import { CLICK_BPM_MIN, CLICK_BPM_MAX } from '@/constants';
 import { SongImportDialog } from '@/components/ClickTrack/SongImportDialog';
+import { ImportTempoMapIntroDialog } from '@/components/ClickTrack/ImportTempoMapIntroDialog';
 import { MeasureCell } from '@/components/ClickTrack/MeasureCell';
 import { SaveToBandDialog } from '@/components/ClickTrack/SaveToBandDialog';
 import { ShareTooLargeNotice } from '@/components/ClickTrack/ShareTooLargeNotice';
@@ -420,6 +421,7 @@ export function ClickTrackPage() {
   // The pieces array the "too large for a link" notice was raised for; any later edit replaces the array and hides it.
   const [shareTooLargeFor, setShareTooLargeFor] = useState<TrackPiece[] | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [importIntroOpen, setImportIntroOpen] = useState(false);
   const [persistFailed, setPersistFailed] = useState(false);
   const [exportFailed, setExportFailed] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -894,7 +896,10 @@ export function ClickTrackPage() {
   function handleImportFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ''; // so picking the same file again still fires onChange
-    if (!file) return;
+    if (file) startImport(file);
+  }
+
+  function startImport(file: File) {
     stopPlayback(); // parsing blocks the page for a moment; a running click would drop out
     setImportFile(file);
   }
@@ -1043,7 +1048,7 @@ export function ClickTrackPage() {
         <div className="ct-header-actions">
           <Button
             size="sm" variant="outline"
-            onClick={() => importInputRef.current?.click()}
+            onClick={() => setImportIntroOpen(true)}
             className="gap-1 text-xs"
           >
             <FileUp size={13} /> Import tempo map
@@ -1133,6 +1138,12 @@ export function ClickTrackPage() {
       )}
       {shareTooLargeFor === pieces && <ShareTooLargeNotice />}
 
+      <ImportTempoMapIntroDialog
+        open={importIntroOpen}
+        onOpenChange={setImportIntroOpen}
+        onChooseFile={() => importInputRef.current?.click()}
+        onFileDropped={startImport}
+      />
       <SongImportDialog
         file={importFile}
         trackIsEmpty={pieces.length === 0}

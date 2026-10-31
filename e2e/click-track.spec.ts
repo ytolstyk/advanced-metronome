@@ -53,6 +53,43 @@ test.describe('ClickTrackPage', () => {
     const upload = (page: import('@playwright/test').Page, content: string, name = 'song.alphatex') =>
       page.getByLabel('Guitar Pro or AlphaTex file').setInputFiles({ name, mimeType: 'text/plain', buffer: Buffer.from(content) });
 
+    test('the Import tempo map button opens an explainer first, and Cancel closes it', async ({ page }) => {
+      await page.getByRole('button', { name: /Import tempo map/ }).click();
+      const dialog = page.getByRole('dialog', { name: 'Import tempo map' });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText('Files it accepts')).toBeVisible();
+      await expect(dialog.getByText(/\.gpx\) aren't supported/)).toBeVisible();
+      await expect(dialog.getByRole('button', { name: /Choose file/ })).toBeVisible();
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dialog).toBeHidden();
+    });
+
+    test('dropping a file on the explainer closes it and opens the import preview', async ({ page }) => {
+      await page.getByRole('button', { name: /Import tempo map/ }).click();
+      const explainer = page.getByRole('dialog', { name: 'Import tempo map' });
+      await expect(explainer.getByText('Drag a .gp or .alphatex file here')).toBeVisible();
+
+      // Playwright has no native file drag, so build the DataTransfer in the page and dispatch the events.
+      const handle = await explainer.elementHandle();
+      await page.evaluate(
+        ({ el, content }) => {
+          const transfer = new DataTransfer();
+          transfer.items.add(new File([content], 'song.alphatex', { type: 'text/plain' }));
+          el!.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+          el!.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+        },
+        { el: handle, content: SONG },
+      );
+
+      await expect(explainer.getByText('Files it accepts')).toBeHidden();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.getByText(/3 bars, 2 segments/)).toBeVisible();
+      await expect(dialog.getByRole('list', { name: 'First segments' })).toContainText('4/4 ♩=120');
+      await dialog.getByRole('button', { name: 'Import' }).click();
+      await expect(dialog).toBeHidden();
+      await expect(page.locator('.ct-piece-card')).toHaveCount(2);
+    });
+
     test('imports a song, shows the preview first, and keeps the track after a reload', async ({ page }) => {
       await upload(page, SONG);
       const dialog = page.getByRole('dialog');

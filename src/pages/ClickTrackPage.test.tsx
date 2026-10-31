@@ -73,6 +73,118 @@ async function pickFile(content = SONG, name = 'song.alphatex') {
   return screen.findByRole('dialog')
 }
 
+describe('ClickTrackPage: import tempo map explainer', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('opens the explainer, not the file picker, when "Import tempo map" is clicked', async () => {
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click')
+    renderPage()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Import tempo map/ }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Import tempo map' })
+    expect(within(dialog).getByText('Files it accepts')).toBeInTheDocument()
+    expect(inputClick).not.toHaveBeenCalled()
+  })
+
+  it('"Choose file…" closes the explainer and clicks the hidden file input', async () => {
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: /Import tempo map/ }))
+    const dialog = await screen.findByRole('dialog')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /Choose file/ }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(inputClick).toHaveBeenCalledTimes(1)
+    expect(inputClick.mock.contexts[0]).toBe(screen.getByLabelText('Guitar Pro or AlphaTex file'))
+  })
+
+  it('Cancel closes the explainer without opening the file picker', async () => {
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click')
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: /Import tempo map/ }))
+    const dialog = await screen.findByRole('dialog')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(inputClick).not.toHaveBeenCalled()
+  })
+})
+
+describe('ClickTrackPage: dropping a file on the explainer', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const dropOnExplainer = async (dropped: File) => {
+    await userEvent.click(screen.getByRole('button', { name: /Import tempo map/ }))
+    const explainer = await screen.findByRole('dialog', { name: 'Import tempo map' })
+    fireEvent.dragOver(explainer, { dataTransfer: { types: ['Files'], files: [] } })
+    fireEvent.drop(explainer, { dataTransfer: { types: ['Files'], files: [dropped] } })
+  }
+
+  it('closes the explainer and opens the import preview for the dropped file', async () => {
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click')
+    renderPage()
+
+    await dropOnExplainer(new File([SONG], 'song.alphatex'))
+
+    await waitFor(() => expect(screen.queryByText('Files it accepts')).not.toBeInTheDocument())
+    const preview = await screen.findByRole('dialog')
+    expect(await within(preview).findByRole('button', { name: 'Import' })).toBeInTheDocument()
+    expect(within(preview).getByText(/3 bars, 2 segments/)).toBeInTheDocument()
+    expect(inputClick).not.toHaveBeenCalled() // no file picker involved
+  })
+
+  it('imports the dropped song into the track', async () => {
+    const { container } = renderPage()
+    await dropOnExplainer(new File([SONG], 'song.alphatex'))
+
+    const preview = await screen.findByRole('dialog')
+    await userEvent.click(await within(preview).findByRole('button', { name: 'Import' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(container.querySelectorAll('.ct-piece-card')).toHaveLength(2)
+    expect(stored().pieces.map((p) => [p.timeSignature.numerator, p.bpm, p.repeats])).toEqual([[4, 120, 2], [3, 90, 1]])
+  })
+
+  it('stops playback when a file is dropped', async () => {
+    seed([piece(1)])
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: /Play/ }))
+    expect(screen.getByRole('button', { name: /Pause/ })).toBeInTheDocument()
+    engineSpies.stop.mockClear()
+
+    await dropOnExplainer(new File([SONG], 'song.alphatex'))
+
+    await screen.findByRole('button', { name: 'Replace track' })
+    expect(engineSpies.stop).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /Pause/ })).not.toBeInTheDocument()
+  })
+
+  it('shows the parse error for a dropped file that is not a score and leaves the track alone', async () => {
+    seed([piece(1)])
+    renderPage()
+
+    await dropOnExplainer(new File(['this is not a score'], 'notes.alphatex'))
+
+    const preview = await screen.findByRole('dialog')
+    expect(await within(preview).findByRole('alert')).toHaveTextContent('readable Guitar Pro')
+    expect(stored().pieces).toHaveLength(1)
+  })
+})
+
 describe('ClickTrackPage: import tempo map', () => {
   beforeEach(() => {
     localStorage.clear()
