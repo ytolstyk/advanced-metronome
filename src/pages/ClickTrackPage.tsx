@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GripVertical, Play, Pause, Square, Pencil, Trash2, Copy, Plus, Download, RotateCcw, Cloud, ChevronDown, FolderOpen, Share2 } from 'lucide-react';
+import { GripVertical, Play, Pause, Square, Pencil, Trash2, Copy, Plus, Download, RotateCcw, Cloud, ChevronDown, FolderOpen, Share2, FileUp } from 'lucide-react';
 import { AuthGate } from '@/components/AuthGate/AuthGate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,12 @@ import type { TrackPiece, SubdivisionLabel, LoopRampConfig } from '@/audio/Click
 import { exportClickTrack } from '@/audio/exportClickTrack';
 import { saveCloudClickTrack, loadCloudClickTracks, deleteCloudClickTrack } from '@/api/clickTrackApi';
 import type { SegmentGroup, CloudClickTrack } from '@/api/clickTrackApi';
+import { CLICK_BPM_MIN, CLICK_BPM_MAX } from '@/constants';
+import { SongImportDialog } from '@/components/ClickTrack/SongImportDialog';
+import { MeasureCell } from '@/components/ClickTrack/MeasureCell';
+import { ShareTooLargeNotice } from '@/components/ClickTrack/ShareTooLargeNotice';
+import { isShareTooLarge, saveClickTrackState } from '../utils/clickTrackPage';
+import { newPieceId } from '../utils/barRuns';
 import { clickTrackToDrumMeasures } from '../utils/clickTrackToDrum';
 import { clickTrackToTabTrack } from '../utils/clickTrackToTab';
 import './ClickTrackPage.css';
@@ -90,10 +96,6 @@ function loadState(): PersistedState {
     if (raw) return JSON.parse(raw) as PersistedState;
   } catch { /* ignore */ }
   return { pieces: [], groups: [], speedPercent: 100, expandView: false, countdownEnabled: false };
-}
-
-function uid(): string {
-  return Math.random().toString(36).slice(2, 10);
 }
 
 function colorForIndex(i: number): string {
@@ -201,10 +203,10 @@ function PieceForm({ d, setD, onSubmit, submitLabel, groups }: {
   groups: SegmentGroup[];
 }) {
   const bpmParsed = parseInt(d.bpmRaw, 10);
-  const bpmValid = !isNaN(bpmParsed) && bpmParsed >= 20 && bpmParsed <= 400;
+  const bpmValid = !isNaN(bpmParsed) && bpmParsed >= CLICK_BPM_MIN && bpmParsed <= CLICK_BPM_MAX;
   const rampEndBpmParsed = parseInt(d.rampEndBpmRaw, 10);
   const rampValid = d.rampMode === '' || (
-    !isNaN(rampEndBpmParsed) && rampEndBpmParsed >= 20 && rampEndBpmParsed <= 400 && rampEndBpmParsed !== bpmParsed &&
+    !isNaN(rampEndBpmParsed) && rampEndBpmParsed >= CLICK_BPM_MIN && rampEndBpmParsed <= CLICK_BPM_MAX && rampEndBpmParsed !== bpmParsed &&
     (d.rampMode !== 'stepped' || (d.rampStepSize >= 1 && d.rampStepMeasures >= 1))
   );
 
@@ -367,7 +369,7 @@ function PieceForm({ d, setD, onSubmit, submitLabel, groups }: {
 // ────────────────────────────────────────────────────────────────────────────
 export function ClickTrackPage() {
   const navigate = useNavigate();
-  const saved = loadState();
+  const [saved] = useState(loadState); // read the persisted state once, not on every render
   const [pieces, setPieces] = useState<TrackPiece[]>(saved.pieces);
   const [groups, setGroups] = useState<SegmentGroup[]>(saved.groups);
   const [speedPercent, setSpeedPercent] = useState(saved.speedPercent);
@@ -407,6 +409,12 @@ export function ClickTrackPage() {
 
   const [sharedOffer, setSharedOffer] = useState<{ pieces: TrackPiece[]; groups: SegmentGroup[] } | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  // The pieces array the "too large for a link" notice was raised for; any later edit replaces the array and hides it.
+  const [shareTooLargeFor, setShareTooLargeFor] = useState<TrackPiece[] | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [persistFailed, setPersistFailed] = useState(false);
+  const [exportFailed, setExportFailed] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [showDrumExportConfirm, setShowDrumExportConfirm] = useState(false);
   const [drumImportBanner, setDrumImportBanner] = useState<boolean>(() => {
     return sessionStorage.getItem('drum-to-click-import') !== null;
@@ -447,7 +455,7 @@ export function ClickTrackPage() {
   // Persist to localStorage
   useEffect(() => {
     const s: PersistedState = { pieces, groups, speedPercent, expandView, countdownEnabled };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    setPersistFailed(!saveClickTrackState(STORAGE_KEY, s));
   }, [pieces, groups, speedPercent, expandView, countdownEnabled]);
 
   // Live speed update
@@ -494,13 +502,20 @@ export function ClickTrackPage() {
     setCountdownDisplay(n);
   }, []);
 
+  // Only the score view shows which dot is clicking. Recording it in the card-list view would re-render
+  // the whole page on every sub-beat for nothing.
+  const expandViewRef = useRef(expandView);
+  useLayoutEffect(() => {
+    expandViewRef.current = expandView;
+  });
   const handleBeat = useCallback((_pi: number, _rep: number, subTick: number) => {
-    setCurrentSubTick(subTick);
+    if (expandViewRef.current) setCurrentSubTick(subTick);
   }, []);
 
   function startFrom(startIdx: number, startRep = 0) {
     if (pieces.length === 0) return;
     setSelectedMeasures(new Set());
+    lastClickedMeasure.current = null;
     engineRef.current!.start(
       pieces, startIdx, speedPercent / 100, countdownEnabled,
       handleProgress, handleCountdown, handleStop, handleBeat,
@@ -510,6 +525,37 @@ export function ClickTrackPage() {
     setCountdownDisplay(countdownEnabled ? 3 : null);
     setCurrentPieceIndex(startIdx);
     setCurrentRepetition(startRep);
+  }
+
+  // Stable handlers for the memoized score cells: they always call the latest closures below.
+  const cellActions = useRef<{ select: (flatIdx: number, shiftKey: boolean) => void; playFrom: (pi: number, r: number) => void }>(
+    { select: () => undefined, playFrom: () => undefined },
+  );
+  useLayoutEffect(() => {
+    cellActions.current = { select: selectMeasure, playFrom: startFrom };
+  });
+  const onCellSelect = useCallback((flatIdx: number, shiftKey: boolean) => cellActions.current.select(flatIdx, shiftKey), []);
+  const onCellPlayFrom = useCallback((pi: number, r: number) => cellActions.current.playFrom(pi, r), []);
+  const setActiveItem = useCallback((el: HTMLDivElement | null) => { activeItemRef.current = el; }, []);
+
+  function selectMeasure(flatIdx: number, shiftKey: boolean) {
+    if (isPlaying) stopPlayback();
+    if (shiftKey && lastClickedMeasure.current !== null) {
+      const lo = Math.min(lastClickedMeasure.current, flatIdx);
+      const hi = Math.max(lastClickedMeasure.current, flatIdx);
+      setSelectedMeasures(prev => {
+        const next = new Set(prev);
+        for (let i = lo; i <= hi; i++) next.add(i);
+        return next;
+      });
+    } else {
+      setSelectedMeasures(prev => {
+        const next = new Set(prev);
+        if (next.has(flatIdx)) next.delete(flatIdx); else next.add(flatIdx);
+        return next;
+      });
+      lastClickedMeasure.current = flatIdx;
+    }
   }
 
   function startLoop() {
@@ -596,7 +642,7 @@ export function ClickTrackPage() {
     const rampEndBpm = d.rampMode ? parseInt(d.rampEndBpmRaw, 10) : NaN;
     const hasRamp = d.rampMode !== '' && !isNaN(rampEndBpm);
     const piece: TrackPiece = {
-      id: uid(),
+      id: newPieceId(),
       label,
       color: d.color,
       groupId: d.groupId,
@@ -731,7 +777,7 @@ export function ClickTrackPage() {
       setGroups(g => g.map(x => x.id === groupTarget ? { ...x, ...groupDraft } : x));
       setPieces(p => p.map(x => selectedIds.has(x.id) ? { ...x, groupId: groupTarget, color: groupDraft.color } : x));
     } else {
-      const id = uid();
+      const id = newPieceId();
       setGroups(g => [...g, { id, name: groupDraft.name.trim(), color: groupDraft.color }]);
       setPieces(p => p.map(x => selectedIds.has(x.id) ? { ...x, groupId: id, color: groupDraft.color } : x));
     }
@@ -747,7 +793,7 @@ export function ClickTrackPage() {
   function copyPiece(piece: TrackPiece) {
     const newPiece: TrackPiece = {
       ...piece,
-      id: uid(),
+      id: newPieceId(),
       label: piece.label ? `${piece.label} (copy)` : '',
     };
     setPieces(p => {
@@ -765,7 +811,7 @@ export function ClickTrackPage() {
         return acc;
       }, []);
       if (indices.length === 0) return p;
-      const copies = indices.map(i => ({ ...p[i], id: uid() }));
+      const copies = indices.map(i => ({ ...p[i], id: newPieceId() }));
       const arr = [...p];
       arr.splice(indices[indices.length - 1] + 1, 0, ...copies);
       return arr;
@@ -780,7 +826,21 @@ export function ClickTrackPage() {
     handleStop();
     setPieces([]);
     setGroups([]);
+    clearSelectionAndEditing();
+  }
+
+  /** Swaps the whole track (saved, shared, imported, ...): stops playback and drops everything tied to the old one. */
+  function replaceTrack(nextPieces: TrackPiece[], nextGroups: SegmentGroup[]) {
+    stopPlayback();
+    setPieces(nextPieces);
+    setGroups(nextGroups);
+    clearSelectionAndEditing();
+  }
+
+  function clearSelectionAndEditing() {
     setSelectedIds(new Set());
+    setSelectedMeasures(new Set());
+    lastClickedMeasure.current = null;
     setEditingId(null);
   }
 
@@ -794,9 +854,7 @@ export function ClickTrackPage() {
 
   function loadTrack(track: CloudClickTrack) {
     if (pieces.length > 0 && !window.confirm('Replace current track with the saved one?')) return;
-    stopPlayback();
-    setPieces(track.pieces);
-    setGroups(track.groups);
+    replaceTrack(track.pieces, track.groups);
     setLoadDialogOpen(false);
   }
 
@@ -809,9 +867,29 @@ export function ClickTrackPage() {
   function handleShare() {
     const encoded = encodeTrack(pieces, groups);
     const url = `${window.location.origin}${window.location.pathname}?t=${encoded}`;
+    if (isShareTooLarge(url)) {
+      setShareTooLargeFor(pieces);
+      return;
+    }
+    setShareTooLargeFor(null);
     void navigator.clipboard.writeText(url);
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 2000);
+  }
+
+  // ── Import a song's tempo map from a Guitar Pro / AlphaTex file ────────
+  function handleImportFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // so picking the same file again still fires onChange
+    if (!file) return;
+    stopPlayback(); // parsing blocks the page for a moment; a running click would drop out
+    setImportFile(file);
+  }
+
+  function acceptImportedPieces(imported: TrackPiece[]) {
+    if (pieces.length > 0 && !window.confirm('Replace the current click track with the imported song?')) return;
+    replaceTrack(imported, []);
+    setImportFile(null);
   }
 
   // ── Drum track export ──────────────────────────────────────────────────
@@ -828,8 +906,7 @@ export function ClickTrackPage() {
     if (!raw) return;
     try {
       const imported = JSON.parse(raw) as TrackPiece[];
-      stopPlayback();
-      setPieces(imported);
+      replaceTrack(imported, []);
     } catch { /* malformed — ignore */ }
   }
 
@@ -846,8 +923,7 @@ export function ClickTrackPage() {
     if (!raw) return;
     try {
       const imported = JSON.parse(raw) as TrackPiece[];
-      stopPlayback();
-      setPieces(imported);
+      replaceTrack(imported, []);
     } catch { /* malformed — ignore */ }
   }
 
@@ -862,7 +938,14 @@ export function ClickTrackPage() {
   // ── Export ─────────────────────────────────────────────────────────────
   async function doExport() {
     setExporting(true);
-    try { await exportClickTrack(pieces, speedPercent); } finally { setExporting(false); }
+    setExportFailed(false);
+    try {
+      await exportClickTrack(pieces, speedPercent);
+    } catch {
+      setExportFailed(true); // typically the browser running out of memory for a very long track
+    } finally {
+      setExporting(false);
+    }
   }
 
   // ── Helpers for rendering ──────────────────────────────────────────────
@@ -947,6 +1030,21 @@ export function ClickTrackPage() {
         <div className="ct-header-actions">
           <Button
             size="sm" variant="outline"
+            onClick={() => importInputRef.current?.click()}
+            className="gap-1 text-xs"
+          >
+            <FileUp size={13} /> Import tempo map
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".gp,.alphatex"
+            className="hidden"
+            aria-label="Guitar Pro or AlphaTex file"
+            onChange={handleImportFilePicked}
+          />
+          <Button
+            size="sm" variant="outline"
             onClick={() => setShowDrumExportConfirm(true)}
             disabled={pieces.length === 0}
             className="gap-1 text-xs"
@@ -1001,6 +1099,25 @@ export function ClickTrackPage() {
           </AuthGate>
         </div>
       </div>
+
+      {persistFailed && (
+        <div className="ct-warning-banner" role="alert">
+          Couldn&apos;t save to this browser: storage is full or blocked. Your track still works this session.
+        </div>
+      )}
+      {exportFailed && (
+        <div className="ct-warning-banner" role="alert">
+          Couldn&apos;t render the WAV file. The track may be too long for this browser to render; try a shorter or faster section.
+        </div>
+      )}
+      {shareTooLargeFor === pieces && <ShareTooLargeNotice />}
+
+      <SongImportDialog
+        file={importFile}
+        trackIsEmpty={pieces.length === 0}
+        onAccept={acceptImportedPieces}
+        onClose={() => setImportFile(null)}
+      />
 
       {/* Playback bar */}
       <div className="ct-playback-bar">
@@ -1057,9 +1174,7 @@ export function ClickTrackPage() {
           <span>Shared track available — load it?</span>
           <Button size="sm" className="h-7 text-xs" onClick={() => {
             if (pieces.length > 0 && !window.confirm('Replace current track with the shared one?')) return;
-            stopPlayback();
-            setPieces(sharedOffer.pieces);
-            setGroups(sharedOffer.groups);
+            replaceTrack(sharedOffer.pieces, sharedOffer.groups);
             setSharedOffer(null);
           }}>Load</Button>
           <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSharedOffer(null)}>Dismiss</Button>
@@ -1123,74 +1238,35 @@ export function ClickTrackPage() {
                     ▶ Play Ramp
                   </button>
                 </div>
-                <button className="ct-loop-bar-clear" onClick={() => { if (isPlaying) stopPlayback(); setSelectedMeasures(new Set()); }}>Clear</button>
+                <button className="ct-loop-bar-clear" onClick={() => { if (isPlaying) stopPlayback(); setSelectedMeasures(new Set()); lastClickedMeasure.current = null; }}>Clear</button>
               </div>
             )}
             <div className="ct-score-view">
               {pieces.map((piece, pi) => {
                 const color = getEffectiveColor(piece);
-                const dots = measureDots[pi];
                 return Array.from({ length: piece.repeats }, (_, r) => {
                   const flatIdx = measureOffsets[pi] + r;
-                  const isActiveCell = currentPieceIndex === pi && currentRepetition === r;
-                  const isSelected = selectedMeasures.has(flatIdx);
-                  const activeDotIdx = isActiveCell && currentSubTick !== null
-                    ? subTickToDotIndex(piece, currentSubTick)
-                    : -1;
+                  const isActive = currentPieceIndex === pi && currentRepetition === r;
                   return (
-                    <div
+                    <MeasureCell
                       key={`${piece.id}-${r}`}
-                      ref={isActiveCell ? (el) => { activeItemRef.current = el; } : undefined}
-                      className={cn('ct-measure-cell', isActiveCell && 'is-active-rep', isSelected && 'is-selected')}
-                      style={{ '--piece-color': color } as React.CSSProperties}
-                      onClick={(e) => {
-                        if (isPlaying) stopPlayback();
-                        if (e.shiftKey && lastClickedMeasure.current !== null) {
-                          const lo = Math.min(lastClickedMeasure.current, flatIdx);
-                          const hi = Math.max(lastClickedMeasure.current, flatIdx);
-                          setSelectedMeasures(prev => {
-                            const next = new Set(prev);
-                            for (let i = lo; i <= hi; i++) next.add(i);
-                            return next;
-                          });
-                        } else {
-                          setSelectedMeasures(prev => {
-                            const next = new Set(prev);
-                            if (next.has(flatIdx)) next.delete(flatIdx); else next.add(flatIdx);
-                            return next;
-                          });
-                          lastClickedMeasure.current = flatIdx;
-                        }
-                      }}
-                    >
-                      <div className="ct-measure-count">{flatIdx + 1}</div>
-                      {r === 0 && piece.label && (
-                        <div className="ct-measure-label">{piece.label}</div>
-                      )}
-                      <div className="ct-dots-row">
-                        {dots.map((type, di) => (
-                          <span
-                            key={di}
-                            className={cn(`ct-dot ct-dot--${type}`, di === activeDotIdx && 'ct-dot--clicking')}
-                          />
-                        ))}
-                      </div>
-                      <div className="ct-measure-info">
-                        <span>{piece.timeSignature.numerator}/{piece.timeSignature.denominator}</span>
-                        <span className="ct-measure-info-sep">·</span>
-                        <span>{measureBpms[pi][r]} bpm</span>
-                      </div>
-                      <div className="ct-measure-footer">
-                        <button
-                          className="ct-cell-play-btn"
-                          disabled={isPlaying}
-                          title="Play from here"
-                          onClick={(e) => { e.stopPropagation(); startFrom(pi, r); }}
-                        >
-                          <Play size={12} />
-                        </button>
-                      </div>
-                    </div>
+                      pieceIndex={pi}
+                      rep={r}
+                      flatIdx={flatIdx}
+                      color={color}
+                      label={r === 0 ? piece.label : ''}
+                      numerator={piece.timeSignature.numerator}
+                      denominator={piece.timeSignature.denominator}
+                      bpm={measureBpms[pi][r]}
+                      dots={measureDots[pi]}
+                      isActive={isActive}
+                      isSelected={selectedMeasures.has(flatIdx)}
+                      activeDot={isActive && currentSubTick !== null ? subTickToDotIndex(piece, currentSubTick) : -1}
+                      playDisabled={isPlaying}
+                      activeRef={isActive ? setActiveItem : undefined}
+                      onSelect={onCellSelect}
+                      onPlayFrom={onCellPlayFrom}
+                    />
                   );
                 });
               })}

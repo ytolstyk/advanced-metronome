@@ -33,6 +33,10 @@ export const DEFAULT_LOOP_COUNT = 0; // infinite
 
 export const MIN_BPM = 40;
 export const MAX_BPM = 300;
+// The click track page accepts a wider tempo range than the drum machine (its input validator and the
+// Guitar Pro import both clamp to it).
+export const CLICK_BPM_MIN = 20;
+export const CLICK_BPM_MAX = 400;
 export const MAX_MEASURES = 8;
 
 export const DEFAULT_HUMANIZE = 0;

@@ -1,6 +1,7 @@
 import type { Measure, Pattern } from '../types';
 import type { TrackPiece, SubdivisionLabel } from '../audio/ClickTrackEngine';
 import { INSTRUMENT_IDS } from '../constants';
+import { CLICK_RUN_PALETTE, newPieceId } from './barRuns';
 
 function stepsForMeasure(m: Measure): number {
   return m.timeSignature.beats * (m.timeSignature.stepsPerBeat ?? 1);
@@ -42,15 +43,6 @@ function stepsPerBeatToSubdivision(spb: number | undefined): SubdivisionLabel {
   }
 }
 
-function uid(): string {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-const PALETTE = [
-  '#8b5cf6', '#38bdf8', '#34d399', '#fbbf24',
-  '#fb7185', '#fb923c', '#2dd4bf', '#94a3b8',
-];
-
 /**
  * Convert drum machine measures + pattern into click-track pieces.
  * Consecutive measures that are identical (same time-sig + same beat pattern)
@@ -78,9 +70,9 @@ export function drumToClickTrackPieces(
 
     const ts = measures[i].timeSignature;
     pieces.push({
-      id: uid(),
+      id: newPieceId(),
       label: '',
-      color: PALETTE[colorIdx % PALETTE.length],
+      color: CLICK_RUN_PALETTE[colorIdx % CLICK_RUN_PALETTE.length],
       groupId: null,
       timeSignature: { numerator: ts.beats, denominator: ts.subdivision },
       subdivision: stepsPerBeatToSubdivision(ts.stepsPerBeat),

@@ -1,14 +1,6 @@
 import type { TabTrack } from '../tabEditorTypes'
 import type { TrackPiece } from '../audio/ClickTrackEngine'
-
-const PALETTE = [
-  '#8b5cf6', '#38bdf8', '#34d399', '#fbbf24',
-  '#fb7185', '#fb923c', '#2dd4bf', '#94a3b8',
-]
-
-function uid(): string {
-  return Math.random().toString(36).slice(2, 10)
-}
+import { CLICK_RUN_PALETTE, groupBarRuns, newPieceId } from './barRuns'
 
 export function tabTrackToClickTrackPieces(track: TabTrack): TrackPiece[] {
   const count = Math.min(track.masterBars.length, track.measures.length)
@@ -24,34 +16,14 @@ export function tabTrackToClickTrackPieces(track: TabTrack): TrackPiece[] {
     }
   })
 
-  const pieces: TrackPiece[] = []
-  let i = 0
-  let colorIdx = 0
-
-  while (i < perMeasure.length) {
-    const base = perMeasure[i]!
-    let groupCount = 1
-    while (
-      i + groupCount < perMeasure.length &&
-      perMeasure[i + groupCount]!.bpm === base.bpm &&
-      perMeasure[i + groupCount]!.numerator === base.numerator &&
-      perMeasure[i + groupCount]!.denominator === base.denominator
-    ) {
-      groupCount++
-    }
-    pieces.push({
-      id: uid(),
-      label: `${base.numerator}/${base.denominator} ♩=${base.bpm}`,
-      color: PALETTE[colorIdx % PALETTE.length]!,
-      groupId: null,
-      timeSignature: { numerator: base.numerator, denominator: base.denominator },
-      subdivision: 'quarter',
-      bpm: base.bpm,
-      repeats: groupCount,
-    })
-    i += groupCount
-    colorIdx++
-  }
-
-  return pieces
+  return groupBarRuns(perMeasure).map((run, i) => ({
+    id: newPieceId(),
+    label: `${run.first.numerator}/${run.first.denominator} ♩=${run.first.bpm}`,
+    color: CLICK_RUN_PALETTE[i % CLICK_RUN_PALETTE.length]!,
+    groupId: null,
+    timeSignature: { numerator: run.first.numerator, denominator: run.first.denominator },
+    subdivision: 'quarter' as const,
+    bpm: run.first.bpm,
+    repeats: run.repeats,
+  }))
 }
