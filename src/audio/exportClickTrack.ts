@@ -1,7 +1,7 @@
 import type { TrackPiece } from './ClickTrackEngine';
 import { accentClick, beatClick, subClick } from './clickSynth';
 import { getBpmAtRepetition, subsPerBeat } from './clickMath';
-import { CLICK_EXPORT_EXTENSION, mp3Sink, wavSink, type ClickExportFormat } from './clickExportSinks';
+import { CLICK_EXPORT_EXTENSION, flacSink, wavSink, type ClickExportFormat } from './clickExportSinks';
 import { pcm16 } from './wavEncoder';
 
 /** A click is a 500-1000 Hz tone, far below the 11 kHz limit at 22.05 kHz, and both channels were identical, so mono at half the rate loses nothing audible. */
@@ -19,7 +19,7 @@ const LEAD_SECONDS = 0.05;
 const MAX_CLICKS_PER_CHUNK = 500;
 
 /**
- * Renders the track to a mono 22.05 kHz file and downloads it: a WAV by default, or a much smaller MP3
+ * Renders the track to a mono 22.05 kHz file and downloads it: a WAV by default, or a lossless FLAC
  * (`filename` defaults to `click-track.<ext>`).
  */
 export async function exportClickTrack(
@@ -77,7 +77,7 @@ export async function exportClickTrack(
   // multi-hundred-megabyte float buffer. A slice ends after CHUNK_SECONDS or MAX_CLICKS_PER_CHUNK
   // clicks, whichever comes first, so a dense track can't put tens of thousands of audio nodes into
   // one graph. Events are in time order, so two pointers walk them.
-  const sink = format === 'mp3' ? await mp3Sink(SAMPLE_RATE) : wavSink(totalSamples, SAMPLE_RATE);
+  const sink = format === 'flac' ? flacSink(totalSamples, SAMPLE_RATE) : wavSink(totalSamples, SAMPLE_RATE);
   let firstKept = 0; // first event that starts at or after this slice
   let firstLead = 0; // first event that can still ring into this slice
   for (let start = 0; start < totalSamples; ) {

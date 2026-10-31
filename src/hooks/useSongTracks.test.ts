@@ -6,15 +6,15 @@ describe('trackFileName', () => {
     expect(trackFileName('Black Dog')).toBe('Black Dog-click.wav');
   });
 
-  it('names the MP3 after the song when asked for that format', () => {
-    expect(trackFileName('Black Dog', 'mp3')).toBe('Black Dog-click.mp3');
+  it('names the FLAC after the song when asked for that format', () => {
+    expect(trackFileName('Black Dog', 'flac')).toBe('Black Dog-click.flac');
     expect(trackFileName('Black Dog', 'wav')).toBe('Black Dog-click.wav');
   });
 
-  it('applies the same sanitising and fallbacks for the MP3 name', () => {
-    expect(trackFileName('AC/DC: "Back in Black" (live)?', 'mp3')).toBe('ACDC Back in Black live-click.mp3');
-    expect(trackFileName('***', 'mp3')).toBe('click-track-click.mp3');
-    expect(trackFileName('x'.repeat(200), 'mp3')).toBe(`${'x'.repeat(50)}-click.mp3`);
+  it('applies the same sanitising and fallbacks for the FLAC name', () => {
+    expect(trackFileName('AC/DC: "Back in Black" (live)?', 'flac')).toBe('ACDC Back in Black live-click.flac');
+    expect(trackFileName('***', 'flac')).toBe('click-track-click.flac');
+    expect(trackFileName('x'.repeat(200), 'flac')).toBe(`${'x'.repeat(50)}-click.flac`);
   });
 
   it('keeps only letters, digits, spaces, dashes and underscores', () => {

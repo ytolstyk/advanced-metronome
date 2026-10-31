@@ -72,10 +72,10 @@ describe('PrivacyPolicyPage', () => {
     expect(screen.getByText('Last updated: October 31, 2026')).toBeInTheDocument();
   });
 
-  it('says playing or downloading a click track as WAV or MP3 happens in the browser and is not uploaded', () => {
+  it('says playing or downloading a click track as WAV or FLAC happens in the browser and is not uploaded', () => {
     render(<PrivacyPolicyPage />);
     const item = screen.getByText('Band click tracks:').closest('li')!;
-    expect(item).toHaveTextContent(/Playing a click track, or downloading it as a WAV or MP3 file, happens in your browser/);
+    expect(item).toHaveTextContent(/Playing a click track, or downloading it as a WAV or FLAC file, happens in your browser/);
     expect(item).toHaveTextContent(/the audio is made on your device and is not uploaded/);
   });
 
@@ -89,7 +89,7 @@ describe('PrivacyPolicyPage', () => {
 
   it('lists open-source browser libraries under third-party services and points to the Terms for licences', () => {
     render(<PrivacyPolicyPage />);
-    const item = screen.getByText(/Open-source libraries, such as the LAME MP3 encoder/).closest('li')!;
+    const item = screen.getByText(/Open-source libraries, such as alphaTab/).closest('li')!;
     expect(item).toHaveTextContent(/alphaTab/);
     expect(item).toHaveTextContent(/run in your browser and send nothing anywhere/);
     expect(item).toHaveTextContent(/Their licences are listed in the Terms of Service/);

@@ -149,7 +149,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
       problem: tracks.problemFor(song),
       onPlay: () => void tracks.play(song),
       onDownload: () => void tracks.download(song),
-      onDownloadCompressed: () => void tracks.download(song, 'mp3'),
+      onDownloadCompressed: () => void tracks.download(song, 'flac'),
       onOpen: () => void tracks.open(song),
       onRemove: () => setRemovingTrack(song),
     };

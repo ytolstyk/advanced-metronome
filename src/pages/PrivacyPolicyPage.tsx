@@ -71,7 +71,7 @@ export function PrivacyPolicyPage() {
           leave a band, if that deletion succeeds; if the owner removes you, or the band is deleted,
           they may remain readable until you dismiss the band, and if you never do, until you delete
           them or ask us to. Your own saved click tracks (not attached to a band) stay private to your account.
-          Playing a click track, or downloading it as a WAV or MP3 file, happens in your browser: the
+          Playing a click track, or downloading it as a WAV or FLAC file, happens in your browser: the
           audio is made on your device and is not uploaded.
         </li>
         <li>
@@ -109,9 +109,8 @@ export function PrivacyPolicyPage() {
         </li>
         <li>PayPal and Venmo, if you choose to donate; they process payments under their own policies.</li>
         <li>
-          Open-source libraries, such as the LAME MP3 encoder (used for MP3 downloads) and alphaTab
-          (tab display and Guitar Pro import), run in your browser and send nothing anywhere. Their
-          licences are listed in the Terms of Service.
+          Open-source libraries, such as alphaTab (tab display and Guitar Pro import), run in your
+          browser and send nothing anywhere. Their licences are listed in the Terms of Service.
         </li>
       </ul>
 

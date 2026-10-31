@@ -1,3 +1,4 @@
+import { FLAC_DOWNLOAD_HINT } from '@/audio/clickExportSinks';
 import { Download, ExternalLink, EyeOff, Music, Pencil, Play, Square, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,7 +22,7 @@ export interface SongClickTrackControls {
   problem?: string;
   onPlay: () => void;
   onDownload: () => void;
-  /** The much smaller MP3 download. */
+  /** The much smaller lossless FLAC download. */
   onDownloadCompressed: () => void;
   onOpen: () => void;
   onRemove: () => void;
@@ -149,10 +150,10 @@ function SongClickTrackStrip({ songTitle, track }: { songTitle: string; track: S
           size="sm"
           onClick={track.onDownloadCompressed}
           disabled={!usable || track.busy}
-          title="Much smaller file that plays everywhere. For practice: MP3 adds a short delay, so use the WAV to line it up with other audio"
-          aria-label={`Download compressed click track (MP3) for ${songTitle}`}
+          title={FLAC_DOWNLOAD_HINT}
+          aria-label={`Download compressed click track (FLAC) for ${songTitle}`}
         >
-          <Download size={14} className="mr-1" /> MP3
+          <Download size={14} className="mr-1" /> FLAC
         </Button>
         <Button
           variant="ghost"

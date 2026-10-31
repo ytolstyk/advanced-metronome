@@ -957,22 +957,31 @@ describe('song click tracks', () => {
     await waitFor(() => expect(exportClickTrack).toHaveBeenCalledWith([piece()], 100, 'Song a-click.wav', 'wav', expect.any(AbortSignal)));
   });
 
-  it('the MP3 button renders the track at 100% into an MP3 named after the song', async () => {
+  it('the FLAC button renders the track at 100% into a FLAC named after the song', async () => {
     vi.mocked(getSongTrack).mockResolvedValue(okRead());
     withTrack();
     await screen.findByText('Song a');
-    fireEvent.click(strip('Song a').getByRole('button', { name: /Download compressed click track \(MP3\) for Song a/ }));
-    await waitFor(() => expect(exportClickTrack).toHaveBeenCalledWith([piece()], 100, 'Song a-click.mp3', 'mp3', expect.any(AbortSignal)));
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download compressed click track \(FLAC\) for Song a/ }));
+    await waitFor(() => expect(exportClickTrack).toHaveBeenCalledWith([piece()], 100, 'Song a-click.flac', 'flac', expect.any(AbortSignal)));
     expect(exportClickTrack).toHaveBeenCalledTimes(1);
   });
 
-  it('a failed MP3 render shows its error instead of failing silently', async () => {
+  it('a failed FLAC render shows its error instead of failing silently', async () => {
     vi.mocked(getSongTrack).mockResolvedValue(okRead());
     vi.mocked(exportClickTrack).mockRejectedValueOnce(new Error('encoder failed to load'));
     withTrack();
     await screen.findByText('Song a');
-    fireEvent.click(strip('Song a').getByRole('button', { name: /Download compressed click track \(MP3\) for Song a/ }));
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download compressed click track \(FLAC\) for Song a/ }));
     expect(await screen.findByText('encoder failed to load')).toBeInTheDocument();
+  });
+
+  it('a FLAC render that fails without a message falls back to "Could not create the FLAC"', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    vi.mocked(exportClickTrack).mockRejectedValueOnce('boom');
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download compressed click track \(FLAC\) for Song a/ }));
+    expect(await screen.findByText('Could not create the FLAC')).toBeInTheDocument();
   });
 
   it('passes the page\'s abort signal to the export, and aborts it when the page goes away', async () => {
@@ -981,7 +990,7 @@ describe('song click tracks', () => {
     vi.mocked(exportClickTrack).mockImplementationOnce(() => new Promise<void>((_, reject) => { finish = reject; }));
     const view = withTrack();
     await screen.findByText('Song a');
-    fireEvent.click(strip('Song a').getByRole('button', { name: /Download compressed click track \(MP3\) for Song a/ }));
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download compressed click track \(FLAC\) for Song a/ }));
     await waitFor(() => expect(exportClickTrack).toHaveBeenCalledTimes(1));
     const signal = vi.mocked(exportClickTrack).mock.calls[0]![4];
     expect(signal).toBeInstanceOf(AbortSignal);

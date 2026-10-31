@@ -42,6 +42,7 @@ vi.mock('@/audio/ClickTrackEngine', async (importOriginal) => {
 
 import { ClickTrackPage } from './ClickTrackPage'
 import { exportClickTrack } from '@/audio/exportClickTrack'
+import { FLAC_DOWNLOAD_HINT } from '@/audio/clickExportSinks'
 
 const STORAGE_KEY = 'click-track-state'
 
@@ -768,15 +769,15 @@ describe('ClickTrackPage: downloads', () => {
     vi.mocked(exportClickTrack).mockResolvedValue(undefined)
   })
 
-  // While exporting, both buttons read "Exporting…", so find them by position (WAV first, MP3 second).
-  const downloadButtons = () => screen.getAllByRole('button', { name: /^(Download WAV|Download MP3|Exporting…)$/ })
+  // While exporting, both buttons read "Exporting…", so find them by position (WAV first, FLAC second).
+  const downloadButtons = () => screen.getAllByRole('button', { name: /^(Download WAV|Download FLAC|Exporting…)$/ })
   const wavButton = () => downloadButtons()[0]!
-  const mp3Button = () => downloadButtons()[1]!
+  const flacButton = () => downloadButtons()[1]!
 
   it('offers both downloads, disabled while the track is empty', () => {
     renderPage()
     expect(wavButton()).toBeDisabled()
-    expect(mp3Button()).toBeDisabled()
+    expect(flacButton()).toBeDisabled()
   })
 
   it('Download WAV renders the track as a WAV with the default file name', async () => {
@@ -788,18 +789,18 @@ describe('ClickTrackPage: downloads', () => {
     expect(exportClickTrack).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ id: 'p1' })]), 100, undefined, 'wav', expect.any(AbortSignal))
   })
 
-  it('Download MP3 renders the track as an MP3 with the default file name', async () => {
+  it('Download FLAC renders the track as a FLAC with the default file name', async () => {
     seed([piece(1)])
     renderPage()
-    await userEvent.click(mp3Button())
+    await userEvent.click(flacButton())
     await waitFor(() => expect(exportClickTrack).toHaveBeenCalledTimes(1))
-    expect(exportClickTrack).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ id: 'p1' })]), 100, undefined, 'mp3', expect.any(AbortSignal))
+    expect(exportClickTrack).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ id: 'p1' })]), 100, undefined, 'flac', expect.any(AbortSignal))
   })
 
   it('passes the chosen speed to the exporter', async () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ pieces: [piece(1)], groups: [], speedPercent: 50, expandView: false, countdownEnabled: false }))
     renderPage()
-    await userEvent.click(mp3Button())
+    await userEvent.click(flacButton())
     await waitFor(() => expect(exportClickTrack).toHaveBeenCalledTimes(1))
     expect(vi.mocked(exportClickTrack).mock.calls[0]![1]).toBe(50)
   })
@@ -809,40 +810,42 @@ describe('ClickTrackPage: downloads', () => {
     vi.mocked(exportClickTrack).mockReturnValueOnce(new Promise<void>((resolve) => { finish = resolve }))
     seed([piece(1)])
     renderPage()
-    await userEvent.click(mp3Button())
-    await waitFor(() => expect(mp3Button()).toBeDisabled())
+    await userEvent.click(flacButton())
+    await waitFor(() => expect(flacButton()).toBeDisabled())
     expect(wavButton()).toBeDisabled()
     expect(wavButton()).toHaveTextContent('Exporting')
-    expect(mp3Button()).toHaveTextContent('Exporting')
+    expect(flacButton()).toHaveTextContent('Exporting')
 
     // a second click while busy does nothing
-    fireEvent.click(mp3Button())
+    fireEvent.click(flacButton())
     expect(exportClickTrack).toHaveBeenCalledTimes(1)
 
     finish()
-    await waitFor(() => expect(mp3Button()).toBeEnabled())
+    await waitFor(() => expect(flacButton()).toBeEnabled())
     expect(wavButton()).toBeEnabled()
     expect(wavButton()).toHaveTextContent('Download WAV')
-    expect(mp3Button()).toHaveTextContent('Download MP3')
+    expect(flacButton()).toHaveTextContent('Download FLAC')
   })
 
-  it('shows the audio-file error when an MP3 export fails (e.g. the encoder cannot load), and clears it on the next attempt', async () => {
+  it('shows the audio-file error when a FLAC export fails (e.g. it is too long to render), and clears it on the next attempt', async () => {
     vi.mocked(exportClickTrack).mockRejectedValueOnce(new Error('encoder failed to load'))
     seed([piece(1)])
     renderPage()
-    await userEvent.click(mp3Button())
+    await userEvent.click(flacButton())
     const alert = await screen.findByText(/Couldn't create the audio file/)
-    expect(alert).toHaveTextContent(/MP3 encoder couldn't load; try WAV/)
+    expect(alert).toHaveTextContent(/The track may be too long for this browser to render; try a shorter or faster section\./)
+    expect(alert).not.toHaveTextContent(/MP3|encoder/)
 
     await userEvent.click(wavButton())
     await waitFor(() => expect(screen.queryByText(/Couldn't create the audio file/)).not.toBeInTheDocument())
     expect(exportClickTrack).toHaveBeenCalledTimes(2)
   })
 
-  it('hints on the MP3 button that it adds a short delay, so the WAV is the one to line up with other audio', () => {
+  it('gives the FLAC button the shared hint as its tooltip', () => {
     seed([piece(1)])
     renderPage()
-    expect(mp3Button()).toHaveAttribute('title', expect.stringMatching(/smaller file.*MP3 adds a short delay.*WAV/))
+    expect(flacButton()).toHaveAttribute('title', FLAC_DOWNLOAD_HINT)
+    expect(wavButton()).not.toHaveAttribute('title', FLAC_DOWNLOAD_HINT)
   })
 
   it('aborts a running export when the page is left, without a failure banner or a state-update warning', async () => {
@@ -850,7 +853,7 @@ describe('ClickTrackPage: downloads', () => {
     vi.mocked(exportClickTrack).mockImplementationOnce(() => new Promise<void>((_, reject) => { fail = reject }))
     seed([piece(1)])
     const view = renderPage()
-    await userEvent.click(mp3Button())
+    await userEvent.click(flacButton())
     await waitFor(() => expect(exportClickTrack).toHaveBeenCalledTimes(1))
     const signal = vi.mocked(exportClickTrack).mock.calls[0]![4]!
     expect(signal.aborted).toBe(false)
@@ -869,7 +872,7 @@ describe('ClickTrackPage: downloads', () => {
     renderPage()
     await userEvent.click(wavButton())
     await waitFor(() => expect(wavButton()).toBeEnabled())
-    await userEvent.click(mp3Button())
+    await userEvent.click(flacButton())
     await waitFor(() => expect(exportClickTrack).toHaveBeenCalledTimes(2))
     const [first, second] = vi.mocked(exportClickTrack).mock.calls.map((c) => c[4]!)
     expect(first).toBe(second)
@@ -880,7 +883,7 @@ describe('ClickTrackPage: downloads', () => {
     seed([piece(1)])
     renderPage()
     await userEvent.click(screen.getByRole('button', { name: /^Play$/ }))
-    await waitFor(() => expect(mp3Button()).toBeDisabled())
+    await waitFor(() => expect(flacButton()).toBeDisabled())
     expect(wavButton()).toBeDisabled()
   })
 })

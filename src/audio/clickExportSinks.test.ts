@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Mp3Encoder } from '@breezystack/lamejs';
-import { CLICK_EXPORT_EXTENSION, mp3Sink, wavSink, type PcmSink } from './clickExportSinks';
+import { describe, expect, it } from 'vitest';
+import { CLICK_EXPORT_EXTENSION, FLAC_DOWNLOAD_HINT, flacSink, wavSink } from './clickExportSinks';
+import { FLAC_BLOCK_SIZE } from './flacEncoder';
+import { decodeFlac } from '../test/flacReferenceDecoder';
 
 const RATE = 22050;
-const MP3_KBPS = 32;
 
 /** 16-bit mono PCM of short 1 kHz click bursts every half second: what the exporter really feeds the sink. */
 function clickSignal(seconds: number): Int16Array {
@@ -25,8 +25,8 @@ const slice = (all: Int16Array, from: number, to: number): ArrayBuffer => all.sl
 
 const bytesOf = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
 
-async function encodeInSlices(signal: Int16Array, sizes: number[]): Promise<Blob> {
-  const sink = await mp3Sink(RATE);
+async function encodeInSlices(signal: Int16Array, sizes: number[], rate = RATE): Promise<Blob> {
+  const sink = flacSink(signal.length, rate);
   let at = 0;
   for (const size of sizes) {
     await sink.push(slice(signal, at, Math.min(at + size, signal.length)));
@@ -38,7 +38,7 @@ async function encodeInSlices(signal: Int16Array, sizes: number[]): Promise<Blob
 
 describe('CLICK_EXPORT_EXTENSION', () => {
   it('maps each format to its file extension', () => {
-    expect(CLICK_EXPORT_EXTENSION).toEqual({ wav: 'wav', mp3: 'mp3' });
+    expect(CLICK_EXPORT_EXTENSION).toEqual({ wav: 'wav', flac: 'flac' });
   });
 });
 
@@ -87,159 +87,175 @@ describe('wavSink', () => {
   });
 });
 
-describe('mp3Sink', () => {
-  it('types the file audio/mpeg and starts with an MPEG frame sync', async () => {
-    const blob = await encodeInSlices(clickSignal(3), [RATE * 3]);
-    expect(blob.type).toBe('audio/mpeg');
+describe('FLAC_DOWNLOAD_HINT', () => {
+  it('names both FLAC and the WAV, so people know what to fall back to', () => {
+    expect(FLAC_DOWNLOAD_HINT).toMatch(/lossless/i);
+    expect(FLAC_DOWNLOAD_HINT).toContain('FLAC');
+    expect(FLAC_DOWNLOAD_HINT).toContain('WAV');
+  });
+});
+
+describe('flacSink', () => {
+  const SLICINGS: Array<[string, number[]]> = [
+    ['one push', [Number.MAX_SAFE_INTEGER]],
+    ['1-sample slices then the rest', [1, 1, 1, Number.MAX_SAFE_INTEGER]],
+    ['777-sample slices', new Array(40).fill(777)],
+    ['1024-sample slices (exactly one frame each)', new Array(40).fill(1024)],
+    ['odd mix', [1, 777, 1024, 5000, 3, 1023, 1025, 20000, 2047]],
+    ['5000-sample slices', new Array(10).fill(5000)],
+  ];
+
+  it('types the file audio/flac and starts with the fLaC marker', async () => {
+    const blob = await encodeInSlices(clickSignal(1), [RATE]);
+    expect(blob.type).toBe('audio/flac');
     const bytes = await bytesOf(blob);
-    expect(bytes[0]).toBe(0xff);
-    expect(bytes[1]! & 0xe0).toBe(0xe0); // the 11 sync bits: 0xFF then three more set bits
+    expect(String.fromCharCode(...bytes.subarray(0, 4))).toBe('fLaC');
   });
 
-  it('is far smaller than the equivalent mono WAV and close to bitrate x duration', async () => {
-    const seconds = 6;
-    const blob = await encodeInSlices(clickSignal(seconds), [RATE * seconds]);
-    const wavSize = 44 + seconds * RATE * 2;
-    expect(blob.size).toBeLessThan(wavSize / 10);
-    const expected = (MP3_KBPS * 1000 * seconds) / 8; // constant bitrate
-    expect(blob.size).toBeGreaterThan(expected * 0.9);
-    expect(blob.size).toBeLessThan(expected * 1.1 + 1000); // + a frame or two of encoder delay and flush
+  it('keeps the audio/flac type when it is only the header (nothing pushed)', () => {
+    const sink = flacSink(0, RATE);
+    const blob = sink.finish();
+    expect(blob.type).toBe('audio/flac');
+    expect(blob.size).toBe(42);
   });
 
-  it('handles slices that are not a multiple of 1152 samples (or of the 9216-sample block)', async () => {
-    const seconds = 5;
-    const signal = clickSignal(seconds);
-    const blob = await encodeInSlices(signal, [10001, 777, 33333, 1, 4096 + 3]);
-    const bytes = await bytesOf(blob);
-    expect(bytes[0]).toBe(0xff);
-    expect(bytes[1]! & 0xe0).toBe(0xe0);
-    const expected = (MP3_KBPS * 1000 * seconds) / 8;
-    expect(blob.size).toBeGreaterThan(expected * 0.9);
-    expect(blob.size).toBeLessThan(expected * 1.1 + 1000);
-  });
-
-  it('gives the same bytes however the signal is cut into pushes (multiple pushes concatenate)', async () => {
-    const signal = clickSignal(4);
+  it.each(SLICINGS)('produces a byte-identical file for %s as for pushing everything at once', async (_name, sizes) => {
+    const signal = clickSignal(3);
     const whole = await bytesOf(await encodeInSlices(signal, [signal.length]));
-    const cut = await bytesOf(await encodeInSlices(signal, [5000, 12345, 1, 20000, 999]));
+    const cut = await bytesOf(await encodeInSlices(signal, sizes));
     expect(cut.length).toBe(whole.length);
     expect(cut).toEqual(whole);
   });
 
-  it('includes the encoder flush: the file equals encode + flush from a reference encoder', async () => {
+  it.each(SLICINGS)('decodes to exactly the input PCM for %s', async (_name, sizes) => {
+    const signal = clickSignal(3);
+    const decoded = decodeFlac(await bytesOf(await encodeInSlices(signal, sizes)));
+    expect(Array.from(decoded.samples)).toEqual(Array.from(signal));
+  });
+
+  it('writes the explicit 22050 Hz sample-rate code into every frame header (Apple decoders need it)', async () => {
+    const signal = clickSignal(1).slice(0, FLAC_BLOCK_SIZE + 300);
+    const bytes = await bytesOf(await encodeInSlices(signal, [signal.length]));
+    const decoded = decodeFlac(bytes);
+    expect(Array.from(bytes.subarray(42, 46))).toEqual([0xff, 0xf8, 0xa6, 0x08]);
+    expect(bytes[42 + decoded.frames[0]!.byteLength + 2]).toBe(0x76);
+    expect(decoded.frames.every((f) => f.sampleRateCode === 6)).toBe(true);
+  });
+
+  it('writes the code for the rate it was given (44100 Hz -> 9) in every frame', async () => {
+    const signal = clickSignal(1).slice(0, 3000);
+    const decoded = decodeFlac(await bytesOf(await encodeInSlices(signal, [signal.length], 44100)));
+    expect(decoded.frames.every((f) => f.sampleRateCode === 9)).toBe(true);
+  });
+
+  it('writes the declared total and sample rate into STREAMINFO', async () => {
     const signal = clickSignal(2);
-    const reference = new Mp3Encoder(1, RATE, MP3_KBPS);
-    const parts: Uint8Array[] = [];
-    for (let i = 0; i < signal.length; i += 1152) {
-      const out = reference.encodeBuffer(signal.subarray(i, i + 1152));
-      if (out.length > 0) parts.push(new Uint8Array(out));
-    }
-    const flushed = reference.flush();
-    expect(flushed.length).toBeGreaterThan(0); // otherwise this test could not tell flush from no flush
-    parts.push(new Uint8Array(flushed));
-    const expected = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
-    let at = 0;
-    for (const p of parts) {
-      expected.set(p, at);
-      at += p.length;
-    }
-
-    const actual = await bytesOf(await encodeInSlices(signal, [signal.length]));
-    expect(actual.length).toBe(expected.length);
-    expect(actual).toEqual(expected);
+    const decoded = decodeFlac(await bytesOf(await encodeInSlices(signal, [3000, 100000], 22050)));
+    expect(decoded.info.totalSamples).toBe(signal.length);
+    expect(decoded.info.sampleRate).toBe(22050);
+    expect(decoded.info.channels).toBe(1);
+    expect(decoded.info.bitsPerSample).toBe(16);
   });
 
-  it('keeps earlier output intact when the encoder reuses its output array between calls', async () => {
-    // Two different signals through two pushes: the second half must not overwrite the first half's bytes.
-    const signal = clickSignal(4);
-    const twoPushes = await bytesOf(await encodeInSlices(signal, [signal.length / 2]));
-    const onePush = await bytesOf(await encodeInSlices(signal, [signal.length]));
-    expect(twoPushes).toEqual(onePush);
+  it('declares the sample rate it was given', async () => {
+    const decoded = decodeFlac(await bytesOf(await encodeInSlices(clickSignal(1).slice(0, 2000), [2000], 44100)));
+    expect(decoded.info.sampleRate).toBe(44100);
   });
 
-  it('produces a valid file with no audio pushed (flush only) and with an empty push', async () => {
-    const sink: PcmSink = await mp3Sink(RATE);
+  it('cuts every frame at 1024 samples except the last, whatever the push sizes', async () => {
+    const signal = clickSignal(3).slice(0, FLAC_BLOCK_SIZE * 7 + 300);
+    const decoded = decodeFlac(await bytesOf(await encodeInSlices(signal, [1, 777, 1024, 5000, 3])));
+    expect(decoded.frames.map((f) => f.blockSize)).toEqual([...new Array(7).fill(FLAC_BLOCK_SIZE), 300]);
+    expect(decoded.frames.map((f) => f.frameNumber)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('emits no partial frame when the total is a whole number of blocks', async () => {
+    const signal = clickSignal(3).slice(0, FLAC_BLOCK_SIZE * 4);
+    const decoded = decodeFlac(await bytesOf(await encodeInSlices(signal, [1500, 1500])));
+    expect(decoded.frames.map((f) => f.blockSize)).toEqual([1024, 1024, 1024, 1024]);
+  });
+
+  it('flushes a leftover shorter than a block as a final frame in finish()', async () => {
+    const signal = clickSignal(1).slice(0, 1500);
+    const sink = flacSink(signal.length, RATE);
+    await sink.push(slice(signal, 0, 1500));
+    const decoded = decodeFlac(await bytesOf(sink.finish()));
+    expect(decoded.frames.map((f) => f.blockSize)).toEqual([1024, 476]);
+    expect(Array.from(decoded.samples)).toEqual(Array.from(signal));
+  });
+
+  it('keeps a sub-block push entirely in the carry until finish() writes it', async () => {
+    const sink = flacSink(10, RATE);
+    await sink.push(Int16Array.from([1, 2, 3, 4, 5]).buffer);
+    await sink.push(Int16Array.from([6, 7, 8, 9, 10]).buffer);
+    const decoded = decodeFlac(await bytesOf(sink.finish()));
+    expect(decoded.frames).toHaveLength(1);
+    expect(Array.from(decoded.samples)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it('writes a final frame of a single sample', async () => {
+    const signal = clickSignal(1).slice(0, FLAC_BLOCK_SIZE + 1);
+    const decoded = decodeFlac(await bytesOf(await encodeInSlices(signal, [signal.length])));
+    expect(decoded.frames.map((f) => f.blockSize)).toEqual([FLAC_BLOCK_SIZE, 1]);
+    expect(Array.from(decoded.samples)).toEqual(Array.from(signal));
+  });
+
+  it('accepts empty pushes anywhere without changing the file', async () => {
+    const signal = clickSignal(1);
+    const plain = await bytesOf(await encodeInSlices(signal, [signal.length]));
+    const sink = flacSink(signal.length, RATE);
     await sink.push(new ArrayBuffer(0));
-    const blob = sink.finish();
-    expect(blob.type).toBe('audio/mpeg');
-    expect(blob.size).toBeGreaterThanOrEqual(0);
+    await sink.push(slice(signal, 0, 3000));
+    await sink.push(new ArrayBuffer(0));
+    await sink.push(slice(signal, 3000, signal.length));
+    await sink.push(new ArrayBuffer(0));
+    expect(await bytesOf(sink.finish())).toEqual(plain);
   });
 
-  describe('yielding to the page', () => {
-    afterEach(() => {
-      vi.restoreAllMocks();
-      vi.unstubAllGlobals();
-    });
-
-    /** Counts message channels created: each `nextTurn()` makes one. */
-    function countTurns() {
-      const Real = globalThis.MessageChannel;
-      const counter = { turns: 0 };
-      vi.stubGlobal(
-        'MessageChannel',
-        class CountingChannel extends Real {
-          constructor() {
-            super();
-            counter.turns++;
-          }
-        },
-      );
-      return counter;
-    }
-
-    it('takes a turn before a block once 25 ms of work have passed, then resumes and finishes the file', async () => {
-      const counter = countTurns();
-      let now = 0;
-      vi.spyOn(performance, 'now').mockImplementation(() => (now += 100)); // every block looks slow
-      const sink = await mp3Sink(RATE);
-      await sink.push(clickSignal(1).slice(0, 9216 * 3).buffer); // 3 blocks
-      expect(counter.turns).toBe(3);
-      const bytes = await bytesOf(sink.finish());
-      expect(bytes[0]).toBe(0xff);
-    });
-
-    it('does not take a turn while the work stays within the budget', async () => {
-      const counter = countTurns();
-      vi.spyOn(performance, 'now').mockReturnValue(1000); // time stands still
-      const sink = await mp3Sink(RATE);
-      await sink.push(new Int16Array(9216 * 20).buffer);
-      expect(counter.turns).toBe(0);
-    });
-
-    it('produces the same bytes whether or not it yielded between blocks', async () => {
-      const signal = clickSignal(3);
-      const quiet = await bytesOf(await encodeInSlices(signal, [signal.length]));
-      let now = 0;
-      vi.spyOn(performance, 'now').mockImplementation(() => (now += 100));
-      const yielding = await bytesOf(await encodeInSlices(signal, [signal.length]));
-      expect(yielding).toEqual(quiet);
-    });
-  });
-});
-
-describe('mp3Sink when the encoder cannot be loaded', () => {
-  afterEach(() => {
-    vi.doUnmock('@breezystack/lamejs');
-    vi.resetModules();
+  it('a second finish() adds nothing', async () => {
+    const signal = clickSignal(1).slice(0, 1500);
+    const sink = flacSink(signal.length, RATE);
+    await sink.push(slice(signal, 0, 1500));
+    const first = await bytesOf(sink.finish());
+    const second = await bytesOf(sink.finish());
+    expect(second).toEqual(first);
   });
 
-  it('rejects with a plain-language message that points at the WAV', async () => {
-    vi.resetModules();
-    vi.doMock('@breezystack/lamejs', () => {
-      throw new Error('Failed to fetch dynamically imported module');
-    });
-    const fresh = await import('./clickExportSinks');
-    await expect(fresh.mp3Sink(RATE)).rejects.toThrow(
-      "Couldn't load the MP3 encoder. Check your connection and try again, or download the WAV.",
-    );
+  it('does not read pushed memory later: changing the pushed buffer after push() leaves the file alone', async () => {
+    const signal = clickSignal(1);
+    const expected = await bytesOf(await encodeInSlices(signal, [signal.length]));
+    const sink = flacSink(signal.length, RATE);
+    const first = slice(signal, 0, 1500); // 1500 = one frame plus a carry
+    await sink.push(first);
+    new Int16Array(first).fill(12345);
+    await sink.push(slice(signal, 1500, signal.length));
+    expect(await bytesOf(sink.finish())).toEqual(expected);
   });
 
-  it('does not leak the underlying loader error text', async () => {
-    vi.resetModules();
-    vi.doMock('@breezystack/lamejs', () => {
-      throw new Error('https://example.invalid/assets/lamejs-abc123.js');
-    });
-    const fresh = await import('./clickExportSinks');
-    await expect(fresh.mp3Sink(RATE)).rejects.not.toThrow(/example\.invalid/);
+  it('returns a promise from push', () => {
+    expect(flacSink(0, RATE).push(new ArrayBuffer(0))).toBeInstanceOf(Promise);
+  });
+
+  it('round-trips full-scale content that forces verbatim frames', async () => {
+    const signal = Int16Array.from({ length: 5000 }, (_, i) => (i % 2 === 0 ? -32768 : 32767));
+    const decoded = decodeFlac(await bytesOf(await encodeInSlices(signal, [999, 3001])));
+    expect(Array.from(decoded.samples)).toEqual(Array.from(signal));
+    expect(decoded.frames.some((f) => f.subframe === 'verbatim')).toBe(true);
+  });
+
+  it('is far smaller than the equivalent mono WAV for sparse clicks', async () => {
+    const seconds = 6;
+    const blob = await encodeInSlices(clickSignal(seconds), [RATE * seconds]);
+    expect(blob.size).toBeLessThan((44 + seconds * RATE * 2) / 10);
+  });
+
+  it('matches the WAV sink sample for sample', async () => {
+    const signal = clickSignal(2);
+    const wav = wavSink(signal.length, RATE);
+    await wav.push(signal.slice().buffer);
+    const wavBytes = await bytesOf(wav.finish());
+    const wavSamples = new Int16Array(wavBytes.slice(44).buffer);
+    const flacSamples = decodeFlac(await bytesOf(await encodeInSlices(signal, [12345, 999999]))).samples;
+    expect(Array.from(flacSamples)).toEqual(Array.from(wavSamples));
   });
 });

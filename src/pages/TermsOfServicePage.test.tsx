@@ -58,29 +58,20 @@ describe('TermsOfServicePage', () => {
   });
 
   describe('Open-source software section', () => {
-    it('links LAME to its home page in a new tab with noopener', () => {
+    it('no longer mentions LAME, lamejs or the LGPL (the MP3 encoder was removed)', () => {
       render(<TermsOfServicePage />);
-      const link = screen.getByRole('link', { name: 'LAME' });
-      expect(link).toHaveAttribute('href', 'https://lame.sourceforge.net/');
-      expect(link).toHaveAttribute('target', '_blank');
-      expect(link.getAttribute('rel')).toContain('noopener');
+      const section = openSourceSection();
+      expect(section).not.toHaveTextContent(/LAME|lamejs|LGPL|MP3/i);
+      expect(screen.queryByRole('link', { name: 'LAME' })).not.toBeInTheDocument();
+      expect(document.querySelector('a[href*="lamejs"], a[href*="lame.sourceforge"]')).toBeNull();
     });
 
-    it('links the lamejs source to its GitHub repository', () => {
+    it('lists alphaTab (MPL-2.0) as the only open-source library bullet', () => {
       render(<TermsOfServicePage />);
-      const link = screen.getByRole('link', { name: 'source' });
-      expect(link).toHaveAttribute('href', 'https://github.com/zhuker/lamejs');
-      expect(link).toHaveAttribute('target', '_blank');
-      expect(link.getAttribute('rel')).toContain('noopener');
-    });
-
-    it('names @breezystack/lamejs, LGPL-3.0, unmodified use and on-demand loading', () => {
-      render(<TermsOfServicePage />);
-      const item = screen.getByRole('link', { name: 'LAME' }).closest('li')!;
-      expect(item).toHaveTextContent('@breezystack/lamejs');
-      expect(item).toHaveTextContent(/LGPL-3\.0/);
-      expect(item).toHaveTextContent(/We use it unmodified/);
-      expect(item).toHaveTextContent(/loads only\s+when you ask for an MP3/);
+      const items = within(openSourceSection()).getAllByRole('listitem');
+      expect(items).toHaveLength(1);
+      expect(items[0]).toHaveTextContent(/alphaTab/);
+      expect(items[0]).toHaveTextContent(/MPL-2\.0/);
     });
 
     it('links alphaTab to its repository and states MPL-2.0', () => {
@@ -103,12 +94,10 @@ describe('TermsOfServicePage', () => {
       expect(paragraph).toHaveTextContent('package.json');
     });
 
-    it('keeps all four links inside the Open-source software section', () => {
+    it('keeps both links inside the Open-source software section', () => {
       render(<TermsOfServicePage />);
       const section = within(openSourceSection());
       expect(section.getAllByRole('link').map((a) => a.textContent?.trim())).toEqual([
-        'LAME',
-        'source',
         'alphaTab',
         'GitHub',
       ]);
@@ -120,7 +109,7 @@ describe('TermsOfServicePage', () => {
     const external = screen
       .getAllByRole('link')
       .filter((a) => /^https?:\/\//.test(a.getAttribute('href') ?? ''));
-    expect(external.length).toBeGreaterThanOrEqual(4);
+    expect(external.length).toBeGreaterThanOrEqual(2);
     for (const a of external) {
       const rel = (a.getAttribute('rel') ?? '').split(/\s+/);
       expect(rel).toContain('noopener');

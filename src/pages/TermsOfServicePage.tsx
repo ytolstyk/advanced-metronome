@@ -39,19 +39,6 @@ export function TermsOfServicePage() {
       </p>
       <ul>
         <li>
-          MP3 downloads use the{' '}
-          <a href="https://lame.sourceforge.net/" target="_blank" rel="noopener noreferrer">
-            LAME
-          </a>{' '}
-          MP3 encoder through lamejs (by Alex Zhukov;{' '}
-          <a href="https://github.com/zhuker/lamejs" target="_blank" rel="noopener noreferrer">
-            source
-          </a>
-          ), published for the web as <code>@breezystack/lamejs</code>, under the GNU Lesser General
-          Public License v3.0 (LGPL-3.0). We use it unmodified, as a separate file the app loads only
-          when you ask for an MP3.
-        </li>
-        <li>
           Tab display, playback and Guitar Pro import use{' '}
           <a href="https://github.com/CoderLine/alphaTab" target="_blank" rel="noopener noreferrer">
             alphaTab

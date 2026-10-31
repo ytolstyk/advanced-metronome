@@ -20,11 +20,12 @@ vi.mock('./clickSynth', () => {
 
 vi.mock('./clickExportSinks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./clickExportSinks')>();
-  return { ...actual, mp3Sink: vi.fn(actual.mp3Sink), wavSink: vi.fn(actual.wavSink) };
+  return { ...actual, flacSink: vi.fn(actual.flacSink), wavSink: vi.fn(actual.wavSink) };
 });
 
 import { exportClickTrack } from './exportClickTrack';
-import { mp3Sink, wavSink } from './clickExportSinks';
+import { flacSink, wavSink } from './clickExportSinks';
+import { decodeFlac } from '../test/flacReferenceDecoder';
 
 // Mirrors the module constants (mono, 22.05 kHz, 5 s slices, at most 500 clicks per slice).
 const SAMPLE_RATE = 22050;
@@ -411,53 +412,68 @@ describe('exportClickTrack', () => {
 
   describe('output format', () => {
     beforeEach(() => {
-      vi.mocked(mp3Sink).mockClear();
+      vi.mocked(flacSink).mockClear();
       vi.mocked(wavSink).mockClear();
     });
 
-    it('defaults to WAV: builds a wav sink for the whole track and never loads the MP3 encoder', async () => {
+    const bytesOfBlob = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
+
+    it('defaults to WAV: builds a wav sink for the whole track and never a FLAC one', async () => {
       await exportClickTrack([piece({ repeats: 1 })], 100);
       expect(wavSink).toHaveBeenCalledWith(Math.ceil(SAMPLE_RATE * 2.5), SAMPLE_RATE);
-      expect(mp3Sink).not.toHaveBeenCalled();
+      expect(flacSink).not.toHaveBeenCalled();
       expect(downloads).toEqual(['click-track.wav']);
     });
 
-    it('renders an MP3 at 22.05 kHz, downloads it as click-track.mp3 and labels the Blob audio/mpeg', async () => {
-      const done = exportClickTrack([piece({ repeats: 2 })], 100, undefined, 'mp3');
-      await vi.runAllTimersAsync(); // the MP3 sink yields to the page with setTimeout 0
-      await done;
-      expect(mp3Sink).toHaveBeenCalledWith(SAMPLE_RATE);
+    it('renders a FLAC at 22.05 kHz, downloads it as click-track.flac and labels the Blob audio/flac', async () => {
+      await exportClickTrack([piece({ repeats: 2 })], 100, undefined, 'flac');
+      expect(flacSink).toHaveBeenCalledWith(Math.ceil(SAMPLE_RATE * 4.5), SAMPLE_RATE);
       expect(wavSink).not.toHaveBeenCalled();
-      expect(downloads).toEqual(['click-track.mp3']);
+      expect(downloads).toEqual(['click-track.flac']);
       expect(createdBlobs).toHaveLength(1);
-      expect(createdBlobs[0]!.type).toBe('audio/mpeg');
+      expect(createdBlobs[0]!.type).toBe('audio/flac');
     });
 
-    it('produces real MP3 data, far smaller than the equivalent WAV', async () => {
-      const done = exportClickTrack([piece({ repeats: 4 })], 100, undefined, 'mp3'); // 8 s
-      await vi.runAllTimersAsync();
-      await done;
-      const bytes = new Uint8Array(await createdBlobs[0]!.arrayBuffer());
-      expect(bytes[0]).toBe(0xff);
-      expect(bytes[1]! & 0xe0).toBe(0xe0);
-      const wavSize = 44 + Math.ceil(SAMPLE_RATE * 8.5) * 2;
-      expect(bytes.length).toBeGreaterThan(0);
-      expect(bytes.length).toBeLessThan(wavSize / 8);
+    it('produces a valid FLAC stream whose declared length is the number of samples rendered', async () => {
+      await exportClickTrack([piece({ repeats: 4 })], 100, undefined, 'flac'); // 8 s -> 2 slices
+      const decoded = decodeFlac(await bytesOfBlob(createdBlobs[0]!));
+      expect(decoded.info.sampleRate).toBe(SAMPLE_RATE);
+      expect(decoded.info.channels).toBe(1);
+      expect(decoded.info.totalSamples).toBe(keptSamples());
+      expect(decoded.samples.length).toBe(keptSamples());
+    });
+
+    it.each([
+      ['one slice', [piece({ repeats: 1 })]],
+      ['several slices', [piece({ repeats: 4 })]],
+      ['mixed pieces', [piece({ repeats: 2 }), piece({ id: 'p2', bpm: 90, repeats: 2, timeSignature: { numerator: 3, denominator: 4 } })]],
+    ])('decodes to exactly the same samples as the WAV of the same track (%s)', async (_name, pieces) => {
+      await exportClickTrack(pieces, 100, undefined, 'wav');
+      const wav = await bytesOfBlob(createdBlobs[0]!);
+      await exportClickTrack(pieces, 100, undefined, 'flac');
+      const flac = decodeFlac(await bytesOfBlob(createdBlobs[1]!));
+      const wavSamples = new Int16Array(wav.slice(44).buffer);
+      expect(flac.samples.length).toBe(wavSamples.length);
+      expect(Array.from(flac.samples)).toEqual(Array.from(wavSamples));
+    });
+
+    it('is smaller than the WAV of the same track', async () => {
+      await exportClickTrack([piece({ repeats: 4 })], 100, undefined, 'wav');
+      await exportClickTrack([piece({ repeats: 4 })], 100, undefined, 'flac');
+      expect(createdBlobs[1]!.size).toBeLessThan(createdBlobs[0]!.size);
     });
 
     it('passes a caller-supplied file name through to the download, whatever the format', async () => {
-      const done = exportClickTrack([piece({ repeats: 1 })], 100, 'Song-click.mp3', 'mp3');
-      await vi.runAllTimersAsync();
-      await done;
+      await exportClickTrack([piece({ repeats: 1 })], 100, 'Song-click.flac', 'flac');
       await exportClickTrack([piece({ repeats: 1 })], 100, 'Song-click.wav', 'wav');
-      expect(downloads).toEqual(['Song-click.mp3', 'Song-click.wav']);
+      expect(downloads).toEqual(['Song-click.flac', 'Song-click.wav']);
     });
 
     it('awaits each slice push, in order, before finishing the file', async () => {
       const order: string[] = [];
       let release!: () => void;
       const gate = new Promise<void>((resolve) => { release = resolve; });
-      vi.mocked(mp3Sink).mockImplementationOnce(async () => ({
+      vi.mocked(flacSink).mockImplementationOnce(() => ({
         push: async (pcm: ArrayBuffer) => {
           order.push(`push:${pcm.byteLength}`);
           if (order.length === 1) await gate;
@@ -465,10 +481,10 @@ describe('exportClickTrack', () => {
         },
         finish: () => {
           order.push('finish');
-          return new Blob(['x'], { type: 'audio/mpeg' });
+          return new Blob(['x'], { type: 'audio/flac' });
         },
       }));
-      const done = exportClickTrack([piece({ repeats: 3 })], 100, undefined, 'mp3'); // 6.5 s -> 2 slices
+      const done = exportClickTrack([piece({ repeats: 3 })], 100, undefined, 'flac'); // 6.5 s -> 2 slices
       await vi.advanceTimersByTimeAsync(0);
       expect(order).toEqual([`push:${CHUNK * 2}`]); // the second slice waits for the first push
       expect(ctxs()).toHaveLength(1);
@@ -478,17 +494,9 @@ describe('exportClickTrack', () => {
       expect(ctxs()).toHaveLength(2);
     });
 
-    it('fails before rendering or downloading anything when the MP3 encoder cannot load', async () => {
-      vi.mocked(mp3Sink).mockRejectedValueOnce(new Error("Couldn't load the MP3 encoder."));
-      await expect(exportClickTrack([piece()], 100, undefined, 'mp3')).rejects.toThrow("Couldn't load the MP3 encoder.");
-      expect(ctxs()).toHaveLength(0);
-      expect(URL.createObjectURL).not.toHaveBeenCalled();
-      expect(downloads).toEqual([]);
-    });
-
-    it('does not load the MP3 encoder for an empty track', async () => {
-      await exportClickTrack([], 100, undefined, 'mp3');
-      expect(mp3Sink).not.toHaveBeenCalled();
+    it('does not build a sink or download anything for an empty track', async () => {
+      await exportClickTrack([], 100, undefined, 'flac');
+      expect(flacSink).not.toHaveBeenCalled();
       expect(downloads).toEqual([]);
     });
   });
@@ -548,6 +556,28 @@ describe('exportClickTrack', () => {
       expect(ctxs()).toHaveLength(2);
       expect(downloads).toEqual(['x.wav']);
       expect(createdBlobs).toHaveLength(1);
+    });
+
+    it('aborts a FLAC export too: already aborted does nothing, a mid-render abort downloads nothing', async () => {
+      vi.mocked(flacSink).mockClear();
+      const pre = new AbortController();
+      pre.abort(new Error('gone'));
+      await expect(exportClickTrack([piece()], 100, undefined, 'flac', pre.signal)).rejects.toThrow('gone');
+      expect(ctxs()).toHaveLength(0);
+      expect(downloads).toEqual([]);
+
+      const controller = new AbortController();
+      const reason = new Error('stop flac');
+      vi.mocked(flacSink).mockImplementationOnce(() => abortingSink(controller, reason, 1));
+      await expect(exportClickTrack([piece({ repeats: 6 })], 100, undefined, 'flac', controller.signal)).rejects.toBe(reason);
+      expect(ctxs()).toHaveLength(1);
+      expect(downloads).toEqual([]);
+      expect(URL.createObjectURL).not.toHaveBeenCalled();
+    });
+
+    it('a FLAC export with a signal that is never aborted still downloads click-track.flac', async () => {
+      await exportClickTrack([piece({ repeats: 3 })], 100, undefined, 'flac', new AbortController().signal);
+      expect(downloads).toEqual(['click-track.flac']);
     });
 
     it('an abort after the download started changes nothing', async () => {

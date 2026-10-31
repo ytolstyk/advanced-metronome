@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn } from '@/lib/utils';
 import { ClickTrackEngine, getBpmAtRepetition } from '@/audio/ClickTrackEngine';
 import type { TrackPiece, SubdivisionLabel, LoopRampConfig } from '@/audio/ClickTrackEngine';
-import type { ClickExportFormat } from '@/audio/clickExportSinks';
+import { FLAC_DOWNLOAD_HINT, type ClickExportFormat } from '@/audio/clickExportSinks';
 import { exportClickTrack } from '@/audio/exportClickTrack';
 import { saveCloudClickTrack, loadCloudClickTracks, deleteCloudClickTrack } from '@/api/clickTrackApi';
 import type { SegmentGroup, CloudClickTrack } from '@/api/clickTrackApi';
@@ -1100,12 +1100,12 @@ export function ClickTrackPage() {
           </Button>
           <Button
             size="sm" variant="outline"
-            onClick={() => void doExport('mp3')}
+            onClick={() => void doExport('flac')}
             disabled={pieces.length === 0 || isPlaying || exporting}
-            title="Much smaller file that plays everywhere. For practice: MP3 adds a short delay, so use the WAV to line it up with other audio"
+            title={FLAC_DOWNLOAD_HINT}
             className="gap-1 text-xs"
           >
-            <Download size={13} /> {exporting ? 'Exporting…' : 'Download MP3'}
+            <Download size={13} /> {exporting ? 'Exporting…' : 'Download FLAC'}
           </Button>
           <Button
             size="sm" variant="outline"
@@ -1152,7 +1152,7 @@ export function ClickTrackPage() {
       )}
       {exportFailed && (
         <div className="ct-warning-banner" role="alert">
-          Couldn&apos;t create the audio file. The track may be too long for this browser to render, or the MP3 encoder couldn&apos;t load; try WAV, or a shorter or faster section.
+          Couldn&apos;t create the audio file. The track may be too long for this browser to render; try a shorter or faster section.
         </div>
       )}
       {shareTooLargeFor === pieces && <ShareTooLargeNotice />}

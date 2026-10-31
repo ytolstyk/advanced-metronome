@@ -1,38 +1,19 @@
+import { FLAC_BLOCK_SIZE, flacFrame, flacStreamHeader } from './flacEncoder';
 import { wavHeader } from './wavEncoder';
 
 /** What the click export writes to: it is handed 16-bit mono PCM slices in order, then asked for the file. */
 export interface PcmSink {
-  /** May take a while (MP3 encoding), so it yields to the page when it has worked for a while; await it. */
   push(pcm: ArrayBuffer): Promise<void>;
   finish(): Blob;
 }
 
-export type ClickExportFormat = 'wav' | 'mp3';
+export type ClickExportFormat = 'wav' | 'flac';
 
-export const CLICK_EXPORT_EXTENSION: Record<ClickExportFormat, string> = { wav: 'wav', mp3: 'mp3' };
+/** Shown on every FLAC download button. A sparse track shrinks about 40x, a dense one about 6x. */
+export const FLAC_DOWNLOAD_HINT =
+  "Lossless and 6 to 40 times smaller than the WAV, depending on how busy the track is. Not every app opens FLAC; if yours doesn't, use the WAV";
 
-/** A click only has to be heard, and a constant-bitrate MP3 of mostly silence is tiny at this rate (about 4.8 MB per 20 minutes). */
-const MP3_KBPS = 32;
-/** lamejs works in blocks of 1152 samples; a block takes about 3 ms to encode. */
-const MP3_BLOCK = 1152 * 8;
-/** Encoding runs on the main thread: after this much work the browser gets a turn. */
-const WORK_BUDGET_MS = 25;
-
-/**
- * Lets the page paint and handle input. A message event rather than `setTimeout`, because browsers
- * throttle timers in a background tab to once a second or less, which would stall a long export
- * the moment the person switches tabs.
- */
-function nextTurn(): Promise<void> {
-  return new Promise((resolve) => {
-    const channel = new MessageChannel();
-    channel.port1.onmessage = () => {
-      channel.port1.close();
-      resolve();
-    };
-    channel.port2.postMessage(null);
-  });
-}
+export const CLICK_EXPORT_EXTENSION: Record<ClickExportFormat, string> = { wav: 'wav', flac: 'flac' };
 
 /** Folds each slice into a Blob straight away, so its ArrayBuffer can be freed and the browser may spill the Blob to disk. */
 export function wavSink(totalSamples: number, sampleRate: number): PcmSink {
@@ -47,37 +28,36 @@ export function wavSink(totalSamples: number, sampleRate: number): PcmSink {
 }
 
 /**
- * Encodes mono PCM as MP3. The encoder (LGPL-3.0, about 170 KB) is its own chunk, fetched and run only
- * when this is called. (The service worker may still precache the file.)
+ * Lossless FLAC: every sample is exactly what the WAV has (no smearing, no encoder delay), and the
+ * silence between clicks costs a few bytes per block, so a sparse track is about 40x smaller than the
+ * WAV. Slices are not a whole number of blocks, so the leftover samples wait for the next slice.
  */
-export async function mp3Sink(sampleRate: number): Promise<PcmSink> {
-  let lib: typeof import('@breezystack/lamejs');
-  try {
-    lib = await import('@breezystack/lamejs');
-  } catch {
-    throw new Error("Couldn't load the MP3 encoder. Check your connection and try again, or download the WAV.");
-  }
-  const { Mp3Encoder } = lib;
-  const encoder = new Mp3Encoder(1, sampleRate, MP3_KBPS);
-  const type = 'audio/mpeg';
-  let blob = new Blob([], { type });
+export function flacSink(totalSamples: number, sampleRate: number): PcmSink {
+  const type = 'audio/flac';
+  let blob = new Blob([flacStreamHeader(sampleRate, totalSamples)], { type });
+  let carry = new Int16Array(0);
+  let frameNumber = 0;
   return {
     push: async (pcm) => {
       // pcm16 writes little-endian, which is what every browser's Int16Array is.
-      const samples = new Int16Array(pcm);
-      const parts: Uint8Array<ArrayBuffer>[] = [];
-      let turnStart = performance.now();
-      for (let i = 0; i < samples.length; i += MP3_BLOCK) {
-        if (performance.now() - turnStart > WORK_BUDGET_MS) {
-          await nextTurn();
-          turnStart = performance.now();
-        }
-        // slice(): the encoder may reuse the array it returns on the next call.
-        const out = encoder.encodeBuffer(samples.subarray(i, i + MP3_BLOCK)).slice();
-        if (out.length > 0) parts.push(out);
+      const incoming = new Int16Array(pcm);
+      const samples = new Int16Array(carry.length + incoming.length);
+      samples.set(carry);
+      samples.set(incoming, carry.length);
+      const whole = samples.length - (samples.length % FLAC_BLOCK_SIZE);
+      const frames: Uint8Array<ArrayBuffer>[] = [];
+      for (let i = 0; i < whole; i += FLAC_BLOCK_SIZE) {
+        frames.push(flacFrame(samples.subarray(i, i + FLAC_BLOCK_SIZE), frameNumber++, sampleRate));
       }
-      blob = new Blob([blob, ...parts], { type });
+      carry = samples.slice(whole);
+      if (frames.length > 0) blob = new Blob([blob, ...frames], { type });
     },
-    finish: () => new Blob([blob, encoder.flush().slice()], { type }),
+    finish: () => {
+      if (carry.length === 0) return blob;
+      const last = flacFrame(carry, frameNumber++, sampleRate);
+      carry = new Int16Array(0);
+      blob = new Blob([blob, last], { type });
+      return blob;
+    },
   };
 }

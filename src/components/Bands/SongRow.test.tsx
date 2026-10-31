@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { FLAC_DOWNLOAD_HINT } from '../../audio/clickExportSinks';
 import { SONG_COLOR_STYLES, SONG_COLOR_TINT_PERCENT } from '../../bandSongColors';
 import { SongRow, type SongClickTrackControls } from './SongRow';
 import type { SongColorKey, ValidSong } from '../../bandTypes';
@@ -387,7 +388,7 @@ describe('SongRow click track strip', () => {
     const user = userEvent.setup();
     await user.click(btn(/^Play click track for Wonderwall$/));
     await user.click(btn(/^Download click track for Wonderwall$/));
-    await user.click(btn(/^Download compressed click track \(MP3\) for Wonderwall$/));
+    await user.click(btn(/^Download compressed click track \(FLAC\) for Wonderwall$/));
     await user.click(btn(/^Open click track for Wonderwall in the editor$/));
     await user.click(btn(/^Remove click track for Wonderwall$/));
     expect(c.onPlay).toHaveBeenCalledTimes(1);
@@ -434,16 +435,16 @@ describe('SongRow click track strip', () => {
     expect(btn(/^Download click track/)).toBeEnabled();
   });
 
-  it('labels the two downloads WAV and MP3, and hints that the MP3 is small but adds a delay', () => {
+  it('labels the two downloads WAV and FLAC, with the shared FLAC hint as the tooltip', () => {
     setup({}, { clickTrack: controls() });
     expect(btn(/^Download click track/)).toHaveTextContent('WAV');
-    const mp3 = btn(/^Download compressed click track/);
-    expect(mp3).toHaveTextContent('MP3');
-    expect(mp3).toBeEnabled();
-    expect(mp3).toHaveAttribute('title', expect.stringMatching(/smaller file.*MP3 adds a short delay.*WAV/));
+    const flac = btn(/^Download compressed click track/);
+    expect(flac).toHaveTextContent('FLAC');
+    expect(flac).toBeEnabled();
+    expect(flac).toHaveAttribute('title', FLAC_DOWNLOAD_HINT);
   });
 
-  it('does not fire the MP3 callback when the button is disabled by a problem', async () => {
+  it('does not fire the FLAC callback when the button is disabled by a problem', async () => {
     const c = controls({ problem: 'Made by a newer version of the app.' });
     setup({}, { clickTrack: c });
     await userEvent.setup().click(btn(/^Download compressed click track/));
