@@ -10,6 +10,7 @@ import {
   type PendingVote,
   type SetListRecord,
   type SongColorRecord,
+  type SongTrackMetaRecord,
   type SongRecord,
   type VoteRecord,
 } from './bandTypes';
@@ -32,6 +33,8 @@ import {
   isSongColorKey,
   isVoteValue,
   myColorSongIds,
+  mySongTrackIds,
+  resolveSongTracks,
   myLabelColors,
   myVotes,
   normalizeHttpUrl,
@@ -1647,5 +1650,106 @@ describe('activePending', () => {
   it('is what resolveMyVote delegates to (same grace default)', () => {
     expect(resolveMyVote(settled('up', 10_000), 10_000 + VOTE_INDEX_LAG_GRACE_MS + 1, 'down').pending).toBeUndefined();
     expect(resolveMyVote(settled('up', 10_000), 10_000 + VOTE_INDEX_LAG_GRACE_MS, 'down').pending).toBe('up');
+  });
+});
+
+describe('resolveSongTracks / mySongTrackIds', () => {
+  const b = band();
+  const w = world(b, [member(BOB), member(CAT)], [setList()], [song('s1', BOB), song('s2', CAT)]);
+  const trackRow = (songId: string, over: Partial<SongTrackMetaRecord> = {}): SongTrackMetaRecord => ({
+    songId,
+    owner: BOB,
+    setListId: 'sl-1',
+    format: 1,
+    bytes: 500,
+    createdAt: '2026-02-01T00:00:00Z',
+    ...over,
+  });
+  const resolve = (rows: SongTrackMetaRecord[], songs = w.validSongs, subs = w.subs) => resolveSongTracks(rows, songs, subs);
+
+  it('maps each valid song to its newest track', () => {
+    const tracks = resolve([trackRow('s1'), trackRow('s2', { owner: CAT, bytes: 900 })]);
+    expect(tracks.get('s1')).toEqual({ owner: BOB, format: 1, bytes: 500, stamp: '2026-02-01T00:00:00Z' });
+    expect(tracks.get('s2')?.owner).toBe(CAT);
+  });
+
+  it('picks the newest row by server stamp, then owner for a tie', () => {
+    const older = trackRow('s1', { owner: BOB, updatedAt: '2026-03-01T00:00:00Z' });
+    const newer = trackRow('s1', { owner: CAT, bytes: 700, updatedAt: '2026-03-02T00:00:00Z' });
+    expect(resolve([older, newer]).get('s1')?.owner).toBe(CAT);
+    expect(resolve([newer, older]).get('s1')?.owner).toBe(CAT);
+    const tie = [trackRow('s1', { updatedAt: '2026-03-01T00:00:00Z' }), trackRow('s1', { owner: CAT, updatedAt: '2026-03-01T00:00:00Z' })];
+    expect(resolve(tie).get('s1')?.owner).toBe(CAT);
+    expect(resolve([...tie].reverse()).get('s1')?.owner).toBe(CAT);
+  });
+
+  it('treats a newest cleared row (0 bytes) as no track, so a clear shadows an older track', () => {
+    const rows = [
+      trackRow('s1', { updatedAt: '2026-03-01T00:00:00Z' }),
+      trackRow('s1', { owner: CAT, bytes: 0, updatedAt: '2026-03-02T00:00:00Z' }),
+    ];
+    expect(resolve(rows).has('s1')).toBe(false);
+    // ...and a replacement after the clear brings a track back
+    expect(resolve([...rows, trackRow('s1', { updatedAt: '2026-03-03T00:00:00Z' })]).has('s1')).toBe(true);
+  });
+
+  it('ignores rows for unknown or hidden songs and rows with forged parents', () => {
+    const hidden = world(band({ hiddenSongIds: ['s1'] }), [member(BOB), member(CAT)], [setList()], [song('s1', BOB), song('s2', CAT)]);
+    const rows = [trackRow('s1'), trackRow('nope'), trackRow('s2', { owner: CAT, setListId: 'sl-other' })];
+    expect(resolveSongTracks(rows, hidden.validSongs, hidden.subs).size).toBe(0);
+  });
+
+  it('ignores rows from strangers and banned members, but counts the band owner', () => {
+    expect(resolve([trackRow('s1', { owner: MALLORY })]).size).toBe(0);
+    const banned = world(band({ bannedSubs: [CAT] }), [member(BOB), member(CAT)], [setList()], [song('s1', BOB)]);
+    expect(resolveSongTracks([trackRow('s1', { owner: CAT })], banned.validSongs, banned.subs).size).toBe(0);
+    expect(resolve([trackRow('s1', { owner: OWNER })]).get('s1')?.owner).toBe(OWNER);
+  });
+
+  it('lets an older valid track show when the newer row is from a banned member', () => {
+    const banned = world(band({ bannedSubs: [CAT] }), [member(BOB), member(CAT)], [setList()], [song('s1', BOB)]);
+    const rows = [
+      trackRow('s1', { updatedAt: '2026-03-01T00:00:00Z' }),
+      trackRow('s1', { owner: CAT, updatedAt: '2026-03-02T00:00:00Z' }),
+    ];
+    expect(resolveSongTracks(rows, banned.validSongs, banned.subs).get('s1')?.owner).toBe(BOB);
+  });
+
+  it('ignores rows with an impossible format or size, so a forged row cannot shadow a good one', () => {
+    const good = trackRow('s1', { updatedAt: '2026-03-01T00:00:00Z' });
+    for (const bad of [{ bytes: -1 }, { bytes: 1.5 }, { bytes: 10_000_000 }, { format: 0 }, { format: 1.2 }, { bytes: Number.NaN }]) {
+      const forged = trackRow('s1', { owner: CAT, updatedAt: '2026-03-09T00:00:00Z', ...bad });
+      expect(resolve([good, forged]).get('s1')?.owner).toBe(BOB);
+    }
+  });
+
+  it('fails closed on a row with no server stamp, so "newest wins" can never degrade to "highest sub wins"', () => {
+    const stampless = trackRow('s1', { createdAt: undefined, updatedAt: undefined });
+    expect(resolve([stampless]).size).toBe(0);
+    expect(mySongTrackIds([stampless], w.validSongs, w.subs, BOB).size).toBe(0);
+    // ...and it can't shadow a properly stamped row either
+    const stamped = trackRow('s1', { owner: CAT, updatedAt: '2026-03-01T00:00:00Z' });
+    expect(resolve([stampless, stamped]).get('s1')?.owner).toBe(CAT);
+  });
+
+  it('keeps a newer-format row visible (the reader decides it is unreadable)', () => {
+    expect(resolve([trackRow('s1', { format: 2 })]).get('s1')?.format).toBe(2);
+  });
+
+  describe('mySongTrackIds', () => {
+    const mine = (rows: SongTrackMetaRecord[], sub = BOB) => mySongTrackIds(rows, w.validSongs, w.subs, sub);
+
+    it('returns the songs the caller has a row for, cleared ones included', () => {
+      expect(mine([trackRow('s1'), trackRow('s2', { bytes: 0 }), trackRow('s2', { owner: CAT })])).toEqual(new Set(['s1', 's2']));
+    });
+
+    it('ignores other members, strangers and rows for unknown songs', () => {
+      expect(mine([trackRow('s1', { owner: CAT }), trackRow('nope')])).toEqual(new Set());
+      expect(mine([trackRow('s1', { owner: MALLORY })], MALLORY)).toEqual(new Set());
+    });
+
+    it('is empty for a non-member caller', () => {
+      expect(mine([trackRow('s1')], 'someone-else').size).toBe(0);
+    });
   });
 });

@@ -3,7 +3,8 @@ import type { Schema } from '../../amplify/data/resource';
 import type { TrackPiece } from '../audio/ClickTrackEngine';
 import { isAuthenticated } from './authUtils';
 
-export interface SegmentGroup { id: string; name: string; color: string }
+import type { SegmentGroup } from '../clickTrackTypes';
+export type { SegmentGroup };
 
 const client = generateClient<Schema>();
 

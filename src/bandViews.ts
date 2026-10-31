@@ -2,10 +2,15 @@ import {
   BAND_TEXT,
   type BandRecord,
   type BandView,
+  type ListAllResult,
   type MemberRecord,
   type SetListRecord,
   type SetListRows,
   type SetListView,
+  type SongRecord,
+  type SongTrackMetaRecord,
+  type SongTrackSummary,
+  type ValidSong,
 } from './bandTypes';
 import {
   buildDisplayNames,
@@ -16,10 +21,12 @@ import {
   isSetListShared,
   myColorSongIds,
   myLabelColors,
+  mySongTrackIds,
   myVotes,
   partitionSongs,
   resolveColorLabels,
   resolveSongColors,
+  resolveSongTracks,
   sanitizeDisplayName,
   sortSongsByScore,
   tallyVotes,
@@ -86,6 +93,7 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
   const tallies = tallyVotes(counted, visible);
   const colorRows = rows.colors?.items ?? [];
   const labelRows = rows.labels?.items ?? [];
+  const clickRows = rows.clicks?.items ?? [];
   return {
     setList,
     shared: isSetListShared(view.band, setListId),
@@ -93,6 +101,8 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
     tallies,
     colors: resolveSongColors(colorRows, visible, view.memberSubs),
     myColorSongIds: myColorSongIds(colorRows, visible, view.memberSubs, view.sub),
+    tracks: resolveSongTracks(clickRows, visible, view.memberSubs),
+    myTrackSongIds: mySongTrackIds(clickRows, visible, view.memberSubs, view.sub),
     colorLabels: resolveColorLabels(labelRows, view.band, view.memberSubs),
     myLabelColors: myLabelColors(labelRows, view.band, view.memberSubs, view.sub),
     myVotes: myVotes(counted, view.sub),
@@ -102,6 +112,31 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
       rows.songs.incomplete ||
       rows.votes.incomplete ||
       (rows.colors?.incomplete ?? false) ||
-      (rows.labels?.incomplete ?? false),
+      (rows.labels?.incomplete ?? false) ||
+      (rows.clicks?.incomplete ?? false),
+  };
+}
+
+/** The songs of a set list a click track can be attached to, with which of them already have one. */
+export interface SongTargets {
+  /** Valid, non-hidden songs, by title. */
+  songs: ValidSong[];
+  tracks: Map<string, SongTrackSummary>;
+  /** Songs the caller has their own click track row for: picks create vs update on save. */
+  myTrackSongIds: Set<string>;
+  incomplete: boolean;
+}
+
+/** Validates raw songs and click track metadata for the "Save to band" picker (no votes needed). */
+export function assembleSongTargets(
+  view: BandView,
+  rows: { songs: ListAllResult<SongRecord>; clicks: ListAllResult<SongTrackMetaRecord> },
+): SongTargets {
+  const { visible } = partitionSongs(rows.songs.items, view.band, view.setLists, view.memberSubs);
+  return {
+    songs: [...visible].sort((a, b) => a.title.localeCompare(b.title)),
+    tracks: resolveSongTracks(rows.clicks.items, visible, view.memberSubs),
+    myTrackSongIds: mySongTrackIds(rows.clicks.items, visible, view.memberSubs, view.sub),
+    incomplete: rows.songs.incomplete || rows.clicks.incomplete,
   };
 }

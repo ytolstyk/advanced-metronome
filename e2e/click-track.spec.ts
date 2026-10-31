@@ -102,4 +102,22 @@ test.describe('ClickTrackPage', () => {
       expect(overflows).toBe(false);
     });
   });
+  test('Save to Band is only offered to signed-in users', async ({ page }) => {
+    await page.getByRole('button', { name: '+ Add' }).click();
+    await expect(page.locator('.ct-piece-card')).toBeVisible();
+    // Signed out, the cloud actions are replaced by a sign-in prompt, and band saving is one of them.
+    await expect(page.getByRole('button', { name: /Save to Band/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Save to Cloud/ })).toHaveCount(0);
+  });
+
+  test('a stale or invalid band hand-off is ignored and does not load a track', async ({ page }) => {
+    await page.evaluate(() => {
+      sessionStorage.setItem('band-to-click-import', JSON.stringify({ pieces: [{ id: 'x' }], groups: [], title: 'Bad', at: Date.now() }));
+    });
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('No segments yet')).toBeVisible();
+    await expect(page.getByText(/click track from your band/)).toHaveCount(0);
+    expect(await page.evaluate(() => sessionStorage.getItem('band-to-click-import'))).toBeNull();
+  });
 });

@@ -20,6 +20,11 @@ vi.mock('@/api/clickTrackApi', () => ({
   deleteCloudClickTrack: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/api/bandsApi', () => ({
+  loadMyBands: vi.fn().mockResolvedValue({ entries: [], failedCount: 0, deadBandIds: [] }),
+  loadBandView: vi.fn(),
+}))
+
 vi.mock('@/audio/exportClickTrack', () => ({ exportClickTrack: vi.fn() }))
 
 vi.mock('@/audio/ClickTrackEngine', async (importOriginal) => {
@@ -534,5 +539,111 @@ describe('ClickTrackPage: every way of replacing the track drops the old selecti
     expect(screen.queryByText(/Loop: measures/)).not.toBeInTheDocument()
     expect(stored().pieces.map((p) => p.label)).toEqual(['Old 7'])
     expect(stored().groups).toEqual([])
+  })
+})
+
+describe('ClickTrackPage: Open from a band set list', () => {
+  const KEY = 'band-to-click-import'
+  const handoff = (pieces: TrackPiece[], over: Record<string, unknown> = {}) =>
+    sessionStorage.setItem(KEY, JSON.stringify({ pieces, groups: [], title: 'Black Dog', at: Date.now(), ...over }))
+
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    auth.status = 'unauthenticated'
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    sessionStorage.clear()
+  })
+
+  it('loads the band track straight into an empty editor, persists it, and forgets the hand-off', async () => {
+    handoff([piece(1, { label: 'Riff' })])
+    const { container } = renderPage()
+    await waitFor(() => expect(container.querySelectorAll('.ct-piece-card')).toHaveLength(1))
+    expect(screen.queryByText(/load it\?/)).not.toBeInTheDocument()
+    expect(stored().pieces.map((p) => p.label)).toEqual(['Riff'])
+    expect(sessionStorage.getItem(KEY)).toBeNull()
+  })
+
+  it('only offers the track when the editor already has work, and replaces nothing until asked', async () => {
+    seed([piece(9)])
+    handoff([piece(1, { label: 'Riff' })])
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderPage()
+
+    expect(await screen.findByText('“Black Dog” click track from your band — load it?')).toBeInTheDocument()
+    expect(stored().pieces.map((p) => p.label)).toEqual(['Old 9'])
+    expect(sessionStorage.getItem(KEY)).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Load' }))
+    expect(confirm).toHaveBeenCalledWith('Replace current track with the band’s click track?')
+    expect(stored().pieces.map((p) => p.label)).toEqual(['Riff'])
+    expect(screen.queryByText(/load it\?/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the current track when the replacement is declined, and Dismiss drops the offer', async () => {
+    seed([piece(9)])
+    handoff([piece(1)])
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Load' }))
+    expect(stored().pieces.map((p) => p.label)).toEqual(['Old 9'])
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(screen.queryByText(/load it\?/)).not.toBeInTheDocument()
+  })
+
+  it('ignores a stale, damaged or foreign hand-off, but still clears it', async () => {
+    for (const raw of [
+      JSON.stringify({ pieces: [piece(1)], groups: [], title: 't', at: Date.now() - 10 * 60_000 }),
+      JSON.stringify({ pieces: [{ id: 'x' }], groups: [], title: 't', at: Date.now() }),
+      'not json',
+    ]) {
+      sessionStorage.setItem(KEY, raw)
+      const { container, unmount } = renderPage()
+      expect(container.querySelectorAll('.ct-piece-card')).toHaveLength(0)
+      expect(screen.queryByText(/load it\?/)).not.toBeInTheDocument()
+      expect(sessionStorage.getItem(KEY)).toBeNull()
+      unmount()
+      localStorage.clear()
+    }
+  })
+
+  it('does not offer the track a second time on the next visit', async () => {
+    seed([piece(9)])
+    handoff([piece(1)])
+    const first = renderPage()
+    await screen.findByText(/load it\?/)
+    first.unmount()
+    renderPage()
+    expect(screen.queryByText(/load it\?/)).not.toBeInTheDocument()
+  })
+})
+
+describe('ClickTrackPage: Save to Band', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+  })
+
+  it('is not offered to a signed-out visitor', () => {
+    auth.status = 'unauthenticated'
+    seed([piece(1)])
+    renderPage()
+    expect(screen.queryByRole('button', { name: /Save to Band/ })).not.toBeInTheDocument()
+  })
+
+  it('is disabled until the track has a segment, and opens the band picker once it does', async () => {
+    auth.status = 'authenticated'
+    const empty = renderPage()
+    expect(screen.getByRole('button', { name: /Save to Band/ })).toBeDisabled()
+    empty.unmount()
+
+    seed([piece(1)])
+    renderPage()
+    const button = screen.getByRole('button', { name: /Save to Band/ })
+    expect(button).toBeEnabled()
+    await userEvent.click(button)
+    expect(await screen.findByRole('dialog', { name: 'Save to a band' })).toBeInTheDocument()
   })
 })

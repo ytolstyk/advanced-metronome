@@ -25,10 +25,12 @@ export function encodeWav(buffer: AudioBuffer): Blob {
   str(36, 'data');
   view.setUint32(40, dataSize, true);
 
+  // Fetch each channel once: asking for it per sample is millions of calls on a long render.
+  const channels = Array.from({ length: numChannels }, (_, ch) => buffer.getChannelData(ch));
   let off = 44;
   for (let i = 0; i < numSamples; i++) {
     for (let ch = 0; ch < numChannels; ch++) {
-      const s = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]));
+      const s = Math.max(-1, Math.min(1, channels[ch]![i]!));
       view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
       off += 2;
     }

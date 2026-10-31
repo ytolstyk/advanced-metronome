@@ -1,10 +1,14 @@
-import { getBpmAtRepetition } from './ClickTrackEngine';
 import type { TrackPiece } from './ClickTrackEngine';
 import { accentClick, beatClick, subClick } from './clickSynth';
-import { subsPerBeat } from './clickMath';
+import { getBpmAtRepetition, subsPerBeat } from './clickMath';
 import { encodeWav } from './wavEncoder';
 
-export async function exportClickTrack(pieces: TrackPiece[], speedPercent: number): Promise<void> {
+/** Renders the track to a WAV and downloads it (`filename` defaults to `click-track.wav`). */
+export async function exportClickTrack(
+  pieces: TrackPiece[],
+  speedPercent: number,
+  filename = 'click-track.wav',
+): Promise<void> {
   const speedMult = speedPercent / 100;
   const sampleRate = 44100;
 
@@ -60,7 +64,7 @@ export async function exportClickTrack(pieces: TrackPiece[], speedPercent: numbe
   const url = URL.createObjectURL(wav);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'click-track.wav';
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }

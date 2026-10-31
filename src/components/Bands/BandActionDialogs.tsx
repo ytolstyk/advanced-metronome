@@ -69,7 +69,7 @@ export function LeaveBandDialog({ band, onClose, onLeft }: Pick<BaseProps, 'onCl
       open
       onOpenChange={(open) => !open && onClose()}
       title="Leave this band?"
-      description="Your votes, availability, gear and rig diagrams are removed. You can rejoin later with an invite code."
+      description="Your votes, availability, gear, rig diagrams and click tracks are removed. You can rejoin later with an invite code."
       confirmLabel={cleanupFailed ? 'Leave anyway' : 'Leave band'}
       destructive
       onConfirm={async () => {

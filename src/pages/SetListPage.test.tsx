@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup as cleanupAll, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { BandRecord, BandView, ColorLabelRecord, SongColorRecord, SongRecord, VoteRecord, ValidMember, ValidSetList } from '../bandTypes';
+import type { BandRecord, BandView, ColorLabelRecord, SongColorRecord, SongRecord, SongTrackMetaRecord, VoteRecord, ValidMember, ValidSetList } from '../bandTypes';
+import type { TrackPiece } from '../audio/ClickTrackEngine';
 import { SONG_COLOR_STYLES } from '../bandSongColors';
 import userEvent from '@testing-library/user-event';
 
@@ -17,6 +18,19 @@ vi.mock('../api/bandsApi', () => ({
 }));
 vi.mock('../api/songVotesApi', () => ({ castVote: vi.fn() }));
 vi.mock('../api/songColorsApi', () => ({ setSongColor: vi.fn() }));
+vi.mock('../api/songTracksApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api/songTracksApi')>()),
+  getSongTrack: vi.fn(),
+  clearSongTrack: vi.fn(),
+}));
+const { engine } = vi.hoisted(() => ({ engine: { prime: vi.fn(), start: vi.fn(), stop: vi.fn(), destroy: vi.fn() } }));
+vi.mock('../audio/ClickTrackEngine', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../audio/ClickTrackEngine')>()),
+  ClickTrackEngine: vi.fn(function () {
+    return engine;
+  }),
+}));
+vi.mock('../audio/exportClickTrack', () => ({ exportClickTrack: vi.fn() }));
 vi.mock('../api/colorLabelsApi', () => ({ fetchColorLabelRows: vi.fn(), setColorLabel: vi.fn() }));
 vi.mock('../api/setListsApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/setListsApi')>()),
@@ -31,6 +45,8 @@ import { hideSong, loadBandView, unhideSong } from '../api/bandsApi';
 import { deleteSong, fetchSetListRows, suggestSong } from '../api/setListsApi';
 import { castVote } from '../api/songVotesApi';
 import { setSongColor } from '../api/songColorsApi';
+import { clearSongTrack, getSongTrack, type SongTrackRead } from '../api/songTracksApi';
+import { exportClickTrack } from '../audio/exportClickTrack';
 import { fetchColorLabelRows, setColorLabel } from '../api/colorLabelsApi';
 
 const ME = 'sub-me';
@@ -124,14 +140,21 @@ function setup(
   votes = [vote('b', BOB, 'up')],
   colors: SongColorRecord[] = [],
   labels: ColorLabelRecord[] = [],
+  clicks: SongTrackMetaRecord[] = [],
 ) {
   vi.mocked(loadBandView).mockResolvedValue({ status: 'ok', view });
   vi.mocked(fetchColorLabelRows).mockResolvedValue(emptyPage(labels));
-  vi.mocked(fetchSetListRows).mockResolvedValue({ songs: emptyPage(songs), votes: emptyPage(votes), colors: emptyPage(colors) });
+  vi.mocked(fetchSetListRows).mockResolvedValue({
+    songs: emptyPage(songs),
+    votes: emptyPage(votes),
+    colors: emptyPage(colors),
+    clicks: emptyPage(clicks),
+  });
   return render(
     <MemoryRouter initialEntries={['/bands/band-1/setlists/sl-1']}>
       <Routes>
         <Route path="/bands/:bandId/setlists/:setListId" element={<SetListPage />} />
+        <Route path="/click-track" element={<div>Click track editor</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -310,7 +333,7 @@ describe('SetListPage', () => {
   it('warns when the member roster was too long to load (members, songs or votes may be missing)', async () => {
     setup(makeView({ incomplete: true }));
     await screen.findByText('Song a');
-    expect(screen.getByText(/some members, songs, votes or colors may be missing/)).toBeInTheDocument();
+    expect(screen.getByText(/some members, songs, votes, colors or click tracks may be missing/)).toBeInTheDocument();
   });
 
   it('a failed hide shows the error and STILL reloads, so nothing half-applied stays on screen', async () => {
@@ -549,7 +572,7 @@ describe('SetListPage', () => {
       );
       await screen.findByText('Song a');
       expect(
-        screen.getByText('This list was too long to load completely, so some members, songs, votes or colors may be missing.'),
+        screen.getByText('This list was too long to load completely, so some members, songs, votes, colors or click tracks may be missing.'),
       ).toBeInTheDocument();
     });
 
@@ -627,7 +650,7 @@ describe('SetListPage', () => {
       );
       expect(await screen.findByText('Song a')).toBeInTheDocument();
       expect(
-        screen.getByText('This list was too long to load completely, so some members, songs, votes or colors may be missing.'),
+        screen.getByText('This list was too long to load completely, so some members, songs, votes, colors or click tracks may be missing.'),
       ).toBeInTheDocument();
     });
 
@@ -839,5 +862,302 @@ describe('SetListPage', () => {
         expect(screen.queryByText('Color (optional)')).not.toBeInTheDocument();
       });
     });
+  });
+});
+
+describe('song click tracks', () => {
+  const piece = (over: Partial<TrackPiece> = {}): TrackPiece => ({
+    id: 'p1',
+    label: 'Verse',
+    color: '#8b5cf6',
+    groupId: null,
+    timeSignature: { numerator: 4, denominator: 4 },
+    subdivision: 'quarter',
+    bpm: 120,
+    repeats: 4,
+    ...over,
+  });
+  const meta = (songId: string, over: Partial<SongTrackMetaRecord> = {}): SongTrackMetaRecord => ({
+    songId,
+    owner: BOB,
+    setListId: 'sl-1',
+    format: 1,
+    bytes: 400,
+    createdAt: '2026-02-01T00:00:00Z',
+    updatedAt: '2026-02-01T00:00:00Z',
+    ...over,
+  });
+  const okRead = (pieces: TrackPiece[] = [piece()], stale = false): SongTrackRead => ({ status: 'ok', pieces, groups: [], stale });
+  const strip = (title: string) => within(row(title));
+  const withTrack = (over: Partial<SongTrackMetaRecord> = {}) =>
+    setup(makeView(), undefined, undefined, [], [], [meta('a', over)]);
+
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  it('shows nothing for a song without a click track', async () => {
+    setup();
+    await screen.findByText('Song a');
+    expect(screen.queryByText(/Click track ·/)).not.toBeInTheDocument();
+  });
+
+  it('shows who attached the track and when, with Play, Download, Open and Remove', async () => {
+    withTrack();
+    await screen.findByText('Song a');
+    expect(row('Song a')).toHaveTextContent(/Click track · by Bob, /);
+    for (const name of [/Play click track for Song a/, /Download click track for Song a/, /Open click track for Song a/, /Remove click track for Song a/]) {
+      expect(strip('Song a').getByRole('button', { name })).toBeEnabled();
+    }
+    expect(row('Song b')).not.toHaveTextContent('Click track');
+  });
+
+  it('ignores a track written by a stranger or a banned member', async () => {
+    setup(makeView(), undefined, undefined, [], [], [meta('a', { owner: 'sub-mallory' })]);
+    await screen.findByText('Song a');
+    expect(screen.queryByText(/Click track ·/)).not.toBeInTheDocument();
+  });
+
+  it('Play unlocks audio first, fetches the payload by the shown author, plays once at 100%, and Stop stops it', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Play click track for Song a/ }));
+    expect(engine.prime).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(engine.start).toHaveBeenCalledTimes(1));
+    expect(getSongTrack).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), expect.objectContaining({ owner: BOB }));
+    expect(engine.start.mock.calls[0]![0]).toEqual([piece()]);
+    expect(engine.start.mock.calls[0]![1]).toBe(0);
+    expect(engine.start.mock.calls[0]![2]).toBe(1);
+    expect(engine.start.mock.calls[0]![3]).toBe(false); // no count-in
+
+    const stop = await strip('Song a').findByRole('button', { name: /Stop click track for Song a/ });
+    fireEvent.click(stop);
+    expect(engine.stop).toHaveBeenCalled();
+    expect(await strip('Song a').findByRole('button', { name: /Play click track for Song a/ })).toBeInTheDocument();
+  });
+
+  it('returns the button to Play when the track ends by itself', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Play click track for Song a/ }));
+    await waitFor(() => expect(engine.start).toHaveBeenCalled());
+    await strip('Song a').findByRole('button', { name: /Stop click track/ });
+    const onStop = engine.start.mock.calls[0]![6] as () => void;
+    onStop();
+    expect(await strip('Song a').findByRole('button', { name: /Play click track for Song a/ })).toBeInTheDocument();
+  });
+
+  it('Download renders the track at 100% into a WAV named after the song', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download click track for Song a/ }));
+    await waitFor(() => expect(exportClickTrack).toHaveBeenCalledWith([piece()], 100, 'Song a-click.wav'));
+  });
+
+  it('Download refuses a track over five minutes and says what to do instead', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead([piece({ repeats: 99, bpm: 60 })])); // 396 s
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download click track for Song a/ }));
+    expect(await screen.findByText(/Too long to download here/)).toBeInTheDocument();
+    expect(exportClickTrack).not.toHaveBeenCalled();
+    // and the button now stays disabled for that track
+    expect(strip('Song a').getByRole('button', { name: /Download click track for Song a/ })).toBeDisabled();
+  });
+
+  it('shows a failed render instead of failing silently', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    vi.mocked(exportClickTrack).mockRejectedValueOnce(new Error('Array buffer allocation failed'));
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download click track for Song a/ }));
+    expect(await screen.findByText('Array buffer allocation failed')).toBeInTheDocument();
+  });
+
+  it('Open hands the track to the editor through sessionStorage and navigates there', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Open click track for Song a/ }));
+    expect(await screen.findByText('Click track editor')).toBeInTheDocument();
+    const handoff = JSON.parse(sessionStorage.getItem('band-to-click-import')!);
+    expect(handoff).toMatchObject({ pieces: [piece()], groups: [], title: 'Song a' });
+    expect(typeof handoff.at).toBe('number');
+  });
+
+  it('Open reports blocked browser storage and stays on the page', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Open click track for Song a/ }));
+    expect(await screen.findByText(/browser storage is blocked/)).toBeInTheDocument();
+    expect(screen.queryByText('Click track editor')).not.toBeInTheDocument();
+    set.mockRestore();
+  });
+
+  it('an unreadable track says why, disables Play / Download / Open, and can still be removed', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue({ status: 'unreadable', reason: 'a segment has a bad tempo' });
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Play click track for Song a/ }));
+    expect(await screen.findByText(/Can't be read \(a segment has a bad tempo\)/)).toBeInTheDocument();
+    expect(engine.start).not.toHaveBeenCalled();
+    for (const name of [/Play click track/, /Download click track/, /Open click track/]) {
+      expect(strip('Song a').getByRole('button', { name })).toBeDisabled();
+    }
+    expect(strip('Song a').getByRole('button', { name: /Remove click track/ })).toBeEnabled();
+  });
+
+  it('a track from a newer app is flagged without fetching anything', async () => {
+    withTrack({ format: 2 });
+    await screen.findByText('Song a');
+    expect(row('Song a')).toHaveTextContent(/newer version of the app/);
+    expect(strip('Song a').getByRole('button', { name: /Play click track/ })).toBeDisabled();
+    expect(getSongTrack).not.toHaveBeenCalled();
+  });
+
+  it('a track that vanished since the page loaded says so and refreshes the list', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue({ status: 'gone' });
+    withTrack();
+    await screen.findByText('Song a');
+    expect(fetchSetListRows).toHaveBeenCalledTimes(1);
+    // hold the refresh open so the message can be seen while it is "refreshing"
+    vi.mocked(fetchSetListRows).mockImplementationOnce(() => new Promise(() => undefined));
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Open click track for Song a/ }));
+    expect(await screen.findByText(/just changed or removed/)).toBeInTheDocument();
+    await waitFor(() => expect(fetchSetListRows).toHaveBeenCalledTimes(2));
+  });
+
+  it('a read failure is shown, not swallowed', async () => {
+    vi.mocked(getSongTrack).mockRejectedValue(new Error('network down'));
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Open click track for Song a/ }));
+    expect(await screen.findByText('network down')).toBeInTheDocument();
+  });
+
+  it('plays what it fetched even if someone saved since, and quietly refreshes the list', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead([piece()], true));
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Play click track for Song a/ }));
+    await waitFor(() => expect(engine.start).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchSetListRows).toHaveBeenCalledTimes(2));
+  });
+
+  it('Remove asks first, then clears my own row (create path when I have none) and drops the strip at once', async () => {
+    vi.mocked(clearSongTrack).mockResolvedValue(undefined);
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Remove click track for Song a/ }));
+    expect(await screen.findByText(/Remove the click track for “Song a”\?/)).toBeInTheDocument();
+    expect(clearSongTrack).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(clearSongTrack).toHaveBeenCalledTimes(1));
+    expect(clearSongTrack).toHaveBeenCalledWith(expect.objectContaining({ id: 'a', bandId: 'band-1', setListId: 'sl-1' }), false);
+    await waitFor(() => expect(screen.queryByText(/Click track ·/)).not.toBeInTheDocument());
+  });
+
+  it('Remove updates my existing row when I already wrote one for the song', async () => {
+    vi.mocked(clearSongTrack).mockResolvedValue(undefined);
+    withTrack({ owner: ME });
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Remove click track for Song a/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(clearSongTrack).toHaveBeenCalledWith(expect.anything(), true));
+  });
+
+  it('a failed Remove keeps the strip and shows the failure in the dialog', async () => {
+    vi.mocked(clearSongTrack).mockRejectedValue(new Error('Could not remove the click track. Please try again.'));
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Remove click track for Song a/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+    expect(await screen.findByText('Could not remove the click track. Please try again.')).toBeInTheDocument();
+    expect(row('Song a')).toHaveTextContent('Click track ·');
+  });
+
+  it('stops the click when the playing track is removed by someone else, instead of leaving it running with no Stop button', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Play click track for Song a/ }));
+    await strip('Song a').findByRole('button', { name: /Stop click track/ });
+    engine.stop.mockClear();
+
+    // another member clears the track; the next refresh no longer lists it
+    vi.mocked(fetchSetListRows).mockResolvedValue({
+      songs: emptyPage([song('a', BOB, '2026-01-02T00:00:00Z'), song('b', ME, '2026-01-02T00:00:01Z')]),
+      votes: emptyPage([vote('b', BOB, 'up')]),
+      colors: emptyPage([]),
+      clicks: emptyPage([meta('a', { bytes: 0, updatedAt: '2026-03-01T00:00:00Z' })]),
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(screen.queryByText(/Click track ·/)).not.toBeInTheDocument());
+    expect(engine.stop).toHaveBeenCalled();
+  });
+
+  it('drops the "just changed, refreshing" message once the refreshed list has loaded', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue({ status: 'gone' });
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Open click track for Song a/ }));
+    await screen.findByText(/just changed or removed/);
+    await waitFor(() => expect(fetchSetListRows).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText(/just changed or removed/)).not.toBeInTheDocument());
+  });
+
+  it('fetches a song\'s payload once: Play, then Download of the same saved track reuse it', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Play click track for Song a/ }));
+    await waitFor(() => expect(engine.start).toHaveBeenCalledTimes(1));
+    await strip('Song a').findByRole('button', { name: /Stop click track/ });
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download click track for Song a/ }));
+    await waitFor(() => expect(exportClickTrack).toHaveBeenCalledTimes(1));
+    expect(getSongTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a second click while the first is still fetching', async () => {
+    let release!: (read: SongTrackRead) => void;
+    vi.mocked(getSongTrack).mockReturnValue(new Promise<SongTrackRead>((resolve) => (release = resolve)));
+    withTrack();
+    await screen.findByText('Song a');
+    const open = strip('Song a').getByRole('button', { name: /Open click track for Song a/ });
+    fireEvent.click(open);
+    fireEvent.click(open);
+    release(okRead());
+    await screen.findByText('Click track editor');
+    expect(getSongTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it('Download of a click-heavy track is refused too (each click is an audio node in the render)', async () => {
+    // 4/4 sixteenths x 99 repeats x 20 pieces = 7,920 clicks, well inside five minutes at 300 BPM
+    const pieces = Array.from({ length: 20 }, (_, i) => piece({ id: `p${i}`, subdivision: 'sixteenth', bpm: 300, repeats: 99 }));
+    vi.mocked(getSongTrack).mockResolvedValue(okRead(pieces));
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Download click track for Song a/ }));
+    expect(await screen.findByText(/Too long to download here/)).toBeInTheDocument();
+    expect(exportClickTrack).not.toHaveBeenCalled();
+  });
+
+  it('stops the engine when the page goes away', async () => {
+    vi.mocked(getSongTrack).mockResolvedValue(okRead());
+    withTrack();
+    await screen.findByText('Song a');
+    fireEvent.click(strip('Song a').getByRole('button', { name: /Play click track for Song a/ }));
+    await waitFor(() => expect(engine.start).toHaveBeenCalled());
+    const { unmount } = render(<div />);
+    unmount();
+    cleanupAll();
+    expect(engine.destroy).toHaveBeenCalled();
   });
 });

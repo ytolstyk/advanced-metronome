@@ -283,3 +283,59 @@ describe('ClickTrackEngine lifecycle', () => {
     expect((engine as any).speedMultiplier).toBe(1.5);
   });
 });
+
+// ── prime() ─────────────────────────────────────────────────────────────────
+
+describe('ClickTrackEngine.prime', () => {
+  it('creates and resumes a suspended audio context without starting playback', () => {
+    const ctx = makeFakeCtx({ state: 'suspended' });
+    vi.stubGlobal('AudioContext', vi.fn(function () { return ctx; }));
+    const engine = new ClickTrackEngine();
+    engine.prime();
+    expect(ctx.resume).toHaveBeenCalledTimes(1);
+    expect(mockAccentClick).not.toHaveBeenCalled();
+    expect((engine as unknown as { isRunning: boolean }).isRunning).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it('does not resume a context that is already running, and reuses it for start()', () => {
+    const ctx = makeFakeCtx({ state: 'running' });
+    const Ctor = vi.fn(function () { return ctx; });
+    vi.stubGlobal('AudioContext', Ctor);
+    const engine = new ClickTrackEngine();
+    engine.prime();
+    engine.start([makeSimplePiece()], 0, 1, false, vi.fn(), vi.fn(), vi.fn());
+    expect(ctx.resume).not.toHaveBeenCalled();
+    expect(Ctor).toHaveBeenCalledTimes(1);
+    engine.stop();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('ClickTrackEngine end-of-track callback', () => {
+  it('a track that has finished scheduling cannot stop or report on a run started right after it', () => {
+    vi.useFakeTimers();
+    const ctx = makeFakeCtx({ state: 'running' });
+    vi.stubGlobal('AudioContext', vi.fn(function () { return ctx; }));
+    const engine = new ClickTrackEngine();
+    const firstStopped = vi.fn();
+    const secondStopped = vi.fn();
+    engine.start([makeSimplePiece({ repeats: 1 })], 0, 1, false, vi.fn(), vi.fn(), firstStopped);
+    const internals = engine as unknown as { scheduleNext(): void; isRunning: boolean };
+    // schedule the whole bar, then the step that finds the end and arms the "finished" callback
+    for (let i = 0; i < 10 && internals.isRunning; i++) internals.scheduleNext(); // like the scheduler loop, stop once it ends
+    expect(internals.isRunning).toBe(false);
+
+    // a different song is started before the first one's callback fires
+    engine.start([makeSimplePiece({ id: 'other' })], 0, 1, false, vi.fn(), vi.fn(), secondStopped);
+    vi.advanceTimersByTime(10_000);
+
+    expect(firstStopped).not.toHaveBeenCalled();
+    expect(secondStopped).not.toHaveBeenCalled();
+    expect(internals.isRunning).toBe(true);
+    engine.stop();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+});
+

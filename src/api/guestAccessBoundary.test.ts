@@ -28,4 +28,12 @@ describe('guest read boundary', () => {
   it('only the public loader resolves a reader', () => {
     expect(filesUsing('resolveReader')).toEqual(['api/bandsShared.ts', 'api/sharedSetListApi.ts']);
   });
+
+  it('band click tracks are signed-in only: no guest-capable module reads them', () => {
+    // The model, the metadata read and the payload API are used by the signed-in paths below and
+    // never by the public loader; a click track on the shared page would need a guest rule first.
+    expect(filesUsing('models.SongClickTrack')).toEqual(['api/bandReads.ts', 'api/songTracksApi.ts']);
+    expect(filesUsing('listSongTrackMeta')).toEqual(['api/bandReads.ts', 'api/setListsApi.ts']);
+    expect(filesUsing('songTracksApi')).toEqual(['api/setListsApi.ts', 'components/ClickTrack/SaveToBandDialog.tsx', 'hooks/useSongTracks.ts']);
+  });
 });

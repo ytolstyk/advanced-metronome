@@ -385,6 +385,38 @@ const schema = a.schema({
       allow.authenticated().to(['get', 'list']),
     ]),
 
+  // A member's click track for a song, one row per (song, member) like SongColor. The song's shown
+  // track is the newest row written by a valid, non-banned member (resolved in the client), so any
+  // member can replace or clear it and bans still apply. Clearing writes `bytes: 0` (never a delete,
+  // which would resurface an older member's track); a member can delete their own rows (leave-band
+  // cleanup). `owner` is declared only because it is part of the key. Signed-in reads only (no guest
+  // rule). `track` is a JSON {pieces, groups} string, validated strictly in the client
+  // (src/clickTrackBand.ts). The index projects ONLY small metadata so listing a set list never reads
+  // payloads; the payload is fetched by exact key. `bandId` and `track` are not projected, so every
+  // index query MUST pass an explicit selectionSet (a default one would hit non-null fields).
+  // The projection is permanent once deployed. `bytes`, not `size`: DynamoDB reserved word.
+  SongClickTrack: a.model({
+    songId: a.string().required(),
+    owner: a.string().required(),
+    bandId: a.string().required(),
+    setListId: a.string().required(),
+    format: a.integer().required(),     // BAND_TRACK_FORMAT (1)
+    bytes: a.integer().required(),      // claimed utf8 bytes of `track`; 0 = cleared
+    track: a.string(),                  // JSON {pieces, groups}; empty when cleared
+  })
+    .identifier(['songId', 'owner'])
+    .secondaryIndexes(index => [
+      index('setListId')
+        .sortKeys(['owner'])
+        .queryField('listSongClickTrackBySetList')
+        .projection('INCLUDE', ['format', 'bytes', 'createdAt', 'updatedAt']),
+    ])
+    .disableOperations(['list', 'subscriptions'])
+    .authorization(allow => [
+      allow.owner().identityClaim('sub'),
+      allow.authenticated().to(['get', 'list']),
+    ]),
+
   // A member's name for one palette color in one band ("ballad" for red), one row per (band, color,
   // member) like SongColor. The band's shown label is the newest row written by a valid, non-banned
   // member (resolved in the client), so any member can rename a color, bans apply and strangers

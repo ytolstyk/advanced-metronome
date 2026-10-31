@@ -504,6 +504,7 @@ describe('BandPage as the owner', () => {
     // The exposure includes members' availability, so the owner is told before agreeing.
     expect(dialog).toHaveTextContent('each member’s availability');
     expect(dialog).toHaveTextContent('gear and rig diagrams');
+    expect(dialog).toHaveTextContent('click tracks attached to songs');
     expect(setSetListShared).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Share' }));
     await waitFor(() => expect(setSetListShared).toHaveBeenCalledWith('band-1', 'sl-1', true));

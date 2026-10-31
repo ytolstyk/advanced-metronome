@@ -150,9 +150,9 @@ console.log('QUERIES', Object.keys(queries).sort().join(', '));
 console.log('MUTATIONS', mutations.sort().join(', '));
 console.log('SUBSCRIPTIONS', subs.join(', ') || '(none)');
 
-for (const q of ['getBand', 'getBandInvite', 'getSetList', 'getSong', 'getVote', 'getMember', 'getMyBand', 'listMyBands', 'getSongColor', 'getColorLabel', 'getAvailability', 'getBandRig', 'listColorLabelByBand', 'listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList'])
+for (const q of ['getBand', 'getBandInvite', 'getSetList', 'getSong', 'getVote', 'getMember', 'getMyBand', 'listMyBands', 'getSongColor', 'getColorLabel', 'getAvailability', 'getBandRig', 'getSongClickTrack', 'listSongClickTrackBySetList', 'listColorLabelByBand', 'listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList'])
   check('G0', `query ${q} exists`, q in queries, '', true);
-for (const q of ['listBands', 'listBandInvites', 'listSetLists', 'listSongs', 'listVotes', 'listMembers', 'listSongColors', 'listColorLabels'])
+for (const q of ['listBands', 'listBandInvites', 'listSetLists', 'listSongs', 'listVotes', 'listMembers', 'listSongColors', 'listColorLabels', 'listSongClickTracks'])
   check('G1b', `plain ${q} absent`, !(q in queries), '', true);
 // Availability is read by exact key only: no list, no index of any kind (a bandId index page could be
 // flooded or bricked by junk rows nobody else can delete), so nothing starting `listAvailabilit` may exist.
@@ -161,11 +161,11 @@ check('G1b', 'no Availability list or index query exists', !Object.keys(queries)
 check('G1b', 'no BandRig list or index query exists', !Object.keys(queries).some((q) => q.startsWith('listBandRig')), Object.keys(queries).filter((q) => q.startsWith('listBandRig')).join(','), true);
 for (const m of ['deleteBand', 'deleteSetList', 'deleteBandInvite'])
   check('G3', `mutation ${m} absent`, !mutations.includes(m), '', true);
-for (const m of ['deleteSong', 'deleteVote', 'deleteMember', 'deleteMyBand', 'deleteSongColor', 'deleteColorLabel', 'deleteAvailability', 'deleteBandRig', 'createBandRig', 'updateBandRig'])
+for (const m of ['deleteSong', 'deleteVote', 'deleteMember', 'deleteMyBand', 'deleteSongColor', 'deleteColorLabel', 'deleteAvailability', 'deleteBandRig', 'createBandRig', 'updateBandRig', 'deleteSongClickTrack', 'createSongClickTrack', 'updateSongClickTrack'])
   check('G0', `mutation ${m} present`, mutations.includes(m));
 check('G0', 'subscriptions absent/empty', subs.length === 0, subs.join(','));
 // No owner-partitioned query on public-read models (cross-band pivot).
-for (const q of ['listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList', 'listColorLabelByBand'])
+for (const q of ['listMemberByBandId', 'listSongBySetList', 'listVoteBySetList', 'listSongColorBySetList', 'listSongClickTrackBySetList', 'listColorLabelByBand'])
   check('G1b', `${q} partition arg is not owner`, (queries[q] ?? [])[0] !== 'owner' && (queries[q] ?? []).length > 0, `args=${(queries[q] ?? []).join(',')}`, true);
 
 // ---------- helpers ----------
@@ -179,6 +179,7 @@ const FIELDS = {
   Vote: 'songId owner value bandId setListId createdAt',
   SongColor: 'songId owner color bandId setListId createdAt updatedAt',
   ColorLabel: 'bandId color owner label createdAt updatedAt',
+  SongClickTrack: 'songId owner bandId setListId format bytes track createdAt updatedAt',
   Availability: 'bandId owner format startDay mask createdAt updatedAt',
   BandRig: 'bandId owner format rev gear diagrams createdAt updatedAt',
 };
@@ -276,6 +277,71 @@ r = await gql(A, `mutation($input: DeleteColorLabelInput!){ deleteColorLabel(inp
 check('G3', 'A cannot delete B\'s ColorLabel row', !r.data?.deleteColorLabel, errType(r), true);
 r = await getById(A, 'ColorLabel', { bandId, color: 'red', owner: B.sub });
 check('G1', 'A can read B\'s ColorLabel row (signed in)', !!r.data?.getColorLabel, errType(r));
+
+// ---------- song click tracks (one row per member per song; the set list index projects only metadata) ----------
+// The payload is a JSON string written by any member and parsed strictly in the client; here we only prove the
+// server side: owner binding, signed-in reads, server-controlled timestamps, no list, no guests, and that the
+// index query works with an explicit selection that omits the fields the index does not project (bandId, track).
+{
+  const trackJson = JSON.stringify({ pieces: [{ id: 'p1', label: 'Verse', color: '#8b5cf6', groupId: null, timeSignature: { numerator: 4, denominator: 4 }, subdivision: 'quarter', bpm: 120, repeats: 4 }], groups: [] });
+  const trackRow = (owner, over = {}) => ({ songId, owner, bandId, setListId, format: 1, bytes: Buffer.byteLength(trackJson), track: trackJson, ...over });
+  const META = 'songId owner setListId format bytes createdAt updatedAt';
+  r = await create(B, 'SongClickTrack', trackRow(A.sub));
+  check('G2', 'B cannot create a SongClickTrack row as A', !r.data?.createSongClickTrack, errType(r), true);
+  r = await create(B, 'SongClickTrack', trackRow(B.sub));
+  check('G2', 'B attaches a click track as B', !!r.data?.createSongClickTrack, errType(r), true);
+  r = await create(B, 'SongClickTrack', trackRow(B.sub));
+  check('G2', 'B duplicate SongClickTrack create is rejected (conditional)', !r.data?.createSongClickTrack, errType(r));
+  r = await update(A, 'SongClickTrack', { songId, owner: B.sub, bytes: 0, track: '' });
+  check('G3', 'A cannot update (clear) B\'s SongClickTrack row', !r.data?.updateSongClickTrack, errType(r), true);
+  r = await gql(A, `mutation($input: DeleteSongClickTrackInput!){ deleteSongClickTrack(input:$input){ songId } }`, { input: { songId, owner: B.sub } });
+  check('G3', 'A cannot delete B\'s SongClickTrack row', !r.data?.deleteSongClickTrack, errType(r), true);
+  r = await getById(A, 'SongClickTrack', { songId, owner: B.sub });
+  check('G1', 'A can read B\'s SongClickTrack row by key, payload included (signed in)', r.data?.getSongClickTrack?.track === trackJson, errType(r), true);
+
+  // Timestamps decide "newest wins", so a client must not be able to forge them.
+  r = await create(A, 'SongClickTrack', trackRow(A.sub, { updatedAt: '2999-01-01T00:00:00.000Z', createdAt: '2999-01-01T00:00:00.000Z' }));
+  const forgedRow = r.data?.createSongClickTrack;
+  check('G2', 'a client-supplied createdAt/updatedAt on SongClickTrack is rejected or ignored', !forgedRow || (!String(forgedRow.updatedAt).startsWith('2999') && !String(forgedRow.createdAt).startsWith('2999')), errType(r), true);
+  // A clean row for A, in case the forged create above was (acceptably) rejected, so the checks below don't fail for the wrong reason.
+  await create(A, 'SongClickTrack', trackRow(A.sub));
+  r = await update(A, 'SongClickTrack', { songId, owner: A.sub, updatedAt: '2999-01-01T00:00:00.000Z' });
+  check('G2', 'a client-supplied updatedAt on SongClickTrack update is rejected or ignored', !r.data?.updateSongClickTrack || !String(r.data.updateSongClickTrack.updatedAt).startsWith('2999'), errType(r), true);
+
+  // `bytes` (not `size`) must work in a plain update, and a clear is a row with 0 bytes, not a delete.
+  r = await update(A, 'SongClickTrack', { songId, owner: A.sub, bytes: 0, track: '' });
+  check('G2', 'A clears own SongClickTrack row (bytes 0, empty track) with an update', r.data?.updateSongClickTrack?.bytes === 0, errType(r), true);
+
+  // The index query: explicit selection that omits bandId/track must return the projected metadata.
+  r = await gql(A, `query($s:String!){ listSongClickTrackBySetList(setListId:$s){ items{ ${META} } } }`, { s: setListId });
+  const items = r.data?.listSongClickTrackBySetList?.items ?? [];
+  check('G1', 'listSongClickTrackBySetList works with the metadata-only selection', items.length >= 1 && items.every((i) => i.songId && i.owner && i.updatedAt && i.createdAt !== undefined && Number.isInteger(i.bytes) && i.format === 1), `${items.length} items err=${errType(r)}`, true);
+  r = await gql(A, `query($s:String!,$o:String!){ listSongClickTrackBySetList(setListId:$s, owner:{eq:$o}){ items{ songId owner } } }`, { s: setListId, o: B.sub });
+  check('G1', 'the index can be queried by exact owner (leave-band cleanup)', (r.data?.listSongClickTrackBySetList?.items ?? []).length === 1, errType(r), true);
+  // Recorded, not asserted: the default selection asks for fields the index does not project.
+  r = await gql(A, `query($s:String!){ listSongClickTrackBySetList(setListId:$s){ items{ ${FIELDS.SongClickTrack} } } }`, { s: setListId });
+  info('G1', 'index query with the FULL selection (bandId + track)', r.errors ? `errors: ${errType(r)} (so the client MUST pass an explicit selectionSet)` : `ok: ${(r.data?.listSongClickTrackBySetList?.items ?? []).length} items, track=${JSON.stringify(r.data?.listSongClickTrackBySetList?.items?.[0]?.track ?? null)?.slice(0, 20)}`);
+
+  // Cost of one hostile oversized row: a client-capped 250 KB payload round-trips, and the index never carries it.
+  {
+    const bigSong = randomUUID();
+    const bigTrack = JSON.stringify({ pieces: [], groups: [], pad: 'x'.repeat(249_000) });
+    const bigBytes = Buffer.byteLength(bigTrack);
+    const t0 = Date.now();
+    r = await create(C, 'SongClickTrack', { songId: bigSong, owner: C.sub, bandId: randomUUID(), setListId: randomUUID(), format: 1, bytes: bigBytes, track: bigTrack });
+    const wrote = !!r.data?.createSongClickTrack;
+    check('G5', 'a ~250 KB SongClickTrack row (the client cap) can be written', wrote, wrote ? `accepted in ${Date.now() - t0} ms` : `rejected: ${errType(r)}`);
+    if (wrote) {
+      const t1 = Date.now();
+      const got = await getById(C, 'SongClickTrack', { songId: bigSong, owner: C.sub });
+      info('G5', 'reading it back by key', `${Date.now() - t1} ms, ${String(got.data?.getSongClickTrack?.track ?? '').length} chars`);
+      await gql(C, `mutation($input: DeleteSongClickTrackInput!){ deleteSongClickTrack(input:$input){ songId } }`, { input: { songId: bigSong, owner: C.sub } });
+    }
+    const huge = 'x'.repeat(420_000);
+    r = await create(C, 'SongClickTrack', { songId: randomUUID(), owner: C.sub, bandId: randomUUID(), setListId: randomUUID(), format: 1, bytes: huge.length, track: huge });
+    info('G5', 'a ~420 KB SongClickTrack row (over DynamoDB\'s 400 KB item limit)', r.data?.createSongClickTrack ? 'ACCEPTED (unexpected)' : `rejected: ${errType(r)}`);
+  }
+}
 
 // ---------- availability (one row per member per band, read by exact key only) ----------
 const MASK = '0'.repeat(11) + '8'; // one UTC day, one slot free
@@ -551,6 +617,10 @@ check('G6', 'guest can list the roster by bandId (needed to validate song author
 
 r = await G(`query($s:String!){ listSongColorBySetList(setListId:$s){ items{ songId } } }`, { s: setListId });
 check('G6', 'guest cannot list song colors (signed-in only)', !r.data?.listSongColorBySetList, errType(r), true);
+r = await G(`query($s:String!){ listSongClickTrackBySetList(setListId:$s){ items{ songId } } }`, { s: setListId });
+check('G6', 'guest cannot list song click tracks (signed-in only)', !r.data?.listSongClickTrackBySetList, errType(r), true);
+r = await G(`query($s:String!,$o:String!){ getSongClickTrack(songId:$s, owner:$o){ bytes } }`, { s: songId, o: B.sub });
+check('G6', 'guest cannot get a SongClickTrack row (signed-in only)', !r.data?.getSongClickTrack && denied(r), errType(r), true);
 r = await G(`query($b:String!){ listColorLabelByBand(bandId:$b){ items{ color } } }`, { b: bandId });
 check('G6', 'guest cannot list color labels (signed-in only)', !r.data?.listColorLabelByBand, errType(r), true);
 r = await G(`query($b:String!,$o:String!){ getAvailability(bandId:$b, owner:$o){ mask } }`, { b: bandId, o: B.sub });

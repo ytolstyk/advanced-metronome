@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PUBLIC_READ_PAGES, type BandRecord, type BandView, type ValidMember, type ValidSetList } from '../bandTypes';
 
 const { m } = vi.hoisted(() => {
@@ -28,6 +28,7 @@ import {
   deleteMyContent,
   deleteSong,
   fetchSetListRows,
+  fetchSongTargets,
   renameSetList,
   setSetListShared,
   suggestSong,
@@ -635,6 +636,86 @@ describe('auth gating', () => {
       for (const fn of Object.values(model)) expect(fn).not.toHaveBeenCalled();
     }
     expect(m.graphql).not.toHaveBeenCalled();
+  });
+});
+
+describe('click tracks in fetchSetListRows / deleteMyContent', () => {
+  const trackModel = { listSongClickTrackBySetList: vi.fn(), delete: vi.fn() };
+  const models = m as unknown as Record<string, unknown>;
+  beforeEach(() => {
+    trackModel.listSongClickTrackBySetList.mockReset();
+    trackModel.delete.mockReset();
+    models.SongClickTrack = trackModel;
+  });
+  afterEach(() => {
+    delete models.SongClickTrack;
+  });
+
+  it('fetchSetListRows includes the click track metadata, fetched with the rest', async () => {
+    trackModel.listSongClickTrackBySetList.mockResolvedValue({
+      data: [{ songId: 'a', owner: 'sub-bob', setListId: 'sl-1', format: 1, bytes: 300, createdAt: 'c', updatedAt: 'u' }],
+      nextToken: null,
+    });
+    const rows = await fetchSetListRows('sl-1');
+    expect(rows.clicks?.items).toEqual([{ songId: 'a', owner: 'sub-bob', setListId: 'sl-1', format: 1, bytes: 300, createdAt: 'c', updatedAt: 'u' }]);
+    expect(rows.clicks?.incomplete).toBe(false);
+  });
+
+  it('shows the set list without click tracks (flagged incomplete) if their read fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    trackModel.listSongClickTrackBySetList.mockResolvedValue({ data: null, errors: [{ errorType: 'InternalFailure', message: 'boom' }] });
+    const rows = await fetchSetListRows('sl-1');
+    expect(rows.songs.items).toEqual([]);
+    expect(rows.clicks).toEqual({ items: [], incomplete: true });
+    warn.mockRestore();
+  });
+
+  it('fetchSongTargets returns the visible songs with the tracks they show, without reading votes', async () => {
+    m.Song.listSongBySetList.mockResolvedValue({ data: [songRow('b', 'sub-bob', { title: 'Kashmir' }), songRow('a', 'sub-bob', { title: 'Black Dog' })], nextToken: null });
+    trackModel.listSongClickTrackBySetList.mockResolvedValue({
+      data: [{ songId: 'a', owner: 'sub-bob', setListId: 'sl-1', format: 1, bytes: 300, createdAt: 'c', updatedAt: '2026-02-01T00:00:00Z' }],
+      nextToken: null,
+    });
+    const targets = await fetchSongTargets(makeView(), 'sl-1');
+    expect(targets.songs.map((s) => s.title)).toEqual(['Black Dog', 'Kashmir']);
+    expect(targets.tracks.get('a')).toMatchObject({ owner: 'sub-bob', bytes: 300 });
+    expect(targets.myTrackSongIds.size).toBe(0);
+    expect(m.Vote.listVoteBySetList).not.toHaveBeenCalled();
+  });
+
+  it('fetchSongTargets still lists the songs when the track metadata cannot be read (flagged incomplete)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    m.Song.listSongBySetList.mockResolvedValue({ data: [songRow('a', 'sub-bob')], nextToken: null });
+    trackModel.listSongClickTrackBySetList.mockResolvedValue({ data: null, errors: [{ errorType: 'InternalFailure', message: 'boom' }] });
+    const targets = await fetchSongTargets(makeView(), 'sl-1');
+    expect(targets.songs).toHaveLength(1);
+    expect(targets.tracks.size).toBe(0);
+    expect(targets.incomplete).toBe(true);
+    warn.mockRestore();
+  });
+
+  it('fetchSongTargets requires sign-in', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+    await expect(fetchSongTargets(makeView(), 'sl-1')).rejects.toBeInstanceOf(NotSignedInError);
+  });
+
+  it('deleteMyContent removes the caller\'s click track rows in every set list, archived included', async () => {
+    trackModel.listSongClickTrackBySetList.mockResolvedValue({ data: [{ songId: 's1', owner: 'sub-me' }], nextToken: null });
+    trackModel.delete.mockResolvedValue({ data: {} });
+    await deleteMyContent(band({ setListIds: ['sl-1'], archivedSetListIds: ['sl-old'] }), false);
+    expect(trackModel.listSongClickTrackBySetList.mock.calls.map((c) => c[0])).toEqual([
+      { setListId: 'sl-1', owner: { eq: 'sub-me' } },
+      { setListId: 'sl-old', owner: { eq: 'sub-me' } },
+    ]);
+    expect(trackModel.delete).toHaveBeenCalledTimes(2);
+  });
+
+  it('a failing colors cleanup does not skip the click track cleanup (and the failure is still reported)', async () => {
+    m.SongColor.listSongColorBySetList.mockResolvedValue({ data: null, errors: [{ errorType: 'InternalFailure', message: 'colors down' }] });
+    trackModel.listSongClickTrackBySetList.mockResolvedValue({ data: [{ songId: 's1', owner: 'sub-me' }], nextToken: null });
+    trackModel.delete.mockResolvedValue({ data: {} });
+    await expect(deleteMyContent(band(), false)).rejects.toThrow(/colors down/);
+    expect(trackModel.delete).toHaveBeenCalledWith({ songId: 's1', owner: 'sub-me' }, expect.anything());
   });
 });
 

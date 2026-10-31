@@ -38,9 +38,9 @@ describe('PrivacyPolicyPage', () => {
     expect(item).toHaveTextContent(/may remain readable until you dismiss the band, and if you never do, until you delete it or ask us to/);
   });
 
-  it('says leaving a band also deletes availability, gear and rig diagrams', () => {
+  it('says leaving a band also deletes availability, gear, rig diagrams and click tracks', () => {
     render(<PrivacyPolicyPage />);
-    expect(screen.getByText(/and we try to delete your availability, gear and rig diagrams too/)).toBeInTheDocument();
+    expect(screen.getByText(/and we try to delete your availability, gear, rig diagrams and click tracks too/)).toBeInTheDocument();
   });
 
   it('discloses stored gear and rig diagrams, who can read them, and how they are deleted', () => {
@@ -52,6 +52,19 @@ describe('PrivacyPolicyPage', () => {
     expect(item).toHaveTextContent(/Only you can change or delete your own/);
     expect(item).toHaveTextContent(/deleted when you leave a band/);
     expect(item).toHaveTextContent(/may remain readable until you dismiss the band/);
+  });
+
+  it('discloses band click tracks, who can read them, who can change them, and how they are deleted', () => {
+    render(<PrivacyPolicyPage />);
+    const item = screen.getByText('Band click tracks:').closest('li')!;
+    expect(item).toHaveTextContent(/tempo and time-signature segments/);
+    expect(item).toHaveTextContent(/Anyone with an account who has the band.s link can read them/);
+    expect(item).toHaveTextContent(/shared set list/);
+    expect(item).toHaveTextContent(/Any member can replace or remove the click track shown on a song/);
+    expect(item).toHaveTextContent(/the owner can ban a member/);
+    expect(item).toHaveTextContent(/deleted when you leave a band/);
+    expect(item).toHaveTextContent(/may remain readable until you dismiss the band/);
+    expect(item).toHaveTextContent(/saved click tracks \(not attached to a band\) stay private/);
   });
 
   it('lists the availability preferences kept in local storage', () => {

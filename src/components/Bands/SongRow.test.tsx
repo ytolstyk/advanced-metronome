@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SONG_COLOR_STYLES, SONG_COLOR_TINT_PERCENT } from '../../bandSongColors';
-import { SongRow } from './SongRow';
+import { SongRow, type SongClickTrackControls } from './SongRow';
 import type { SongColorKey, ValidSong } from '../../bandTypes';
 
 const song = (over: Partial<ValidSong> = {}): ValidSong =>
@@ -347,5 +347,100 @@ describe('SongRow', () => {
       expect(screen.getByRole('button', { name: 'Hide Wonderwall' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^Set color for Wonderwall/ })).toBeInTheDocument();
     });
+  });
+});
+
+describe('SongRow click track strip', () => {
+  const controls = (over: Partial<SongClickTrackControls> = {}): SongClickTrackControls => ({
+    by: 'Alice',
+    date: 'Jan 5',
+    playing: false,
+    busy: false,
+    onPlay: vi.fn(),
+    onDownload: vi.fn(),
+    onOpen: vi.fn(),
+    onRemove: vi.fn(),
+    ...over,
+  });
+  const btn = (name: RegExp) => screen.getByRole('button', { name });
+
+  it('renders no strip when the song has no click track', () => {
+    setup();
+    expect(screen.queryByText(/Click track/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /click track/i })).not.toBeInTheDocument();
+  });
+
+  it('shows who saved it and when, and omits the date part when unknown', () => {
+    setup({}, { clickTrack: controls() });
+    expect(screen.getByText('Click track · by Alice, Jan 5')).toBeInTheDocument();
+  });
+
+  it('shows just the author when the date is empty', () => {
+    setup({}, { clickTrack: controls({ date: '' }) });
+    expect(screen.getByText('Click track · by Alice')).toBeInTheDocument();
+  });
+
+  it('wires all four actions to their callbacks with song-specific labels', async () => {
+    const c = controls();
+    setup({}, { clickTrack: c });
+    const user = userEvent.setup();
+    await user.click(btn(/^Play click track for Wonderwall$/));
+    await user.click(btn(/^Download click track for Wonderwall$/));
+    await user.click(btn(/^Open click track for Wonderwall in the editor$/));
+    await user.click(btn(/^Remove click track for Wonderwall$/));
+    expect(c.onPlay).toHaveBeenCalledTimes(1);
+    expect(c.onDownload).toHaveBeenCalledTimes(1);
+    expect(c.onOpen).toHaveBeenCalledTimes(1);
+    expect(c.onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns Play into Stop while playing, and Stop stays enabled while another fetch is busy', () => {
+    setup({}, { clickTrack: controls({ playing: true, busy: true }) });
+    const stop = btn(/^Stop click track for Wonderwall$/);
+    expect(stop).toHaveTextContent('Stop');
+    expect(stop).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /^Play click track/ })).not.toBeInTheDocument();
+    expect(btn(/^Download click track/)).toBeDisabled();
+    expect(btn(/^Open click track/)).toBeDisabled();
+    expect(btn(/^Remove click track/)).toBeDisabled();
+  });
+
+  it('disables every action while busy when not playing', () => {
+    setup({}, { clickTrack: controls({ busy: true }) });
+    expect(btn(/^Play click track/)).toBeDisabled();
+    expect(btn(/^Download click track/)).toBeDisabled();
+    expect(btn(/^Open click track/)).toBeDisabled();
+    expect(btn(/^Remove click track/)).toBeDisabled();
+  });
+
+  it('with a problem: disables Play/Download/Open, shows the reason, but keeps Remove usable', () => {
+    setup({}, { clickTrack: controls({ problem: 'Made by a newer version of the app.' }) });
+    expect(btn(/^Play click track/)).toBeDisabled();
+    expect(btn(/^Download click track/)).toBeDisabled();
+    expect(btn(/^Open click track/)).toBeDisabled();
+    expect(btn(/^Remove click track/)).toBeEnabled();
+    expect(screen.getByText('Made by a newer version of the app.')).toBeInTheDocument();
+  });
+
+  it('shows only the problem when both a problem and a download block are set', () => {
+    setup({}, { clickTrack: controls({ problem: 'Unreadable.', downloadBlocked: 'Too long to download.' }) });
+    expect(screen.getByText('Unreadable.')).toBeInTheDocument();
+    expect(screen.queryByText('Too long to download.')).not.toBeInTheDocument();
+  });
+
+  it('with downloadBlocked: disables only Download, titles it and shows the hint', () => {
+    setup({}, { clickTrack: controls({ downloadBlocked: 'Too long to download.' }) });
+    const dl = btn(/^Download click track/);
+    expect(dl).toBeDisabled();
+    expect(dl).toHaveAttribute('title', 'Too long to download.');
+    expect(btn(/^Play click track/)).toBeEnabled();
+    expect(btn(/^Open click track/)).toBeEnabled();
+    expect(screen.getByText('Too long to download.')).toBeInTheDocument();
+  });
+
+  it('has no hint text and no title when everything is fine', () => {
+    setup({}, { clickTrack: controls() });
+    expect(btn(/^Download click track/)).not.toHaveAttribute('title');
+    expect(btn(/^Download click track/)).toBeEnabled();
   });
 });

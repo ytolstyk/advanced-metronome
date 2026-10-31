@@ -6,6 +6,7 @@ import {
   type SongColorRecord,
   type SetListRows,
   type SongRecord,
+  type SongTrackMetaRecord,
 } from '../bandTypes';
 import { parseSongInput, requireName, type RawSongInput } from '../bandUtils';
 import { getCurrentUserSub } from './authUtils';
@@ -21,9 +22,11 @@ import {
   updateBand,
 } from './bandsShared';
 import { runPool } from './paginate';
-import { listSongColors, listSongs } from './bandReads';
+import { listSongColors, listSongs, listSongTrackMeta } from './bandReads';
 import { deleteMyLabelRows } from './colorLabelsApi';
 import { deleteMyColorRows } from './songColorsApi';
+import { deleteMyTrackRows } from './songTracksApi';
+import { assembleSongTargets, type SongTargets } from '../bandViews';
 import { deleteVoteRow, listVotesByOwner, listVotesForSetList } from './songVotesApi';
 
 /** Parallelism for leave-band cleanup: a few set lists at a time, a few deletes per list. */
@@ -36,7 +39,7 @@ const CLEANUP_DELETES_AT_ONCE = 6;
  */
 export async function fetchSetListRows(setListId: string): Promise<SetListRows> {
   await requireAuth();
-  const [songs, votes, colors] = await Promise.all([
+  const [songs, votes, colors, clicks] = await Promise.all([
     listSongs(setListId),
     listVotesForSetList(setListId),
     // Colors are cosmetic: if they can't be read, show the songs without them (flagged incomplete).
@@ -44,8 +47,30 @@ export async function fetchSetListRows(setListId: string): Promise<SetListRows> 
       console.warn('Could not load song colors', e);
       return { items: [], incomplete: true };
     }),
+    // Click tracks are an extra too: only their small metadata is read here, never the payload.
+    listSongTrackMeta(setListId).catch((e): ListAllResult<SongTrackMetaRecord> => {
+      console.warn('Could not load song click tracks', e);
+      return { items: [], incomplete: true };
+    }),
   ]);
-  return { songs, votes, colors };
+  return { songs, votes, colors, clicks };
+}
+
+/**
+ * The songs of a set list that a click track can be attached to, and which already have one
+ * (the "Save to band" picker). Reads songs and click track metadata only; signed in. A failed
+ * metadata read degrades to "no tracks known" (flagged incomplete) instead of blocking the picker.
+ */
+export async function fetchSongTargets(view: BandView, setListId: string): Promise<SongTargets> {
+  await requireAuth();
+  const [songs, clicks] = await Promise.all([
+    listSongs(setListId),
+    listSongTrackMeta(setListId).catch((e): ListAllResult<SongTrackMetaRecord> => {
+      console.warn('Could not load song click tracks', e);
+      return { items: [], incomplete: true };
+    }),
+  ]);
+  return assembleSongTargets(view, { songs, clicks });
 }
 
 // ── Set lists (owner only; rows are never deleted, only archived) ──────────
@@ -178,6 +203,8 @@ export async function deleteMyContent(band: BandRecord, includeSongs: boolean): 
       await deleteMyColorRows(setListId, owner);
     }),
     deleteMyLabelRows(band.id, owner),
+    // Its own entry (not chained after colors), so a failing colors cleanup can't skip a member's click tracks.
+    runPool(CLEANUP_LISTS_AT_ONCE, setListIds, (setListId) => deleteMyTrackRows(setListId, owner)),
   ]);
   const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
   if (failed) throw failed.reason;

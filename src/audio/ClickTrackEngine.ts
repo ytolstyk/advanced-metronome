@@ -1,5 +1,5 @@
 import { accentClick, beatClick, subClick, countdownClick, ghostClick } from './clickSynth';
-import { subsPerBeat } from './clickMath';
+import { getBpmAtRepetition, subsPerBeat } from './clickMath';
 import type { SubdivisionLabel } from './clickMath';
 export type { SubdivisionLabel } from './clickMath';
 
@@ -26,23 +26,7 @@ export interface TrackPiece {
   accentPattern?: AccentLevel[];
 }
 
-/** Returns the effective BPM for a specific repetition (measure) within a piece. */
-export function getBpmAtRepetition(piece: TrackPiece, repetition: number): number {
-  if (!piece.rampMode || piece.rampEndBpm === undefined) return piece.bpm;
-  const { bpm: startBpm, rampEndBpm: endBpm, repeats } = piece;
-  if (piece.rampMode === 'linear') {
-    if (repeats <= 1) return startBpm;
-    const t = repetition / (repeats - 1);
-    return startBpm + (endBpm - startBpm) * t;
-  }
-  // stepped
-  const stepSize = piece.rampStepSize ?? 5;
-  const stepMeasures = Math.max(1, piece.rampStepMeasures ?? 4);
-  const direction = Math.sign(endBpm - startBpm);
-  const steps = Math.floor(repetition / stepMeasures);
-  const raw = startBpm + steps * stepSize * direction;
-  return direction >= 0 ? Math.min(raw, endBpm) : Math.max(raw, endBpm);
-}
+export { getBpmAtRepetition };
 
 /** Config for per-loop-pass speed ramping. All multipliers are relative to 1× (100%). */
 export interface LoopRampConfig {
@@ -58,6 +42,8 @@ export class ClickTrackEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** The pending "track finished" callback; cleared by stop()/start() so a late one can't stop a newer run. */
+  private endTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Playback cursor
   private pieces: TrackPiece[] = [];
@@ -97,6 +83,18 @@ export class ClickTrackEngine {
     return this.ctx;
   }
 
+  /**
+   * Creates and resumes the audio context WITHOUT playing anything. Call it synchronously inside a
+   * click, before any `await`: iOS Safari only unlocks audio for work started in the gesture, so a
+   * caller that has to fetch the track first primes here and calls `start` afterwards.
+   */
+  prime(): void {
+    const ctx = this.ensureCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(err => console.warn('AudioContext resume failed:', err));
+    }
+  }
+
   start(
     pieces: TrackPiece[],
     startPieceIndex: number,
@@ -114,10 +112,8 @@ export class ClickTrackEngine {
     onLoopPass?: (pass: number, speedMultiplier: number) => void,
   ): void {
     this.stop();
+    this.prime();
     const ctx = this.ensureCtx();
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(err => console.warn('AudioContext resume failed:', err));
-    }
 
     this.pieces = pieces;
     this.startPieceIndex = startPieceIndex;
@@ -164,6 +160,7 @@ export class ClickTrackEngine {
 
   stop(): void {
     if (this.timer !== null) { clearInterval(this.timer); this.timer = null; }
+    if (this.endTimer !== null) { clearTimeout(this.endTimer); this.endTimer = null; }
     this.isRunning = false;
     this.isPaused = false;
   }
@@ -229,7 +226,7 @@ export class ClickTrackEngine {
         this.subIndex = 0;
       } else {
         const delay = (t - ctx.currentTime) * 1000;
-        setTimeout(() => { this.stop(); this.onStop?.(); }, Math.max(0, delay));
+        this.endTimer = setTimeout(() => { this.endTimer = null; this.stop(); this.onStop?.(); }, Math.max(0, delay));
         this.isRunning = false;
         return;
       }

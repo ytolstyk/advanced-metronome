@@ -18,6 +18,8 @@ function makeList(colors: Array<[string, SongColorKey]> = [], mine: string[] = [
     tallies: new Map(),
     colors: new Map(colors),
     myColorSongIds: new Set(mine),
+    tracks: new Map(),
+    myTrackSongIds: new Set(),
     colorLabels: new Map(),
     myLabelColors: new Set(),
     myVotes: new Map(),

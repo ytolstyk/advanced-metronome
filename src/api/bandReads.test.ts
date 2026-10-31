@@ -6,6 +6,7 @@ const { m } = vi.hoisted(() => {
     Vote: { listVoteBySetList: vi.fn() },
     SongColor: { listSongColorBySetList: vi.fn() },
     ColorLabel: { listColorLabelByBand: vi.fn() },
+    SongClickTrack: { listSongClickTrackBySetList: vi.fn() },
     graphql: vi.fn(),
   };
   return { m };
@@ -20,7 +21,8 @@ vi.mock('./authUtils', () => ({
 }));
 
 import { BAND_LIMITS, LIST_PAGE_SIZE, MAX_LIST_PAGES, SONG_COLOR_KEYS } from '../bandTypes';
-import { listColorLabels, listSongColors } from './bandReads';
+import { hasSongTrackModel, listColorLabels, listSongColors, listSongTrackMeta } from './bandReads';
+import { SONG_TRACK_INDEX_FIELDS } from './bandsShared';
 
 const colorRow = (songId: string, color = 'red', owner = 'sub-bob') => ({
   songId,
@@ -161,5 +163,81 @@ describe('listColorLabels', () => {
   it('fails closed when the read errors', async () => {
     m.ColorLabel.listColorLabelByBand.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
     await expect(listColorLabels('band-1')).rejects.toThrow('listColorLabels: gsi down');
+  });
+});
+
+const trackRow = (songId: string, owner = 'sub-bob') => ({
+  songId,
+  owner,
+  setListId: 'sl-1',
+  format: 1,
+  bytes: 120,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-02T00:00:00Z',
+  track: 'dropped',
+  bandId: 'dropped',
+});
+
+describe('listSongTrackMeta', () => {
+  beforeEach(() => {
+    m.SongClickTrack.listSongClickTrackBySetList.mockReset();
+  });
+
+  it('queries the set-list index with an explicit index-only selection set and maps the rows', async () => {
+    m.SongClickTrack.listSongClickTrackBySetList.mockResolvedValue({ data: [trackRow('a')], nextToken: null });
+    const res = await listSongTrackMeta('sl-1');
+    expect(m.SongClickTrack.listSongClickTrackBySetList).toHaveBeenCalledWith(
+      { setListId: 'sl-1' },
+      { limit: LIST_PAGE_SIZE, nextToken: undefined, selectionSet: [...SONG_TRACK_INDEX_FIELDS] },
+    );
+    expect(SONG_TRACK_INDEX_FIELDS).not.toContain('track');
+    expect(SONG_TRACK_INDEX_FIELDS).not.toContain('bandId');
+    expect(res.incomplete).toBe(false);
+    expect(res.items).toEqual([
+      { songId: 'a', owner: 'sub-bob', setListId: 'sl-1', format: 1, bytes: 120, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z' },
+    ]);
+  });
+
+  it('never sends an authMode (no guest read rule for click tracks)', async () => {
+    m.SongClickTrack.listSongClickTrackBySetList.mockResolvedValue({ data: [], nextToken: null });
+    await listSongTrackMeta('sl-1');
+    expect(m.SongClickTrack.listSongClickTrackBySetList.mock.calls[0][1]).not.toHaveProperty('authMode');
+  });
+
+  it('follows nextToken across pages', async () => {
+    m.SongClickTrack.listSongClickTrackBySetList
+      .mockResolvedValueOnce({ data: [trackRow('a')], nextToken: 't1' })
+      .mockResolvedValueOnce({ data: [trackRow('b')], nextToken: null });
+    const res = await listSongTrackMeta('sl-1');
+    expect(res.items.map((r) => r.songId)).toEqual(['a', 'b']);
+    expect(res.incomplete).toBe(false);
+    expect(m.SongClickTrack.listSongClickTrackBySetList.mock.calls[1][1]).toMatchObject({ nextToken: 't1' });
+  });
+
+  it('stops at a tight page cap (members x songs, plus one page of slack) and flags incomplete', async () => {
+    m.SongClickTrack.listSongClickTrackBySetList.mockResolvedValue({ data: [], nextToken: 'more' });
+    const res = await listSongTrackMeta('sl-1');
+    const expectedPages = Math.ceil((BAND_LIMITS.maxMembers * BAND_LIMITS.maxSongsPerSetList) / LIST_PAGE_SIZE) + 1;
+    expect(res.incomplete).toBe(true);
+    expect(m.SongClickTrack.listSongClickTrackBySetList).toHaveBeenCalledTimes(expectedPages);
+    expect(expectedPages).toBeLessThan(MAX_LIST_PAGES);
+  });
+
+  it('fails closed when the read errors', async () => {
+    m.SongClickTrack.listSongClickTrackBySetList.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
+    await expect(listSongTrackMeta('sl-1')).rejects.toThrow('listSongTrackMeta: gsi down');
+  });
+
+  it('returns an empty, complete result without any query when the backend predates the model', async () => {
+    const saved = m.SongClickTrack;
+    delete (m as Record<string, unknown>).SongClickTrack;
+    try {
+      expect(hasSongTrackModel()).toBe(false);
+      await expect(listSongTrackMeta('sl-1')).resolves.toEqual({ items: [], incomplete: false });
+    } finally {
+      m.SongClickTrack = saved;
+    }
+    expect(hasSongTrackModel()).toBe(true);
+    expect(saved.listSongClickTrackBySetList).not.toHaveBeenCalled();
   });
 });

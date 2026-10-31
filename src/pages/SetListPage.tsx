@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../components/Bands/ConfirmDialog';
 import { CopyShareLinkButton } from '../components/Bands/CopyShareLinkButton';
 import { InlineAlert } from '../components/Bands/InlineAlert';
 import { LoaderBoundary } from '../components/Bands/LoaderBoundary';
-import { SongRow } from '../components/Bands/SongRow';
+import { SongRow, type SongClickTrackControls } from '../components/Bands/SongRow';
 import { StatusNotice } from '../components/Bands/StatusNotice';
 import { SuggestSongDialog } from '../components/Bands/SuggestSongDialog';
 import { hideSong, loadBandView, unhideSong } from '../api/bandsApi';
@@ -26,6 +26,13 @@ import { useActionThenReload } from '../hooks/useAsyncAction';
 import { useLoader } from '../hooks/useLoader';
 import { useOptimisticVotes } from '../hooks/useOptimisticVotes';
 import { useSongColors } from '../hooks/useSongColors';
+import { useSongTracks } from '../hooks/useSongTracks';
+
+/** "Oct 31, 2026" from a server timestamp; empty when it can't be read. */
+function shortDate(stamp: string): string {
+  const time = Date.parse(stamp);
+  return Number.isNaN(time) ? '' : new Date(time).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
 type PageData =
   | { kind: 'blocked'; status: Exclude<BandLoadResult['status'], 'ok'> }
@@ -121,13 +128,32 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
   const votes = useOptimisticVotes(list, fetchedAt);
   const colors = useSongColors(list, fetchedAt);
   const colorLabels = useColorLabels(view.band.id, list, fetchedAt);
+  const tracks = useSongTracks(list, fetchedAt, reload);
   const { act, error: actionError } = useActionThenReload(reload);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [labelsOpen, setLabelsOpen] = useState(false);
   const [editing, setEditing] = useState<ValidSong | null>(null);
   const [deleting, setDeleting] = useState<ValidSong | null>(null);
+  const [removingTrack, setRemovingTrack] = useState<ValidSong | null>(null);
 
   const nameOf = (sub: string) => view.displayNames.get(sub) ?? 'a member';
+
+  const clickTrackControls = (song: ValidSong): SongClickTrackControls | undefined => {
+    const shown = tracks.trackFor(song.id);
+    if (!shown) return undefined;
+    return {
+      by: nameOf(shown.owner),
+      date: shortDate(shown.stamp),
+      playing: tracks.isPlaying(song.id),
+      busy: tracks.busy,
+      problem: tracks.problemFor(song),
+      downloadBlocked: tracks.downloadBlocked(song),
+      onPlay: () => void tracks.play(song),
+      onDownload: () => void tracks.download(song),
+      onOpen: () => void tracks.open(song),
+      onRemove: () => setRemovingTrack(song),
+    };
+  };
 
   return (
     <>
@@ -152,10 +178,11 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
 
       {votes.error && <InlineAlert tone="error" className="mb-4">{votes.error}</InlineAlert>}
       {colors.error && <InlineAlert tone="error" className="mb-4">{colors.error}</InlineAlert>}
+      {tracks.error && <InlineAlert tone="error" className="mb-4">{tracks.error}</InlineAlert>}
       {actionError && <InlineAlert tone="error" className="mb-4">{actionError}</InlineAlert>}
       {(list.incomplete || view.incomplete) && (
         <InlineAlert tone="warning" className="mb-4">
-          This list was too long to load completely, so some members, songs, votes or colors may be missing.
+          This list was too long to load completely, so some members, songs, votes, colors or click tracks may be missing.
         </InlineAlert>
       )}
 
@@ -178,6 +205,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
               isAuthor={song.owner === view.sub}
               isOwner={isOwner}
               isVoting={votes.isVoting(song.id)}
+              clickTrack={clickTrackControls(song)}
               onVote={(value) => void votes.vote(song, value)}
               onColor={(color) => void colors.setColor(song, color)}
               onEdit={() => setEditing(song)}
@@ -262,6 +290,18 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
               void reload();
             }
           }}
+        />
+      )}
+      {removingTrack && (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => !open && setRemovingTrack(null)}
+          title={`Remove the click track for “${removingTrack.title}”?`}
+          description="It disappears for everyone in the band. Anyone can attach a new one."
+          confirmLabel="Remove"
+          destructive
+          onConfirm={() => tracks.remove(removingTrack)}
+          onSettled={() => void reload()}
         />
       )}
       {deleting && (

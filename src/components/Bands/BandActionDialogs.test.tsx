@@ -165,7 +165,7 @@ describe('LeaveBandDialog availability cleanup', () => {
 
   it('says availability, gear and rigs are removed', () => {
     render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={() => {}} />);
-    expect(screen.getByText(/Your votes, availability, gear and rig diagrams are removed/)).toBeInTheDocument();
+    expect(screen.getByText(/Your votes, availability, gear, rig diagrams and click tracks are removed/)).toBeInTheDocument();
   });
 
   it('deletes the gear and rig row along with the rest', async () => {

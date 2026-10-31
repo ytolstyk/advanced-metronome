@@ -35,6 +35,8 @@ export const BAND_LIMITS = {
   tuningMax: 30,
   /** Longest label a band can give a song color ("Fast thrash"). */
   colorLabelMax: 20,
+  /** Largest stored click track (JSON bytes); the strict parser lives in `clickTrackBand.ts`. */
+  trackMaxBytes: 250_000,
 } as const;
 
 const AVAILABILITY_SLOTS_PER_DAY = 48;
@@ -172,6 +174,30 @@ export interface SongColorRecord {
   updatedAt?: string;
 }
 
+/**
+ * A member's click track row as the set list index returns it: metadata only, never the payload
+ * (the index projects just these fields; the track itself is read by exact key).
+ */
+export interface SongTrackMetaRecord {
+  songId: string;
+  owner: string;
+  setListId: string;
+  format: number;
+  /** Claimed size of the stored track in bytes; 0 = the member cleared it. Untrusted until the payload is parsed. */
+  bytes: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** The click track a song shows: the newest valid member row. The payload is fetched on demand. */
+export interface SongTrackSummary {
+  owner: string;
+  format: number;
+  bytes: number;
+  /** Server stamp of the row (`updatedAt`, else `createdAt`). */
+  stamp: string;
+}
+
 export interface ColorLabelRecord {
   bandId: string;
   color: string;
@@ -300,6 +326,8 @@ export interface SetListRows {
   colors?: ListAllResult<SongColorRecord>;
   /** The band's color labels (band-wide, not per set list). Absent on the public page. */
   labels?: ListAllResult<ColorLabelRecord>;
+  /** Members' click track metadata. Absent on the public page, which doesn't show click tracks. */
+  clicks?: ListAllResult<SongTrackMetaRecord>;
 }
 
 export interface SetListView {
@@ -313,6 +341,10 @@ export interface SetListView {
   colors: Map<string, SongColorKey>;
   /** Songs the caller has their own color row for (even `none`): it picks create vs update. */
   myColorSongIds: Set<string>;
+  /** Valid, non-hidden songs that have a click track (songs without one are absent). */
+  tracks: Map<string, SongTrackSummary>;
+  /** Songs the caller has their own click track row for (even a cleared one): it picks create vs update. */
+  myTrackSongIds: Set<string>;
   /** The band's label per palette color (colors without a label are absent). */
   colorLabels: Map<SongColorKey, string>;
   /** Colors the caller has their own label row for (even an empty one): it picks create vs update. */

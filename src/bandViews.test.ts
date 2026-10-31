@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { BandRecord, ColorLabelRecord, MemberRecord, SetListRecord, SetListRows, SongColorRecord, SongRecord, VoteRecord } from './bandTypes';
-import { assembleBandView, assembleSetListView } from './bandViews';
+import type { BandRecord, ColorLabelRecord, MemberRecord, SetListRecord, SetListRows, SongColorRecord, SongRecord, SongTrackMetaRecord, VoteRecord } from './bandTypes';
+import { assembleBandView, assembleSetListView, assembleSongTargets } from './bandViews';
 
 const OWNER = 'sub-owner';
 const ME = 'sub-me';
@@ -67,6 +67,16 @@ const colorRow = (songId: string, color: string, over: Partial<SongColorRecord> 
   setListId: 'sl-1',
   color,
   createdAt: '2026-01-04T00:00:00Z',
+  ...over,
+});
+
+const trackRow = (songId: string, over: Partial<SongTrackMetaRecord> = {}): SongTrackMetaRecord => ({
+  songId,
+  owner: BOB,
+  setListId: 'sl-1',
+  format: 1,
+  bytes: 400,
+  createdAt: '2026-01-05T00:00:00Z',
   ...over,
 });
 
@@ -333,6 +343,52 @@ describe('assembleSetListView', () => {
       expect(view.incomplete).toBe(true);
     });
   });
+  describe('song click tracks', () => {
+    const withClicks = (songs: SongRecord[], clicks: SongTrackMetaRecord[] | undefined, clicksIncomplete = false): SetListRows => ({
+      songs: { items: songs, incomplete: false },
+      votes: { items: [], incomplete: false },
+      ...(clicks ? { clicks: { items: clicks, incomplete: clicksIncomplete } } : {}),
+    });
+
+    it('is empty when no click rows were fetched (the public page)', () => {
+      const view = assembleSetListView(bandView(), 'sl-1', withClicks([song('a', BOB)], undefined))!;
+      expect(view.tracks.size).toBe(0);
+      expect(view.myTrackSongIds.size).toBe(0);
+    });
+
+    it('exposes the newest valid track of each visible song', () => {
+      const view = assembleSetListView(
+        bandView(),
+        'sl-1',
+        withClicks(
+          [song('a', BOB), song('b', BOB)],
+          [
+            trackRow('a', { owner: BOB, updatedAt: '2026-02-01T00:00:00Z' }),
+            trackRow('a', { owner: ME, bytes: 900, updatedAt: '2026-03-01T00:00:00Z' }),
+            trackRow('b', { owner: BOB, bytes: 0 }),
+          ],
+        ),
+      )!;
+      expect(view.tracks.get('a')).toMatchObject({ owner: ME, bytes: 900 });
+      expect(view.tracks.has('b')).toBe(false);
+      expect(view.myTrackSongIds).toEqual(new Set(['a']));
+    });
+
+    it('drops tracks written by strangers or banned members', () => {
+      const view = assembleSetListView(
+        bandView({ band: band({ bannedSubs: [BOB] }) }),
+        'sl-1',
+        withClicks([song('a', ME), song('b', ME)], [trackRow('a', { owner: MALLORY }), trackRow('b', { owner: BOB })]),
+      )!;
+      expect(view.tracks.size).toBe(0);
+    });
+
+    it('marks the page incomplete when the click read hit its cap', () => {
+      const view = assembleSetListView(bandView(), 'sl-1', withClicks([song('a', BOB)], [], true))!;
+      expect(view.incomplete).toBe(true);
+    });
+  });
+
   describe('color labels', () => {
     const withLabels = (labels: ColorLabelRecord[] | undefined, labelsIncomplete = false): SetListRows => ({
       songs: { items: [], incomplete: false },
@@ -432,5 +488,40 @@ describe('assembleSetListView', () => {
     it('is not incomplete when labels were fully read', () => {
       expect(assembleSetListView(bandView(), 'sl-1', withLabels([], false))!.incomplete).toBe(false);
     });
+  });
+});
+
+describe('assembleSongTargets', () => {
+  const targetsFor = (songs: SongRecord[], clicks: SongTrackMetaRecord[], flags: { s?: boolean; c?: boolean } = {}, v = bandView()) =>
+    assembleSongTargets(v, {
+      songs: { items: songs, incomplete: flags.s ?? false },
+      clicks: { items: clicks, incomplete: flags.c ?? false },
+    });
+
+  it('lists the valid, visible songs by title with the track each already shows', () => {
+    const t = targetsFor(
+      [song('b', BOB, { title: 'Kashmir' }), song('a', BOB, { title: 'Black Dog' }), song('h', BOB, { title: 'Hidden' })],
+      [trackRow('a', { owner: BOB }), trackRow('b', { owner: ME, bytes: 0 })],
+      {},
+      bandView({ band: band({ hiddenSongIds: ['h'] }) }),
+    );
+    expect(t.songs.map((s) => s.title)).toEqual(['Black Dog', 'Kashmir']);
+    expect([...t.tracks.keys()]).toEqual(['a']);
+    expect(t.myTrackSongIds).toEqual(new Set(['b'])); // my cleared row still exists: it picks "update"
+    expect(t.incomplete).toBe(false);
+  });
+
+  it('drops forged songs and tracks from strangers', () => {
+    const t = targetsFor(
+      [song('a', BOB), song('evil', MALLORY)],
+      [trackRow('a', { owner: MALLORY }), trackRow('evil', { owner: BOB })],
+    );
+    expect(t.songs.map((s) => s.id)).toEqual(['a']);
+    expect(t.tracks.size).toBe(0);
+  });
+
+  it('is incomplete when either read hit its page cap', () => {
+    expect(targetsFor([], [], { s: true }).incomplete).toBe(true);
+    expect(targetsFor([], [], { c: true }).incomplete).toBe(true);
   });
 });

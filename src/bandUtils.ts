@@ -11,6 +11,8 @@ import {
   type SetListRecord,
   type SongColorKey,
   type SongColorRecord,
+  type SongTrackMetaRecord,
+  type SongTrackSummary,
   type SongRecord,
   type SongTally,
   type ValidMember,
@@ -324,14 +326,26 @@ export const rowStamp = (r: Stamped): string => r.updatedAt ?? r.createdAt ?? ''
 const isNewerRow = (a: Stamped, b: Stamped): boolean =>
   (rowStamp(a).localeCompare(rowStamp(b)) || a.owner.localeCompare(b.owner)) > 0;
 
-/** Color rows that count: the song is valid, the parents match it and the writer is a valid member. */
-function countedColorRows(rows: SongColorRecord[], songs: ValidSong[], memberSubs: Set<string>): SongColorRecord[] {
+/**
+ * Per-song member rows that count: the song is valid, the row's set list matches it, the writer is a
+ * valid member and `accept` (extra checks the row type needs) passes. Everything else is invisible.
+ */
+function countedSongRows<T extends { songId: string; setListId: string; owner: string }>(
+  rows: T[],
+  songs: ValidSong[],
+  memberSubs: Set<string>,
+  accept: (row: T, song: ValidSong) => boolean = () => true,
+): T[] {
   const songById = new Map(songs.map((s) => [s.id, s]));
   return rows.filter((row) => {
     const song = songById.get(row.songId);
-    return !!song && row.setListId === song.setListId && row.bandId === song.bandId && memberSubs.has(row.owner);
+    return !!song && row.setListId === song.setListId && memberSubs.has(row.owner) && accept(row, song);
   });
 }
+
+/** Color rows that count: the song is valid, the parents match it and the writer is a valid member. */
+const countedColorRows = (rows: SongColorRecord[], songs: ValidSong[], memberSubs: Set<string>): SongColorRecord[] =>
+  countedSongRows(rows, songs, memberSubs, (row, song) => row.bandId === song.bandId);
 
 /**
  * The shared color per song: the newest row (by server `updatedAt`, then owner for a stable tie)
@@ -357,6 +371,57 @@ export function resolveSongColors(
 /** Songs the caller has a (valid) color row for, `none` included: picks create vs update for the next write. */
 export function myColorSongIds(rows: SongColorRecord[], songs: ValidSong[], memberSubs: Set<string>, sub: string): Set<string> {
   return new Set(countedColorRows(rows, songs, memberSubs).filter((r) => r.owner === sub).map((r) => r.songId));
+}
+
+// ── Song click tracks ──────────────────────────────────────────────────────
+
+/**
+ * Track metadata rows that count: a counted row with an integer format, a size within the cap (0 =
+ * cleared) and a server stamp. "Newest wins" is meaningless without the stamp (it would silently
+ * become "highest sub wins"), so a row without one, e.g. an index that stopped projecting the
+ * timestamps, fails closed: the song shows no track rather than the wrong one.
+ */
+function countedTrackRows(rows: SongTrackMetaRecord[], songs: ValidSong[], memberSubs: Set<string>): SongTrackMetaRecord[] {
+  return countedSongRows(
+    rows,
+    songs,
+    memberSubs,
+    (row) =>
+      Number.isInteger(row.format) &&
+      row.format >= 1 &&
+      Number.isInteger(row.bytes) &&
+      row.bytes >= 0 &&
+      row.bytes <= BAND_LIMITS.trackMaxBytes &&
+      rowStamp(row) !== '',
+  );
+}
+
+/**
+ * The click track each song shows: the newest counted row (by server `updatedAt`, then owner for a
+ * stable tie) written by a valid member; a newest row of size 0 means "cleared" and leaves the song
+ * without one. Rows from strangers, banned users, forged parents or an impossible size never count.
+ * Only metadata is judged here: whether the payload itself is readable is known after it is fetched.
+ */
+export function resolveSongTracks(
+  rows: SongTrackMetaRecord[],
+  songs: ValidSong[],
+  memberSubs: Set<string>,
+): Map<string, SongTrackSummary> {
+  const latest = new Map<string, SongTrackMetaRecord>();
+  for (const row of countedTrackRows(rows, songs, memberSubs)) {
+    const prev = latest.get(row.songId);
+    if (!prev || isNewerRow(row, prev)) latest.set(row.songId, row);
+  }
+  const tracks = new Map<string, SongTrackSummary>();
+  for (const [songId, row] of latest) {
+    if (row.bytes > 0) tracks.set(songId, { owner: row.owner, format: row.format, bytes: row.bytes, stamp: rowStamp(row) });
+  }
+  return tracks;
+}
+
+/** Songs the caller has a (valid) click track row for, cleared ones included: picks create vs update for the next write. */
+export function mySongTrackIds(rows: SongTrackMetaRecord[], songs: ValidSong[], memberSubs: Set<string>, sub: string): Set<string> {
+  return new Set(countedTrackRows(rows, songs, memberSubs).filter((r) => r.owner === sub).map((r) => r.songId));
 }
 
 // ── Color labels ───────────────────────────────────────────────────────────

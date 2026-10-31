@@ -8,6 +8,7 @@ import type {
   SetListRecord,
   SongColorRecord,
   SongRecord,
+  SongTrackMetaRecord,
   VoteRecord,
 } from '../bandTypes';
 import { normalizeInstruments } from '../bandInstruments';
@@ -164,6 +165,10 @@ const strings = (xs: ReadonlyArray<string | null> | null | undefined): string[] 
 
 type Row<K extends keyof Schema> = Schema[K]['type'];
 
+/** The fields every `SongClickTrack` index query selects (`bandId`/`track` are not in the index). */
+export const SONG_TRACK_INDEX_FIELDS = ['songId', 'owner', 'setListId', 'format', 'bytes', 'createdAt', 'updatedAt'] as const;
+export type SongTrackIndexRow = Pick<Row<'SongClickTrack'>, (typeof SONG_TRACK_INDEX_FIELDS)[number]>;
+
 /** The Band fields the client reads. Both the raw mutation's selection set and `BandRow` derive from it. */
 const BAND_FIELDS = [
   'id',
@@ -241,6 +246,19 @@ export function toSongColor(r: Row<'SongColor'>): SongColorRecord {
     bandId: r.bandId,
     setListId: r.setListId,
     color: r.color,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  };
+}
+
+/** Maps an index row from `listSongClickTrackBySetList`; it only carries the projected metadata fields. */
+export function toSongTrackMeta(r: SongTrackIndexRow): SongTrackMetaRecord {
+  return {
+    songId: r.songId,
+    owner: r.owner,
+    setListId: r.setListId,
+    format: r.format,
+    bytes: r.bytes,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };

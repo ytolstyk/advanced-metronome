@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GripVertical, Play, Pause, Square, Pencil, Trash2, Copy, Plus, Download, RotateCcw, Cloud, ChevronDown, FolderOpen, Share2, FileUp } from 'lucide-react';
+import { GripVertical, Play, Pause, Square, Pencil, Trash2, Copy, Plus, Download, RotateCcw, Cloud, ChevronDown, FolderOpen, Share2, FileUp, Users } from 'lucide-react';
 import { AuthGate } from '@/components/AuthGate/AuthGate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,8 +17,9 @@ import type { SegmentGroup, CloudClickTrack } from '@/api/clickTrackApi';
 import { CLICK_BPM_MIN, CLICK_BPM_MAX } from '@/constants';
 import { SongImportDialog } from '@/components/ClickTrack/SongImportDialog';
 import { MeasureCell } from '@/components/ClickTrack/MeasureCell';
+import { SaveToBandDialog } from '@/components/ClickTrack/SaveToBandDialog';
 import { ShareTooLargeNotice } from '@/components/ClickTrack/ShareTooLargeNotice';
-import { isShareTooLarge, saveClickTrackState } from '../utils/clickTrackPage';
+import { clearBandTrackHandoff, isShareTooLarge, readBandTrackHandoff, saveClickTrackState } from '../utils/clickTrackPage';
 import { newPieceId } from '../utils/barRuns';
 import { clickTrackToDrumMeasures } from '../utils/clickTrackToDrum';
 import { clickTrackToTabTrack } from '../utils/clickTrackToTab';
@@ -370,8 +371,12 @@ function PieceForm({ d, setD, onSubmit, submitLabel, groups }: {
 export function ClickTrackPage() {
   const navigate = useNavigate();
   const [saved] = useState(loadState); // read the persisted state once, not on every render
-  const [pieces, setPieces] = useState<TrackPiece[]>(saved.pieces);
-  const [groups, setGroups] = useState<SegmentGroup[]>(saved.groups);
+  // A track opened from a band's set list. An empty editor takes it straight away; one with work in it
+  // gets the usual "load it?" offer instead, so nothing is ever replaced without asking.
+  const [bandHandoff] = useState(() => readBandTrackHandoff());
+  const loadHandoffNow = bandHandoff !== null && saved.pieces.length === 0;
+  const [pieces, setPieces] = useState<TrackPiece[]>(loadHandoffNow ? bandHandoff.pieces : saved.pieces);
+  const [groups, setGroups] = useState<SegmentGroup[]>(loadHandoffNow ? bandHandoff.groups : saved.groups);
   const [speedPercent, setSpeedPercent] = useState(saved.speedPercent);
   const [expandView, setExpandView] = useState(saved.expandView);
   const [countdownEnabled, setCountdownEnabled] = useState(saved.countdownEnabled);
@@ -407,7 +412,10 @@ export function ClickTrackPage() {
   const [savedTracks, setSavedTracks] = useState<CloudClickTrack[]>([]);
   const [loadingTracks, setLoadingTracks] = useState(false);
 
-  const [sharedOffer, setSharedOffer] = useState<{ pieces: TrackPiece[]; groups: SegmentGroup[] } | null>(null);
+  const [sharedOffer, setSharedOffer] = useState<{ pieces: TrackPiece[]; groups: SegmentGroup[]; label?: string } | null>(
+    bandHandoff && !loadHandoffNow ? { pieces: bandHandoff.pieces, groups: bandHandoff.groups, label: bandHandoff.title } : null,
+  );
+  const [saveToBandOpen, setSaveToBandOpen] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   // The pieces array the "too large for a link" notice was raised for; any later edit replaces the array and hides it.
   const [shareTooLargeFor, setShareTooLargeFor] = useState<TrackPiece[] | null>(null);
@@ -472,6 +480,11 @@ export function ClickTrackPage() {
     const elRect = el.getBoundingClientRect();
     container.scrollTop += elRect.top - containerRect.top;
   }, [currentPieceIndex, currentRepetition, isPlaying]);
+
+  // The band hand-off was read when the page mounted; forget it so it is never offered again.
+  useEffect(() => {
+    clearBandTrackHandoff();
+  }, []);
 
   // Load shared track from URL param on mount
   useEffect(() => {
@@ -1095,6 +1108,14 @@ export function ClickTrackPage() {
               >
                 <Cloud size={13} /> Save to Cloud
               </Button>
+              <Button
+                size="sm" variant="outline"
+                onClick={() => setSaveToBandOpen(true)}
+                disabled={pieces.length === 0}
+                className="gap-1 text-xs"
+              >
+                <Users size={13} /> Save to Band
+              </Button>
             </>
           </AuthGate>
         </div>
@@ -1171,9 +1192,9 @@ export function ClickTrackPage() {
       {/* Shared track banner */}
       {sharedOffer !== null && (
         <div className="ct-shared-banner">
-          <span>Shared track available — load it?</span>
+          <span>{sharedOffer.label ? `“${sharedOffer.label}” click track from your band — load it?` : 'Shared track available — load it?'}</span>
           <Button size="sm" className="h-7 text-xs" onClick={() => {
-            if (pieces.length > 0 && !window.confirm('Replace current track with the shared one?')) return;
+            if (pieces.length > 0 && !window.confirm(sharedOffer.label ? 'Replace current track with the band’s click track?' : 'Replace current track with the shared one?')) return;
             replaceTrack(sharedOffer.pieces, sharedOffer.groups);
             setSharedOffer(null);
           }}>Load</Button>
@@ -1480,6 +1501,8 @@ export function ClickTrackPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <SaveToBandDialog open={saveToBandOpen} onOpenChange={setSaveToBandOpen} pieces={pieces} groups={groups} />
 
       {/* Save to Cloud dialog */}
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>

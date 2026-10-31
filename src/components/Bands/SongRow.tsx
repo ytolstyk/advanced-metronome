@@ -1,4 +1,4 @@
-import { Pencil, Trash2, EyeOff } from 'lucide-react';
+import { Download, ExternalLink, EyeOff, Music, Pencil, Play, Square, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { SONG_COLOR_STYLES, SONG_COLOR_TINT_PERCENT, type ColorLabels } from '../../bandSongColors';
@@ -7,6 +7,25 @@ import { CARD_SURFACE } from './cardStyles';
 import { SongColorPicker } from './SongColorPicker';
 import { SongDetails } from './SongDetails';
 import { VoteButtons } from './VoteButtons';
+
+/** What the song row needs to show and drive a song's click track (absent when the song has none). */
+export interface SongClickTrackControls {
+  /** Display name of the member whose track is shown. */
+  by: string;
+  /** Short date the track was saved, '' when unknown. */
+  date: string;
+  playing: boolean;
+  /** A fetch is in flight for some song: all track buttons wait. */
+  busy: boolean;
+  /** Why the track can't be played (unreadable / newer app); Play, Download and Open are then disabled. */
+  problem?: string;
+  /** Why Download alone is unavailable (track too long). */
+  downloadBlocked?: string;
+  onPlay: () => void;
+  onDownload: () => void;
+  onOpen: () => void;
+  onRemove: () => void;
+}
 
 interface SongRowProps {
   song: ValidSong;
@@ -22,6 +41,7 @@ interface SongRowProps {
   /** The caller owns the band (may hide any song). */
   isOwner: boolean;
   isVoting: boolean;
+  clickTrack?: SongClickTrackControls;
   onVote: (value: VoteValue) => void;
   onColor: (color: SongColorKey | null) => void;
   onEdit: () => void;
@@ -40,6 +60,7 @@ export function SongRow({
   isAuthor,
   isOwner,
   isVoting,
+  clickTrack,
   onVote,
   onColor,
   onEdit,
@@ -69,6 +90,7 @@ export function SongRow({
         </div>
         <VoteButtons songTitle={song.title} myVote={myVote} tally={tally} disabled={isVoting} onVote={onVote} />
       </div>
+      {clickTrack && <SongClickTrackStrip songTitle={song.title} track={clickTrack} />}
       <div className="mt-2 flex flex-wrap gap-1 pl-9">
         <SongColorPicker songTitle={song.title} color={color} labels={colorLabels} onChange={onColor} />
         {isAuthor && (
@@ -88,5 +110,56 @@ export function SongRow({
         )}
       </div>
     </li>
+  );
+}
+
+function SongClickTrackStrip({ songTitle, track }: { songTitle: string; track: SongClickTrackControls }) {
+  const usable = !track.problem;
+  return (
+    <div className="mt-2 pl-9">
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+          <Music size={14} aria-hidden className="shrink-0" />
+          <span className="truncate">
+            Click track · by {track.by}
+            {track.date ? `, ${track.date}` : ''}
+          </span>
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={track.onPlay}
+          disabled={!usable || (track.busy && !track.playing)}
+          aria-label={`${track.playing ? 'Stop' : 'Play'} click track for ${songTitle}`}
+        >
+          {track.playing ? <Square size={14} className="mr-1" /> : <Play size={14} className="mr-1" />}
+          {track.playing ? 'Stop' : 'Play'}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={track.onDownload}
+          disabled={!usable || track.busy || !!track.downloadBlocked}
+          title={track.downloadBlocked}
+          aria-label={`Download click track for ${songTitle}`}
+        >
+          <Download size={14} className="mr-1" /> Download
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={track.onOpen}
+          disabled={!usable || track.busy}
+          aria-label={`Open click track for ${songTitle} in the editor`}
+        >
+          <ExternalLink size={14} className="mr-1" /> Open
+        </Button>
+        <Button variant="ghost" size="sm" onClick={track.onRemove} disabled={track.busy} aria-label={`Remove click track for ${songTitle}`}>
+          <Trash2 size={14} className="mr-1" /> Remove
+        </Button>
+      </div>
+      {track.problem && <p className="mt-1 text-xs text-destructive">{track.problem}</p>}
+      {!track.problem && track.downloadBlocked && <p className="mt-1 text-xs text-muted-foreground">{track.downloadBlocked}</p>}
+    </div>
   );
 }
