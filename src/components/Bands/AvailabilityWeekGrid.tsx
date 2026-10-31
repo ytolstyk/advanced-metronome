@@ -104,7 +104,12 @@ export function AvailabilityWeekGrid({ days, timeZone, locale, todayKey, label, 
         {columns.map(({ day, dayLabel }) => (
           <div
             key={day.key}
-            className={cn('px-1 pb-1 text-center text-xs leading-tight', day.key === todayKey ? 'font-semibold text-primary' : 'text-foreground')}
+            aria-current={day.key === todayKey ? 'date' : undefined}
+            className={cn(
+              'px-1 pb-1 text-center text-xs leading-tight',
+              'text-foreground',
+              day.key === todayKey && 'rounded-t-md border-t-2 border-primary bg-primary/15 font-semibold',
+            )}
           >
             <div>{dayLabel}</div>
             <DayNote text={dayNote?.(day)} />
@@ -129,14 +134,14 @@ export function AvailabilityWeekGrid({ days, timeZone, locale, todayKey, label, 
                   col === 0 && 'border-l border-l-border/60',
                   row === 0 && 'border-t border-t-border',
                 );
-                if (slot === undefined) return <div key={column.day.key} aria-hidden="true" className={lines} />;
+                if (slot === undefined) return <div key={column.day.key} aria-hidden="true" className={cn(lines, column.day.key === todayKey && 'bg-primary/10')} />;
                 const focus: CellFocus = {
                   tabIndex: stop?.col === col && stop.row === row ? 0 : -1,
                   'data-col': col,
                   'data-row': row,
                 };
                 return (
-                  <div key={column.day.key} className={cn('p-0.5', lines)}>
+                  <div key={column.day.key} className={cn('p-0.5', lines, column.day.key === todayKey && 'bg-primary/10')}>
                     {renderCell({ slot, col, row, timeLabel: column.labels.get(slot) ?? '', dayLabel: column.dayLabel }, focus)}
                   </div>
                 );

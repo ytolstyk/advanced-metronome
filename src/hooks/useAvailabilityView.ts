@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { AvailabilityPageOk } from '../api/availabilityApi';
-import { buildHorizonDays, localDateKey, practiceSlots, type LocalDay } from '../availabilityCalendar';
+import { WIDE_DAYS_PER_PAGE } from './useDaysPerPage';
+import { buildCalendarDays, localDateKey, practiceSlots, type LocalDay } from '../availabilityCalendar';
 import {
   buildOverlap,
   parseGroup,
@@ -12,29 +13,38 @@ import {
 import { findBestWindows, type BestWindows } from '../availabilityWindows';
 
 /**
- * Today and the days ahead. About 2,900 Intl calls, so it is rebuilt when the local date changes,
+ * The days the calendar pages through: from the Sunday of this week, through today and the days
+ * ahead. About 3,500 Intl calls, so it is rebuilt when the local date changes,
  * not on every clock tick.
  */
 export function useHorizonDays(nowMs: number, timeZone: string): LocalDay[] {
   const todayKey = localDateKey(nowMs, timeZone);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the date, deliberately not on `nowMs`
-  return useMemo(() => buildHorizonDays(Date.now(), timeZone), [todayKey, timeZone]);
+  return useMemo(() => buildCalendarDays(Date.now(), timeZone), [todayKey, timeZone]);
 }
 
 /**
  * Which days are on screen (a page of `perPage` columns) and the slot picked among them. Moving to
  * another page, or any day jump, clears the picked slot; if the days are rebuilt without the page
- * being shown (the horizon rolled over), it falls back to the first page.
+ * being shown (the horizon rolled over), it is clamped to the last page.
+ *
+ * At a full week (7 columns) pages are aligned to the first day, a Sunday, so they read Sunday to
+ * Saturday and the days before `todayIndex` stay reachable. On fewer columns (a phone) pages start
+ * at `todayIndex`, so the first screen opens on today and never on dead past columns.
  */
-export function useWeekFocus(days: LocalDay[], perPage: number) {
-  const [focus, setFocus] = useState<{ start: number; slot: number | null }>({ start: 0, slot: null });
-  const lastPageStart = Math.floor((days.length - 1) / perPage) * perPage;
-  const start = Math.min(Math.floor(focus.start / perPage) * perPage, lastPageStart);
+export function useWeekFocus(days: LocalDay[], perPage: number, todayIndex: number) {
+  const firstStart = perPage >= WIDE_DAYS_PER_PAGE ? 0 : Math.min(todayIndex, days.length - 1);
+  const lastIndex = days.length - 1;
+  const pageOf = (index: number) =>
+    firstStart + Math.floor((Math.min(Math.max(index, firstStart), lastIndex) - firstStart) / perPage) * perPage;
+  const [focus, setFocus] = useState<{ start: number; slot: number | null }>({ start: todayIndex, slot: null });
+  const start = pageOf(focus.start);
   const visibleDays = useMemo(() => days.slice(start, start + perPage), [days, start, perPage]);
-  const pageOf = (index: number) => Math.floor(Math.min(Math.max(index, 0), days.length - 1) / perPage) * perPage;
   const slotShown = focus.slot !== null && visibleDays.some((d) => d.slots.includes(focus.slot!));
   return {
     start,
+    /** Index of the first day of the first page; "Earlier" stops here. */
+    firstStart,
     visibleDays,
     selectedSlot: slotShown ? focus.slot : null,
     /** Show the page that holds the day at `index`. */

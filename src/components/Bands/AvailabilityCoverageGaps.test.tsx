@@ -113,7 +113,7 @@ describe('AvailabilityWeekGrid keyboard: gaps', () => {
 describe('AvailabilityWeekNav: gaps', () => {
   const noop = { onEarlier: vi.fn(), onLater: vi.fn(), onGoToDay: vi.fn() };
   const nav = (days: typeof all, start: number, perPage: number) =>
-    render(<AvailabilityWeekNav days={days} start={start} perPage={perPage} timeZone={TZ} locale={LOCALE} {...noop} />);
+    render(<AvailabilityWeekNav days={days} start={start} todayIndex={0} perPage={perPage} timeZone={TZ} locale={LOCALE} {...noop} />);
 
   it('ends the label on the last day of a short final page', () => {
     nav(all, 56, 7); // days 56 to 59 only
@@ -141,7 +141,7 @@ describe('AvailabilityWeekNav: gaps', () => {
 
   it('ignores the date box being cleared', () => {
     const onGoToDay = vi.fn();
-    render(<AvailabilityWeekNav days={all} start={7} perPage={7} timeZone={TZ} locale={LOCALE} {...noop} onGoToDay={onGoToDay} />);
+    render(<AvailabilityWeekNav days={all} start={7} todayIndex={0} perPage={7} timeZone={TZ} locale={LOCALE} {...noop} onGoToDay={onGoToDay} />);
     fireEvent.change(screen.getByLabelText('Jump to a date'), { target: { value: '' } });
     expect(onGoToDay).not.toHaveBeenCalled();
   });

@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { AvailabilityPageResult } from '../api/availabilityApi';
-import { buildHorizonDays } from '../availabilityCalendar';
+import { buildCalendarDays, buildHorizonDays, localDateKey } from '../availabilityCalendar';
 import { ME, NOW, OWNER, BOB, band, everyone, ok, row, at } from '../availabilityTestHelpers';
 import { useAvailabilityModel, useWeekFocus, useHorizonDays } from './useAvailabilityView';
 
@@ -23,10 +23,19 @@ function data(): OkResult {
 }
 
 describe('useHorizonDays', () => {
+  // The hook builds from the real clock (it is keyed on the date, not on `nowMs`), so pin it.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+
   it('builds the days once and keeps them while the date is unchanged', () => {
     const { result, rerender } = renderHook(({ now }) => useHorizonDays(now, 'UTC'), { initialProps: { now: NOW } });
     const first = result.current;
-    expect(first).toHaveLength(60);
+    expect(first).toHaveLength(62); // 60 days from Tuesday, plus Sunday and Monday before it
+    expect(first[0].key).toBe('2026-11-01');
+    expect(first[2].key).toBe(localDateKey(NOW, 'UTC'));
     rerender({ now: NOW + 5 * 60_000 }); // a few minutes later, same day
     expect(result.current).toBe(first);
   });
@@ -39,25 +48,101 @@ describe('useHorizonDays', () => {
   });
 });
 
+describe('useWeekFocus: todayIndex', () => {
+  const days = buildCalendarDays(NOW, 'UTC'); // Tuesday: today is index 2, the Sunday is index 0
+  const todayIndex = 2;
+
+  it('opens a full week on the Sunday-to-Saturday page holding today', () => {
+    const { result } = renderHook(() => useWeekFocus(days, 7, todayIndex));
+    expect(result.current.firstStart).toBe(0);
+    expect(result.current.start).toBe(0);
+    expect(result.current.visibleDays).toHaveLength(7);
+    expect(result.current.visibleDays[todayIndex].key).toBe(localDateKey(NOW, 'UTC'));
+    expect(result.current.selectedSlot).toBeNull();
+  });
+
+  it('keeps full-week pages aligned to the Sunday, so Earlier stops at it', () => {
+    const { result } = renderHook(() => useWeekFocus(days, 7, todayIndex));
+    act(() => result.current.shiftPage(1));
+    expect(result.current.start).toBe(7);
+    act(() => result.current.shiftPage(-1));
+    expect(result.current.start).toBe(0);
+    act(() => result.current.shiftPage(-1));
+    expect(result.current.start).toBe(0);
+  });
+
+  it('opens on a phone (3 per page) at today, not on the dead days before it', () => {
+    const { result } = renderHook(() => useWeekFocus(days, 3, todayIndex));
+    expect(result.current.firstStart).toBe(todayIndex);
+    expect(result.current.start).toBe(todayIndex);
+    expect(result.current.visibleDays.map((d) => d.key)).toEqual(days.slice(2, 5).map((d) => d.key));
+  });
+
+  it('pages a phone from today and never earlier than it', () => {
+    const { result } = renderHook(() => useWeekFocus(days, 3, todayIndex));
+    act(() => result.current.shiftPage(1));
+    expect(result.current.start).toBe(5);
+    act(() => result.current.shiftPage(-1));
+    expect(result.current.start).toBe(2);
+    act(() => result.current.shiftPage(-1));
+    expect(result.current.start).toBe(2);
+    act(() => result.current.goToDay(0));
+    expect(result.current.start).toBe(2);
+    act(() => result.current.goToDay(8));
+    expect(result.current.start).toBe(8);
+  });
+
+  it('puts today on the first phone page for every weekday', () => {
+    for (let d = 0; d < 7; d++) {
+      const list = buildCalendarDays(Date.UTC(2026, 10, 1 + d, 12), 'UTC');
+      const { result } = renderHook(() => useWeekFocus(list, 3, d));
+      expect(result.current.visibleDays[0].key).toBe(list[d].key);
+    }
+  });
+
+  it('with a phone and a Sunday today there is no offset', () => {
+    const list = buildCalendarDays(Date.UTC(2026, 10, 1, 12), 'UTC');
+    const { result } = renderHook(() => useWeekFocus(list, 3, 0));
+    expect(result.current.start).toBe(0);
+    expect(result.current.firstStart).toBe(0);
+  });
+
+  it('opens on the page holding today when today is on a later page', () => {
+    const { result } = renderHook(() => useWeekFocus(days, 7, 9));
+    expect(result.current.start).toBe(7);
+  });
+
+  it('clamps a today index beyond the end to the last page', () => {
+    const { result } = renderHook(() => useWeekFocus(days, 7, 9999));
+    expect(result.current.start).toBe(Math.floor((days.length - 1) / 7) * 7);
+  });
+
+  it('showSlot on a past day of this week lands on the first page, not before it', () => {
+    const { result } = renderHook(() => useWeekFocus(days, 3, todayIndex));
+    act(() => result.current.showSlot(days[0].slots[20]));
+    expect(result.current.start).toBe(2);
+  });
+});
+
 describe('useWeekFocus', () => {
   const days = buildHorizonDays(NOW, 'UTC');
 
   it('starts on the first page, from today, with no slot', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 7));
+    const { result } = renderHook(() => useWeekFocus(days, 7, 0));
     expect(result.current.start).toBe(0);
     expect(result.current.visibleDays.map((d) => d.key)).toEqual(days.slice(0, 7).map((d) => d.key));
     expect(result.current.selectedSlot).toBeNull();
   });
 
   it('shows fewer days per page when asked to', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 3));
+    const { result } = renderHook(() => useWeekFocus(days, 3, 0));
     expect(result.current.visibleDays).toHaveLength(3);
     act(() => result.current.shiftPage(1));
     expect(result.current.start).toBe(3);
   });
 
   it('moves a page at a time and stops at both ends', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 7));
+    const { result } = renderHook(() => useWeekFocus(days, 7, 0));
     act(() => result.current.shiftPage(-1));
     expect(result.current.start).toBe(0);
     act(() => result.current.shiftPage(1));
@@ -68,7 +153,7 @@ describe('useWeekFocus', () => {
   });
 
   it('goes to the page holding a day', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 7));
+    const { result } = renderHook(() => useWeekFocus(days, 7, 0));
     act(() => result.current.goToDay(10));
     expect(result.current.start).toBe(7);
     act(() => result.current.goToDay(-5));
@@ -78,7 +163,7 @@ describe('useWeekFocus', () => {
   });
 
   it('clears the slot whenever the page changes', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 7));
+    const { result } = renderHook(() => useWeekFocus(days, 7, 0));
     act(() => result.current.selectSlot(at(19)));
     expect(result.current.selectedSlot).toBe(at(19));
     act(() => result.current.shiftPage(1));
@@ -86,27 +171,27 @@ describe('useWeekFocus', () => {
   });
 
   it('hides a selected slot that is not on the page shown', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 7));
+    const { result } = renderHook(() => useWeekFocus(days, 7, 0));
     act(() => result.current.selectSlot(days[10].slots[20]));
     expect(result.current.selectedSlot).toBeNull();
   });
 
   it('jumps to the page and slot of any upcoming time', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 7));
+    const { result } = renderHook(() => useWeekFocus(days, 7, 0));
     act(() => result.current.showSlot(days[9].slots[24]));
     expect(result.current.start).toBe(7);
     expect(result.current.selectedSlot).toBe(days[9].slots[24]);
   });
 
   it('ignores a slot outside the horizon', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 7));
+    const { result } = renderHook(() => useWeekFocus(days, 7, 0));
     act(() => result.current.showSlot(1));
     expect(result.current.start).toBe(0);
     expect(result.current.selectedSlot).toBeNull();
   });
 
   it('falls back to the last page when the list shrinks under it', () => {
-    const { result, rerender } = renderHook(({ list }) => useWeekFocus(list, 7), { initialProps: { list: days } });
+    const { result, rerender } = renderHook(({ list }) => useWeekFocus(list, 7, 0), { initialProps: { list: days } });
     act(() => result.current.goToDay(30));
     expect(result.current.start).toBe(28);
     rerender({ list: days.slice(0, 10) });
@@ -119,7 +204,7 @@ describe('useWeekFocus: gaps', () => {
   const days = buildHorizonDays(NOW, 'UTC');
 
   it('realigns to the page holding the same days when the page size changes', () => {
-    const { result, rerender } = renderHook(({ perPage }) => useWeekFocus(days, perPage), { initialProps: { perPage: 7 } });
+    const { result, rerender } = renderHook(({ perPage }) => useWeekFocus(days, perPage, 0), { initialProps: { perPage: 7 } });
     act(() => result.current.shiftPage(1));
     expect(result.current.start).toBe(7);
     rerender({ perPage: 3 }); // a phone-width window: pages start at multiples of 3
@@ -130,7 +215,7 @@ describe('useWeekFocus: gaps', () => {
   });
 
   it('keeps a picked slot when the page size changes and its day is still shown', () => {
-    const { result, rerender } = renderHook(({ perPage }) => useWeekFocus(days, perPage), { initialProps: { perPage: 7 } });
+    const { result, rerender } = renderHook(({ perPage }) => useWeekFocus(days, perPage, 0), { initialProps: { perPage: 7 } });
     const slot = days[1].slots[20];
     act(() => result.current.selectSlot(slot));
     rerender({ perPage: 3 });
@@ -140,7 +225,7 @@ describe('useWeekFocus: gaps', () => {
   });
 
   it('pages by the page size on a phone, and aligns day jumps to it', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 3));
+    const { result } = renderHook(() => useWeekFocus(days, 3, 0));
     act(() => result.current.goToDay(10));
     expect(result.current.start).toBe(9);
     act(() => result.current.shiftPage(-1));
@@ -149,14 +234,14 @@ describe('useWeekFocus: gaps', () => {
   });
 
   it('ends on a short final page of the right length', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 7));
+    const { result } = renderHook(() => useWeekFocus(days, 7, 0));
     act(() => result.current.goToDay(days.length - 1));
     expect(result.current.start).toBe(56);
     expect(result.current.visibleDays).toHaveLength(days.length - 56);
   });
 
   it('unpicks a slot with selectSlot(null) without changing the page', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 7));
+    const { result } = renderHook(() => useWeekFocus(days, 7, 0));
     act(() => result.current.showSlot(days[9].slots[24]));
     act(() => result.current.selectSlot(null));
     expect(result.current.selectedSlot).toBeNull();
@@ -164,14 +249,14 @@ describe('useWeekFocus: gaps', () => {
   });
 
   it('keeps the page and picks the slot when showing a time on the page already open', () => {
-    const { result } = renderHook(() => useWeekFocus(days, 7));
+    const { result } = renderHook(() => useWeekFocus(days, 7, 0));
     act(() => result.current.showSlot(days[2].slots[30]));
     expect(result.current.start).toBe(0);
     expect(result.current.selectedSlot).toBe(days[2].slots[30]);
   });
 
   it('drops a picked slot when the days are rebuilt without it', () => {
-    const { result, rerender } = renderHook(({ list }) => useWeekFocus(list, 7), { initialProps: { list: days } });
+    const { result, rerender } = renderHook(({ list }) => useWeekFocus(list, 7, 0), { initialProps: { list: days } });
     const slot = days[0].slots[30];
     act(() => result.current.selectSlot(slot));
     expect(result.current.selectedSlot).toBe(slot);

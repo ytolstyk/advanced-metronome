@@ -67,9 +67,32 @@ describe('AvailabilityWeekGrid', () => {
 
   it('highlights today and prints a short note under a day', () => {
     plain([today, wed], { dayNote: (d) => (d.key === wed.key ? 'peak 3/4' : null) });
-    expect(screen.getByText('Tue, Nov 3').parentElement).toHaveClass('text-primary');
-    expect(screen.getByText('Wed, Nov 4').parentElement).not.toHaveClass('text-primary');
+    expect(screen.getByText('Tue, Nov 3').parentElement).toHaveClass('bg-primary/15', 'font-semibold', 'border-primary');
+    expect(screen.getByText('Wed, Nov 4').parentElement).not.toHaveClass('bg-primary/15');
     expect(screen.getByText('peak 3/4')).toBeInTheDocument();
+  });
+
+  it('marks only today\'s header with aria-current="date"', () => {
+    plain([today, wed, thu]);
+    expect(screen.getByText('Tue, Nov 3').parentElement).toHaveAttribute('aria-current', 'date');
+    expect(screen.getByText('Wed, Nov 4').parentElement).not.toHaveAttribute('aria-current');
+    expect(screen.getByText('Thu, Nov 5').parentElement).not.toHaveAttribute('aria-current');
+    expect(document.querySelectorAll('[aria-current="date"]')).toHaveLength(1);
+  });
+
+  it('marks nothing as today when today is not on the page', () => {
+    plain([wed, thu]);
+    expect(document.querySelector('[aria-current]')).toBeNull();
+    expect(screen.getByText('Wed, Nov 4').parentElement).not.toHaveClass('bg-primary/15');
+  });
+
+  it('tints every cell in today\'s column and no other', () => {
+    plain([today, wed]);
+    const todayCells = screen.getAllByRole('button', { name: /^Tue, Nov 3/ });
+    const wedCells = screen.getAllByRole('button', { name: /^Wed, Nov 4/ });
+    expect(todayCells).toHaveLength(28);
+    for (const c of todayCells) expect(c.parentElement).toHaveClass('bg-primary/10');
+    for (const c of wedCells) expect(c.parentElement).not.toHaveClass('bg-primary/10');
   });
 
   it('keeps rows lined up in a zone whose half hours fall on :15 and :45', () => {
@@ -168,9 +191,9 @@ describe('AvailabilityWeekGrid', () => {
 });
 
 describe('AvailabilityWeekNav', () => {
-  const setup = (start = 0, perPage = 7) => {
+  const setup = (start = 0, perPage = 7, todayIndex = 0, firstStart?: number) => {
     const handlers = { onEarlier: vi.fn(), onLater: vi.fn(), onGoToDay: vi.fn() };
-    render(<AvailabilityWeekNav days={all} start={start} perPage={perPage} timeZone={TZ} locale={LOCALE} {...handlers} />);
+    render(<AvailabilityWeekNav days={all} start={start} todayIndex={todayIndex} firstStart={firstStart} perPage={perPage} timeZone={TZ} locale={LOCALE} {...handlers} />);
     return handlers;
   };
 
@@ -197,6 +220,58 @@ describe('AvailabilityWeekNav', () => {
     expect(h.onEarlier).toHaveBeenCalledTimes(1);
     expect(h.onLater).toHaveBeenCalledTimes(1);
     expect(h.onGoToDay).toHaveBeenCalledWith(0);
+  });
+
+  it('goes to today at its index, not the first day, when the week starts before today', () => {
+    const h = setup(7, 7, 2);
+    const today = screen.getByRole('button', { name: 'Today' });
+    expect(today).toBeEnabled();
+    fireEvent.click(today);
+    expect(h.onGoToDay).toHaveBeenCalledWith(2);
+  });
+
+  it('disables Today while today is on screen, even when it is not the first day shown', () => {
+    setup(0, 7, 2);
+    expect(screen.getByRole('button', { name: 'Today' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Earlier/ })).toBeDisabled();
+  });
+
+  it('enables Today on the page before today, and on a phone page that misses it', () => {
+    setup(0, 3, 4);
+    expect(screen.getByRole('button', { name: 'Today' })).toBeEnabled();
+  });
+
+  it('disables Today on the phone page that holds today', () => {
+    setup(3, 3, 4);
+    expect(screen.getByRole('button', { name: 'Today' })).toBeDisabled();
+  });
+
+  it('limits the date box to today onward', () => {
+    setup(0, 7, 2);
+    expect(screen.getByLabelText('Jump to a date')).toHaveAttribute('min', all[2].key);
+  });
+
+  it('shows today in the date box when the page starts on a past day', () => {
+    setup(0, 7, 2);
+    expect(screen.getByLabelText('Jump to a date')).toHaveValue(all[2].key);
+  });
+
+  it('shows the first day of a page that starts on or after today', () => {
+    setup(7, 7, 2);
+    expect(screen.getByLabelText('Jump to a date')).toHaveValue(all[7].key);
+  });
+
+  it('stops Earlier at firstStart, not at the first day', () => {
+    setup(2, 3, 2, 2);
+    expect(screen.getByRole('button', { name: /Earlier/ })).toBeDisabled();
+  });
+
+  it('allows Earlier once past firstStart', () => {
+    const h = setup(5, 3, 2, 2);
+    const earlier = screen.getByRole('button', { name: /Earlier/ });
+    expect(earlier).toBeEnabled();
+    fireEvent.click(earlier);
+    expect(h.onEarlier).toHaveBeenCalledTimes(1);
   });
 
   it('cannot go earlier than today', () => {

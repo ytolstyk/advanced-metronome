@@ -16,7 +16,7 @@ import { loadAvailabilityPage, type AvailabilityPageOk, type AvailabilityPageRes
 import { bandPath } from '../bandRoutes';
 import { normalizeInstruments } from '../bandInstruments';
 import { BAND_GONE_TITLES, type AvailabilityRead } from '../bandTypes';
-import { getViewerTimeZone, practiceSlots, type LocalDay } from '../availabilityCalendar';
+import { getViewerTimeZone, localDateKey, practiceSlots, type LocalDay } from '../availabilityCalendar';
 import { SLOTS_PER_HOUR, slotOf } from '../availabilitySlots';
 import { NO_ROW_READ, hasCurrentRow, parseGroup, subsOfKind } from '../availabilityUtils';
 import { useAvailabilityEditor } from '../hooks/useAvailabilityEditor';
@@ -103,9 +103,15 @@ function AvailabilityResult({
 type Mode = 'group' | 'mine';
 
 /** Under a day's name in the group view: the most members free together that day. */
-function groupDayNote(day: LocalDay, timeZone: string, nowSlot: number, countAt: (slot: number) => number, total: number): string {
+function groupDayNote(day: LocalDay, timeZone: string, nowSlot: number, countAt: (slot: number) => number, total: number): string | null {
   let peak = 0;
-  for (const slot of practiceSlots(day, timeZone)) if (slot > nowSlot) peak = Math.max(peak, countAt(slot));
+  let upcoming = false;
+  for (const slot of practiceSlots(day, timeZone)) {
+    if (slot <= nowSlot) continue;
+    upcoming = true;
+    peak = Math.max(peak, countAt(slot));
+  }
+  if (!upcoming) return null;
   return peak > 0 ? `peak ${peak}/${total}` : 'none';
 }
 
@@ -121,8 +127,10 @@ function AvailabilityBody({ data, refreshing, reload }: { data: AvailabilityPage
   const nowMs = useClock();
   const [timeZone] = useState(getViewerTimeZone);
   const days = useHorizonDays(nowMs, timeZone);
+  const todayKey = localDateKey(nowMs, timeZone);
+  const todayIndex = Math.max(0, days.findIndex((d) => d.key === todayKey));
   const perPage = useDaysPerPage();
-  const week = useWeekFocus(days, perPage);
+  const week = useWeekFocus(days, perPage, todayIndex);
   const lastDay = days[days.length - 1];
   const lastVisibleSlot = lastDay.slots[lastDay.slots.length - 1];
 
@@ -211,6 +219,8 @@ function AvailabilityBody({ data, refreshing, reload }: { data: AvailabilityPage
       <AvailabilityWeekNav
         days={days}
         start={week.start}
+        todayIndex={todayIndex}
+        firstStart={week.firstStart}
         perPage={perPage}
         timeZone={timeZone}
         onEarlier={() => week.shiftPage(-1)}
@@ -221,7 +231,7 @@ function AvailabilityBody({ data, refreshing, reload }: { data: AvailabilityPage
       {mode === 'mine' || !overlap ? (
         <AvailabilityMine
           days={week.visibleDays}
-          todayKey={days[0].key}
+          todayKey={todayKey}
           dayNote={note}
           lastVisibleSlot={lastVisibleSlot}
           timeZone={timeZone}
@@ -232,7 +242,7 @@ function AvailabilityBody({ data, refreshing, reload }: { data: AvailabilityPage
       ) : (
         <AvailabilityOverlap
           days={week.visibleDays}
-          todayKey={days[0].key}
+          todayKey={todayKey}
           dayNote={note}
           resolution={resolution}
           overlap={overlap}

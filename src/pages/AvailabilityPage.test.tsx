@@ -222,8 +222,8 @@ describe('the week shown', () => {
     renderPage();
     await screen.findByRole('radio', { name: 'Group' });
     const grid = screen.getByRole('group', { name: 'How many members are free' });
-    for (const day of ['Tue, Nov 3', 'Wed, Nov 4', 'Mon, Nov 9']) expect(within(grid).getByText(day)).toBeInTheDocument();
-    expect(within(grid).queryByText('Tue, Nov 10')).not.toBeInTheDocument();
+    for (const day of ['Sun, Nov 1', 'Tue, Nov 3', 'Wed, Nov 4', 'Sat, Nov 7']) expect(within(grid).getByText(day)).toBeInTheDocument();
+    expect(within(grid).queryByText('Sun, Nov 8')).not.toBeInTheDocument();
     expect(within(grid).getAllByRole('button', { name: /^Wed, Nov 4,/ })).toHaveLength(28);
     expect(within(grid).queryByRole('button', { name: time('Wed, Nov 4, 7:30 AM') })).not.toBeInTheDocument();
     expect(within(grid).queryByRole('button', { name: time('Wed, Nov 4, 10:00 PM') })).not.toBeInTheDocument();
@@ -233,12 +233,45 @@ describe('the week shown', () => {
     load(pageData({}, { [ME]: ok(row(ME, evening)) }));
     renderPage();
     await screen.findByRole('radio', { name: 'Group' });
-    expect(screen.getByText('Tue, Nov 3 – Mon, Nov 9')).toBeInTheDocument();
+    expect(screen.getByText('Sun, Nov 1 – Sat, Nov 7')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Later/ }));
-    expect(screen.getByText('Tue, Nov 10 – Mon, Nov 16')).toBeInTheDocument();
+    expect(screen.getByText('Sun, Nov 8 – Sat, Nov 14')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Wed, Nov 4,/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Earlier/ }));
     expect(screen.getByRole('button', { name: time('Wed, Nov 4, 7:00 PM') })).toBeInTheDocument();
+  });
+
+  it('opens on the Sunday-to-Saturday week holding today and highlights today', async () => {
+    load(pageData({}, { [ME]: ok(row(ME, evening)) }));
+    renderPage();
+    await screen.findByRole('radio', { name: 'Group' });
+    const grid = screen.getByRole('group', { name: 'How many members are free' });
+    const current = grid.querySelectorAll('[aria-current="date"]');
+    expect(current).toHaveLength(1);
+    expect(current[0]).toHaveTextContent('Tue, Nov 3');
+    expect(screen.getByRole('button', { name: 'Today' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Earlier/ })).toBeDisabled();
+  });
+
+  it('Today brings the current week back from a later one', async () => {
+    load(pageData({}, { [ME]: ok(row(ME, evening)) }));
+    renderPage();
+    await screen.findByRole('radio', { name: 'Group' });
+    fireEvent.click(screen.getByRole('button', { name: /Later/ }));
+    expect(screen.getByRole('button', { name: 'Today' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    expect(screen.getByText('Sun, Nov 1 – Sat, Nov 7')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Today' })).toBeDisabled();
+  });
+
+  it('shows no group note under days before today', async () => {
+    load(pageData({}, { [ME]: ok(row(ME, evening)) }));
+    renderPage();
+    await screen.findByRole('radio', { name: 'Group' });
+    const grid = screen.getByRole('group', { name: 'How many members are free' });
+    expect(within(grid).getByText('Sun, Nov 1').parentElement).not.toHaveTextContent(/peak|none/);
+    expect(within(grid).getByText('Mon, Nov 2').parentElement).not.toHaveTextContent(/peak|none/);
+    expect(within(grid).getByText('Wed, Nov 4').parentElement).toHaveTextContent(/peak|none/);
   });
 
   it('marks times in a later week and keeps them there', async () => {

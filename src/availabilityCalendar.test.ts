@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildCalendarDays,
   buildHorizonDays,
   formatDayLabel,
   formatSlotTime,
@@ -9,6 +10,7 @@ import {
   labelDaySlots,
   localDateKey,
   localParts,
+  localWeekday,
   practiceSlots,
   repeatWeekday,
   wallClockToMs,
@@ -517,5 +519,96 @@ describe('isPracticeHour and practiceSlots: gaps', () => {
     expect(inKolkata).toHaveLength(28);
     expect(inKolkata[0]).toBe(slotOf(utc(2026, 11, 3, 2, 30))); // 8:00 AM IST
     expect(inKolkata[0]).not.toBe(practiceSlots(utcDay, 'UTC')[0]);
+  });
+});
+
+describe('localWeekday', () => {
+  it('numbers Sunday 0 through Saturday 6', () => {
+    // 2026-11-01 is a Sunday.
+    for (let d = 0; d < 7; d++) expect(localWeekday(utc(2026, 11, 1 + d, 12), 'UTC')).toBe(d);
+  });
+
+  it('uses the local date, not the UTC date', () => {
+    const lateSaturdayNy = utc(2026, 11, 8, 3, 30); // Sunday Nov 8 UTC, still Saturday Nov 7 in New York
+    expect(localWeekday(lateSaturdayNy, 'UTC')).toBe(0);
+    expect(localWeekday(lateSaturdayNy, NY)).toBe(6);
+    const earlyMondayTokyo = utc(2026, 11, 8, 16, 0); // Sunday UTC, already Monday in Tokyo
+    expect(localWeekday(earlyMondayTokyo, 'Asia/Tokyo')).toBe(1);
+  });
+});
+
+describe('buildCalendarDays', () => {
+  /** 2026-11-01 (Sunday) to 2026-11-07 (Saturday), at midday. */
+  const weekdays = [0, 1, 2, 3, 4, 5, 6].map((d) => ({ weekday: d, now: utc(2026, 11, 1 + d, 17, 0) }));
+
+  it.each(weekdays)('starts on a Sunday when now is weekday $weekday', ({ weekday, now }) => {
+    const days = buildCalendarDays(now, NY);
+    expect(localWeekday(slotStartMs(days[0].slots[0]), NY)).toBe(0);
+    expect(days[0].key).toBe(`2026-11-01`);
+    expect(days[weekday].key).toBe(localDateKey(now, NY));
+  });
+
+  it.each(weekdays)('puts today at index $weekday and spans the horizon plus the days before it', ({ weekday, now }) => {
+    const days = buildCalendarDays(now, NY);
+    expect(days).toHaveLength(60 + weekday);
+    expect(days[weekday].key).toBe(localDateKey(now, NY));
+    expect(days[days.length - 1].key).toBe(buildHorizonDays(now, NY).at(-1)!.key);
+  });
+
+  it('is exactly the horizon when today is a Sunday', () => {
+    const now = utc(2026, 11, 1, 17);
+    expect(buildCalendarDays(now, NY).map((d) => d.key)).toEqual(buildHorizonDays(now, NY).map((d) => d.key));
+  });
+
+  it('honours a custom number of days', () => {
+    const days = buildCalendarDays(utc(2026, 11, 4, 17), NY, 10); // Wednesday
+    expect(days).toHaveLength(13);
+    expect(days[3].key).toBe('2026-11-04');
+  });
+
+  it('lays slots out contiguously with no gaps or overlaps', () => {
+    for (const { now } of weekdays) {
+      const all = buildCalendarDays(now, NY).flatMap((d) => d.slots);
+      for (let i = 1; i < all.length; i++) expect(all[i]).toBe(all[i - 1] + 1);
+    }
+  });
+
+  it('keeps pages of 7 aligned Sunday to Saturday', () => {
+    const days = buildCalendarDays(utc(2026, 11, 5, 17), NY);
+    for (let i = 0; i < days.length; i += 7) expect(localWeekday(slotStartMs(days[i].slots[0]), NY)).toBe(0);
+  });
+
+  it('works across the fall-back week in America/New_York (Sunday Nov 1 has 50 slots)', () => {
+    for (const now of [utc(2026, 11, 1, 17), utc(2026, 11, 3, 17), utc(2026, 11, 7, 17)]) {
+      const days = buildCalendarDays(now, NY);
+      expect(days[0].key).toBe('2026-11-01');
+      expect(days[0].slots).toHaveLength(50);
+    }
+  });
+
+  it('steps back over the fall-back day when now is the Monday after it', () => {
+    const days = buildCalendarDays(utc(2026, 11, 2, 17), NY);
+    expect(days.slice(0, 2).map((d) => d.key)).toEqual(['2026-11-01', '2026-11-02']);
+    expect(days[0].slots).toHaveLength(50);
+  });
+
+  it('works across the spring-forward week (Sunday Mar 8 has 46 slots)', () => {
+    for (const now of [utc(2026, 3, 8, 17), utc(2026, 3, 11, 17)]) {
+      const days = buildCalendarDays(now, NY);
+      expect(days[0].key).toBe('2026-03-08');
+      expect(days[0].slots).toHaveLength(46);
+    }
+  });
+
+  it('starts on the Sunday before when the week began before a spring-forward shift', () => {
+    const days = buildCalendarDays(utc(2026, 3, 9, 17), NY); // Monday after the shift
+    expect(days.slice(0, 2).map((d) => d.key)).toEqual(['2026-03-08', '2026-03-09']);
+  });
+
+  it('uses the local weekday when it differs from the UTC one', () => {
+    const now = utc(2026, 11, 8, 3, 30); // Saturday evening in New York, Sunday in UTC
+    expect(buildCalendarDays(now, NY)[6].key).toBe('2026-11-07');
+    expect(buildCalendarDays(now, NY)[0].key).toBe('2026-11-01');
+    expect(buildCalendarDays(now, 'UTC')[0].key).toBe('2026-11-08');
   });
 });

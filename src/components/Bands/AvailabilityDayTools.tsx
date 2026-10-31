@@ -62,7 +62,7 @@ export function AvailabilityDayTools({ days, lastVisibleSlot, timeZone, locale, 
       <label className={FIELD_LABEL_CLASS}>
         Day
         <select className={SELECT_CLASS} disabled={disabled} value={toolDay.key} onChange={(e) => setDayChoice(e.target.value)}>
-          {days.map((day) => (
+          {days.filter((day) => day === toolDay || editableIn(day).length > 0).map((day) => (
             <option key={day.key} value={day.key}>
               {formatDayLabel(day.slots[0], timeZone, locale)}
             </option>

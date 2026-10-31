@@ -146,6 +146,27 @@ export function buildHorizonDays(nowMs: number, timeZone: string, days: number =
   return result;
 }
 
+/** 0 (Sunday) to 6 (Saturday) for the local date containing an instant. */
+export function localWeekday(ms: number, timeZone: string): number {
+  const { year, month, day } = localParts(ms, timeZone);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+
+/**
+ * The days a calendar page pages through: the Sunday that starts today's week (those earlier days
+ * show as past, nothing in them can be marked), then today and the following days up to the same
+ * horizon `buildHorizonDays` reaches. Pages of 7 from the first day are then Sunday to Saturday.
+ */
+export function buildCalendarDays(nowMs: number, timeZone: string, days: number = horizonDays): LocalDay[] {
+  const weekday = localWeekday(nowMs, timeZone);
+  let slot = firstSlotOfLocalDay(slotOf(nowMs), localDateKey(nowMs, timeZone), timeZone);
+  for (let back = weekday; back > 0; back--) {
+    const previous = slot - 1;
+    slot = firstSlotOfLocalDay(previous, localDateKey(slotStartMs(previous), timeZone), timeZone);
+  }
+  return buildHorizonDays(slotStartMs(slot), timeZone, days + weekday);
+}
+
 /**
  * The band practices between these local hours (8 AM to 10 PM) and nowhere else, so the calendar
  * shows, and can mark, only these. Slots outside them are never created by the UI.
