@@ -76,7 +76,7 @@ function SharedSetListResultView({
         <div className="min-w-0">
           <h1 className="break-words text-2xl font-bold text-foreground">{list.setList.name}</h1>
           <p className="text-sm text-muted-foreground">
-            {view.band.name} · Shared set list, ranked by the band’s votes · {list.songs.length}/{BAND_LIMITS.maxSongsPerSetList} songs
+            {view.band.name} · {list.customOrder ? 'Shared set list, in the band’s running order' : 'Shared set list, ranked by the band’s votes'} · {list.songs.length}/{BAND_LIMITS.maxSongsPerSetList} songs
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

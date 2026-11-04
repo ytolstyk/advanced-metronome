@@ -31,6 +31,7 @@ import {
   fetchSongTargets,
   renameSetList,
   reorderSetLists,
+  reorderSongs,
   setSetListShared,
   suggestSong,
   updateSong,
@@ -302,6 +303,49 @@ describe('setSetListShared', () => {
     await expect(setSetListShared('band-1', 'sl-1', true)).rejects.toBeInstanceOf(NotSignedInError);
     expect(m.Band.get).not.toHaveBeenCalled();
     expect(m.graphql).not.toHaveBeenCalled();
+  });
+});
+
+describe('reorderSongs', () => {
+  it('writes the order to the SetList row as a plain partial update', async () => {
+    m.SetList.update.mockResolvedValue({ data: {} });
+    await reorderSongs('sl-1', ['b', 'a', 'c']);
+    expect(m.SetList.update).toHaveBeenCalledTimes(1);
+    expect(m.SetList.update).toHaveBeenCalledWith({ id: 'sl-1', songOrder: ['b', 'a', 'c'] });
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('writes an empty order to go back to vote ranking', async () => {
+    m.SetList.update.mockResolvedValue({ data: {} });
+    await reorderSongs('sl-1', []);
+    expect(m.SetList.update).toHaveBeenCalledWith({ id: 'sl-1', songOrder: [] });
+  });
+
+  it('drops duplicate ids, keeping the first occurrence', async () => {
+    m.SetList.update.mockResolvedValue({ data: {} });
+    await reorderSongs('sl-1', ['a', 'b', 'a', 'c', 'b']);
+    expect(m.SetList.update).toHaveBeenCalledWith({ id: 'sl-1', songOrder: ['a', 'b', 'c'] });
+  });
+
+  it('caps the order at maxSongsPerSetList', async () => {
+    m.SetList.update.mockResolvedValue({ data: {} });
+    const long = Array.from({ length: BAND_LIMITS.maxSongsPerSetList + 10 }, (_, i) => `s-${i}`);
+    await reorderSongs('sl-1', long);
+    const sent = m.SetList.update.mock.calls[0][0].songOrder as string[];
+    expect(sent).toHaveLength(BAND_LIMITS.maxSongsPerSetList);
+    expect(sent).toEqual(long.slice(0, BAND_LIMITS.maxSongsPerSetList));
+  });
+
+  it('dedupes before capping, so duplicates do not eat the cap', async () => {
+    m.SetList.update.mockResolvedValue({ data: {} });
+    const unique = Array.from({ length: BAND_LIMITS.maxSongsPerSetList }, (_, i) => `s-${i}`);
+    await reorderSongs('sl-1', [...unique, ...unique]);
+    expect(m.SetList.update.mock.calls[0][0].songOrder).toEqual(unique);
+  });
+
+  it('throws when the write is rejected (a non-owner)', async () => {
+    m.SetList.update.mockResolvedValue({ data: null, errors: UNAUTH });
+    await expect(reorderSongs('sl-1', ['a'])).rejects.toThrow();
   });
 });
 
@@ -701,6 +745,7 @@ describe('auth gating', () => {
   it.each([
     ['createSetList', () => createSetList('band-1', 'Gig')],
     ['renameSetList', () => renameSetList('sl-1', 'Gig')],
+    ['reorderSongs', () => reorderSongs('sl-1', ['a', 'b'])],
     ['archiveSetList', () => archiveSetList('band-1', 'sl-1')],
     ['setSetListShared', () => setSetListShared('band-1', 'sl-1', true)],
     ['fetchSetListRows', () => fetchSetListRows('sl-1')],

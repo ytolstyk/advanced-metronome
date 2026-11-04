@@ -244,6 +244,74 @@ describe('assembleSetListView', () => {
     expect(assembleSetListView(view, 'sl-1', rows([], []))!.shared).toBe(false);
   });
 
+  describe('song order', () => {
+    const three = () => [
+      song('a', BOB, { createdAt: '2026-01-01T00:00:00Z' }),
+      song('b', BOB, { createdAt: '2026-01-02T00:00:00Z' }),
+      song('c', BOB, { createdAt: '2026-01-03T00:00:00Z' }),
+    ];
+    const withOrder = (songOrder: string[] | undefined, votes: VoteRecord[] = [], songs = three()) =>
+      assembleSetListView(bandView({ setListRows: [setList({ songOrder })] }), 'sl-1', rows(songs, votes))!;
+
+    it('is purely vote-ranked with customOrder false when the set list has no songOrder', () => {
+      const result = withOrder(undefined, [vote('c', BOB, 'up'), vote('c', ME, 'up'), vote('b', BOB, 'up')]);
+      expect(result.songs.map((s) => s.id)).toEqual(['c', 'b', 'a']);
+      expect(result.customOrder).toBe(false);
+    });
+
+    it('treats an empty songOrder as vote-ranked', () => {
+      const result = withOrder([], [vote('c', BOB, 'up')]);
+      expect(result.songs.map((s) => s.id)).toEqual(['c', 'a', 'b']);
+      expect(result.customOrder).toBe(false);
+    });
+
+    it('applies the owner order over the votes and sets customOrder', () => {
+      const result = withOrder(['a', 'b', 'c'], [vote('c', BOB, 'up'), vote('c', ME, 'up')]);
+      expect(result.songs.map((s) => s.id)).toEqual(['a', 'b', 'c']);
+      expect(result.customOrder).toBe(true);
+    });
+
+    it('puts songs missing from the order after the listed ones, ranked by score', () => {
+      const result = withOrder(['b'], [vote('c', BOB, 'up')]);
+      expect(result.songs.map((s) => s.id)).toEqual(['b', 'c', 'a']);
+      expect(result.customOrder).toBe(true);
+    });
+
+    it('keeps the tallies and votes independent of the order', () => {
+      const result = withOrder(['a', 'b', 'c'], [vote('c', BOB, 'up'), vote('c', ME, 'up')]);
+      expect(result.tallies.get('c')).toEqual({ up: 2, down: 0, score: 2 });
+      expect(result.myVotes).toEqual(new Map([['c', 'up']]));
+    });
+
+    it('ignores order ids with no visible song, and customOrder stays false if none match', () => {
+      const result = withOrder(['ghost', 'phantom'], [vote('b', BOB, 'up')]);
+      expect(result.songs.map((s) => s.id)).toEqual(['b', 'a', 'c']);
+      expect(result.customOrder).toBe(false);
+    });
+
+    it('ignores forged songs listed in the order (non-member authors never render)', () => {
+      const songs = [...three(), song('evil', MALLORY)];
+      const result = withOrder(['evil', 'c', 'a'], [], songs);
+      expect(result.songs.map((s) => s.id)).toEqual(['c', 'a', 'b']);
+    });
+
+    it('ignores hidden songs listed in the order, and customOrder ignores them', () => {
+      const hiddenBand = band({ hiddenSongIds: ['a'] });
+      const result = assembleSetListView(
+        bandView({ band: hiddenBand, setListRows: [setList({ songOrder: ['a'] })] }),
+        'sl-1',
+        rows(three(), []),
+      )!;
+      expect(result.songs.map((s) => s.id)).toEqual(['b', 'c']);
+      expect(result.customOrder).toBe(false);
+    });
+
+    it('a duplicated id in songOrder does not duplicate a song', () => {
+      const result = withOrder(['c', 'c', 'a']);
+      expect(result.songs.map((s) => s.id)).toEqual(['c', 'a', 'b']);
+    });
+  });
+
   describe('song colors', () => {
     const withColors = (
       songs: SongRecord[],

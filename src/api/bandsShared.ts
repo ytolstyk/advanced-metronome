@@ -1,15 +1,16 @@
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
-import type {
-  BandRecord,
-  ColorLabelRecord,
-  MemberRecord,
-  ReadAuthMode,
-  SetListRecord,
-  SongColorRecord,
-  SongRecord,
-  SongTrackMetaRecord,
-  VoteRecord,
+import {
+  BAND_LIMITS,
+  type BandRecord,
+  type ColorLabelRecord,
+  type MemberRecord,
+  type ReadAuthMode,
+  type SetListRecord,
+  type SongColorRecord,
+  type SongRecord,
+  type SongTrackMetaRecord,
+  type VoteRecord,
 } from '../bandTypes';
 import { normalizeInstruments } from '../bandInstruments';
 import { normalizeInviteTtlDays } from '../bandUtils';
@@ -216,8 +217,21 @@ export function toMember(r: Row<'Member'>): MemberRecord {
   };
 }
 
+/** Song ids are UUIDs (36 characters); anything much longer in `songOrder` is junk. */
+const SONG_ID_MAX = 64;
+
 export function toSetList(r: Row<'SetList'>): SetListRecord {
-  return { id: r.id, owner: r.owner ?? '', bandId: r.bandId, name: r.name, archivedAt: r.archivedAt ?? null };
+  return {
+    id: r.id,
+    owner: r.owner ?? '',
+    bandId: r.bandId,
+    name: r.name,
+    archivedAt: r.archivedAt ?? null,
+    // Owner-written but untrusted: keep only short strings, and read at most one list's worth.
+    songOrder: (r.songOrder ?? [])
+      .slice(0, BAND_LIMITS.maxSongsPerSetList)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= SONG_ID_MAX),
+  };
 }
 
 export function toSong(r: Row<'Song'>): SongRecord {
@@ -324,6 +338,7 @@ export async function tombstoneSetList(setListId: string, scrubbedName: string):
     id: setListId,
     archivedAt: new Date().toISOString(),
     name: scrubbedName,
+    songOrder: [],
   });
   throwUnlessConflict(res, 'archiveSetList');
 }

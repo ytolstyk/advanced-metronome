@@ -18,9 +18,13 @@ type Control = 'up' | 'down' | 'pos';
 export function SetListReorderList({
   setLists,
   onReorder,
+  label = 'Set list order',
 }: {
+  /** The rows to order: `name` is what each row shows and what its controls are labelled with. */
   setLists: { id: string; name: string }[];
   onReorder: (ids: string[]) => void;
+  /** Accessible name of the list ("Song order" when the rows are songs). */
+  label?: string;
 }) {
   const ids = setLists.map((s) => s.id);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -59,7 +63,7 @@ export function SetListReorderList({
 
   return (
     <>
-      <ol ref={listRef} className="grid gap-2" aria-label="Set list order">
+      <ol ref={listRef} className="grid gap-2" aria-label={label}>
         {setLists.map((setList, index) => (
           <li
             key={setList.id}

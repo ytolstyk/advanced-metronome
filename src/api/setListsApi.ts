@@ -117,6 +117,17 @@ export async function reorderSetLists(bandId: string, displayOrder: string[]): P
   });
 }
 
+/**
+ * Saves the running order of a set list's songs (`order` = song ids, top first; empty = back to
+ * ranking by votes). A plain owner-only write of the SetList row: auth rules reject anyone else,
+ * and the whole order is sent, so a stale second tab of the owner can revert an earlier reorder.
+ */
+export async function reorderSongs(setListId: string, order: string[]): Promise<void> {
+  await requireAuth();
+  const songOrder = [...new Set(order)].slice(0, BAND_LIMITS.maxSongsPerSetList);
+  unwrap(await client.models.SetList.update({ id: setListId, songOrder }), 'reorderSongs');
+}
+
 export async function renameSetList(setListId: string, nameInput: string): Promise<void> {
   await requireAuth();
   unwrap(await client.models.SetList.update({ id: setListId, name: requireName(nameInput) }), 'renameSetList');

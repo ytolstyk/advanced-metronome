@@ -20,6 +20,7 @@ vi.mock('./authUtils', () => ({
   getSignedInSub: vi.fn(async () => 'sub-me' as string | null),
 }));
 
+import { BAND_LIMITS } from '../bandTypes';
 import {
   BandConflictError,
   NotSignedInError,
@@ -310,8 +311,35 @@ describe('row mappers', () => {
     const row = { id: 'sl', owner: null, bandId: 'b', name: 'Main', archivedAt: undefined } as unknown as Parameters<
       typeof toSetList
     >[0];
-    expect(toSetList(row)).toEqual({ id: 'sl', owner: '', bandId: 'b', name: 'Main', archivedAt: null });
+    expect(toSetList(row)).toEqual({ id: 'sl', owner: '', bandId: 'b', name: 'Main', archivedAt: null, songOrder: [] });
     expect(toSetList({ ...row, archivedAt: '2026-01-01T00:00:00Z' }).archivedAt).toBe('2026-01-01T00:00:00Z');
+  });
+
+  describe('toSetList songOrder', () => {
+    const withOrder = (songOrder: unknown) =>
+      toSetList({ id: 'sl', owner: 'o', bandId: 'b', name: 'Main', archivedAt: null, songOrder } as unknown as Parameters<
+        typeof toSetList
+      >[0]).songOrder;
+
+    it('passes a clean order through unchanged', () => {
+      expect(withOrder(['a', 'b', 'c'])).toEqual(['a', 'b', 'c']);
+    });
+
+    it('reads null and undefined (rows written before the field existed) as an empty order', () => {
+      expect(withOrder(null)).toEqual([]);
+      expect(withOrder(undefined)).toEqual([]);
+    });
+
+    it('drops null and non-string entries (GraphQL list items can be null)', () => {
+      expect(withOrder(['a', null, 7, 'b', undefined, { id: 'x' }])).toEqual(['a', 'b']);
+    });
+
+    it('caps the order at maxSongsPerSetList so a hostile row cannot bloat the page', () => {
+      const long = Array.from({ length: BAND_LIMITS.maxSongsPerSetList + 25 }, (_, i) => `s-${i}`);
+      const result = withOrder(long);
+      expect(result).toHaveLength(BAND_LIMITS.maxSongsPerSetList);
+      expect(result?.[0]).toBe('s-0');
+    });
   });
 
   it('toMember and toVote copy exactly the fields the client reads', () => {
@@ -792,7 +820,9 @@ describe('getSetListRow', () => {
 
   it('returns the mapped row, or null when it does not exist', async () => {
     m.models.SetList.get.mockResolvedValueOnce({ data: row });
-    expect(await getSetListRow('sl-1')).toEqual({ id: 'sl-1', owner: 'sub-owner', bandId: 'band-1', name: 'Main', archivedAt: null });
+    expect(await getSetListRow('sl-1')).toEqual({ id: 'sl-1', owner: 'sub-owner', bandId: 'band-1', name: 'Main', archivedAt: null, songOrder: [] });
+    m.models.SetList.get.mockResolvedValueOnce({ data: { ...row, songOrder: ['s1', 's2'] } });
+    expect((await getSetListRow('sl-1'))?.songOrder).toEqual(['s1', 's2']);
     m.models.SetList.get.mockResolvedValueOnce({ data: null });
     expect(await getSetListRow('sl-1')).toBeNull();
   });

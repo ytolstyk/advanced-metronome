@@ -50,6 +50,19 @@ function gripOf(row: HTMLElement): HTMLElement {
   return grip;
 }
 
+describe('SetListReorderList label', () => {
+  it('names the list "Set list order" by default', () => {
+    setup();
+    expect(screen.getByRole('list', { name: 'Set list order' })).toBeInTheDocument();
+  });
+
+  it('uses a custom label for the list', () => {
+    render(<SetListReorderList setLists={LISTS} onReorder={vi.fn()} label="Song order" />);
+    expect(screen.getByRole('list', { name: 'Song order' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Set list order' })).not.toBeInTheDocument();
+  });
+});
+
 describe('SetListReorderList rendering', () => {
   it('renders one row per set list, in the given order, with 1-based positions', () => {
     setup();

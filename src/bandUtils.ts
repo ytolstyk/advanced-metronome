@@ -607,6 +607,19 @@ export function resolveMyVote(
   return { mine: active.value ?? undefined, pending: active.value };
 }
 
+/**
+ * `songs` (already ranked by score) with the owner's running order applied: songs named in
+ * `order` come first in that order, every other song (a new suggestion, one restored from hidden)
+ * follows in its existing score order. Ids with no song are skipped and duplicates count once.
+ */
+export function applySongOrder(songs: ValidSong[], order: readonly string[] | undefined): ValidSong[] {
+  if (!order?.length) return songs;
+  const byId = new Map(songs.map((s) => [s.id, s]));
+  const listed = [...new Set(order)].flatMap((id) => byId.get(id) ?? []);
+  const placed = new Set(listed.map((s) => s.id));
+  return [...listed, ...songs.filter((s) => !placed.has(s.id))];
+}
+
 /** Score desc, then createdAt asc, then id (stable, deterministic). */
 export function sortSongsByScore(songs: ValidSong[], tallies: Map<string, SongTally>): ValidSong[] {
   return [...songs].sort((a, b) => {

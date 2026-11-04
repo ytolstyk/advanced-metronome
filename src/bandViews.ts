@@ -29,6 +29,7 @@ import {
   resolveSongColors,
   resolveSongTracks,
   sanitizeDisplayName,
+  applySongOrder,
   sortSongsByScore,
   tallyVotes,
   validMemberSubs,
@@ -95,13 +96,15 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
   const { visible, hidden } = partitionSongs(rows.songs.items, view.band, view.setLists, view.memberSubs);
   const counted = filterCountedVotes(rows.votes.items, visible, view.memberSubs);
   const tallies = tallyVotes(counted, visible);
+  const orderedIds = new Set(setList.songOrder);
   const colorRows = rows.colors?.items ?? [];
   const labelRows = rows.labels?.items ?? [];
   const clickRows = rows.clicks?.items ?? [];
   return {
     setList,
     shared: isSetListShared(view.band, setListId),
-    songs: sortSongsByScore(visible, tallies),
+    songs: applySongOrder(sortSongsByScore(visible, tallies), setList.songOrder),
+    customOrder: visible.some((s) => orderedIds.has(s.id)),
     tallies,
     colors: resolveSongColors(colorRows, visible, view.memberSubs),
     myColorSongIds: myColorSongIds(colorRows, visible, view.memberSubs, view.sub),

@@ -56,6 +56,7 @@ import {
   sanitizeName,
   sanitizeNotes,
   songFieldError,
+  applySongOrder,
   sortSongsByScore,
   splitTextWithLinks,
   stripUnsafeText,
@@ -423,6 +424,61 @@ describe('sortSongsByScore', () => {
     const before = w.validSongs.map((s) => s.id);
     sortSongsByScore(w.validSongs, tallyVotes([], w.validSongs));
     expect(w.validSongs.map((s) => s.id)).toEqual(before);
+  });
+});
+
+describe('applySongOrder', () => {
+  /** Songs `a`..`e` already in score order (a first). */
+  const ranked = () => {
+    const w = world(band(), [member(BOB)], [setList()], ['a', 'b', 'c', 'd', 'e'].map((id) => song(id, BOB)));
+    return ['a', 'b', 'c', 'd', 'e'].map((id) => w.validSongs.find((s) => s.id === id)!);
+  };
+  const ids = (songs: { id: string }[]) => songs.map((s) => s.id);
+
+  it('returns the input unchanged (same array) for undefined or empty order', () => {
+    const songs = ranked();
+    expect(applySongOrder(songs, undefined)).toBe(songs);
+    expect(applySongOrder(songs, [])).toBe(songs);
+  });
+
+  it('puts listed songs first in the listed order', () => {
+    expect(ids(applySongOrder(ranked(), ['c', 'a', 'b', 'e', 'd']))).toEqual(['c', 'a', 'b', 'e', 'd']);
+  });
+
+  it('keeps unlisted songs after the listed ones, in their existing score order', () => {
+    expect(ids(applySongOrder(ranked(), ['d', 'b']))).toEqual(['d', 'b', 'a', 'c', 'e']);
+  });
+
+  it('ignores ids that match no song (deleted, hidden or forged)', () => {
+    expect(ids(applySongOrder(ranked(), ['ghost', 'c', 'nope', 'a']))).toEqual(['c', 'a', 'b', 'd', 'e']);
+  });
+
+  it('counts a duplicated id once, at its first position', () => {
+    const result = applySongOrder(ranked(), ['c', 'a', 'c', 'a']);
+    expect(ids(result)).toEqual(['c', 'a', 'b', 'd', 'e']);
+    expect(result).toHaveLength(5);
+  });
+
+  it('returns the score order when no listed id matches any song', () => {
+    expect(ids(applySongOrder(ranked(), ['x', 'y']))).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('never loses or duplicates a song', () => {
+    const result = applySongOrder(ranked(), ['e', 'e', 'zzz', 'b']);
+    expect([...ids(result)].sort()).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('returns the same song objects and does not mutate its inputs', () => {
+    const songs = ranked();
+    const order = ['c', 'a'];
+    const result = applySongOrder(songs, order);
+    expect(ids(songs)).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(order).toEqual(['c', 'a']);
+    expect(result[0]).toBe(songs[2]);
+  });
+
+  it('handles an empty song list', () => {
+    expect(applySongOrder([], ['a', 'b'])).toEqual([]);
   });
 });
 

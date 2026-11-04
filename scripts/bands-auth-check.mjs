@@ -174,7 +174,7 @@ const FIELDS = {
   BandInvite: 'code bandId revokedAt owner createdAt',
   MyBand: 'owner bandId',
   Member: 'bandId owner displayName createdAt',
-  SetList: 'id owner bandId name archivedAt',
+  SetList: 'id owner bandId name archivedAt songOrder',
   Song: 'id owner bandId setListId title createdAt',
   Vote: 'songId owner value bandId setListId createdAt',
   SongColor: 'songId owner color bandId setListId createdAt updatedAt',
@@ -499,6 +499,8 @@ r = await update(C, 'BandInvite', { code, bandId: randomUUID() });
 check('G3', 'C cannot update A\'s BandInvite', !r.data?.updateBandInvite, errType(r));
 r = await update(B, 'SetList', { id: setListId, name: 'pwned' });
 check('G3', 'non-owner cannot update SetList', !r.data?.updateSetList, errType(r));
+r = await update(B, 'SetList', { id: setListId, songOrder: [randomUUID()] });
+check('G3', 'non-owner cannot update SetList.songOrder', !r.data?.updateSetList, errType(r));
 r = await create(B, 'SetList', { id: setListId, bandId, name: 'squat' });
 check('G3', 'B cannot re-create existing SetList id', !r.data?.createSetList, errType(r), true);
 r = await create(B, 'Band', { id: bandId, name: 'squat', inviteCode: 'x', version: 1 });

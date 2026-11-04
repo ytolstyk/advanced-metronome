@@ -335,6 +335,7 @@ const schema = a.schema({
     bandId: a.string().required(),
     name: a.string().required(),
     archivedAt: a.datetime(),
+    songOrder: a.string().array(),      // owner-written running order of song ids (empty = ranked by votes)
   })
     .disableOperations(['delete', 'list', 'subscriptions'])
     .authorization(allow => [

@@ -273,6 +273,7 @@ Navigate to the **Bands** tab to organise a band. Everything here is cloud-only 
 
 - **Create or join** — start a band, or join one with an invite link or code (links expire after 1 to 7 days, the owner's choice)
 - **Set list order** — the band's set lists show newest first; the owner can reorder them by dragging, typing a position number or using the arrows
+- **Song order** — a set list's songs rank by votes until the owner sets a running order (Reorder: drag, type a position number or use the arrows; "Reset to vote order" undoes it); songs suggested later go to the end, and the shared public page follows the same order
 - **Set lists** — members suggest songs straight onto a set list and vote them up or down. Paste a Spotify, YouTube, Apple Music or SoundCloud link to fill in the title and artist
 - **Click tracks on songs** — attach a click track to a song; every member can play it, download it as a WAV or FLAC, or open it in the click track editor
 - **Availability calendar** — mark the half hours you can practice (8 AM to 10 PM) and see who overlaps and the best windows

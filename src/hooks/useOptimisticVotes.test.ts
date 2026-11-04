@@ -13,6 +13,7 @@ function makeList(serverVote?: VoteValue, tally: SongTally = { up: serverVote ==
   return {
     setList: {} as ValidSetList,
     shared: false,
+    customOrder: false,
     songs: [song],
     tallies: new Map([['s1', { ...tally, score: tally.up - tally.down }]]),
     myVotes: new Map(serverVote ? [['s1', serverVote]] : []),

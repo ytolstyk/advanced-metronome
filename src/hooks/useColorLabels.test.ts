@@ -11,6 +11,7 @@ function makeList(labels: Array<[SongColorKey, string]> = [], mine: SongColorKey
   return {
     setList: {} as ValidSetList,
     shared: false,
+    customOrder: false,
     songs: [],
     tallies: new Map(),
     colors: new Map(),

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { RefreshCw, Tags } from 'lucide-react';
+import { ArrowDownUp, RefreshCw, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AuthGate } from '../components/AuthGate/AuthGate';
@@ -11,14 +11,16 @@ import { ConfirmDialog } from '../components/Bands/ConfirmDialog';
 import { CopyShareLinkButton } from '../components/Bands/CopyShareLinkButton';
 import { InlineAlert } from '../components/Bands/InlineAlert';
 import { LoaderBoundary } from '../components/Bands/LoaderBoundary';
+import { SetListReorderList } from '../components/Bands/SetListReorderList';
 import { SongRow, type SongClickTrackControls } from '../components/Bands/SongRow';
 import { StatusNotice } from '../components/Bands/StatusNotice';
 import { SuggestSongDialog } from '../components/Bands/SuggestSongDialog';
 import { hideSong, loadBandView, unhideSong } from '../api/bandsApi';
 import { fetchColorLabelRows } from '../api/colorLabelsApi';
-import { deleteSong, fetchSetListRows, suggestSong, updateSong } from '../api/setListsApi';
+import { deleteSong, fetchSetListRows, reorderSongs, suggestSong, updateSong } from '../api/setListsApi';
 import { BAND_GONE_TITLES, BAND_LIMITS, type BandLoadResult, type BandView, type SetListView, type ValidSong } from '../bandTypes';
 import { bandPath } from '../bandRoutes';
+import { applySongOrder } from '../bandUtils';
 import { assembleSetListView } from '../bandViews';
 import { tuningOrDefault } from '../bandTunings';
 import { useColorLabels } from '../hooks/useColorLabels';
@@ -129,12 +131,41 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
   const colors = useSongColors(list, fetchedAt);
   const colorLabels = useColorLabels(view.band.id, list, fetchedAt);
   const tracks = useSongTracks(list, fetchedAt, reload);
-  const { act, error: actionError } = useActionThenReload(reload);
+  const { act, busy: actionBusy, error: actionError } = useActionThenReload(reload);
+  // While reordering, moves only change this local draft (`ids`, top first; `base` is the order when
+  // Reorder was pressed, so Done with no moves writes nothing); "Done" saves it once. A failed save
+  // keeps the draft on screen so the owner can retry.
+  const [draft, setDraft] = useState<{ base: string[]; ids: string[] } | null>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [labelsOpen, setLabelsOpen] = useState(false);
   const [editing, setEditing] = useState<ValidSong | null>(null);
   const [deleting, setDeleting] = useState<ValidSong | null>(null);
   const [removingTrack, setRemovingTrack] = useState<ValidSong | null>(null);
+
+  // Not while the list is partial: the save would drop the stored places of songs that didn't load.
+  const canReorder = isOwner && list.songs.length > 1 && !list.incomplete;
+  const reordering = draft !== null && canReorder;
+  // The order just saved, shown until a load that started after the save arrives, so a failed
+  // reload can't make the page snap back to the old order while the new one is stored.
+  const [saved, setSaved] = useState<{ order: string[]; at: number } | null>(null);
+  const savedShown = saved !== null && fetchedAt <= saved.at;
+  // A reload during reordering can add songs; they join the end of the draft rather than vanish.
+  const shownSongs = reordering
+    ? applySongOrder(list.songs, draft.ids)
+    : savedShown
+      ? applySongOrder(list.songs, saved.order)
+      : list.songs;
+  const showsCustomOrder = list.customOrder || (savedShown && saved.order.length > 0);
+  const finishReordering = async (commit: boolean, resetToVotes = false) => {
+    const ids = resetToVotes ? [] : shownSongs.map((s) => s.id);
+    const unchanged = !resetToVotes && !!draft && draft.ids.every((id, i) => id === draft.base[i]);
+    if (!commit || unchanged) return setDraft(null);
+    const ok = await act(async () => {
+      await reorderSongs(setListId, ids);
+      setSaved(resetToVotes ? null : { order: ids, at: Date.now() });
+    });
+    if (ok) setDraft(null);
+  };
 
   const nameOf = (sub: string) => view.displayNames.get(sub) ?? 'a member';
 
@@ -161,7 +192,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
         <div className="min-w-0">
           <h1 className="break-words text-2xl font-bold text-foreground">{list.setList.name}</h1>
           <p className="text-sm text-muted-foreground">
-            {view.band.name} · Suggestions ranked by votes · {list.songs.length}/{BAND_LIMITS.maxSongsPerSetList} songs
+            {view.band.name} · {showsCustomOrder ? 'In the owner’s running order (votes don’t move listed songs, new suggestions go last)' : 'Suggestions ranked by votes'} · {list.songs.length}/{BAND_LIMITS.maxSongsPerSetList} songs
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -169,7 +200,30 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
           <Button variant="outline" onClick={() => setLabelsOpen(true)}>
             <Tags size={14} className="mr-1" aria-hidden /> Color labels
           </Button>
-          <Button onClick={() => setSuggestOpen(true)}>Suggest a song</Button>
+          {reordering && (
+            <Button variant="ghost" disabled={actionBusy} onClick={() => void finishReordering(false)}>
+              Cancel
+            </Button>
+          )}
+          {reordering && showsCustomOrder && (
+            <Button variant="outline" disabled={actionBusy} onClick={() => void finishReordering(true, true)}>
+              Reset to vote order
+            </Button>
+          )}
+          {canReorder && (
+            <Button
+              variant="outline"
+              disabled={actionBusy}
+              onClick={() => {
+                if (reordering) return void finishReordering(true);
+                const ids = list.songs.map((s) => s.id);
+                setDraft({ base: ids, ids });
+              }}
+            >
+              <ArrowDownUp size={14} className="mr-1" aria-hidden /> {reordering ? 'Done' : 'Reorder'}
+            </Button>
+          )}
+          <Button onClick={() => setSuggestOpen(true)} disabled={reordering}>Suggest a song</Button>
           <Button variant="outline" size="icon" onClick={() => void reload()} disabled={refreshing} aria-label="Refresh">
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
           </Button>
@@ -190,9 +244,24 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
         <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
           No songs yet. Suggest the first one!
         </p>
+      ) : reordering ? (
+        <>
+          <p className="mb-2 text-sm text-muted-foreground">
+            Drag a song by its handle, type a position number, or use the arrows, then press Done to save. Everyone in
+            the band sees this order; songs suggested later go to the end.
+          </p>
+          {/* Frozen while the save runs: a move made now would be dropped when the save lands. */}
+          <div inert={actionBusy}>
+            <SetListReorderList
+              label="Song order"
+              setLists={shownSongs.map((s) => ({ id: s.id, name: s.title }))}
+              onReorder={(ids) => setDraft((d) => d && { ...d, ids })}
+            />
+          </div>
+        </>
       ) : (
         <ol className="grid gap-2">
-          {list.songs.map((song, index) => (
+          {shownSongs.map((song, index) => (
             <SongRow
               key={song.id}
               song={song}

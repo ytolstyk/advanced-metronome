@@ -144,6 +144,8 @@ export interface SetListRecord {
   bandId: string;
   name: string;
   archivedAt: string | null;
+  /** Owner-written running order of song ids (top first); absent or empty = ranked by votes. */
+  songOrder?: string[];
 }
 
 export interface SongRecord {
@@ -334,8 +336,10 @@ export interface SetListView {
   setList: ValidSetList;
   /** The owner shares this set list with anyone who has its link. */
   shared: boolean;
-  /** Valid, non-hidden songs, ranked by score. */
+  /** Valid, non-hidden songs: the owner's running order first, then any unlisted ones ranked by score. */
   songs: ValidSong[];
+  /** The owner has set a running order (some listed song is on the list); false = purely vote-ranked. */
+  customOrder: boolean;
   tallies: Map<string, SongTally>;
   /** Valid, non-hidden songs that have a color (songs without one are absent). */
   colors: Map<string, SongColorKey>;

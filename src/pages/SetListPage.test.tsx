@@ -38,11 +38,12 @@ vi.mock('../api/setListsApi', async (importOriginal) => ({
   suggestSong: vi.fn(),
   updateSong: vi.fn(),
   deleteSong: vi.fn(),
+  reorderSongs: vi.fn(),
 }));
 
 import { SetListPage } from './SetListPage';
 import { hideSong, loadBandView, unhideSong } from '../api/bandsApi';
-import { deleteSong, fetchSetListRows, suggestSong } from '../api/setListsApi';
+import { deleteSong, fetchSetListRows, reorderSongs, suggestSong } from '../api/setListsApi';
 import { castVote } from '../api/songVotesApi';
 import { setSongColor } from '../api/songColorsApi';
 import { clearSongTrack, getSongTrack, type SongTrackRead } from '../api/songTracksApi';
@@ -862,6 +863,128 @@ describe('SetListPage', () => {
         expect(screen.queryByText('Color (optional)')).not.toBeInTheDocument();
       });
     });
+  });
+});
+
+describe('song reordering', () => {
+  const ownerView = (songOrder?: string[]) =>
+    makeView({
+      isOwner: true,
+      sub: OWNER,
+      setLists: [
+        { id: 'sl-1', owner: OWNER, bandId: 'band-1', name: 'Main Set', archivedAt: null, songOrder },
+      ] as unknown as ValidSetList[],
+    });
+  const three = () => [
+    song('a', BOB, '2026-01-02T00:00:00Z'),
+    song('b', ME, '2026-01-02T00:00:01Z'),
+    song('c', ME, '2026-01-02T00:00:02Z'),
+  ];
+  // Votes make the vote order b, a, c.
+  const votes = () => [vote('b', BOB, 'up'), vote('b', ME, 'up'), vote('a', BOB, 'up')];
+  const orderedTitles = () =>
+    within(screen.getByRole('list', { name: 'Song order' }))
+      .getAllByRole('listitem')
+      .map((li) => /Song [abc]/.exec(li.textContent ?? '')?.[0]);
+
+  it('shows a Reorder button to the owner only', async () => {
+    setup(ownerView(), three(), votes());
+    await screen.findByText('Song a');
+    expect(screen.getByRole('button', { name: /Reorder/ })).toBeInTheDocument();
+    cleanupAll();
+    setup(makeView(), three(), votes());
+    await screen.findByText('Song a');
+    expect(screen.queryByRole('button', { name: /Reorder/ })).not.toBeInTheDocument();
+  });
+
+  it('offers no Reorder button when there is only one song', async () => {
+    setup(ownerView(), [song('a', BOB, '2026-01-02T00:00:00Z')], []);
+    await screen.findByText('Song a');
+    expect(screen.queryByRole('button', { name: /Reorder/ })).not.toBeInTheDocument();
+  });
+
+  it('entering reorder mode lists the songs in their current order, hides vote rows and disables Suggest', async () => {
+    setup(ownerView(), three(), votes());
+    await screen.findByText('Song a');
+    fireEvent.click(screen.getByRole('button', { name: /Reorder/ }));
+    expect(orderedTitles()).toEqual(['Song b', 'Song a', 'Song c']);
+    expect(screen.queryByRole('button', { name: 'Upvote Song a' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Suggest a song' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reset to vote order' })).not.toBeInTheDocument();
+  });
+
+  it('Done saves the moved order once and returns to the ranked list', async () => {
+    vi.mocked(reorderSongs).mockResolvedValue(undefined);
+    setup(ownerView(), three(), votes());
+    await screen.findByText('Song a');
+    fireEvent.click(screen.getByRole('button', { name: /Reorder/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move Song c up' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move Song c up' }));
+    expect(orderedTitles()).toEqual(['Song c', 'Song b', 'Song a']);
+    expect(reorderSongs).not.toHaveBeenCalled(); // moves only change the local draft
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(reorderSongs).toHaveBeenCalledTimes(1));
+    expect(reorderSongs).toHaveBeenCalledWith('sl-1', ['c', 'b', 'a']);
+    await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2)); // reloads afterwards
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Song order' })).not.toBeInTheDocument());
+  });
+
+  it('Done without any move writes nothing', async () => {
+    setup(ownerView(), three(), votes());
+    await screen.findByText('Song a');
+    fireEvent.click(screen.getByRole('button', { name: /Reorder/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Song order' })).not.toBeInTheDocument());
+    expect(reorderSongs).not.toHaveBeenCalled();
+  });
+
+  it('Cancel discards the draft without saving', async () => {
+    setup(ownerView(), three(), votes());
+    await screen.findByText('Song a');
+    fireEvent.click(screen.getByRole('button', { name: /Reorder/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move Song c up' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(reorderSongs).not.toHaveBeenCalled();
+    expect(screen.queryByRole('list', { name: 'Song order' })).not.toBeInTheDocument();
+    // Re-entering starts from the saved order again, not the discarded draft.
+    fireEvent.click(screen.getByRole('button', { name: /Reorder/ }));
+    expect(orderedTitles()).toEqual(['Song b', 'Song a', 'Song c']);
+  });
+
+  it('shows the owner order and the running-order subtitle once an order is saved', async () => {
+    setup(ownerView(['c', 'a', 'b']), three(), votes());
+    await screen.findByText('Song a');
+    const titles = screen
+      .getAllByRole('listitem')
+      .map((li) => /Song [abc]/.exec(li.textContent ?? '')?.[0])
+      .filter(Boolean);
+    expect(titles).toEqual(['Song c', 'Song a', 'Song b']);
+    expect(screen.getByText(/In the owner’s running order/)).toBeInTheDocument();
+    expect(screen.queryByText(/Suggestions ranked by votes/)).not.toBeInTheDocument();
+  });
+
+  it('Reset to vote order appears only with a saved order and saves an empty order', async () => {
+    vi.mocked(reorderSongs).mockResolvedValue(undefined);
+    setup(ownerView(['c', 'a', 'b']), three(), votes());
+    await screen.findByText('Song a');
+    fireEvent.click(screen.getByRole('button', { name: /Reorder/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to vote order' }));
+    await waitFor(() => expect(reorderSongs).toHaveBeenCalledWith('sl-1', []));
+  });
+
+  it('a failed save shows the error, keeps the draft on screen and still reloads', async () => {
+    vi.mocked(reorderSongs).mockRejectedValue(new Error('Not Authorized'));
+    setup(ownerView(), three(), votes());
+    await screen.findByText('Song a');
+    fireEvent.click(screen.getByRole('button', { name: /Reorder/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move Song c up' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not Authorized');
+    await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+    expect(orderedTitles()).toEqual(['Song b', 'Song c', 'Song a']);
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
   });
 });
 
