@@ -1,5 +1,6 @@
+import { PartialCopyError } from './partialCopyError';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BAND_LIMITS, PUBLIC_READ_PAGES, type BandRecord, type BandView, type ValidMember, type ValidSetList } from '../bandTypes';
+import { BAND_LIMITS, PUBLIC_READ_PAGES, type BandRecord, type BandView, type ValidMember, type ValidSetList, type ValidSong } from '../bandTypes';
 
 const { m } = vi.hoisted(() => {
   const m = {
@@ -23,11 +24,13 @@ vi.mock('./authUtils', () => ({
 }));
 
 import {
+  addSongsFromOtherLists,
   archiveSetList,
   createSetList,
   deleteMyContent,
   deleteSong,
   fetchSetListRows,
+  fetchSongChoices,
   fetchSongTargets,
   renameSetList,
   reorderSetLists,
@@ -753,6 +756,8 @@ describe('auth gating', () => {
     ['deleteSong', () => deleteSong('s1')],
     ['deleteMyContent', () => deleteMyContent(band(), true)],
     ['suggestSong', () => suggestSong(makeView(), 'sl-1', { title: 'x' }, 0)],
+    ['fetchSongChoices', () => fetchSongChoices(makeTwoListView(), 'sl-2')],
+    ['addSongsFromOtherLists', () => addSongsFromOtherLists(makeTwoListView(), 'sl-1', [validSong('x')], 0)],
   ])('%s never touches the API when signed out', async (_name, call) => {
     vi.mocked(isAuthenticated).mockResolvedValue(false);
     await expect(call()).rejects.toThrow('Not authenticated');
@@ -1022,5 +1027,200 @@ describe('deleteMyContent hardening', () => {
     await deleteMyContent(band(), true);
     expect(m.Song.delete).toHaveBeenCalledTimes(1);
     expect(m.Song.delete).toHaveBeenCalledWith({ id: 'mine' });
+  });
+});
+
+// ── Copying songs between set lists ────────────────────────────────────────
+
+function makeTwoListView(over: Partial<BandView> = {}): BandView {
+  return makeView({
+    setLists: [
+      { id: 'sl-1', owner: 'sub-owner', bandId: 'band-1', name: 'Main Set', archivedAt: null },
+      { id: 'sl-2', owner: 'sub-owner', bandId: 'band-1', name: 'Old Gig', archivedAt: null },
+    ] as unknown as ValidSetList[],
+    ...over,
+  }, band({ setListIds: ['sl-1', 'sl-2'] }));
+}
+
+const validSong = (id: string, over: Record<string, unknown> = {}): ValidSong =>
+  ({
+    ...songRow(id, 'sub-bob', { setListId: 'sl-2', title: `Song ${id}` }),
+    tuning: null,
+    songUrl: null,
+    tabUrl: null,
+    ...over,
+  }) as unknown as ValidSong;
+
+describe('fetchSongChoices', () => {
+  it('returns the valid songs of the source list, sorted by title', async () => {
+    m.Song.listSongBySetList.mockResolvedValue({
+      data: [
+        songRow('b', 'sub-bob', { setListId: 'sl-2', title: 'Kashmir' }),
+        songRow('a', 'sub-bob', { setListId: 'sl-2', title: 'Black Dog' }),
+        songRow('evil', 'sub-mallory', { setListId: 'sl-2', title: 'Forged' }),
+      ],
+      nextToken: null,
+    });
+    const choices = await fetchSongChoices(makeTwoListView(), 'sl-2');
+    expect(choices.songs.map((s) => s.title)).toEqual(['Black Dog', 'Kashmir']);
+    expect(choices.incomplete).toBe(false);
+    expect(m.Song.listSongBySetList.mock.calls[0][0]).toEqual({ setListId: 'sl-2' });
+  });
+
+  it('reads songs only: no votes, colors or labels', async () => {
+    await fetchSongChoices(makeTwoListView(), 'sl-2');
+    expect(m.Vote.listVoteBySetList).not.toHaveBeenCalled();
+    expect(m.SongColor.listSongColorBySetList).not.toHaveBeenCalled();
+    expect(m.ColorLabel.listColorLabelByBand).not.toHaveBeenCalled();
+  });
+
+  it('flags the result incomplete when the song read hit its page cap', async () => {
+    m.Song.listSongBySetList.mockResolvedValue({ data: [], nextToken: 'more' });
+    expect((await fetchSongChoices(makeTwoListView(), 'sl-2')).incomplete).toBe(true);
+  });
+
+  it('requires sign-in before anything else', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+    await expect(fetchSongChoices(makeTwoListView(), 'sl-2')).rejects.toBeInstanceOf(NotSignedInError);
+    expect(m.Song.listSongBySetList).not.toHaveBeenCalled();
+  });
+
+  it('rejects a set list the view does not hold, without reading', async () => {
+    await expect(fetchSongChoices(makeTwoListView(), 'sl-nope')).rejects.toThrow('Set list not found');
+    expect(m.Song.listSongBySetList).not.toHaveBeenCalled();
+  });
+});
+
+describe('addSongsFromOtherLists', () => {
+  beforeEach(() => {
+    m.Song.create.mockResolvedValue({ data: songRow('new', 'sub-me') });
+  });
+
+  it('creates one new song per picked song with only bandId, setListId and the parsed fields', async () => {
+    await addSongsFromOtherLists(
+      makeTwoListView(),
+      'sl-1',
+      [
+        validSong('a', { title: 'Kashmir', artist: 'Led Zeppelin', key: 'Dm', tuning: 'DADGAD', bpm: 80, notes: 'capo 2', songUrl: 'https://open.spotify.com/track/1', tabUrl: 'https://tabs.example.com/k' }),
+        validSong('b', { title: 'Black Dog' }),
+      ],
+      3,
+    );
+    expect(m.Song.create).toHaveBeenCalledTimes(2);
+    const calls = m.Song.create.mock.calls.map((c) => c[0]);
+    expect(calls).toContainEqual({
+      bandId: 'band-1',
+      setListId: 'sl-1',
+      title: 'Kashmir',
+      artist: 'Led Zeppelin',
+      key: 'Dm',
+      tuning: 'DADGAD',
+      bpm: 80,
+      notes: 'capo 2',
+      songUrl: 'https://open.spotify.com/track/1',
+      tabUrl: 'https://tabs.example.com/k',
+    });
+    expect(calls).toContainEqual({
+      bandId: 'band-1',
+      setListId: 'sl-1',
+      title: 'Black Dog',
+      artist: null,
+      key: null,
+      tuning: 'E Standard', // songs without a tuning copy as the default
+      bpm: null,
+      notes: null,
+      songUrl: null,
+      tabUrl: null,
+    });
+  });
+
+  it('never sends an owner, id or timestamps (the server populates them; votes/colors do not come along)', async () => {
+    await addSongsFromOtherLists(makeTwoListView(), 'sl-1', [validSong('a')], 0);
+    const sent = m.Song.create.mock.calls[0][0] as Record<string, unknown>;
+    for (const key of ['owner', 'id', 'createdAt', 'updatedAt', 'votes', 'color']) expect(sent).not.toHaveProperty(key);
+  });
+
+  it('does nothing for an empty list (no writes, no error)', async () => {
+    await expect(addSongsFromOtherLists(makeTwoListView(), 'sl-1', [], 0)).resolves.toBeUndefined();
+    expect(m.Song.create).not.toHaveBeenCalled();
+  });
+
+  it('requires sign-in before anything else', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+    await expect(addSongsFromOtherLists(makeTwoListView(), 'sl-1', [validSong('a')], 0)).rejects.toBeInstanceOf(NotSignedInError);
+    expect(m.Song.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses non-members and unknown set lists before any write', async () => {
+    await expect(addSongsFromOtherLists(makeTwoListView({ isMember: false }), 'sl-1', [validSong('a')], 0)).rejects.toThrow('Join the band');
+    await expect(addSongsFromOtherLists(makeTwoListView(), 'sl-nope', [validSong('a')], 0)).rejects.toThrow('Set list not found');
+    expect(m.Song.create).not.toHaveBeenCalled();
+  });
+
+  it('checks the cap across the whole batch and writes nothing when it would overflow', async () => {
+    const max = BAND_LIMITS.maxSongsPerSetList;
+    await expect(
+      addSongsFromOtherLists(makeTwoListView(), 'sl-1', [validSong('a'), validSong('b'), validSong('c')], max - 2),
+    ).rejects.toThrow('room for 2 more songs');
+    expect(m.Song.create).not.toHaveBeenCalled();
+  });
+
+  it('allows a batch that exactly fills the list', async () => {
+    const max = BAND_LIMITS.maxSongsPerSetList;
+    await addSongsFromOtherLists(makeTwoListView(), 'sl-1', [validSong('a'), validSong('b')], max - 2);
+    expect(m.Song.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports room for 0 when the list is already over its cap', async () => {
+    const max = BAND_LIMITS.maxSongsPerSetList;
+    await expect(addSongsFromOtherLists(makeTwoListView(), 'sl-1', [validSong('a')], max + 5)).rejects.toThrow('room for 0 more songs');
+  });
+
+  it('validates every song before writing any, naming the bad one', async () => {
+    await expect(
+      addSongsFromOtherLists(makeTwoListView(), 'sl-1', [validSong('a'), validSong('bad', { title: 'Bad One', bpm: 9999 })], 0),
+    ).rejects.toThrow(/Bad One.*can.t be copied: .*BPM/);
+    expect(m.Song.create).not.toHaveBeenCalled();
+  });
+
+  it('attempts every song after a failure and reports how many landed', async () => {
+    let n = 0;
+    m.Song.create.mockImplementation(async () => {
+      n += 1;
+      if (n === 2) return { data: null, errors: [{ errorType: 'InternalFailure', message: 'write failed' }] };
+      return { data: songRow('new', 'sub-me') };
+    });
+    const songs = ['a', 'b', 'c', 'd'].map((id) => validSong(id));
+    const err = await addSongsFromOtherLists(makeTwoListView(), 'sl-1', songs, 0).catch((e: unknown) => e);
+    expect((err as Error).message).toMatch(/^Added 3 of 4 songs\. /);
+    expect(err).toBeInstanceOf(PartialCopyError);
+    // Exactly the songs whose create succeeded (the second call failed: which song that was depends on scheduling).
+    expect((err as PartialCopyError).landedSongIds.size).toBe(3);
+    expect(m.Song.create).toHaveBeenCalledTimes(4);
+  });
+
+  it('keeps the underlying failure as the cause', async () => {
+    m.Song.create.mockResolvedValue({ data: null, errors: [{ errorType: 'InternalFailure', message: 'write failed' }] });
+    const err = await addSongsFromOtherLists(makeTwoListView(), 'sl-1', [validSong('a')], 0).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/^Added 0 of 1 songs\. /);
+    expect((err as Error).cause).toBeInstanceOf(Error);
+  });
+
+  it('writes with bounded parallelism', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    m.Song.create.mockImplementation(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 0));
+      inFlight -= 1;
+      return { data: songRow('new', 'sub-me') };
+    });
+    const songs = Array.from({ length: 20 }, (_, i) => validSong(`s${i}`));
+    await addSongsFromOtherLists(makeTwoListView(), 'sl-1', songs, 0);
+    expect(m.Song.create).toHaveBeenCalledTimes(20);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(6);
   });
 });

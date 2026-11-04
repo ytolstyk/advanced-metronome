@@ -39,6 +39,7 @@ import {
   InviteError,
   joinBand,
   loadBandView,
+  loadMemberBandView,
   loadMyBands,
   ensureFreshInvite,
   getInviteIssuedAt,
@@ -573,6 +574,41 @@ describe('loadBandView', () => {
   });
 });
 
+describe('loadMemberBandView', () => {
+  it('returns the view for a member', async () => {
+    m.Member.get.mockResolvedValue({ data: memberRow(ME) });
+    const res = await loadMemberBandView('band-1');
+    if (res === 'unavailable') throw new Error('expected a view');
+    expect(res.isMember).toBe(true);
+    expect(res.band.id).toBe('band-1');
+    expect(res.setLists.map((s) => s.id)).toEqual(['sl-1']);
+  });
+
+  it('returns the view for the owner (always a member)', async () => {
+    m.Band.get.mockResolvedValue({ data: bandRow({ owner: ME }) });
+    const res = await loadMemberBandView('band-1');
+    expect(res).not.toBe('unavailable');
+  });
+
+  it('is unavailable for someone who is not a member', async () => {
+    expect(await loadMemberBandView('band-1')).toBe('unavailable');
+  });
+
+  it.each([
+    ['missing', { data: null }],
+    ['deleted', { data: bandRow({ deletedAt: '2026-02-01T00:00:00Z' }) }],
+    ['removed', { data: bandRow({ bannedSubs: [ME] }) }],
+  ])('is unavailable when the band is %s', async (_name, result) => {
+    m.Band.get.mockResolvedValue(result);
+    expect(await loadMemberBandView('band-1')).toBe('unavailable');
+  });
+
+  it('lets read failures through instead of calling them unavailable', async () => {
+    m.Band.get.mockResolvedValue({ data: null, errors: [{ message: 'boom' }] });
+    await expect(loadMemberBandView('band-1')).rejects.toThrow('boom');
+  });
+});
+
 describe('loadMyBands', () => {
   const rows = (...ids: string[]) => ({ data: ids.map((bandId) => ({ owner: ME, bandId })), nextToken: null });
 
@@ -1040,6 +1076,7 @@ describe('auth gating (every cloud call checks sign-in first)', () => {
     ['resetInviteCode', () => resetInviteCode('band-1')],
     ['deleteBand', () => deleteBand('band-1')],
     ['loadBandView', () => loadBandView('band-1')],
+    ['loadMemberBandView', () => loadMemberBandView('band-1')],
     ['previewBand', () => previewBand('band-1')],
     ['lookupInvite', () => lookupInvite('ABCDE-FGHJK')],
     ['joinBand', () => joinBand('band-1', 'Bob')],

@@ -7,7 +7,19 @@ import type { TrackPiece } from '@/audio/ClickTrackEngine';
 import type { BandRecord, BandView, MyBandEntry, ValidSetList, ValidSong } from '@/bandTypes';
 import type { SongTargets } from '@/bandViews';
 
-vi.mock('@/api/bandsApi', () => ({ loadMyBands: vi.fn(), loadBandView: vi.fn() }));
+// `loadMemberBandView` is the member-only wrapper the dialog calls; it is built on the mocked `loadBandView`
+// with the same rule as the real one, so these tests keep driving the band through `loadBandView`.
+vi.mock('@/api/bandsApi', () => {
+  const loadBandView = vi.fn<(bandId: string) => Promise<{ status: string; view?: { isMember: boolean } }>>();
+  return {
+    loadMyBands: vi.fn(),
+    loadBandView,
+    loadMemberBandView: async (bandId: string) => {
+      const result = await loadBandView(bandId);
+      return result.status === 'ok' && result.view?.isMember ? result.view : 'unavailable';
+    },
+  };
+});
 vi.mock('@/api/setListsApi', () => ({ fetchSongTargets: vi.fn() }));
 vi.mock('@/api/songTracksApi', () => ({ saveSongTrack: vi.fn() }));
 

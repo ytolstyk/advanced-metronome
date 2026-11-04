@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BandRecord, ColorLabelRecord, MemberRecord, SetListRecord, SetListRows, SongColorRecord, SongRecord, SongTrackMetaRecord, VoteRecord } from './bandTypes';
-import { assembleBandView, assembleSetListView, assembleSongTargets } from './bandViews';
+import { assembleBandView, assembleSetListView, assembleSongChoices, assembleSongTargets } from './bandViews';
 
 const OWNER = 'sub-owner';
 const ME = 'sub-me';
@@ -622,5 +622,59 @@ describe('assembleSongTargets', () => {
   it('is incomplete when either read hit its page cap', () => {
     expect(targetsFor([], [], { s: true }).incomplete).toBe(true);
     expect(targetsFor([], [], { c: true }).incomplete).toBe(true);
+  });
+});
+
+describe('assembleSongChoices', () => {
+  const choicesFor = (songs: SongRecord[], incomplete = false, v = bandView()) => assembleSongChoices(v, { items: songs, incomplete });
+
+  it('lists the valid songs sorted by title', () => {
+    const c = choicesFor([song('b', BOB, { title: 'Kashmir' }), song('a', BOB, { title: 'Black Dog' }), song('c', OWNER, { title: 'Zeppelin' })]);
+    expect(c.songs.map((s) => s.title)).toEqual(['Black Dog', 'Kashmir', 'Zeppelin']);
+    expect(c.incomplete).toBe(false);
+  });
+
+  it('leaves out hidden songs, forged songs from non-members and songs whose text changes when sanitised', () => {
+    const c = choicesFor(
+      [
+        song('ok', BOB, { title: 'Fine' }),
+        song('h', BOB, { title: 'Hidden' }),
+        song('evil', MALLORY, { title: 'Forged' }),
+        song('zw', BOB, { title: 'Zero\u200bWidth' }),
+        song('pad', BOB, { title: ' Padded ' }),
+      ],
+      false,
+      bandView({ band: band({ hiddenSongIds: ['h'] }) }),
+    );
+    expect(c.songs.map((s) => s.id)).toEqual(['ok']);
+  });
+
+  it('keeps the first of songs with the same title and artist, ignoring case of the artist', () => {
+    const c = choicesFor([
+      song('1', BOB, { title: 'Black Dog', artist: 'Led Zeppelin' }),
+      song('2', OWNER, { title: 'Black Dog', artist: 'led zeppelin' }),
+      song('3', BOB, { title: 'Black Dog', artist: 'Someone Else' }),
+      song('4', BOB, { title: 'Black Dog', artist: null }),
+    ]);
+    // same title sorts stably, so the first row in input order wins among equals
+    expect(c.songs.map((s) => s.id).sort()).toEqual(['1', '3', '4']);
+  });
+
+  it('treats a title that differs only in case as the same song', () => {
+    const c = choicesFor([song('1', BOB, { title: 'Black Dog' }), song('2', BOB, { title: 'black dog' })]);
+    expect(c.songs).toHaveLength(1);
+  });
+
+  it('passes the incomplete flag through', () => {
+    expect(choicesFor([], true).incomplete).toBe(true);
+    expect(choicesFor([], false).incomplete).toBe(false);
+  });
+
+  it('returns no songs for an empty source', () => {
+    expect(choicesFor([]).songs).toEqual([]);
+  });
+
+  it('does not carry votes, colors or tracks (songs and the incomplete flag only)', () => {
+    expect(Object.keys(choicesFor([song('a', BOB)])).sort()).toEqual(['incomplete', 'songs']);
   });
 });

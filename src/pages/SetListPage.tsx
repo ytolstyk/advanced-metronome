@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowDownUp, RefreshCw, Tags } from 'lucide-react';
+import { ArrowDownUp, CopyPlus, RefreshCw, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AuthGate } from '../components/AuthGate/AuthGate';
+import { AddFromSetListDialog } from '../components/Bands/AddFromSetListDialog';
 import { BandsShell } from '../components/Bands/BandsShell';
 import { CARD_SURFACE } from '../components/Bands/cardStyles';
 import { ColorLabelsDialog } from '../components/Bands/ColorLabelsDialog';
@@ -17,12 +18,11 @@ import { StatusNotice } from '../components/Bands/StatusNotice';
 import { SuggestSongDialog } from '../components/Bands/SuggestSongDialog';
 import { hideSong, loadBandView, unhideSong } from '../api/bandsApi';
 import { fetchColorLabelRows } from '../api/colorLabelsApi';
-import { deleteSong, fetchSetListRows, reorderSongs, suggestSong, updateSong } from '../api/setListsApi';
+import { addSongsFromOtherLists, deleteSong, fetchSetListRows, reorderSongs, suggestSong, updateSong } from '../api/setListsApi';
 import { BAND_GONE_TITLES, BAND_LIMITS, type BandLoadResult, type BandView, type SetListView, type ValidSong } from '../bandTypes';
 import { bandPath } from '../bandRoutes';
-import { applySongOrder } from '../bandUtils';
+import { applySongOrder, songToRawInput } from '../bandUtils';
 import { assembleSetListView } from '../bandViews';
-import { tuningOrDefault } from '../bandTunings';
 import { useColorLabels } from '../hooks/useColorLabels';
 import { useActionThenReload } from '../hooks/useAsyncAction';
 import { useLoader } from '../hooks/useLoader';
@@ -137,6 +137,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
   // keeps the draft on screen so the owner can retry.
   const [draft, setDraft] = useState<{ base: string[]; ids: string[] } | null>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
   const [labelsOpen, setLabelsOpen] = useState(false);
   const [editing, setEditing] = useState<ValidSong | null>(null);
   const [deleting, setDeleting] = useState<ValidSong | null>(null);
@@ -166,6 +167,10 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
     });
     if (ok) setDraft(null);
   };
+
+  // `view` holds only this page's set list, but the band's own id list says whether others exist.
+  const hasOtherLists = view.band.setListIds.some((id) => id !== setListId);
+  const listFull = list.songs.length >= BAND_LIMITS.maxSongsPerSetList;
 
   const nameOf = (sub: string) => view.displayNames.get(sub) ?? 'a member';
 
@@ -223,6 +228,11 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
               <ArrowDownUp size={14} className="mr-1" aria-hidden /> {reordering ? 'Done' : 'Reorder'}
             </Button>
           )}
+          {hasOtherLists && (
+            <Button variant="outline" onClick={() => setCopyOpen(true)} disabled={reordering || listFull}>
+              <CopyPlus size={14} className="mr-1" aria-hidden /> Add from another list
+            </Button>
+          )}
           <Button onClick={() => setSuggestOpen(true)} disabled={reordering}>Suggest a song</Button>
           <Button variant="outline" size="icon" onClick={() => void reload()} disabled={refreshing} aria-label="Refresh">
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
@@ -242,7 +252,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
 
       {list.songs.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          No songs yet. Suggest the first one!
+          No songs yet. Suggest the first one{hasOtherLists ? ', or add some from another set list' : ''}!
         </p>
       ) : reordering ? (
         <>
@@ -322,6 +332,21 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
           }
         }}
       />
+      {copyOpen && (
+        <AddFromSetListDialog
+          onOpenChange={setCopyOpen}
+          bandId={view.band.id}
+          setListId={setListId}
+          existingSongs={list.songs}
+          onAdd={async (picked) => {
+            try {
+              await addSongsFromOtherLists(view, setListId, picked, list.songs.length);
+            } finally {
+              await reload(); // some copies may have landed even when others failed
+            }
+          }}
+        />
+      )}
       {labelsOpen && (
         <ColorLabelsDialog
           open
@@ -342,16 +367,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
           key={editing.id}
           open
           onOpenChange={(open) => !open && setEditing(null)}
-          initial={{
-            title: editing.title,
-            artist: editing.artist ?? '',
-            key: editing.key ?? '',
-            tuning: tuningOrDefault(editing.tuning),
-            bpm: editing.bpm ?? '',
-            notes: editing.notes ?? '',
-            songUrl: editing.songUrl ?? '',
-            tabUrl: editing.tabUrl ?? '',
-          }}
+          initial={songToRawInput(editing)}
           onSubmit={async (raw) => {
             try {
               await updateSong(editing.id, raw);

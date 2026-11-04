@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup as cleanupAll, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { BandRecord, BandView, ColorLabelRecord, SongColorRecord, SongRecord, SongTrackMetaRecord, VoteRecord, ValidMember, ValidSetList } from '../bandTypes';
+import { BAND_LIMITS } from '../bandTypes';
+import type { BandRecord, BandView, ValidSong, ColorLabelRecord, SongColorRecord, SongRecord, SongTrackMetaRecord, VoteRecord, ValidMember, ValidSetList } from '../bandTypes';
 import type { TrackPiece } from '../audio/ClickTrackEngine';
 import { SONG_COLOR_STYLES } from '../bandSongColors';
 import userEvent from '@testing-library/user-event';
@@ -13,6 +14,7 @@ vi.mock('@aws-amplify/ui-react', () => ({
 vi.mock('aws-amplify/data', () => ({ generateClient: vi.fn(() => ({ models: {}, graphql: vi.fn() })) }));
 vi.mock('../api/bandsApi', () => ({
   loadBandView: vi.fn(),
+  loadMemberBandView: vi.fn(),
   hideSong: vi.fn(),
   unhideSong: vi.fn(),
 }));
@@ -39,11 +41,13 @@ vi.mock('../api/setListsApi', async (importOriginal) => ({
   updateSong: vi.fn(),
   deleteSong: vi.fn(),
   reorderSongs: vi.fn(),
+  fetchSongChoices: vi.fn(),
+  addSongsFromOtherLists: vi.fn(),
 }));
 
 import { SetListPage } from './SetListPage';
-import { hideSong, loadBandView, unhideSong } from '../api/bandsApi';
-import { deleteSong, fetchSetListRows, reorderSongs, suggestSong } from '../api/setListsApi';
+import { hideSong, loadBandView, loadMemberBandView, unhideSong } from '../api/bandsApi';
+import { addSongsFromOtherLists, deleteSong, fetchSetListRows, fetchSongChoices, reorderSongs, suggestSong } from '../api/setListsApi';
 import { castVote } from '../api/songVotesApi';
 import { setSongColor } from '../api/songColorsApi';
 import { clearSongTrack, getSongTrack, type SongTrackRead } from '../api/songTracksApi';
@@ -1330,5 +1334,108 @@ describe('song click tracks', () => {
     unmount();
     cleanupAll();
     expect(engine.destroy).toHaveBeenCalled();
+  });
+});
+
+describe('add songs from another set list', () => {
+  const twoLists = () => band({ setListIds: ['sl-1', 'sl-2'] });
+  const twoListView = (over: Partial<BandView> = {}) =>
+    makeView(
+      {
+        setLists: [
+          { id: 'sl-1', owner: OWNER, bandId: 'band-1', name: 'Main Set', archivedAt: null },
+          { id: 'sl-2', owner: OWNER, bandId: 'band-1', name: 'Old Gig', archivedAt: null },
+        ] as unknown as ValidSetList[],
+        ...over,
+      },
+      twoLists(),
+    );
+  const addButton = () => screen.getByRole('button', { name: /Add from another list/ });
+  const three = () => [song('a', BOB, '2026-01-02T00:00:00Z'), song('b', ME, '2026-01-02T00:00:01Z'), song('c', ME, '2026-01-02T00:00:02Z')];
+
+  it('is not shown when the band has no other set list', async () => {
+    setup(makeView(), three(), []);
+    await screen.findByText('Song a');
+    expect(screen.queryByRole('button', { name: /Add from another list/ })).not.toBeInTheDocument();
+  });
+
+  it('is shown, and enabled, when the band has another set list', async () => {
+    setup(twoListView(), three(), []);
+    await screen.findByText('Song a');
+    expect(addButton()).toBeEnabled();
+  });
+
+  it('is disabled while the owner reorders songs', async () => {
+    setup(twoListView({ isOwner: true, sub: OWNER }), three(), []);
+    await screen.findByText('Song a');
+    fireEvent.click(screen.getByRole('button', { name: /Reorder/ }));
+    expect(addButton()).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(addButton()).toBeEnabled();
+  });
+
+  it('is disabled when the list is full', async () => {
+    const full = Array.from({ length: BAND_LIMITS.maxSongsPerSetList }, (_, i) =>
+      song(`n${i}`, BOB, `2026-01-02T00:00:${String(i % 60).padStart(2, '0')}Z`),
+    );
+    setup(twoListView(), full, []);
+    await screen.findByText('Song n0');
+    expect(addButton()).toBeDisabled();
+  });
+
+  it('is enabled one song below the cap', async () => {
+    const almost = Array.from({ length: BAND_LIMITS.maxSongsPerSetList - 1 }, (_, i) => song(`n${i}`, BOB, '2026-01-02T00:00:00Z'));
+    setup(twoListView(), almost, []);
+    await screen.findByText('Song n0');
+    expect(addButton()).toBeEnabled();
+  });
+
+  it('hints at adding from another list in the empty state only when one exists', async () => {
+    setup(twoListView(), [], []);
+    expect(await screen.findByText(/No songs yet\. Suggest the first one, or add some from another set list!/)).toBeInTheDocument();
+    cleanupAll();
+    setup(makeView(), [], []);
+    expect(await screen.findByText('No songs yet. Suggest the first one!')).toBeInTheDocument();
+  });
+
+  const pickable = () => ({
+    songs: [{ id: 'x1', owner: BOB, bandId: 'band-1', setListId: 'sl-2', title: 'Imported Tune', artist: null, key: null, tuning: null, bpm: null, notes: null, songUrl: null, tabUrl: null }] as unknown as ValidSong[],
+    incomplete: false,
+  });
+
+  it('copies the ticked song onto this list with the current song count, then reloads', async () => {
+    const view = twoListView();
+    vi.mocked(loadMemberBandView).mockResolvedValue(view);
+    vi.mocked(fetchSongChoices).mockResolvedValue(pickable());
+    vi.mocked(addSongsFromOtherLists).mockResolvedValue(undefined);
+    setup(view, three(), []);
+    await screen.findByText('Song a');
+    fireEvent.click(addButton());
+    const tick = await screen.findByRole('checkbox', { name: /Imported Tune/ });
+    fireEvent.click(tick);
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 song' }));
+    await waitFor(() => expect(addSongsFromOtherLists).toHaveBeenCalledTimes(1));
+    const [passedView, setListId, picked, count] = vi.mocked(addSongsFromOtherLists).mock.calls[0];
+    expect(passedView.band.id).toBe('band-1');
+    expect(setListId).toBe('sl-1');
+    expect(picked.map((s) => s.id)).toEqual(['x1']);
+    expect(count).toBe(3);
+    await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('still reloads when the copy fails part-way, and keeps the dialog open with the message', async () => {
+    const view = twoListView();
+    vi.mocked(loadMemberBandView).mockResolvedValue(view);
+    vi.mocked(fetchSongChoices).mockResolvedValue(pickable());
+    vi.mocked(addSongsFromOtherLists).mockRejectedValue(new Error('Added 0 of 1 songs. write failed'));
+    setup(view, three(), []);
+    await screen.findByText('Song a');
+    fireEvent.click(addButton());
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Imported Tune/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 song' }));
+    expect(await screen.findByText('Added 0 of 1 songs. write failed')).toBeInTheDocument();
+    await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

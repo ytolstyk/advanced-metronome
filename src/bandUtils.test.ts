@@ -56,6 +56,8 @@ import {
   sanitizeName,
   sanitizeNotes,
   songFieldError,
+  songIdentity,
+  songToRawInput,
   applySongOrder,
   sortSongsByScore,
   splitTextWithLinks,
@@ -1988,5 +1990,73 @@ describe('reorderedSetListIds', () => {
     const rows = ['a', 'b', 'c'].map((id) => ({ id }));
     expect(orderSetListsForDisplay(rows, band({ setListIds: stored! })).map((r) => r.id)).toEqual(want);
     expect(b.setListIds).toEqual(current);
+  });
+});
+
+describe('songToRawInput', () => {
+  it('turns a stored song into form input, mapping nulls to blanks', () => {
+    expect(songToRawInput(song('s1', BOB, { title: 'Kashmir' }))).toEqual({
+      title: 'Kashmir',
+      artist: '',
+      key: '',
+      tuning: 'E Standard', // rows without a tuning read as the default
+      bpm: '',
+      notes: '',
+      songUrl: '',
+      tabUrl: '',
+    });
+  });
+
+  it('keeps every filled field and a stored tuning', () => {
+    const raw = songToRawInput(
+      song('s1', BOB, {
+        title: 'Kashmir',
+        artist: 'Led Zeppelin',
+        key: 'Dm',
+        tuning: 'DADGAD',
+        bpm: 80,
+        notes: 'capo 2',
+        songUrl: 'https://open.spotify.com/track/1',
+        tabUrl: 'https://tabs.example.com/k',
+      }),
+    );
+    expect(raw).toEqual({
+      title: 'Kashmir',
+      artist: 'Led Zeppelin',
+      key: 'Dm',
+      tuning: 'DADGAD',
+      bpm: 80,
+      notes: 'capo 2',
+      songUrl: 'https://open.spotify.com/track/1',
+      tabUrl: 'https://tabs.example.com/k',
+    });
+  });
+
+  it('round-trips through parseSongInput to the same normalized values', () => {
+    const s = song('s1', BOB, { title: 'Kashmir', artist: 'Led Zeppelin', key: 'Dm', tuning: 'Drop D', bpm: 80, notes: 'n' });
+    expect(parseSongInput(songToRawInput(s))).toEqual({
+      value: { title: 'Kashmir', artist: 'Led Zeppelin', key: 'Dm', tuning: 'Drop D', bpm: 80, notes: 'n', songUrl: null, tabUrl: null },
+    });
+  });
+});
+
+describe('songIdentity', () => {
+  it('ignores case and surrounding padding in title and artist', () => {
+    expect(songIdentity({ title: '  Black Dog ', artist: ' LED zeppelin' })).toBe(songIdentity({ title: 'black dog', artist: 'Led Zeppelin ' }));
+  });
+
+  it('treats a missing artist like a blank one', () => {
+    expect(songIdentity({ title: 'x', artist: null })).toBe(songIdentity({ title: 'x', artist: '  ' }));
+  });
+
+  it('distinguishes different artists and different titles', () => {
+    expect(songIdentity({ title: 'x', artist: 'a' })).not.toBe(songIdentity({ title: 'x', artist: 'b' }));
+    expect(songIdentity({ title: 'x', artist: null })).not.toBe(songIdentity({ title: 'x', artist: 'a' }));
+    expect(songIdentity({ title: 'x', artist: 'a' })).not.toBe(songIdentity({ title: 'y', artist: 'a' }));
+  });
+
+  it('cannot be forged by moving text across the title/artist boundary', () => {
+    expect(songIdentity({ title: 'a b', artist: 'c' })).not.toBe(songIdentity({ title: 'a', artist: 'b c' }));
+    expect(songIdentity({ title: 'ab', artist: null })).not.toBe(songIdentity({ title: 'a', artist: 'b' }));
   });
 });

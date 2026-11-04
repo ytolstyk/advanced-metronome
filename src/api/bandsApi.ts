@@ -4,6 +4,7 @@ import {
   BAND_TEXT,
   type BandLoadResult,
   type BandRecord,
+  type BandView,
   type InviteFailure,
   type InvitePreview,
   type SetListRecord,
@@ -187,6 +188,12 @@ export async function loadBandView(
       setListRows,
     }),
   };
+}
+
+/** The band view when the caller is a member, else `'unavailable'` (pickers that only make sense for members). */
+export async function loadMemberBandView(bandId: string): Promise<BandView | 'unavailable'> {
+  const result = await loadBandView(bandId);
+  return result.status === 'ok' && result.view.isMember ? result.view : 'unavailable';
 }
 
 // ── Creating / joining / leaving ───────────────────────────────────────────

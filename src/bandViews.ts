@@ -30,6 +30,7 @@ import {
   resolveSongTracks,
   sanitizeDisplayName,
   applySongOrder,
+  songIdentity,
   sortSongsByScore,
   tallyVotes,
   validMemberSubs,
@@ -124,6 +125,12 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
   };
 }
 
+/** Valid, non-hidden songs of the band's set lists, by title. */
+function visibleSongsByTitle(view: BandView, rows: SongRecord[]): ValidSong[] {
+  const { visible } = partitionSongs(rows, view.band, view.setLists, view.memberSubs);
+  return [...visible].sort((a, b) => a.title.localeCompare(b.title));
+}
+
 /** The songs of a set list a click track can be attached to, with which of them already have one. */
 export interface SongTargets {
   /** Valid, non-hidden songs, by title. */
@@ -139,11 +146,26 @@ export function assembleSongTargets(
   view: BandView,
   rows: { songs: ListAllResult<SongRecord>; clicks: ListAllResult<SongTrackMetaRecord> },
 ): SongTargets {
-  const { visible } = partitionSongs(rows.songs.items, view.band, view.setLists, view.memberSubs);
+  const songs = visibleSongsByTitle(view, rows.songs.items);
+  const visible = songs;
   return {
-    songs: [...visible].sort((a, b) => a.title.localeCompare(b.title)),
+    songs,
     tracks: resolveSongTracks(rows.clicks.items, visible, view.memberSubs),
     myTrackSongIds: mySongTrackIds(rows.clicks.items, visible, view.memberSubs, view.sub),
     incomplete: rows.songs.incomplete || rows.clicks.incomplete,
   };
+}
+
+/** The songs of another set list that can be copied into this one. */
+export type SongChoices = Pick<SongTargets, 'songs' | 'incomplete'>;
+
+/** Validates the raw songs of a source set list for the "Add from another set list" picker. */
+export function assembleSongChoices(view: BandView, songs: ListAllResult<SongRecord>): SongChoices {
+  // The same title and artist twice in the source would copy as two identical suggestions: keep the first.
+  const seen = new Set<string>();
+  const unique = visibleSongsByTitle(view, songs.items).filter((s) => {
+    const id = songIdentity(s);
+    return !seen.has(id) && seen.add(id);
+  });
+  return { songs: unique, incomplete: songs.incomplete };
 }

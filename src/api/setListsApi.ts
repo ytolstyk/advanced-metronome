@@ -8,9 +8,10 @@ import {
   type SongRecord,
   type SongTrackMetaRecord,
 } from '../bandTypes';
-import { parseSongInput, reorderedSetListIds, requireName, type RawSongInput } from '../bandUtils';
+import { parseSongInput, reorderedSetListIds, requireName, songToRawInput, type RawSongInput } from '../bandUtils';
+import { errorMessage } from '../lib/errors';
 import { getCurrentUserSub } from './authUtils';
-import type { BandView } from '../bandTypes';
+import type { BandView, ValidSong } from '../bandTypes';
 import {
   bandsClient as client,
   deleteConfirmed,
@@ -21,12 +22,13 @@ import {
   unwrap,
   updateBand,
 } from './bandsShared';
+import { PartialCopyError } from './partialCopyError';
 import { runPool } from './paginate';
 import { listSongColors, listSongs, listSongTrackMeta } from './bandReads';
 import { deleteMyLabelRows } from './colorLabelsApi';
 import { deleteMyColorRows } from './songColorsApi';
 import { deleteMyTrackRows } from './songTracksApi';
-import { assembleSongTargets, type SongTargets } from '../bandViews';
+import { assembleSongChoices, assembleSongTargets, type SongChoices, type SongTargets } from '../bandViews';
 import { deleteVoteRow, listVotesByOwner, listVotesForSetList } from './songVotesApi';
 
 /** Parallelism for leave-band cleanup: a few set lists at a time, a few deletes per list. */
@@ -71,6 +73,16 @@ export async function fetchSongTargets(view: BandView, setListId: string): Promi
     }),
   ]);
   return assembleSongTargets(view, { songs, clicks });
+}
+
+/**
+ * The songs of another set list, to copy into the current one. `view` must hold the source list
+ * (a band view loaded with all its set lists). Songs only: no votes, colors or click tracks are read.
+ */
+export async function fetchSongChoices(view: BandView, sourceSetListId: string): Promise<SongChoices> {
+  await requireAuth();
+  if (!view.setLists.some((s) => s.id === sourceSetListId)) throw new Error('Set list not found');
+  return assembleSongChoices(view, await listSongs(sourceSetListId));
 }
 
 // ── Set lists (owner only; rows are never deleted, only archived) ──────────
@@ -172,6 +184,44 @@ export async function suggestSong(
     'createSong',
   );
   return toSong(created);
+}
+
+/** Parallel creates when copying songs (a full 100-song copy is ~17 rounds, not a burst). */
+const COPY_SONGS_AT_ONCE = 6;
+
+/**
+ * Copies songs from other set lists onto this one as new suggestions by the caller (title, artist,
+ * key, tuning, BPM, notes and links; votes, colors and click tracks start fresh). All-or-nothing on
+ * the cap check; once writing starts every song is attempted and a failure reports how many landed.
+ */
+export async function addSongsFromOtherLists(
+  view: BandView,
+  setListId: string,
+  songs: readonly ValidSong[],
+  currentSongCount: number,
+): Promise<void> {
+  await requireAuth();
+  if (!view.isMember) throw new Error('Join the band to suggest songs');
+  if (!view.setLists.some((s) => s.id === setListId)) throw new Error('Set list not found');
+  if (songs.length === 0) return;
+  if (currentSongCount + songs.length > BAND_LIMITS.maxSongsPerSetList) {
+    throw new Error(`This set list has room for ${Math.max(0, BAND_LIMITS.maxSongsPerSetList - currentSongCount)} more songs`);
+  }
+  // Validate everything first so a bad row can't leave a half-copied selection.
+  const items = songs.map((song) => {
+    const parsed = parseSongInput(songToRawInput(song));
+    if ('error' in parsed) throw new Error(`“${song.title}” can’t be copied: ${parsed.error}`);
+    return { id: song.id, value: parsed.value };
+  });
+  const landed = new Set<string>();
+  try {
+    await runPool(COPY_SONGS_AT_ONCE, items, async ({ id, value }) => {
+      unwrap(await client.models.Song.create({ bandId: view.band.id, setListId, ...value }), 'createSong');
+      landed.add(id);
+    });
+  } catch (e) {
+    throw new PartialCopyError(`Added ${landed.size} of ${items.length} songs. ${errorMessage(e)}`, landed, e);
+  }
 }
 
 export async function updateSong(songId: string, raw: RawSongInput): Promise<void> {

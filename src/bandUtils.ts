@@ -23,7 +23,7 @@ import {
   type VoteValue,
 } from './bandTypes';
 import { DAY_MS } from './availabilitySlots';
-import { DEFAULT_TUNING } from './bandTunings';
+import { DEFAULT_TUNING, tuningOrDefault } from './bandTunings';
 import { sanitizeText, stripUnsafeText, textLength } from './utils/sanitizeText';
 
 /**
@@ -686,6 +686,25 @@ export function parseLinkInput(raw: string | undefined): string {
   const text = stripUnsafeText(raw ?? '');
   if (!text) return '';
   return normalizeHttpUrl(withDefaultScheme(text)) ?? text;
+}
+
+/** The editable fields of a stored song as form input (for the edit dialog and for copying a song to another set list). */
+export function songToRawInput(song: SongRecord): RawSongInput {
+  return {
+    title: song.title,
+    artist: song.artist ?? '',
+    key: song.key ?? '',
+    tuning: tuningOrDefault(song.tuning),
+    bpm: song.bpm ?? '',
+    notes: song.notes ?? '',
+    songUrl: song.songUrl ?? '',
+    tabUrl: song.tabUrl ?? '',
+  };
+}
+
+/** Same title and artist (ignoring case and padding) means the same song for "already on this list" checks. */
+export function songIdentity(song: Pick<SongRecord, 'title' | 'artist'>): string {
+  return `${song.title.trim().toLowerCase()}\u0000${(song.artist ?? '').trim().toLowerCase()}`;
 }
 
 /** Validates/normalizes a suggest-song form with the same bounds the read-time validators enforce. */
