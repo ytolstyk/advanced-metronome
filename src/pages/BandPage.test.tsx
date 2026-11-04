@@ -38,6 +38,7 @@ vi.mock('../api/setListsApi', () => ({
   renameSetList: vi.fn(),
   archiveSetList: vi.fn(),
   setSetListShared: vi.fn(),
+  reorderSetLists: vi.fn(),
   deleteMyContent: vi.fn(),
 }));
 
@@ -57,7 +58,7 @@ import {
   unbanMember,
   updateMyProfile,
 } from '../api/bandsApi';
-import { archiveSetList, createSetList, deleteMyContent, renameSetList, setSetListShared } from '../api/setListsApi';
+import { archiveSetList, createSetList, deleteMyContent, renameSetList, reorderSetLists, setSetListShared } from '../api/setListsApi';
 
 const ME = 'sub-me';
 const BOB = 'sub-bob';
@@ -487,6 +488,51 @@ describe('BandPage as the owner', () => {
     expect(archiveSetList).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'Archive' }));
     await waitFor(() => expect(archiveSetList).toHaveBeenCalledWith('band-1', 'sl-1'));
+  });
+
+  it('the owner can reorder set lists: Done calls reorderSetLists(band, ids top first), then reloads', async () => {
+    const lists = [
+      { id: 'sl-1', owner: OWNER, bandId: 'band-1', name: 'Alpha', archivedAt: null },
+      { id: 'sl-2', owner: OWNER, bandId: 'band-1', name: 'Bravo', archivedAt: null },
+    ] as unknown as ValidSetList[];
+    load(ownerView({ setLists: lists, band: band({ setListIds: ['sl-2', 'sl-1'] }) }));
+    vi.mocked(reorderSetLists).mockResolvedValue(undefined);
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    fireEvent.click(screen.getByRole('button', { name: 'Reorder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha down' }));
+    expect(reorderSetLists).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(reorderSetLists).toHaveBeenCalledWith('band-1', ['sl-2', 'sl-1']));
+    await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+  });
+
+  it('a failed reorder shows the error, reloads, and keeps the owner\'s arrangement to retry', async () => {
+    const lists = [
+      { id: 'sl-1', owner: OWNER, bandId: 'band-1', name: 'Alpha', archivedAt: null },
+      { id: 'sl-2', owner: OWNER, bandId: 'band-1', name: 'Bravo', archivedAt: null },
+    ] as unknown as ValidSetList[];
+    load(ownerView({ setLists: lists, band: band({ setListIds: ['sl-2', 'sl-1'] }) }));
+    vi.mocked(reorderSetLists).mockRejectedValue(new Error('The band changed while you were editing. Please retry.'));
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    fireEvent.click(screen.getByRole('button', { name: 'Reorder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha down' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The band changed');
+    await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
+    const order = () =>
+      within(screen.getByRole('list', { name: 'Set list order' }))
+        .getAllByRole('listitem')
+        .map((row) => within(row).getByLabelText(/^Position of /).getAttribute('aria-label')?.replace('Position of ', ''));
+    await waitFor(() => expect(order()).toEqual(['Bravo', 'Alpha'])); // still in reorder mode with the draft
+  });
+
+  it('members do not get a Reorder button', async () => {
+    load(makeView());
+    renderPage();
+    await screen.findByRole('heading', { name: 'The Band' });
+    expect(screen.queryByRole('button', { name: 'Reorder' })).not.toBeInTheDocument();
   });
 
   it('the owner can share a set list: calls setSetListShared(band, list, true), then reloads', async () => {

@@ -8,7 +8,7 @@ import {
   type SongRecord,
   type SongTrackMetaRecord,
 } from '../bandTypes';
-import { parseSongInput, requireName, type RawSongInput } from '../bandUtils';
+import { parseSongInput, reorderedSetListIds, requireName, type RawSongInput } from '../bandUtils';
 import { getCurrentUserSub } from './authUtils';
 import type { BandView } from '../bandTypes';
 import {
@@ -102,6 +102,18 @@ export async function setSetListShared(bandId: string, setListId: string, shared
         ? [...band.sharedSetListIds, setListId]
         : band.sharedSetListIds.filter((id) => id !== setListId),
     };
+  });
+}
+
+/**
+ * Saves a new order for the set lists (`displayOrder` = ids, top first). One owner-only Band write
+ * against the fresh row, so a list created or archived meanwhile is kept or dropped correctly.
+ */
+export async function reorderSetLists(bandId: string, displayOrder: string[]): Promise<void> {
+  await requireAuth();
+  await updateBand(bandId, (band) => {
+    const next = reorderedSetListIds(band.setListIds, displayOrder.slice(0, BAND_LIMITS.maxSetLists));
+    return next ? { setListIds: next } : null;
   });
 }
 

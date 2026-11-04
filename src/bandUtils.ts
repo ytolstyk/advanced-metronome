@@ -197,6 +197,54 @@ export function filterValidSetLists(setLists: SetListRecord[], band: BandRecord)
 }
 
 /**
+ * Display order of a band's set lists: newest first. `Band.setListIds` is stored bottom to top
+ * (creating a set list appends, so the last id is the newest and is shown first); an owner reorder
+ * rewrites the array. Order only: pass lists that already went through `filterValidSetLists`.
+ */
+export function orderSetListsForDisplay<T extends { id: string }>(setLists: T[], band: BandRecord): T[] {
+  const position = new Map<string, number>();
+  band.setListIds.slice(0, BAND_LIMITS.maxSetLists).forEach((id, i) => {
+    if (!position.has(id)) position.set(id, i);
+  });
+  const at = (s: T) => position.get(s.id) ?? -1;
+  return [...setLists].sort((a, b) => at(b) - at(a));
+}
+
+/** `items` in the order of `ids` (top first); items missing from `ids` (new ones) go first, ids with no item are skipped. */
+export function applyDisplayOrder<T extends { id: string }>(items: readonly T[], ids: readonly string[]): T[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const listed = new Set(ids);
+  return [...items.filter((item) => !listed.has(item.id)), ...ids.flatMap((id) => byId.get(id) ?? [])];
+}
+
+/** `ids` with the item at `from` moved to `to` (both clamped into range); a copy, never the input. */
+export function moveId(ids: readonly string[], from: number, to: number): string[] {
+  const next = [...ids];
+  if (from < 0 || from >= next.length) return next;
+  const [item] = next.splice(from, 1);
+  next.splice(Math.min(Math.max(to, 0), next.length), 0, item);
+  return next;
+}
+
+/**
+ * The `setListIds` to store so the set lists in `displayOrder` (top first) read in that order.
+ * Slot-preserving: the listed ids are written back into the slots the listed ids already occupy,
+ * so every other id (a list whose row failed to load, a hidden row, one created in another tab
+ * meanwhile) keeps its exact place and is never shuffled. Ids in `displayOrder` that are no longer
+ * in `current` (archived meanwhile) are dropped, and duplicate ids in `current` collapse.
+ * `null` when nothing would change.
+ */
+export function reorderedSetListIds(current: readonly string[], displayOrder: readonly string[]): string[] | null {
+  const slots = [...new Set(current)];
+  const have = new Set(slots);
+  const wanted = [...new Set(displayOrder)].filter((id) => have.has(id)).reverse(); // stored order = reverse of display
+  const wantedSet = new Set(wanted);
+  let k = 0;
+  const next = slots.map((id) => (wantedSet.has(id) ? wanted[k++] : id));
+  return next.length === current.length && next.every((id, i) => id === current[i]) ? null : next;
+}
+
+/**
  * Whether the owner shares this set list with anyone who has its link (the band must be alive and
  * the list one of its first `maxSetLists` ids, so a hostile owner's long arrays are bounded).
  */

@@ -148,6 +148,37 @@ describe('assembleBandView', () => {
   });
 });
 
+describe('assembleBandView set list order', () => {
+  it('returns set lists newest first (reverse of band.setListIds)', () => {
+    const view = bandView({
+      band: band({ setListIds: ['sl-1', 'sl-2', 'sl-3'] }),
+      setListRows: [setList({ id: 'sl-1' }), setList({ id: 'sl-2' }), setList({ id: 'sl-3' })],
+    });
+    expect(view.setLists.map((s) => s.id)).toEqual(['sl-3', 'sl-2', 'sl-1']);
+  });
+
+  it('follows the stored order whatever order the rows were fetched in', () => {
+    const view = bandView({
+      band: band({ setListIds: ['sl-1', 'sl-2', 'sl-3'] }),
+      setListRows: [setList({ id: 'sl-2' }), setList({ id: 'sl-3' }), setList({ id: 'sl-1' })],
+    });
+    expect(view.setLists.map((s) => s.id)).toEqual(['sl-3', 'sl-2', 'sl-1']);
+  });
+
+  it('respects an owner-reordered band array and skips missing and archived rows', () => {
+    const view = bandView({
+      band: band({ setListIds: ['sl-3', 'sl-1', 'sl-2', 'sl-4'] }),
+      setListRows: [
+        setList({ id: 'sl-1' }),
+        null,
+        setList({ id: 'sl-3' }),
+        setList({ id: 'sl-4', archivedAt: '2026-02-01T00:00:00Z' }),
+      ],
+    });
+    expect(view.setLists.map((s) => s.id)).toEqual(['sl-1', 'sl-3']);
+  });
+});
+
 describe('assembleSetListView', () => {
   const rows = (songs: SongRecord[], votes: VoteRecord[], flags = { s: false, v: false }): SetListRows => ({
     songs: { items: songs, incomplete: flags.s },

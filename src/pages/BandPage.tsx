@@ -30,7 +30,7 @@ import {
   renameBand,
   unbanMember,
 } from '../api/bandsApi';
-import { createSetList, renameSetList, setSetListShared } from '../api/setListsApi';
+import { createSetList, renameSetList, reorderSetLists, setSetListShared } from '../api/setListsApi';
 import { BAND_GONE_TITLES, BAND_LIMITS, type BandLoadResult, type BandView } from '../bandTypes';
 import { useActionThenReload, useAsyncAction } from '../hooks/useAsyncAction';
 import { useDefaultDisplayName } from '../hooks/useDefaultDisplayName';
@@ -142,7 +142,7 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
   const navigate = useNavigate();
   const { band, isOwner } = view;
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
-  const { act, error: actionError } = useActionThenReload(reload);
+  const { act, busy: actionBusy, error: actionError } = useActionThenReload(reload);
   const close = () => setDialog(null);
   const myMember = view.members.find((m) => m.owner === view.sub);
   const settled = () => void reload();
@@ -186,6 +186,8 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
         onCreate={() => setDialog({ kind: 'new-set-list' })}
         onRename={(id, name) => setDialog({ kind: 'rename-set-list', id, name })}
         onArchive={(id, name) => setDialog({ kind: 'archive-set-list', id, name })}
+        onReorder={(ids) => act(() => reorderSetLists(band.id, ids))}
+        reorderBusy={actionBusy}
         onToggleShared={(id, shared) => {
           // Turning sharing on publishes more than the list: the owner confirms what that means first.
           if (!shared) return void act(() => setSetListShared(band.id, id, false));

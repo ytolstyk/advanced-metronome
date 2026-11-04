@@ -23,6 +23,7 @@ import {
   myLabelColors,
   mySongTrackIds,
   myVotes,
+  orderSetListsForDisplay,
   partitionSongs,
   resolveColorLabels,
   resolveSongColors,
@@ -61,8 +62,11 @@ export function assembleBandView({
   const rows = ownRow ? [...rosterRows, ownRow] : rosterRows;
   const members = filterValidMembers(rows, band);
   const memberSubs = validMemberSubs(members, band);
-  const setLists = filterValidSetLists(
-    setListRows.filter((s): s is SetListRecord => s !== null),
+  const setLists = orderSetListsForDisplay(
+    filterValidSetLists(
+      setListRows.filter((s): s is SetListRecord => s !== null),
+      band,
+    ),
     band,
   );
   const nameBySub = new Map(rows.map((r) => [r.owner, sanitizeDisplayName(r.displayName)]));

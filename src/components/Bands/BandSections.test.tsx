@@ -39,7 +39,7 @@ const view = (over: Partial<BandView> = {}): BandView => ({
 const inRouter = (ui: React.ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
 
 describe('SetListsSection', () => {
-  const handlers = () => ({ onCreate: vi.fn(), onRename: vi.fn(), onArchive: vi.fn(), onToggleShared: vi.fn() });
+  const handlers = () => ({ onCreate: vi.fn(), onRename: vi.fn(), onArchive: vi.fn(), onToggleShared: vi.fn(), onReorder: vi.fn().mockResolvedValue(true) });
 
   it('tells the owner to create the first set list, and offers the create button', () => {
     const h = handlers();
@@ -95,8 +95,243 @@ describe('SetListsSection', () => {
   });
 });
 
+describe('SetListsSection reordering', () => {
+  const lists = () => [setList('sl-1', 'Alpha'), setList('sl-2', 'Bravo'), setList('sl-3', 'Charlie')];
+  const ownerView = (over: Partial<BandView> = {}) =>
+    view({ isOwner: true, band: band({ setListIds: ['sl-3', 'sl-2', 'sl-1'] }), setLists: lists(), ...over });
+  const handlers = (onReorder = vi.fn().mockResolvedValue(true)) => ({
+    onCreate: vi.fn(),
+    onRename: vi.fn(),
+    onArchive: vi.fn(),
+    onToggleShared: vi.fn(),
+    onReorder,
+  });
+  const linkNames = () => screen.getAllByRole('link').map((a) => /^(Alpha|Bravo|Charlie|Delta)/.exec(a.textContent ?? '')?.[1]);
+  const startReordering = () => fireEvent.click(screen.getByRole('button', { name: 'Reorder' }));
+  const reorderRows = () => within(screen.getByRole('list', { name: 'Set list order' })).getAllByRole('listitem');
+  const rowNames = () => reorderRows().map((r) => within(r).getByLabelText(/^Position of /).getAttribute('aria-label')?.replace('Position of ', ''));
+
+  it('shows the lists in the order of the view (top first)', () => {
+    inRouter(<SetListsSection view={ownerView()} {...handlers()} />);
+    expect(linkNames()).toEqual(['Alpha', 'Bravo', 'Charlie']);
+  });
+
+  it('offers Reorder to the owner when there are two or more lists', () => {
+    inRouter(<SetListsSection view={ownerView({ setLists: lists().slice(0, 2) })} {...handlers()} />);
+    expect(screen.getByRole('button', { name: 'Reorder' })).toBeEnabled();
+  });
+
+  it('hides Reorder from a non-owner member', () => {
+    inRouter(<SetListsSection view={ownerView({ isOwner: false })} {...handlers()} />);
+    expect(screen.queryByRole('button', { name: 'Reorder' })).not.toBeInTheDocument();
+  });
+
+  it('hides Reorder with one list or none', () => {
+    const { unmount } = inRouter(<SetListsSection view={ownerView({ setLists: [setList('sl-1', 'Alpha')] })} {...handlers()} />);
+    expect(screen.queryByRole('button', { name: 'Reorder' })).not.toBeInTheDocument();
+    unmount();
+    inRouter(<SetListsSection view={ownerView({ setLists: [] })} {...handlers()} />);
+    expect(screen.queryByRole('button', { name: 'Reorder' })).not.toBeInTheDocument();
+  });
+
+  it('enters reorder mode with Done and Cancel, hides New set list and the normal links', () => {
+    inRouter(<SetListsSection view={ownerView()} {...handlers()} />);
+    expect(screen.getByRole('button', { name: 'New set list' })).toBeInTheDocument();
+    startReordering();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reorder' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New set list' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(rowNames()).toEqual(['Alpha', 'Bravo', 'Charlie']);
+  });
+
+  it('does not call onReorder while moving, only when Done is pressed (once, top first)', async () => {
+    const h = handlers();
+    inRouter(<SetListsSection view={ownerView()} {...h} />);
+    startReordering();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Charlie up' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move Charlie up' }));
+    expect(rowNames()).toEqual(['Charlie', 'Alpha', 'Bravo']);
+    expect(h.onReorder).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(h.onReorder).toHaveBeenCalledTimes(1));
+    expect(h.onReorder).toHaveBeenCalledWith(['sl-3', 'sl-1', 'sl-2']);
+  });
+
+  it('keeps showing the draft while the save runs, then the saved order once it succeeds', async () => {
+    let finish: (ok: boolean) => void = () => undefined;
+    const onReorder = vi.fn().mockReturnValue(new Promise<boolean>((resolve) => (finish = resolve)));
+    inRouter(<SetListsSection view={ownerView()} {...handlers(onReorder)} />);
+    startReordering();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha down' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onReorder).toHaveBeenCalledWith(['sl-2', 'sl-1', 'sl-3']);
+    expect(rowNames()).toEqual(['Bravo', 'Alpha', 'Charlie']); // still reordering until the save lands
+    finish(true);
+    await waitFor(() => expect(linkNames()).toEqual(['Bravo', 'Alpha', 'Charlie']));
+  });
+
+  it('a position typed in the number box is part of the draft and saved by Done', async () => {
+    const h = handlers();
+    inRouter(<SetListsSection view={ownerView()} {...h} />);
+    startReordering();
+    const input = screen.getByRole('spinbutton', { name: 'Position of Alpha' });
+    fireEvent.change(input, { target: { value: '3' } });
+    fireEvent.blur(input);
+    expect(h.onReorder).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(h.onReorder).toHaveBeenCalledWith(['sl-2', 'sl-3', 'sl-1']));
+  });
+
+  it('Cancel discards the draft and does not call onReorder', () => {
+    const h = handlers();
+    inRouter(<SetListsSection view={ownerView()} {...h} />);
+    startReordering();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha down' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(h.onReorder).not.toHaveBeenCalled();
+    expect(linkNames()).toEqual(['Alpha', 'Bravo', 'Charlie']);
+    expect(screen.getByRole('button', { name: 'Reorder' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New set list' })).toBeInTheDocument();
+    // A fresh session starts from the view's order again.
+    startReordering();
+    expect(rowNames()).toEqual(['Alpha', 'Bravo', 'Charlie']);
+  });
+
+  it('Done with no change does not call onReorder', () => {
+    const h = handlers();
+    inRouter(<SetListsSection view={ownerView()} {...h} />);
+    startReordering();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(h.onReorder).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Reorder' })).toBeInTheDocument();
+  });
+
+  it('moving a row away and back then Done does not call onReorder', () => {
+    const h = handlers();
+    inRouter(<SetListsSection view={ownerView()} {...h} />);
+    startReordering();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha down' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha up' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(h.onReorder).not.toHaveBeenCalled();
+  });
+
+  it('keeps the draft and reorder mode when the save fails, so Done can retry', async () => {
+    const onReorder = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    inRouter(<SetListsSection view={ownerView()} {...handlers(onReorder)} />);
+    startReordering();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha down' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(onReorder).toHaveBeenCalledTimes(1));
+    expect(rowNames()).toEqual(['Bravo', 'Alpha', 'Charlie']); // the arrangement survives the failure
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(onReorder).toHaveBeenCalledTimes(2));
+    expect(onReorder).toHaveBeenLastCalledWith(['sl-2', 'sl-1', 'sl-3']);
+    await waitFor(() => expect(linkNames()).toEqual(['Bravo', 'Alpha', 'Charlie']));
+  });
+
+  it('keeps the new order after onReorder resolves true', async () => {
+    const onReorder = vi.fn().mockResolvedValue(true);
+    inRouter(<SetListsSection view={ownerView()} {...handlers(onReorder)} />);
+    startReordering();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha down' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(onReorder).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(linkNames()).toEqual(['Bravo', 'Alpha', 'Charlie']);
+  });
+
+  it('lets a reloaded view (a new setLists array) replace the optimistic order', async () => {
+    const h = handlers();
+    const first = ownerView();
+    const { rerender } = inRouter(<SetListsSection view={first} {...h} />);
+    startReordering();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha down' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(h.onReorder).toHaveBeenCalled());
+    const reloaded = ownerView({ setLists: [setList('sl-2', 'Bravo'), setList('sl-3', 'Charlie'), setList('sl-1', 'Alpha')] });
+    rerender(
+      <MemoryRouter>
+        <SetListsSection view={reloaded} {...h} />
+      </MemoryRouter>,
+    );
+    expect(linkNames()).toEqual(['Bravo', 'Charlie', 'Alpha']);
+  });
+
+  it('puts a list that arrives while reordering at the top of the draft', () => {
+    const h = handlers();
+    const first = ownerView();
+    const { rerender } = inRouter(<SetListsSection view={first} {...h} />);
+    startReordering();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha down' }));
+    rerender(
+      <MemoryRouter>
+        <SetListsSection view={ownerView({ setLists: [setList('sl-4', 'Delta'), ...lists()] })} {...h} />
+      </MemoryRouter>,
+    );
+    expect(rowNames()).toEqual(['Delta', 'Bravo', 'Alpha', 'Charlie']);
+  });
+
+  it('leaves reorder mode when the lists drop below two (only one is left)', () => {
+    const h = handlers();
+    const { rerender } = inRouter(<SetListsSection view={ownerView()} {...h} />);
+    startReordering();
+    rerender(
+      <MemoryRouter>
+        <SetListsSection view={ownerView({ setLists: [setList('sl-1', 'Alpha')] })} {...h} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('list', { name: 'Set list order' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Alpha/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
+  });
+
+  it('disables Reorder (and Done) while reorderBusy is set', () => {
+    const h = handlers();
+    const { rerender } = inRouter(<SetListsSection view={ownerView()} {...h} reorderBusy />);
+    expect(screen.getByRole('button', { name: 'Reorder' })).toBeDisabled();
+    rerender(
+      <MemoryRouter>
+        <SetListsSection view={ownerView()} {...h} reorderBusy={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: 'Reorder' })).toBeEnabled();
+  });
+
+  it('disables Done while a save is running, even in the middle of a reorder', () => {
+    const h = handlers();
+    const { rerender } = inRouter(<SetListsSection view={ownerView()} {...h} />);
+    startReordering();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha down' }));
+    rerender(
+      <MemoryRouter>
+        <SetListsSection view={ownerView()} {...h} reorderBusy />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(h.onReorder).not.toHaveBeenCalled();
+  });
+
+  it('does not show the reorder help text outside reorder mode', () => {
+    inRouter(<SetListsSection view={ownerView()} {...handlers()} />);
+    expect(screen.queryByText(/press Done to save/)).not.toBeInTheDocument();
+    startReordering();
+    expect(screen.getByText(/press Done to save/)).toBeInTheDocument();
+  });
+
+  it('announces moves in the status region while reordering', () => {
+    inRouter(<SetListsSection view={ownerView()} {...handlers()} />);
+    startReordering();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Alpha down' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Alpha moved to position 2 of 3');
+  });
+});
+
 describe('SetListsSection public sharing', () => {
-  const handlers = () => ({ onCreate: vi.fn(), onRename: vi.fn(), onArchive: vi.fn(), onToggleShared: vi.fn() });
+  const handlers = () => ({ onCreate: vi.fn(), onRename: vi.fn(), onArchive: vi.fn(), onToggleShared: vi.fn(), onReorder: vi.fn().mockResolvedValue(true) });
   const writeText = vi.fn();
   beforeEach(() => {
     writeText.mockReset();

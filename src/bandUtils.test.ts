@@ -17,6 +17,7 @@ import {
 import {
   activePending,
   adjustTally,
+  applyDisplayOrder,
   buildDisplayNames,
   buildInviteLink,
   filterCountedVotes,
@@ -33,7 +34,10 @@ import {
   isSongColorKey,
   isVoteValue,
   myColorSongIds,
+  moveId,
   mySongTrackIds,
+  orderSetListsForDisplay,
+  reorderedSetListIds,
   resolveSongTracks,
   myLabelColors,
   myVotes,
@@ -1751,5 +1755,182 @@ describe('resolveSongTracks / mySongTrackIds', () => {
     it('is empty for a non-member caller', () => {
       expect(mine([trackRow('s1')], 'someone-else').size).toBe(0);
     });
+  });
+});
+
+describe('orderSetListsForDisplay', () => {
+  const lists = (...ids: string[]) => ids.map((id) => ({ id }));
+  const idsOf = (xs: { id: string }[]) => xs.map((x) => x.id);
+
+  it('shows the newest (last stored) set list first', () => {
+    const b = band({ setListIds: ['a', 'b', 'c'] });
+    expect(idsOf(orderSetListsForDisplay(lists('a', 'b', 'c'), b))).toEqual(['c', 'b', 'a']);
+  });
+
+  it('orders by the band array whatever order the rows arrive in', () => {
+    const b = band({ setListIds: ['a', 'b', 'c'] });
+    expect(idsOf(orderSetListsForDisplay(lists('b', 'c', 'a'), b))).toEqual(['c', 'b', 'a']);
+  });
+
+  it('does not mutate its input', () => {
+    const input = lists('a', 'b');
+    orderSetListsForDisplay(input, band({ setListIds: ['a', 'b'] }));
+    expect(idsOf(input)).toEqual(['a', 'b']);
+  });
+
+  it('uses the first occurrence of a duplicated id', () => {
+    const b = band({ setListIds: ['a', 'b', 'a'] });
+    // a sits at 0 (first occurrence), b at 1: newest first = b, a
+    expect(idsOf(orderSetListsForDisplay(lists('a', 'b'), b))).toEqual(['b', 'a']);
+  });
+
+  it('ignores ids beyond maxSetLists: such a row sorts last', () => {
+    const ids = Array.from({ length: BAND_LIMITS.maxSetLists }, (_, i) => `sl-${i}`);
+    const b = band({ setListIds: [...ids, 'extra'] });
+    const out = idsOf(orderSetListsForDisplay(lists('sl-0', 'extra', 'sl-9'), b));
+    expect(out).toEqual(['sl-9', 'sl-0', 'extra']);
+  });
+
+  it('puts rows missing from the band array last', () => {
+    const b = band({ setListIds: ['a'] });
+    expect(idsOf(orderSetListsForDisplay(lists('ghost', 'a'), b))).toEqual(['a', 'ghost']);
+  });
+
+  it('returns an empty list for no rows', () => {
+    expect(orderSetListsForDisplay([], band())).toEqual([]);
+  });
+});
+
+describe('applyDisplayOrder', () => {
+  const items = (...ids: string[]) => ids.map((id) => ({ id }));
+  const idsOf = (xs: { id: string }[]) => xs.map((x) => x.id);
+
+  it('orders items by the ids, top first', () => {
+    expect(idsOf(applyDisplayOrder(items('a', 'b', 'c'), ['c', 'a', 'b']))).toEqual(['c', 'a', 'b']);
+  });
+
+  it('puts items missing from the ids first, in their own order', () => {
+    expect(idsOf(applyDisplayOrder(items('a', 'b', 'c', 'd'), ['d', 'a']))).toEqual(['b', 'c', 'd', 'a']);
+  });
+
+  it('skips ids that have no item', () => {
+    expect(idsOf(applyDisplayOrder(items('a', 'b'), ['x', 'b', 'y', 'a']))).toEqual(['b', 'a']);
+  });
+
+  it('returns the same item objects', () => {
+    const [a, b] = items('a', 'b');
+    const out = applyDisplayOrder([a, b], ['b', 'a']);
+    expect(out[0]).toBe(b);
+    expect(out[1]).toBe(a);
+  });
+
+  it('handles empty inputs', () => {
+    expect(applyDisplayOrder([], ['a'])).toEqual([]);
+    expect(idsOf(applyDisplayOrder(items('a', 'b'), []))).toEqual(['a', 'b']);
+  });
+});
+
+describe('moveId', () => {
+  it('moves an item forward and backward', () => {
+    expect(moveId(['a', 'b', 'c', 'd'], 0, 2)).toEqual(['b', 'c', 'a', 'd']);
+    expect(moveId(['a', 'b', 'c', 'd'], 3, 1)).toEqual(['a', 'd', 'b', 'c']);
+  });
+
+  it('clamps a destination below 0 to the top', () => {
+    expect(moveId(['a', 'b', 'c'], 2, -5)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('clamps a destination past the end to the bottom', () => {
+    expect(moveId(['a', 'b', 'c'], 0, 99)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('returns an unchanged copy when from is out of range', () => {
+    const ids = ['a', 'b'];
+    for (const from of [-1, 2, 99]) {
+      const out = moveId(ids, from, 0);
+      expect(out).toEqual(['a', 'b']);
+      expect(out).not.toBe(ids);
+    }
+  });
+
+  it('never mutates the input', () => {
+    const ids = Object.freeze(['a', 'b', 'c']) as readonly string[];
+    expect(moveId(ids, 0, 2)).toEqual(['b', 'c', 'a']);
+    expect(ids).toEqual(['a', 'b', 'c']);
+  });
+
+  it('moving to the same place is a no-op', () => {
+    expect(moveId(['a', 'b', 'c'], 1, 1)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('handles an empty list', () => {
+    expect(moveId([], 0, 0)).toEqual([]);
+  });
+});
+
+describe('reorderedSetListIds', () => {
+  it('maps a display order (top first) back to stored order (bottom first)', () => {
+    // stored a,b,c displays c,b,a. Wanting a,b,c on screen means storing c,b,a.
+    expect(reorderedSetListIds(['a', 'b', 'c'], ['a', 'b', 'c'])).toEqual(['c', 'b', 'a']);
+  });
+
+  it('returns null when the display order matches the current one', () => {
+    expect(reorderedSetListIds(['a', 'b', 'c'], ['c', 'b', 'a'])).toBeNull();
+  });
+
+  it('returns null for an empty display order', () => {
+    expect(reorderedSetListIds(['a', 'b'], [])).toBeNull();
+  });
+
+  it('keeps a hidden id between two visible ids in its slot', () => {
+    // stored: a, HIDDEN, b, c. Visible display is c,b,a. Swap to b,c,a.
+    expect(reorderedSetListIds(['a', 'h', 'b', 'c'], ['b', 'c', 'a'])).toEqual(['a', 'h', 'c', 'b']);
+  });
+
+  it('keeps hidden ids at the ends in place', () => {
+    expect(reorderedSetListIds(['h1', 'a', 'b', 'h2'], ['a', 'b'])).toEqual(['h1', 'b', 'a', 'h2']);
+  });
+
+  it('drops an id archived meanwhile (no longer in current) from the display order', () => {
+    expect(reorderedSetListIds(['a', 'b'], ['gone', 'a', 'b'])).toEqual(['b', 'a']);
+    expect(reorderedSetListIds(['a', 'b'], ['gone', 'b', 'a'])).toBeNull();
+  });
+
+  it('keeps an id created meanwhile (absent from displayOrder) in its slot', () => {
+    // a,b,new stored; the user only knew a and b and wants a on top of b: store b,a around "new".
+    expect(reorderedSetListIds(['a', 'b', 'new'], ['a', 'b'])).toEqual(['b', 'a', 'new']);
+    expect(reorderedSetListIds(['a', 'new', 'b'], ['a', 'b'])).toEqual(['b', 'new', 'a']);
+  });
+
+  it('collapses duplicate ids in current', () => {
+    expect(reorderedSetListIds(['a', 'b', 'a'], ['a', 'b'])).toEqual(['b', 'a']);
+  });
+
+  it('collapses duplicate ids in the display order', () => {
+    expect(reorderedSetListIds(['a', 'b', 'c'], ['a', 'a', 'b', 'c'])).toEqual(['c', 'b', 'a']);
+  });
+
+  it('does not report a change for an array that only differs by duplicates when order holds', () => {
+    // dedupe shrinks the array, so it is a real change to write
+    expect(reorderedSetListIds(['a', 'a', 'b'], ['b', 'a'])).toEqual(['a', 'b']);
+  });
+
+  it('does not mutate its inputs', () => {
+    const current = Object.freeze(['a', 'b', 'c']) as readonly string[];
+    const order = Object.freeze(['a', 'b', 'c']) as readonly string[];
+    reorderedSetListIds(current, order);
+    expect(current).toEqual(['a', 'b', 'c']);
+    expect(order).toEqual(['a', 'b', 'c']);
+  });
+
+  it('round-trips with orderSetListsForDisplay', () => {
+    const current = ['a', 'h', 'b', 'c'];
+    const b = band({ setListIds: current });
+    const want = ['b', 'a', 'c'];
+    const stored = reorderedSetListIds(current, want);
+    expect(stored).not.toBeNull();
+    const rows = ['a', 'b', 'c'].map((id) => ({ id }));
+    expect(orderSetListsForDisplay(rows, band({ setListIds: stored! })).map((r) => r.id)).toEqual(want);
+    expect(b.setListIds).toEqual(current);
   });
 });

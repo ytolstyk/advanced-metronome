@@ -1,13 +1,15 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BAND_LIMITS, type BandView } from '../../bandTypes';
 import { availabilityPath, rigPath, setListPath } from '../../bandRoutes';
-import { isSetListShared } from '../../bandUtils';
+import { applyDisplayOrder, isSetListShared } from '../../bandUtils';
 import { CARD_SURFACE_INTERACTIVE } from './cardStyles';
 import { CopyShareLinkButton } from './CopyShareLinkButton';
 import { MemberList } from './MemberList';
+import { SetListReorderList } from './SetListReorderList';
 
 /** The four sections of the band page. They only render; every action is a callback. */
 
@@ -17,21 +19,66 @@ export function SetListsSection({
   onRename,
   onArchive,
   onToggleShared,
+  onReorder,
+  reorderBusy = false,
 }: {
   view: BandView;
   onCreate: () => void;
   onRename: (id: string, name: string) => void;
   onArchive: (id: string, name: string) => void;
   onToggleShared: (id: string, shared: boolean) => void;
+  /** Owner only: saves the new order (top first); resolves `false` when the save failed. */
+  onReorder: (ids: string[]) => Promise<boolean>;
+  /** A save is running: the Reorder button waits. */
+  reorderBusy?: boolean;
 }) {
   const { band, isOwner } = view;
+  // While reordering, moves only change this local draft (ids, top first); "Done" saves it once.
+  const [draft, setDraft] = useState<string[] | null>(null);
+  // The order just saved, shown until the reloaded one arrives. Tied to the list it was made from, so
+  // a reload (a new `view.setLists`) replaces it without an effect; a failed save clears it.
+  const [saved, setSaved] = useState<{ base: typeof view.setLists; ids: string[] } | null>(null);
+  const canReorder = isOwner && view.setLists.length > 1;
+  const reordering = draft !== null && canReorder;
+  const shown = reordering
+    ? applyDisplayOrder(view.setLists, draft)
+    : saved && saved.base === view.setLists
+      ? applyDisplayOrder(view.setLists, saved.ids)
+      : view.setLists;
+  // Cancel, or Done with nothing changed, just leaves. A real Done keeps the draft until the save
+  // succeeds, so a failed save leaves the owner's arrangement on screen to retry.
+  const finishReordering = (commit: boolean) => {
+    const ids = shown.map((s) => s.id);
+    if (!commit || ids.every((id, i) => id === view.setLists[i]?.id)) return setDraft(null);
+    setSaved({ base: view.setLists, ids });
+    void onReorder(ids).then((ok) => {
+      if (ok) setDraft(null);
+      else setSaved(null);
+    });
+  };
+  const canCreate = isOwner && !reordering && band.setListIds.length < BAND_LIMITS.maxSetLists;
   return (
     <section aria-labelledby="set-lists-heading" className="mb-8">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 id="set-lists-heading" className="text-lg font-semibold text-foreground">Set lists</h2>
-        {isOwner && band.setListIds.length < BAND_LIMITS.maxSetLists && (
-          <Button size="sm" onClick={onCreate}>New set list</Button>
-        )}
+        <div className="flex items-center gap-2">
+          {reordering && (
+            <Button size="sm" variant="ghost" disabled={reorderBusy} onClick={() => finishReordering(false)}>
+              Cancel
+            </Button>
+          )}
+          {canReorder && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={reorderBusy}
+              onClick={() => (reordering ? finishReordering(true) : setDraft(shown.map((s) => s.id)))}
+            >
+              {reordering ? 'Done' : 'Reorder'}
+            </Button>
+          )}
+          {canCreate && <Button size="sm" onClick={onCreate}>New set list</Button>}
+        </div>
       </div>
       <p className="mb-2 text-sm text-muted-foreground">
         A shared set list has a public link anyone can open without signing in. Nothing is shared until the owner
@@ -41,9 +88,20 @@ export function SetListsSection({
         <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
           {isOwner ? 'Create your first set list.' : 'The owner hasn’t created a set list yet.'}
         </p>
+      ) : reordering ? (
+        <>
+          <p className="mb-2 text-sm text-muted-foreground">
+            Drag a set list by its handle, type a position number, or use the arrows, then press Done to save.
+            Newly created set lists start at the top.
+          </p>
+          {/* Frozen while the save runs: a move made now would be dropped when the save lands. */}
+          <div inert={reorderBusy}>
+            <SetListReorderList setLists={shown} onReorder={setDraft} />
+          </div>
+        </>
       ) : (
         <ul className="grid gap-2">
-          {view.setLists.map((setList) => {
+          {shown.map((setList) => {
             const shared = isSetListShared(band, setList.id);
             return (
               <li key={setList.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">

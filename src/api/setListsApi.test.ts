@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PUBLIC_READ_PAGES, type BandRecord, type BandView, type ValidMember, type ValidSetList } from '../bandTypes';
+import { BAND_LIMITS, PUBLIC_READ_PAGES, type BandRecord, type BandView, type ValidMember, type ValidSetList } from '../bandTypes';
 
 const { m } = vi.hoisted(() => {
   const m = {
@@ -30,6 +30,7 @@ import {
   fetchSetListRows,
   fetchSongTargets,
   renameSetList,
+  reorderSetLists,
   setSetListShared,
   suggestSong,
   updateSong,
@@ -299,6 +300,84 @@ describe('setSetListShared', () => {
   it('requires sign-in before reading or writing anything', async () => {
     vi.mocked(isAuthenticated).mockResolvedValue(false);
     await expect(setSetListShared('band-1', 'sl-1', true)).rejects.toBeInstanceOf(NotSignedInError);
+    expect(m.Band.get).not.toHaveBeenCalled();
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+});
+
+describe('reorderSetLists', () => {
+  it('writes the stored (reversed) order as a single partial band write', async () => {
+    const current = echoBandUpdates(bandRow({ setListIds: ['sl-1', 'sl-2', 'sl-3'] }));
+    await reorderSetLists('band-1', ['sl-1', 'sl-2', 'sl-3']);
+    expect(current().setListIds).toEqual(['sl-3', 'sl-2', 'sl-1']);
+    expect(m.graphql).toHaveBeenCalledTimes(1);
+    const { input } = m.graphql.mock.calls[0][0].variables as { input: Record<string, unknown> };
+    expect(Object.keys(input).sort()).toEqual(['id', 'setListIds', 'version']);
+    expect(m.graphql.mock.calls[0][0].variables.condition).toEqual({ version: { eq: 1 } });
+  });
+
+  it('keeps ids the caller did not list (created meanwhile) in their slot', async () => {
+    const current = echoBandUpdates(bandRow({ setListIds: ['sl-1', 'sl-new', 'sl-2'] }));
+    await reorderSetLists('band-1', ['sl-1', 'sl-2']);
+    expect(current().setListIds).toEqual(['sl-2', 'sl-new', 'sl-1']);
+  });
+
+  it('writes nothing when the order is unchanged', async () => {
+    echoBandUpdates(bandRow({ setListIds: ['sl-1', 'sl-2'] }));
+    await expect(reorderSetLists('band-1', ['sl-2', 'sl-1'])).resolves.toBeUndefined();
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing for an empty display order', async () => {
+    echoBandUpdates(bandRow({ setListIds: ['sl-1', 'sl-2'] }));
+    await reorderSetLists('band-1', []);
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('caps the display order at BAND_LIMITS.maxSetLists', async () => {
+    const max = BAND_LIMITS.maxSetLists;
+    const stored = Array.from({ length: max + 1 }, (_, i) => `sl-${i}`);
+    const current = echoBandUpdates(bandRow({ setListIds: stored }));
+    // Uncapped, all 11 would be reversed. Capped to the first 10, the 11th keeps its slot.
+    await reorderSetLists('band-1', stored);
+    const expected = [...stored.slice(0, max).reverse(), stored[max]];
+    expect(current().setListIds).toEqual(expected);
+  });
+
+  it('ignores display entries past the cap', async () => {
+    const stored = ['a', 'b', 'c'];
+    const current = echoBandUpdates(bandRow({ setListIds: stored }));
+    const long = [...Array.from({ length: BAND_LIMITS.maxSetLists }, (_, i) => `x-${i}`), 'a', 'b', 'c'];
+    // All of a, b, c sit beyond the cap, so none is reordered and nothing is written.
+    await reorderSetLists('band-1', long);
+    expect(m.graphql).not.toHaveBeenCalled();
+    expect(current().setListIds).toEqual(stored);
+  });
+
+  it('works from the FRESH band after a version conflict', async () => {
+    m.Band.get
+      .mockResolvedValueOnce({ data: bandRow({ version: 1, setListIds: ['sl-1', 'sl-2'] }) })
+      .mockResolvedValueOnce({ data: bandRow({ version: 2, setListIds: ['sl-1', 'sl-2', 'sl-3'] }) });
+    m.graphql
+      .mockRejectedValueOnce({ errors: CONFLICT })
+      .mockImplementationOnce(async ({ variables }: { variables: { input: Record<string, unknown> } }) => ({
+        data: { updateBand: { ...bandRow(), ...variables.input } },
+      }));
+    await reorderSetLists('band-1', ['sl-1', 'sl-2']);
+    expect(m.graphql).toHaveBeenCalledTimes(2);
+    expect(m.graphql.mock.calls[1][0].variables.input).toMatchObject({ version: 3, setListIds: ['sl-2', 'sl-1', 'sl-3'] });
+    expect(m.graphql.mock.calls[1][0].variables.condition).toEqual({ version: { eq: 2 } });
+  });
+
+  it('refuses a deleted band', async () => {
+    echoBandUpdates(bandRow({ deletedAt: '2026-02-01T00:00:00Z', setListIds: ['sl-1', 'sl-2'] }));
+    await expect(reorderSetLists('band-1', ['sl-1', 'sl-2'])).rejects.toThrow('This band was deleted');
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('requires sign-in before reading or writing anything', async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(false);
+    await expect(reorderSetLists('band-1', ['sl-1', 'sl-2'])).rejects.toBeInstanceOf(NotSignedInError);
     expect(m.Band.get).not.toHaveBeenCalled();
     expect(m.graphql).not.toHaveBeenCalled();
   });
