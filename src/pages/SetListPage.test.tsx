@@ -1015,6 +1015,73 @@ describe('song reordering', () => {
   });
 });
 
+describe('song list text', () => {
+  const titled = (id: string, title: string, artist: string | null, createdAt: string): SongRecord => ({
+    ...song(id, BOB, createdAt),
+    title,
+    artist,
+  });
+  const ownerView = () =>
+    makeView({
+      isOwner: true,
+      sub: OWNER,
+      setLists: [
+        { id: 'sl-1', owner: OWNER, bandId: 'band-1', name: 'Main Set', archivedAt: null },
+      ] as unknown as ValidSetList[],
+    });
+  const rows = () => [
+    titled('a', 'Alpha', 'Band A', '2026-01-02T00:00:00Z'),
+    titled('b', 'Beta', null, '2026-01-02T00:00:01Z'),
+  ];
+
+  it('opens a dialog with the numbered songs in the order shown (vote ranked)', async () => {
+    setup(makeView(), rows(), [vote('b', BOB, 'up')]);
+    await screen.findByText('Alpha');
+    fireEvent.click(screen.getByRole('button', { name: /Song list/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Song list').textContent).toBe('1. Beta\n2. Alpha - Band A');
+  });
+
+  it('can be closed again', async () => {
+    setup(makeView(), rows(), []);
+    await screen.findByText('Alpha');
+    fireEvent.click(screen.getByRole('button', { name: /Song list/ }));
+    const dialog = await screen.findByRole('dialog');
+    const footerClose = within(dialog).getAllByRole('button', { name: 'Close' }).find((b) => !b.querySelector('svg'));
+    fireEvent.click(footerClose as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('is disabled when the set list has no songs', async () => {
+    setup(makeView(), [], []);
+    await screen.findByRole('button', { name: /Song list/ });
+    expect(screen.getByRole('button', { name: /Song list/ })).toBeDisabled();
+  });
+
+  it('is disabled while reordering and enabled again after Cancel', async () => {
+    setup(ownerView(), rows(), []);
+    await screen.findByText('Alpha');
+    expect(screen.getByRole('button', { name: /Song list/ })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: /Reorder/ }));
+    expect(screen.getByRole('button', { name: /Song list/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name: /Song list/ })).toBeEnabled();
+  });
+
+  it('follows the owner running order when one is saved', async () => {
+    const view = makeView({
+      setLists: [
+        { id: 'sl-1', owner: OWNER, bandId: 'band-1', name: 'Main Set', archivedAt: null, songOrder: ['b', 'a'] },
+      ] as unknown as ValidSetList[],
+    });
+    setup(view, rows(), [vote('a', BOB, 'up')]);
+    await screen.findByText('Alpha');
+    fireEvent.click(screen.getByRole('button', { name: /Song list/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Song list').textContent).toBe('1. Beta\n2. Alpha - Band A');
+  });
+});
+
 describe('song click tracks', () => {
   const piece = (over: Partial<TrackPiece> = {}): TrackPiece => ({
     id: 'p1',

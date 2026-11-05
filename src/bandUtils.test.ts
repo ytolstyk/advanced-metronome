@@ -25,6 +25,7 @@ import {
   filterValidSetLists,
   filterValidSongs,
   formatInviteCode,
+  formatSongList,
   generateInviteCode,
   isBanned,
   inviteStatus,
@@ -2059,5 +2060,43 @@ describe('songIdentity', () => {
   it('cannot be forged by moving text across the title/artist boundary', () => {
     expect(songIdentity({ title: 'a b', artist: 'c' })).not.toBe(songIdentity({ title: 'a', artist: 'b c' }));
     expect(songIdentity({ title: 'ab', artist: null })).not.toBe(songIdentity({ title: 'a', artist: 'b' }));
+  });
+});
+
+describe('formatSongList', () => {
+  it('returns an empty string for no songs', () => {
+    expect(formatSongList([])).toBe('');
+  });
+
+  it('numbers songs from 1 as "n. Title - Artist", one per line, in the given order', () => {
+    expect(
+      formatSongList([
+        { title: 'Zebra', artist: 'Band Z' },
+        { title: 'Alpha', artist: 'Band A' },
+        { title: 'Middle', artist: 'Band M' },
+      ]),
+    ).toBe('1. Zebra - Band Z\n2. Alpha - Band A\n3. Middle - Band M');
+  });
+
+  it('leaves out the separator when there is no artist (null, empty or blank)', () => {
+    expect(
+      formatSongList([
+        { title: 'One', artist: null },
+        { title: 'Two', artist: '' },
+        { title: 'Three', artist: '   ' },
+      ]),
+    ).toBe('1. One\n2. Two\n3. Three');
+  });
+
+  it('trims the artist but keeps the title as given', () => {
+    expect(formatSongList([{ title: 'Song', artist: '  Someone  ' }])).toBe('1. Song - Someone');
+  });
+
+  it('has no trailing newline and keeps numbering past 9', () => {
+    const songs = Array.from({ length: 11 }, (_, i) => ({ title: `T${i}`, artist: null }));
+    const lines = formatSongList(songs).split('\n');
+    expect(lines).toHaveLength(11);
+    expect(lines[10]).toBe('11. T10');
+    expect(formatSongList(songs).endsWith('\n')).toBe(false);
   });
 });

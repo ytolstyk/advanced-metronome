@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowDownUp, CopyPlus, RefreshCw, Tags } from 'lucide-react';
+import { ArrowDownUp, CopyPlus, ListOrdered, RefreshCw, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AuthGate } from '../components/AuthGate/AuthGate';
@@ -13,6 +13,7 @@ import { CopyShareLinkButton } from '../components/Bands/CopyShareLinkButton';
 import { InlineAlert } from '../components/Bands/InlineAlert';
 import { LoaderBoundary } from '../components/Bands/LoaderBoundary';
 import { SetListReorderList } from '../components/Bands/SetListReorderList';
+import { SongListTextDialog } from '../components/Bands/SongListTextDialog';
 import { SongRow, type SongClickTrackControls } from '../components/Bands/SongRow';
 import { StatusNotice } from '../components/Bands/StatusNotice';
 import { SuggestSongDialog } from '../components/Bands/SuggestSongDialog';
@@ -147,6 +148,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
   const [labelsOpen, setLabelsOpen] = useState(false);
+  const [textOpen, setTextOpen] = useState(false);
   const [editing, setEditing] = useState<ValidSong | null>(null);
   const [deleting, setDeleting] = useState<ValidSong | null>(null);
   const [removingTrack, setRemovingTrack] = useState<ValidSong | null>(null);
@@ -213,6 +215,9 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
           {list.shared && <CopyShareLinkButton setListId={setListId} setListName={list.setList.name} />}
           <Button variant="outline" onClick={() => setLabelsOpen(true)}>
             <Tags size={14} className="mr-1" aria-hidden /> Color labels
+          </Button>
+          <Button variant="outline" onClick={() => setTextOpen(true)} disabled={reordering || list.songs.length === 0}>
+            <ListOrdered size={14} className="mr-1" aria-hidden /> Song list
           </Button>
           {reordering && (
             <Button variant="ghost" disabled={actionBusy} onClick={() => void finishReordering(false)}>
@@ -356,6 +361,15 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
               await reload(); // some copies may have landed even when others failed
             }
           }}
+        />
+      )}
+      {textOpen && (
+        <SongListTextDialog
+          open
+          onOpenChange={setTextOpen}
+          setListName={list.setList.name}
+          songs={shownSongs}
+          incomplete={list.incomplete || view.incomplete}
         />
       )}
       {labelsOpen && (
