@@ -423,6 +423,21 @@ describe('MembersSection', () => {
     expect(onRestore).toHaveBeenCalledWith('sub-bob');
   });
 
+  it('offers "Delete files" for a removed member only when the backend supports backing tracks, and passes their sub and name', () => {
+    const onDeleteFiles = vi.fn();
+    const { rerender } = render(
+      <MembersSection view={view({ isOwner: true, removedMembers: removed })} onRemove={() => {}} onRestore={() => {}} onEditProfile={() => {}} />,
+    );
+    expect(screen.queryByRole('button', { name: /Delete backing track files/ })).not.toBeInTheDocument();
+
+    rerender(
+      <MembersSection view={view({ isOwner: true, removedMembers: removed })} onRemove={() => {}} onRestore={() => {}} onDeleteFiles={onDeleteFiles} onEditProfile={() => {}} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete backing track files of Bob' }));
+    expect(onDeleteFiles).toHaveBeenCalledWith('sub-bob', 'Bob');
+    expect(screen.getByRole('button', { name: 'Restore Bob' })).toBeInTheDocument(); // Restore is still there
+  });
+
   it('a non-owner never sees the removed section even when the data is present', () => {
     render(<MembersSection view={view({ isOwner: false, removedMembers: removed })} onRemove={() => {}} onRestore={() => {}} onEditProfile={() => {}} />);
     expect(screen.queryByRole('heading', { name: 'Removed' })).not.toBeInTheDocument();

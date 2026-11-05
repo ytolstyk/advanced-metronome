@@ -21,7 +21,9 @@
 //     default): Cognito console > the sandbox user pool > App clients > the client > Edit > turn on
 //     "Sign in with username and password: ALLOW_USER_PASSWORD_AUTH". Leave the other settings alone.
 //   - the AWS identity running this needs cognito-idp AdminCreateUser, AdminSetUserPassword and
-//     AdminDeleteUser on that pool.
+//     AdminDeleteUser on that pool;
+//   - for the backing-track gate (G8) to upload, deploy with BACKING_TRACKS_ENABLED=true (otherwise it
+//     checks the schema only and skips the upload flow).
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -660,6 +662,121 @@ r = await G(`query($o:String!){ listMyBands(owner:$o){ items{ bandId } } }`, { o
 check('G6', 'guest cannot list MyBand rows', denied(r) && !r.data?.listMyBands?.items?.length, errType(r), true);
 r = await G(`query($id:ID!){ getPublishedTab(id:$id){ id } }`, { id: randomUUID() });
 check('G6', 'guest cannot read other (signed-in only) models', guestDenied(r, 'getPublishedTab'), errType(r));
+
+// ---------- G8: backing tracks ----------
+// The model is written ONLY by the backing-track Lambda: no client create/update/delete, no list, and no
+// owner-keyed index. Uploads go through a presigned POST the Lambda signs. Needs the sandbox deployed with
+// BACKING_TRACKS_ENABLED=true; without it the flow is skipped (the schema checks still run).
+for (const q of ['getBackingTrack', 'listBackingTrackBySetList', 'listBackingTrackBySong', 'listBackingTrackByBand'])
+  check('G8', `query ${q} exists`, q in queries, '', true);
+check('G8', 'plain listBackingTracks absent', !('listBackingTracks' in queries), '', true);
+for (const m of ['createBackingTrack', 'updateBackingTrack', 'deleteBackingTrack'])
+  check('G8', `mutation ${m} absent (rows are Lambda-written only)`, !mutations.includes(m), '', true);
+for (const m of ['requestBackingTrackUpload', 'commitBackingTrack', 'editBackingTrack', 'removeBackingTracks', 'removeSongBackingTracks', 'leaveMyBackingTracks', 'removeMemberBackingTracks'])
+  check('G8', `mutation ${m} present`, mutations.includes(m), '', true);
+for (const q of ['listBackingTrackBySetList', 'listBackingTrackBySong', 'listBackingTrackByBand'])
+  check('G8', `${q} partition arg is not owner`, (queries[q] ?? [])[0] !== 'owner' && (queries[q] ?? []).length > 0, `args=${(queries[q] ?? []).join(',')}`, true);
+
+const fn = async (user, name, decl, vars) => {
+  const res = await gql(user, `mutation(${decl}){ ${name}(${Object.keys(vars).map((k) => `${k}: $${k}`).join(', ')}) }`, vars);
+  const text = res.data?.[name];
+  return text ? JSON.parse(text) : { ok: false, code: `gql:${errType(res)}` };
+};
+const fakeMp3 = (size) => {
+  const b = Buffer.alloc(size, 0x41);
+  b.write('ID3', 0, 'latin1');
+  b[3] = 3; b[10] = 0xff; b[11] = 0xfb;
+  return b;
+};
+const postForm = async (ticket, body, extra = {}) => {
+  const form = new FormData();
+  for (const [k, v] of Object.entries({ ...ticket.fields, ...extra })) form.append(k, v);
+  form.append('file', new Blob([body], { type: ticket.fields['Content-Type'] }), 'x.mp3');
+  return (await fetch(ticket.url, { method: 'POST', body: form })).status;
+};
+const COMMIT = '$trackId:String!,$bandId:String!,$songId:String!,$slot:Int!,$label:String!,$tags:[String]';
+const commitVars = (t, ids, label = 'No drums', tags = ['drums']) => ({ trackId: t.trackId, bandId: ids.bandId, songId: ids.songId, slot: t.slot, label, tags });
+
+const bt = { bandId: randomUUID(), setListId: randomUUID(), songId: randomUUID() };
+await create(A, 'Band', { id: bt.bandId, name: 'Tracks Band', inviteCode: 'BT' + RUN.toUpperCase(), version: 1, setListIds: [bt.setListId] });
+await create(A, 'SetList', { id: bt.setListId, bandId: bt.bandId, name: 'Tracks' });
+await create(A, 'Member', { bandId: bt.bandId, owner: A.sub, displayName: 'Alice' });
+await create(B, 'Member', { bandId: bt.bandId, owner: B.sub, displayName: 'Bob' });
+await create(B, 'Song', { id: bt.songId, bandId: bt.bandId, setListId: bt.setListId, title: 'Track song' });
+
+const ticket = await fn(B, 'requestBackingTrackUpload', '$ext:String!,$bytes:Int!', { ext: 'mp3', bytes: 4000 });
+if (!ticket.ok && ticket.code === 'uploads-disabled') {
+  info('G8', 'upload flow skipped', 'BACKING_TRACKS_ENABLED is off on this sandbox; redeploy with BACKING_TRACKS_ENABLED=true to run it');
+} else {
+  check('G8', 'a member gets a signed upload form', ticket.ok === true, JSON.stringify(ticket).slice(0, 160), true);
+  const forgedExt = await fn(B, 'requestBackingTrackUpload', '$ext:String!,$bytes:Int!', { ext: 'exe', bytes: 10 });
+  check('G8', 'an unsupported file type is refused', !forgedExt.ok && forgedExt.code === 'bad-input', JSON.stringify(forgedExt), true);
+  const tooBig = await fn(B, 'requestBackingTrackUpload', '$ext:String!,$bytes:Int!', { ext: 'mp3', bytes: 60 * 1024 * 1024 });
+  check('G8', 'a file over 50 MB is refused before any form is signed', !tooBig.ok && tooBig.code === 'too-big', JSON.stringify(tooBig), true);
+
+  if (ticket.ok) {
+    // S3 itself enforces the signed limits.
+    check('G8', 'S3 rejects a body larger than the declared size', (await postForm(ticket, fakeMp3(5000))) >= 400, '', true);
+    const t2 = await fn(B, 'requestBackingTrackUpload', '$ext:String!,$bytes:Int!', { ext: 'mp3', bytes: 4000 });
+    check('G8', 'S3 rejects a changed Content-Type field', (await postForm(t2, fakeMp3(100), { 'Content-Type': 'text/html' })) >= 400, '', true);
+    const t3 = await fn(B, 'requestBackingTrackUpload', '$ext:String!,$bytes:Int!', { ext: 'mp3', bytes: 4000 });
+    check('G8', 'S3 rejects an extra form field', (await postForm(t3, fakeMp3(100), { 'x-amz-meta-evil': '1' })) >= 400, '', true);
+
+    // A real upload by B (member), then the checks around it.
+    const t4 = await fn(B, 'requestBackingTrackUpload', '$ext:String!,$bytes:Int!', { ext: 'mp3', bytes: 4000 });
+    check('G8', 'a valid upload is accepted by S3', (await postForm(t4, fakeMp3(3000))) === 204, '', true);
+    const outsider = await fn(C, 'commitBackingTrack', COMMIT, commitVars(t4, bt));
+    check('G8', 'an outsider cannot commit B\'s upload (no pending object under their own id)', !outsider.ok, JSON.stringify(outsider), true);
+    const committed = await fn(B, 'commitBackingTrack', COMMIT, commitVars(t4, bt));
+    check('G8', 'a member commits their upload', committed.ok === true && committed.track?.owner === B.sub, JSON.stringify(committed).slice(0, 200), true);
+    const replay = await fn(B, 'commitBackingTrack', COMMIT, commitVars(t4, bt));
+    check('G8', 'committing again is idempotent', replay.ok === true && replay.track?.id === t4.trackId, JSON.stringify(replay).slice(0, 160), true);
+
+    const BT_FIELDS = 'id owner bandId setListId songId label forTags key contentType bytes format createdAt updatedAt __typename';
+    r = await gql(C, `query($id:ID!){ getBackingTrack(id:$id){ ${BT_FIELDS} } }`, { id: t4.trackId });
+    check('G8', 'a Lambda-written row reads back through AppSync (shape, tags array, timestamps)',
+      r.data?.getBackingTrack?.label === 'No drums' && Array.isArray(r.data.getBackingTrack.forTags) && !!r.data.getBackingTrack.createdAt,
+      errType(r), true);
+    info('G8', 'any signed-in user can read a row by id (capability model, same as click tracks)', `signed-in outsider read: ${!!r.data?.getBackingTrack}`);
+    r = await G(`query($id:ID!){ getBackingTrack(id:$id){ id } }`, { id: t4.trackId });
+    check('G8', 'guest cannot get a BackingTrack row', guestDenied(r, 'getBackingTrack'), errType(r), true);
+    r = await G(`query($s:String!){ listBackingTrackBySetList(setListId:$s){ items{ id } } }`, { s: bt.setListId });
+    check('G8', 'guest cannot list backing tracks by set list', !r.data?.listBackingTrackBySetList && denied(r), errType(r), true);
+
+    // Client writes are impossible.
+    r = await gql(C, `mutation{ createBackingTrack(input:{ id:"${randomUUID()}" }){ id } }`);
+    check('G8', 'client createBackingTrack does not exist', !r.data?.createBackingTrack && !!r.errors, errType(r), true);
+
+    // Management authorization.
+    const editByC = await fn(C, 'editBackingTrack', '$trackId:String!,$label:String!,$tags:[String]', { trackId: t4.trackId, label: 'hijack', tags: [] });
+    check('G8', 'an outsider cannot edit B\'s track', !editByC.ok && editByC.code === 'forbidden', JSON.stringify(editByC), true);
+    const editByA = await fn(A, 'editBackingTrack', '$trackId:String!,$label:String!,$tags:[String]', { trackId: t4.trackId, label: 'hijack', tags: [] });
+    check('G8', 'even the band owner cannot edit someone else\'s track', !editByA.ok && editByA.code === 'forbidden', JSON.stringify(editByA), true);
+    const editByB = await fn(B, 'editBackingTrack', '$trackId:String!,$label:String!,$tags:[String]', { trackId: t4.trackId, label: 'Drums only', tags: ['guitar'] });
+    check('G8', 'the author can edit their own track', editByB.ok === true && editByB.track?.label === 'Drums only', JSON.stringify(editByB).slice(0, 160), true);
+    const rmByC = await fn(C, 'removeBackingTracks', '$trackIds:[String]!', { trackIds: [t4.trackId] });
+    check('G8', 'an outsider cannot remove it', rmByC.ok === true && rmByC.results?.[0]?.ok === false && rmByC.results[0].code === 'forbidden', JSON.stringify(rmByC), true);
+    const rmSongByC = await fn(C, 'removeSongBackingTracks', '$songId:String!', { songId: bt.songId });
+    check('G8', 'an outsider cannot clear a song\'s tracks', !rmSongByC.ok && rmSongByC.code === 'forbidden', JSON.stringify(rmSongByC), true);
+    const purgeByB = await fn(B, 'removeMemberBackingTracks', '$bandId:String!,$mode:String!', { bandId: bt.bandId, mode: 'all' });
+    check('G8', 'a member who is not the band owner cannot purge the band', !purgeByB.ok && purgeByB.code === 'forbidden', JSON.stringify(purgeByB), true);
+    const unknownId = await fn(B, 'removeBackingTracks', '$trackIds:[String]!', { trackIds: [randomUUID()] });
+    check('G8', 'removing an already-gone track succeeds, so a retried call converges', unknownId.ok === true && unknownId.results?.[0]?.ok === true, JSON.stringify(unknownId).slice(0, 200));
+
+    // Ban: the next commit is refused straight away (consistent reads), then the owner purges.
+    await update(A, 'Band', { id: bt.bandId, bannedSubs: [B.sub] });
+    const t5 = await fn(B, 'requestBackingTrackUpload', '$ext:String!,$bytes:Int!', { ext: 'mp3', bytes: 4000 });
+    if (t5.ok) await postForm(t5, fakeMp3(3000));
+    const bannedCommit = t5.ok ? await fn(B, 'commitBackingTrack', COMMIT, commitVars(t5, bt, 'Banned')) : t5;
+    check('G8', 'a banned member\'s commit is refused immediately', !bannedCommit.ok && bannedCommit.code === 'banned', JSON.stringify(bannedCommit), true);
+    const purge = await fn(A, 'removeMemberBackingTracks', '$bandId:String!,$mode:String!,$memberSub:String', { bandId: bt.bandId, mode: 'member', memberSub: B.sub });
+    check('G8', 'the band owner purges the banned member\'s files', purge.ok === true && purge.removed >= 1, JSON.stringify(purge), true);
+    r = await gql(A, `query($id:ID!){ getBackingTrack(id:$id){ id } }`, { id: t4.trackId });
+    check('G8', 'the purged row is gone', !r.data?.getBackingTrack, errType(r), true);
+    const leave = await fn(B, 'leaveMyBackingTracks', '$bandId:String!', { bandId: bt.bandId });
+    check('G8', 'a banned user can still run their own cleanup (no membership needed)', leave.ok === true && leave.done === true, JSON.stringify(leave));
+  }
+}
 
 // ---------- summary ----------
 const failed = results.filter((x) => x.pass === false);

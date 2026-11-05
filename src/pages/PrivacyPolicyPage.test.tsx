@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { TAKEDOWN_CONTACT } from '../legalContact';
 import { PrivacyPolicyPage } from './PrivacyPolicyPage';
 
 describe('PrivacyPolicyPage', () => {
@@ -38,9 +39,9 @@ describe('PrivacyPolicyPage', () => {
     expect(item).toHaveTextContent(/may remain readable until you dismiss the band, and if you never do, until you delete it or ask us to/);
   });
 
-  it('says leaving a band also deletes availability, gear, rig diagrams and click tracks', () => {
+  it('says leaving a band also deletes availability, gear, rig diagrams, click tracks and backing tracks', () => {
     render(<PrivacyPolicyPage />);
-    expect(screen.getByText(/and we try to delete your availability, gear, rig diagrams and click tracks too/)).toBeInTheDocument();
+    expect(screen.getByText(/and we try to delete your availability, gear, rig diagrams, click tracks and backing tracks \(audio files\) too/)).toBeInTheDocument();
   });
 
   it('discloses stored gear and rig diagrams, who can read them, and how they are deleted', () => {
@@ -52,6 +53,30 @@ describe('PrivacyPolicyPage', () => {
     expect(item).toHaveTextContent(/Only you can change or delete your own/);
     expect(item).toHaveTextContent(/deleted when you leave a band/);
     expect(item).toHaveTextContent(/may remain readable until you dismiss the band/);
+  });
+
+  it('discloses uploaded backing tracks: what is stored where, who can read it, the limits, and how it is deleted', () => {
+    render(<PrivacyPolicyPage />);
+    const item = screen.getByText('Band backing tracks:').closest('li')!;
+    expect(item).toHaveTextContent(/MP3, M4A, WAV or FLAC/);
+    expect(item).toHaveTextContent(/up to 50 MB/);
+    expect(item).toHaveTextContent(/stored in Amazon S3/);
+    expect(item).toHaveTextContent(/20 files per person, 10 per song, 100 per band/);
+    expect(item).toHaveTextContent(/Anyone with an account who has the band.s link can play and download it/);
+    expect(item).toHaveTextContent(/not someone who is signed out/);
+    expect(item).toHaveTextContent(/ten minutes/);
+    expect(item).toHaveTextContent(/band owner can remove any track/);
+    expect(item).toHaveTextContent(/deleted when you leave a band/);
+    expect(item).toHaveTextContent(/a song, a member \(by the owner\) or a\s+band is deleted/);
+    expect(item).toHaveTextContent(/Only add audio you have the right to share/);
+  });
+
+  it('says where to report an audio file added without permission', () => {
+    render(<PrivacyPolicyPage />);
+    const text = screen.getByText(/To report an audio file you believe was added without permission/);
+    // The launch placeholder is never shown as if it were a real address.
+    expect(text).not.toHaveTextContent(TAKEDOWN_CONTACT);
+    expect(text).toHaveTextContent(/say so in an issue and ask for a private channel/);
   });
 
   it('discloses band click tracks, who can read them, who can change them, and how they are deleted', () => {
@@ -67,9 +92,9 @@ describe('PrivacyPolicyPage', () => {
     expect(item).toHaveTextContent(/saved click tracks \(not attached to a band\) stay private/);
   });
 
-  it('shows the October 31, 2026 last-updated date', () => {
+  it('shows the November 4, 2026 last-updated date', () => {
     render(<PrivacyPolicyPage />);
-    expect(screen.getByText('Last updated: October 31, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Last updated: November 4, 2026')).toBeInTheDocument();
   });
 
   it('says playing or downloading a click track as WAV or FLAC happens in the browser and is not uploaded', () => {

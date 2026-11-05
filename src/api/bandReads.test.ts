@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { m } = vi.hoisted(() => {
+const { m, mutations } = vi.hoisted(() => {
+  const mutations: Record<string, unknown> = { requestBackingTrackUpload: () => undefined };
   const m = {
+    BackingTrack: { listBackingTrackBySetList: vi.fn(), listBackingTrackBySong: vi.fn() },
     Song: { listSongBySetList: vi.fn() },
     Vote: { listVoteBySetList: vi.fn() },
     SongColor: { listSongColorBySetList: vi.fn() },
@@ -9,19 +11,20 @@ const { m } = vi.hoisted(() => {
     SongClickTrack: { listSongClickTrackBySetList: vi.fn() },
     graphql: vi.fn(),
   };
-  return { m };
+  return { m, mutations };
 });
 
 vi.mock('aws-amplify/data', () => ({
-  generateClient: vi.fn(() => ({ models: m, graphql: m.graphql })),
+  generateClient: vi.fn(() => ({ models: m, graphql: m.graphql, mutations })),
 }));
 vi.mock('./authUtils', () => ({
   isAuthenticated: vi.fn(async () => true),
   getCurrentUserSub: vi.fn(async () => 'sub-me'),
 }));
 
+import { BACKING_TRACK_LIMITS } from '../backingTrackFormat';
 import { BAND_LIMITS, LIST_PAGE_SIZE, MAX_LIST_PAGES, SONG_COLOR_KEYS } from '../bandTypes';
-import { hasSongTrackModel, listColorLabels, listSongColors, listSongTrackMeta } from './bandReads';
+import { hasBackingTrackModel, hasSongTrackModel, listBackingTracks, songHasBackingTracks, listColorLabels, listSongColors, listSongTrackMeta } from './bandReads';
 import { SONG_TRACK_INDEX_FIELDS } from './bandsShared';
 
 const colorRow = (songId: string, color = 'red', owner = 'sub-bob') => ({
@@ -239,5 +242,137 @@ describe('listSongTrackMeta', () => {
     }
     expect(hasSongTrackModel()).toBe(true);
     expect(saved.listSongClickTrackBySetList).not.toHaveBeenCalled();
+  });
+});
+
+const backingRow = (id: string) => ({
+  id,
+  owner: 'sub-bob',
+  bandId: 'band-1',
+  setListId: 'sl-1',
+  songId: 'song-1',
+  label: 'No drums',
+  forTags: ['drums'],
+  key: `bt/${id}`,
+  contentType: 'audio/mpeg',
+  bytes: 100,
+  format: 1,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-02T00:00:00Z',
+  extra: 'dropped',
+});
+
+describe('hasBackingTrackModel', () => {
+  it('is true with the model and the upload mutation', () => {
+    expect(hasBackingTrackModel()).toBe(true);
+  });
+
+  it('is false when the model is missing', () => {
+    const saved = m.BackingTrack;
+    delete (m as Record<string, unknown>).BackingTrack;
+    try {
+      expect(hasBackingTrackModel()).toBe(false);
+    } finally {
+      m.BackingTrack = saved;
+    }
+  });
+
+  it('is false when the upload mutation is missing (an older backend)', () => {
+    const saved = mutations.requestBackingTrackUpload;
+    delete mutations.requestBackingTrackUpload;
+    try {
+      expect(hasBackingTrackModel()).toBe(false);
+    } finally {
+      mutations.requestBackingTrackUpload = saved;
+    }
+  });
+});
+
+describe('listBackingTracks', () => {
+  beforeEach(() => {
+    m.BackingTrack.listBackingTrackBySetList.mockReset();
+  });
+
+  it('queries the set-list index with the default (signed-in) auth mode and maps the rows', async () => {
+    m.BackingTrack.listBackingTrackBySetList.mockResolvedValue({ data: [backingRow('a')], nextToken: null });
+    const res = await listBackingTracks('sl-1');
+    expect(m.BackingTrack.listBackingTrackBySetList).toHaveBeenCalledWith(
+      { setListId: 'sl-1' },
+      { limit: LIST_PAGE_SIZE, nextToken: undefined },
+    );
+    expect(m.BackingTrack.listBackingTrackBySetList.mock.calls[0][1]).not.toHaveProperty('authMode');
+    expect(res.incomplete).toBe(false);
+    expect(res.items).toHaveLength(1);
+    expect(res.items[0]).toMatchObject({ id: 'a', owner: 'sub-bob', songId: 'song-1', key: 'bt/a', bytes: 100 });
+    expect(res.items[0]).not.toHaveProperty('extra');
+  });
+
+  it('follows nextToken across pages', async () => {
+    m.BackingTrack.listBackingTrackBySetList
+      .mockResolvedValueOnce({ data: [backingRow('a')], nextToken: 't1' })
+      .mockResolvedValueOnce({ data: [backingRow('b')], nextToken: null });
+    const res = await listBackingTracks('sl-1');
+    expect(res.items.map((r) => r.id)).toEqual(['a', 'b']);
+    expect(res.incomplete).toBe(false);
+    expect(m.BackingTrack.listBackingTrackBySetList.mock.calls[1][1]).toMatchObject({ nextToken: 't1' });
+  });
+
+  it('stops at a tight page cap (the band-wide track limit, plus one page) and flags incomplete', async () => {
+    m.BackingTrack.listBackingTrackBySetList.mockResolvedValue({ data: [], nextToken: 'more' });
+    const res = await listBackingTracks('sl-1');
+    const expectedPages = Math.ceil(BACKING_TRACK_LIMITS.maxPerBand / LIST_PAGE_SIZE) + 1;
+    expect(res.incomplete).toBe(true);
+    expect(m.BackingTrack.listBackingTrackBySetList).toHaveBeenCalledTimes(expectedPages);
+    expect(expectedPages).toBeLessThan(MAX_LIST_PAGES);
+  });
+
+  it('fails closed when the read errors', async () => {
+    m.BackingTrack.listBackingTrackBySetList.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
+    await expect(listBackingTracks('sl-1')).rejects.toThrow('listBackingTracks: gsi down');
+  });
+
+  it('returns an empty, complete result without any query when the backend predates the model', async () => {
+    const saved = mutations.requestBackingTrackUpload;
+    delete mutations.requestBackingTrackUpload;
+    try {
+      await expect(listBackingTracks('sl-1')).resolves.toEqual({ items: [], incomplete: false });
+    } finally {
+      mutations.requestBackingTrackUpload = saved;
+    }
+    expect(m.BackingTrack.listBackingTrackBySetList).not.toHaveBeenCalled();
+  });
+});
+
+describe('songHasBackingTracks', () => {
+  const list = m.BackingTrack.listBackingTrackBySong;
+  beforeEach(() => {
+    list.mockReset();
+  });
+
+  it('is true when the index returns a row, asking for just one', async () => {
+    list.mockResolvedValue({ data: [backingRow('a')] });
+    await expect(songHasBackingTracks('song-1')).resolves.toBe(true);
+    expect(list).toHaveBeenCalledWith({ songId: 'song-1' }, { limit: 1 });
+  });
+
+  it('is false when the index returns nothing', async () => {
+    list.mockResolvedValue({ data: [] });
+    await expect(songHasBackingTracks('song-1')).resolves.toBe(false);
+  });
+
+  it('is null (unknown) when the read comes back with errors, even with empty data', async () => {
+    list.mockResolvedValue({ data: [], errors: [{ message: 'denied' }] });
+    await expect(songHasBackingTracks('song-1')).resolves.toBeNull();
+  });
+
+  it('is null (unknown) when the read throws', async () => {
+    list.mockRejectedValue(new Error('network'));
+    await expect(songHasBackingTracks('song-1')).resolves.toBeNull();
+  });
+
+  it('never sends an authMode (no guest read rule)', async () => {
+    list.mockResolvedValue({ data: [] });
+    await songHasBackingTracks('song-1');
+    expect(list.mock.calls[0][1]).not.toHaveProperty('authMode');
   });
 });

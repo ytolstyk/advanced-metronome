@@ -451,3 +451,49 @@ describe('SongRow click track strip', () => {
     expect(c.onDownloadCompressed).not.toHaveBeenCalled();
   });
 });
+
+describe('SongRow backing tracks slot', () => {
+  const clickTrack: SongClickTrackControls = {
+    by: 'Alice',
+    date: 'Jan 5',
+    playing: false,
+    busy: false,
+    onPlay: vi.fn(),
+    onDownload: vi.fn(),
+    onDownloadCompressed: vi.fn(),
+    onOpen: vi.fn(),
+    onRemove: vi.fn(),
+  };
+  const panel = <div data-testid="backing-panel">Backing tracks (2)</div>;
+  const follows = (first: HTMLElement, second: HTMLElement) =>
+    Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it('renders the node it is given', () => {
+    setup({}, { backingTracks: panel });
+    expect(screen.getByTestId('backing-panel')).toHaveTextContent('Backing tracks (2)');
+  });
+
+  it('renders nothing extra when no node is given', () => {
+    setup();
+    expect(screen.queryByTestId('backing-panel')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Backing tracks/)).not.toBeInTheDocument();
+  });
+
+  it('sits after the vote row and before the colour and edit controls', () => {
+    setup({}, { isAuthor: true, backingTracks: panel });
+    const slot = screen.getByTestId('backing-panel');
+    expect(follows(screen.getByLabelText('Rank 3'), slot)).toBe(true);
+    expect(follows(slot, screen.getByRole('button', { name: 'Edit Wonderwall' }))).toBe(true);
+  });
+
+  it('sits after the click track strip', () => {
+    setup({}, { clickTrack, backingTracks: panel });
+    expect(follows(screen.getByText('Click track · by Alice, Jan 5'), screen.getByTestId('backing-panel'))).toBe(true);
+  });
+
+  it('shows alongside the click track without replacing it', () => {
+    setup({}, { clickTrack, backingTracks: panel });
+    expect(screen.getByText('Click track · by Alice, Jan 5')).toBeInTheDocument();
+    expect(screen.getByTestId('backing-panel')).toBeInTheDocument();
+  });
+});

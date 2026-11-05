@@ -188,11 +188,14 @@ export function MembersSection({
   view,
   onRemove,
   onRestore,
+  onDeleteFiles,
   onEditProfile,
 }: {
   view: BandView;
   onRemove: (sub: string, name: string) => void;
   onRestore: (sub: string) => void;
+  /** Present when the backend has backing tracks: retries deleting a removed member's audio files (a ban can succeed while that cleanup fails). */
+  onDeleteFiles?: (sub: string, name: string) => void;
   onEditProfile: () => void;
 }) {
   const { isOwner } = view;
@@ -207,9 +210,16 @@ export function MembersSection({
             {view.removedMembers.map(({ sub, name }) => (
               <li key={sub} className="flex min-h-11 items-center justify-between gap-3 rounded-md bg-destructive/10 px-3 py-1.5">
                 <span className="min-w-0 truncate text-sm text-foreground/80">{name}</span>
-                <Button variant="ghost" size="sm" onClick={() => onRestore(sub)} aria-label={`Restore ${name}`}>
-                  Restore
-                </Button>
+                <span className="flex shrink-0 items-center gap-1">
+                  {onDeleteFiles && (
+                    <Button variant="ghost" size="sm" onClick={() => onDeleteFiles(sub, name)} aria-label={`Delete backing track files of ${name}`}>
+                      Delete files
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => onRestore(sub)} aria-label={`Restore ${name}`}>
+                    Restore
+                  </Button>
+                </span>
               </li>
             ))}
           </ul>

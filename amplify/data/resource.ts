@@ -5,6 +5,7 @@ import { geminiDrumsFunction } from '../functions/gemini-drums/resource';
 import { geminiChordsFunction } from '../functions/gemini-chords/resource';
 import { geminiTabsFunction } from '../functions/gemini-tabs/resource';
 import { songMetadataFunction } from '../functions/song-metadata/resource';
+import { backingTrackFunction } from '../functions/backing-track/resource';
 
 const schema = a.schema({
   // One record per user — auto-saved on every change
@@ -196,6 +197,57 @@ const schema = a.schema({
     .returns(a.string())
     .authorization(allow => [allow.authenticated()])
     .handler(a.handler.function(songMetadataFunction)),
+
+  // Backing tracks: the only way to upload. Every call returns a JSON string `{ok, ...}` / `{ok:false, code}`.
+  // The function checks the JWT `sub` itself and refuses identity-pool callers. See CLAUDE.md "Backing tracks".
+  requestBackingTrackUpload: a.mutation()
+    .arguments({ ext: a.string().required(), bytes: a.integer().required() })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(backingTrackFunction)),
+
+  commitBackingTrack: a.mutation()
+    .arguments({
+      trackId: a.string().required(),
+      bandId: a.string().required(),
+      songId: a.string().required(),
+      slot: a.integer().required(),
+      label: a.string().required(),
+      tags: a.string().array(),
+    })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(backingTrackFunction)),
+
+  editBackingTrack: a.mutation()
+    .arguments({ trackId: a.string().required(), label: a.string().required(), tags: a.string().array() })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(backingTrackFunction)),
+
+  removeBackingTracks: a.mutation()
+    .arguments({ trackIds: a.string().array().required() })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(backingTrackFunction)),
+
+  removeSongBackingTracks: a.mutation()
+    .arguments({ songId: a.string().required() })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(backingTrackFunction)),
+
+  leaveMyBackingTracks: a.mutation()
+    .arguments({ bandId: a.string().required() })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(backingTrackFunction)),
+
+  removeMemberBackingTracks: a.mutation()
+    .arguments({ bandId: a.string().required(), mode: a.string().required(), memberSub: a.string() })
+    .returns(a.string())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(backingTrackFunction)),
 
   generatePracticePlan: a.query()
     .arguments({
@@ -510,6 +562,31 @@ const schema = a.schema({
       allow.authenticated().to(['get', 'list']),
       allow.guest().to(['get', 'list']),
     ]),
+
+  // Backing track audio attached to a song. Rows are written ONLY by the `backing-track` Lambda (direct
+  // DynamoDB writes, so no client create/update/delete exists and `owner` can be trusted); clients read
+  // them by id or through the three indexes. `owner` is declared (the Lambda sets it to the JWT sub) but
+  // there is deliberately no owner rule. No guest access. The indexes are immutable once deployed and
+  // none is keyed by owner (that would let anyone list every band a user belongs to).
+  BackingTrack: a.model({
+    owner: a.string().required(),
+    bandId: a.string().required(),
+    setListId: a.string().required(),
+    songId: a.string().required(),
+    label: a.string().required(),
+    forTags: a.string().array(),
+    key: a.string().required(),        // bt/{owner}/{bandId}/{songId}/{id}.{ext}
+    contentType: a.string().required(),
+    bytes: a.integer().required(),
+    format: a.integer().required(),    // BACKING_TRACK_FORMAT (1)
+  })
+    .secondaryIndexes(index => [
+      index('setListId').queryField('listBackingTrackBySetList'),
+      index('songId').queryField('listBackingTrackBySong'),
+      index('bandId').queryField('listBackingTrackByBand'),
+    ])
+    .disableOperations(['create', 'update', 'delete', 'list', 'subscriptions'])
+    .authorization(allow => [allow.authenticated().to(['get', 'list'])]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

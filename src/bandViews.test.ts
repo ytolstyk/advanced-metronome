@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { BandRecord, ColorLabelRecord, MemberRecord, SetListRecord, SetListRows, SongColorRecord, SongRecord, SongTrackMetaRecord, VoteRecord } from './bandTypes';
+import { committedKey } from './backingTrackFormat';
+import type { BackingTrackRecord, BandRecord, ColorLabelRecord, MemberRecord, SetListRecord, SetListRows, SongColorRecord, SongRecord, SongTrackMetaRecord, VoteRecord } from './bandTypes';
 import { assembleBandView, assembleSetListView, assembleSongChoices, assembleSongTargets } from './bandViews';
 
 const OWNER = 'sub-owner';
@@ -176,6 +177,88 @@ describe('assembleBandView set list order', () => {
       ],
     });
     expect(view.setLists.map((s) => s.id)).toEqual(['sl-1', 'sl-3']);
+  });
+});
+
+const BT_ID = (n: number) => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const backingRow = (n: number, songId: string, over: Partial<BackingTrackRecord> = {}): BackingTrackRecord => {
+  const owner = over.owner ?? BOB;
+  const id = BT_ID(n);
+  return {
+    id,
+    owner,
+    bandId: 'band-1',
+    setListId: 'sl-1',
+    songId,
+    label: `Track ${n}`,
+    forTags: [],
+    key: committedKey({ sub: owner, bandId: 'band-1', songId, trackId: id, ext: 'mp3' }),
+    contentType: 'audio/mpeg',
+    bytes: 2048,
+    format: 1,
+    createdAt: `2026-02-01T00:00:0${n}Z`,
+    ...over,
+  };
+};
+
+describe('assembleSetListView backing tracks', () => {
+  const rowsWith = (backing: SetListRows['backingTracks'], songs = [song('a', BOB), song('b', BOB)]): SetListRows => ({
+    songs: { items: songs, incomplete: false },
+    votes: { items: [], incomplete: false },
+    backingTracks: backing,
+  });
+
+  it('is an empty map when the rows carry no backing tracks (the public page, an older backend)', () => {
+    const result = assembleSetListView(bandView(), 'sl-1', { songs: { items: [song('a', BOB)], incomplete: false }, votes: { items: [], incomplete: false } })!;
+    expect(result.backingTracks.size).toBe(0);
+    expect(result.incomplete).toBe(false);
+  });
+
+  it('fills backingTracks per song from the rows, oldest first', () => {
+    const result = assembleSetListView(
+      bandView(),
+      'sl-1',
+      rowsWith({ items: [backingRow(2, 'a'), backingRow(1, 'a'), backingRow(3, 'b')], incomplete: false }),
+    )!;
+    expect(result.backingTracks.get('a')!.map((t) => t.label)).toEqual(['Track 1', 'Track 2']);
+    expect(result.backingTracks.get('b')!.map((t) => t.label)).toEqual(['Track 3']);
+    expect(result.incomplete).toBe(false);
+  });
+
+  it('resolves rows against the caller: the per-song cap spares only the caller\'s own tracks', () => {
+    const others = Array.from({ length: 10 }, (_, i) => backingRow(i, 'a'));
+    const mine = backingRow(11, 'a', { owner: ME, createdAt: '2026-03-01T00:00:00Z' });
+    const rows = rowsWith({ items: [...others, mine], incomplete: false });
+    expect(assembleSetListView(bandView({ sub: ME }), 'sl-1', rows)!.backingTracks.get('a')).toHaveLength(11);
+    expect(assembleSetListView(bandView({ sub: BOB, ownRow: member(BOB), rosterRows: [member(OWNER), member(ME)] }), 'sl-1', rows)!.backingTracks.get('a')).toHaveLength(10);
+  });
+
+  it('hides tracks of a song that is not visible (hidden, or not on this list)', () => {
+    const hiddenBand = band({ hiddenSongIds: ['a'] });
+    const result = assembleSetListView(
+      bandView({ band: hiddenBand }),
+      'sl-1',
+      rowsWith({ items: [backingRow(1, 'a'), backingRow(2, 'b'), backingRow(3, 'ghost')], incomplete: false }),
+    )!;
+    expect([...result.backingTracks.keys()]).toEqual(['b']);
+  });
+
+  it('hides tracks by a non-member or a banned member', () => {
+    const rows = rowsWith({ items: [backingRow(1, 'a', { owner: MALLORY }), backingRow(2, 'a', { owner: BOB })], incomplete: false });
+    expect(assembleSetListView(bandView(), 'sl-1', rows)!.backingTracks.get('a')!.map((t) => t.owner)).toEqual([BOB]);
+    const banned = assembleSetListView(bandView({ band: band({ bannedSubs: [BOB] }) }), 'sl-1', rows)!;
+    expect(banned.backingTracks.size).toBe(0);
+  });
+
+  it('ORs the backing tracks\' incomplete flag into the view\'s', () => {
+    expect(assembleSetListView(bandView(), 'sl-1', rowsWith({ items: [], incomplete: true }))!.incomplete).toBe(true);
+    expect(assembleSetListView(bandView(), 'sl-1', rowsWith({ items: [], incomplete: false }))!.incomplete).toBe(false);
+  });
+
+  it('keeps the tracks it did read when the read was incomplete', () => {
+    const result = assembleSetListView(bandView(), 'sl-1', rowsWith({ items: [backingRow(1, 'a')], incomplete: true }))!;
+    expect(result.incomplete).toBe(true);
+    expect(result.backingTracks.get('a')).toHaveLength(1);
   });
 });
 

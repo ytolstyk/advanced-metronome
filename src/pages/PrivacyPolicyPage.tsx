@@ -1,8 +1,10 @@
 import { LegalPage } from '@/components/LegalPage/LegalPage';
+import { BACKING_TRACK_LIMITS } from '../backingTrackFormat';
+import { TAKEDOWN_CONTACT, isTakedownContactSet } from '../legalContact';
 
 export function PrivacyPolicyPage() {
   return (
-    <LegalPage title="Privacy Policy" lastUpdated="October 31, 2026">
+    <LegalPage title="Privacy Policy" lastUpdated="November 4, 2026">
       <p>
         This Privacy Policy explains what information Advanced Metronome (the &ldquo;Service&rdquo;)
         collects, how it is used, and the choices you have.
@@ -75,6 +77,22 @@ export function PrivacyPolicyPage() {
           audio is made on your device and is not uploaded.
         </li>
         <li>
+          <strong>Band backing tracks:</strong> if you add a backing track (an MP3, M4A, WAV or FLAC audio
+          file of up to {BACKING_TRACK_LIMITS.maxBytes / (1024 * 1024)} MB) to a song in a band&rsquo;s set list, the file is stored in Amazon S3 in our AWS account under
+          your account&rsquo;s internal user ID, and its name, who you say it is for, its size and type are
+          stored in the cloud database. Our server checks that you belong to the band and applies limits
+          ({BACKING_TRACK_LIMITS.maxUserFiles} files per person, {BACKING_TRACK_LIMITS.maxPerSong} per song,
+          {' '}{BACKING_TRACK_LIMITS.maxPerBand} per band) before it keeps a file. Anyone with an account who has the
+          band&rsquo;s link can play and download it, because member and song IDs are visible to anyone with
+          the link. That includes a link to a shared set list, but not someone who is signed out. Playback
+          and download links stop working after ten minutes, but anyone who can list the band&rsquo;s tracks can get a new one.
+          You can rename or remove your own tracks; the band owner can remove any track. They are deleted
+          when you leave a band, if that deletion succeeds, and when a song, a member (by the owner) or a
+          band is deleted. If the owner removes you or the band is deleted, your files may remain until
+          you dismiss the band or ask us to delete them. Only add audio you have the right to share. A backing track is
+          uploaded to our storage, unlike the click tracks above, which are made on your device.
+        </li>
+        <li>
           <strong>Files you import (local only):</strong> Guitar Pro and AlphaTex files you load into
           the click track builder or the tab editor are read in your browser and are not uploaded.
           Only what you then choose to save, publish or attach to a band is stored in the cloud.
@@ -119,7 +137,7 @@ export function PrivacyPolicyPage() {
         Local data can be cleared via your browser settings. To request deletion of your account and
         cloud-stored data, contact us using the details below. Deleting a published tab removes it
         from the public library. When you leave a band you can also delete your own votes and songs
-        in it, and we try to delete your availability, gear, rig diagrams and click tracks too. Deleted bands are closed and their name, invite code and member bans are cleared, but
+        in it, and we try to delete your availability, gear, rig diagrams, click tracks and backing tracks (audio files) too. Deleted bands are closed and their name, invite code and member bans are cleared, but
         songs and votes written by other members may remain until those members remove them.
       </p>
 
@@ -143,7 +161,8 @@ export function PrivacyPolicyPage() {
         <a href="https://github.com/ytolstyk/advanced-metronome" target="_blank" rel="noopener noreferrer">
           GitHub
         </a>
-        . Issues are public, so please don&rsquo;t post personal information there; ask for a private
+        . To report an audio file you believe was added without permission,{' '}
+        {isTakedownContactSet() ? <>write to {TAKEDOWN_CONTACT}</> : <>say so in an issue and ask for a private channel</>}. Issues are public, so please don&rsquo;t post personal information there; ask for a private
         contact channel for account or data-deletion requests.
       </p>
     </LegalPage>

@@ -12,6 +12,7 @@ import {
   type SongTrackSummary,
   type ValidSong,
 } from './bandTypes';
+import { resolveBackingTracks } from './backingTrackUtils';
 import {
   buildDisplayNames,
   filterCountedVotes,
@@ -101,6 +102,7 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
   const colorRows = rows.colors?.items ?? [];
   const labelRows = rows.labels?.items ?? [];
   const clickRows = rows.clicks?.items ?? [];
+  const backingRows = rows.backingTracks?.items ?? [];
   return {
     setList,
     shared: isSetListShared(view.band, setListId),
@@ -111,6 +113,7 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
     myColorSongIds: myColorSongIds(colorRows, visible, view.memberSubs, view.sub),
     tracks: resolveSongTracks(clickRows, visible, view.memberSubs),
     myTrackSongIds: mySongTrackIds(clickRows, visible, view.memberSubs, view.sub),
+    backingTracks: resolveBackingTracks(backingRows, visible, view.memberSubs, view.band, view.sub),
     colorLabels: resolveColorLabels(labelRows, view.band, view.memberSubs),
     myLabelColors: myLabelColors(labelRows, view.band, view.memberSubs, view.sub),
     myVotes: myVotes(counted, view.sub),
@@ -121,7 +124,8 @@ export function assembleSetListView(view: BandView, setListId: string, rows: Set
       rows.votes.incomplete ||
       (rows.colors?.incomplete ?? false) ||
       (rows.labels?.incomplete ?? false) ||
-      (rows.clicks?.incomplete ?? false),
+      (rows.clicks?.incomplete ?? false) ||
+      (rows.backingTracks?.incomplete ?? false),
   };
 }
 

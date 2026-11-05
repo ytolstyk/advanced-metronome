@@ -27,6 +27,7 @@ import {
 import { assembleBandView } from '../bandViews';
 import { getCurrentUserSub } from './authUtils';
 import { cleanupMyAvailability } from './availabilityRows';
+import { cleanupMyBackingTracks, removeMemberBackingTracks } from './backingTracksCleanup';
 import { cleanupMyRig } from './rigRows';
 import {
   bandsClient as client,
@@ -349,11 +350,13 @@ export async function ensureMyBandRow(bandId: string): Promise<void> {
  * availability row is cleaned up best-effort alongside (bounded, never rejects, not awaited): it is
  * cosmetic next to losing membership, and a leaving member's dialog already deletes it first.
  */
-export async function dismissBand(bandId: string): Promise<void> {
+export async function dismissBand(bandId: string, options: { filesCleaned?: boolean } = {}): Promise<void> {
   await requireAuth();
   const sub = await getCurrentUserSub();
   void cleanupMyAvailability(bandId);
   void cleanupMyRig(bandId);
+  // The leave dialog has already cleared the person's files (twice); the other callers have not.
+  if (!options.filesCleaned) void cleanupMyBackingTracks(bandId);
   await Promise.all([
     deleteQuietly(() => client.models.Member.delete({ bandId, owner: sub }), 'deleteMember'),
     deleteQuietly(() => client.models.MyBand.delete({ owner: sub, bandId }), 'deleteMyBand'),
@@ -375,6 +378,18 @@ export function banMember(bandId: string, memberSub: string): Promise<BandRecord
       throw new Error('Removed-member limit reached');
     }
     return next ? { bannedSubs: next } : null;
+  });
+}
+
+/**
+ * Removes a member: ban FIRST (it stops new uploads at once), then delete their backing track files. If the
+ * file cleanup fails the ban stands and the error says so; running it again retries only the cleanup,
+ * because banning an already-banned member changes nothing.
+ */
+export async function banMemberAndRemoveFiles(bandId: string, memberSub: string, name: string): Promise<void> {
+  await banMember(bandId, memberSub);
+  await removeMemberBackingTracks(bandId, { memberSub }).catch(() => {
+    throw new Error(`${name} was removed, but some of their backing track files may remain. Press Remove again to retry, or use “Delete files” under Removed.`);
   });
 }
 
@@ -523,5 +538,8 @@ export async function deleteBand(bandId: string, onProgress?: (step: DeleteStep)
 
   onProgress?.('invite');
   if (current.inviteCode) await revokeInvite(current.inviteCode).catch(() => undefined);
+  // Audio files of the whole band, best-effort and re-runnable (the owner check survives the scrub above);
+  // members' own dismiss/leave cleanup is the second net.
+  await removeMemberBackingTracks(bandId, 'all').catch((e) => console.warn('Could not remove the band backing tracks', e));
   onProgress?.('done');
 }

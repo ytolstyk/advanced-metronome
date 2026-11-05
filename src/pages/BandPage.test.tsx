@@ -19,7 +19,7 @@ vi.mock('../api/bandsApi', () => ({
   joinBand: vi.fn(),
   dismissBand: vi.fn(),
   ensureMyBandRow: vi.fn().mockResolvedValue(undefined),
-  banMember: vi.fn(),
+  banMemberAndRemoveFiles: vi.fn(),
   unbanMember: vi.fn(),
   updateMyProfile: vi.fn(),
   renameBand: vi.fn(),
@@ -28,6 +28,14 @@ vi.mock('../api/bandsApi', () => ({
   getInviteIssuedAt: vi.fn().mockResolvedValue(new Date().toISOString()),
   ensureFreshInvite: vi.fn(),
   setInviteTtlDays: vi.fn(),
+}));
+vi.mock('../api/backingTracksCleanup', () => ({
+  leaveMyBackingTracksWithin: vi.fn().mockResolvedValue(undefined),
+  removeMemberBackingTracks: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../api/bandReads', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api/bandReads')>()),
+  hasBackingTrackModel: vi.fn(() => true),
 }));
 vi.mock('../api/rigRows', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/rigRows')>()),
@@ -45,7 +53,7 @@ vi.mock('../api/setListsApi', () => ({
 import { isRigAvailable } from '../api/rigRows';
 import { BandPage } from './BandPage';
 import {
-  banMember,
+  banMemberAndRemoveFiles,
   deleteBand,
   dismissBand,
   ensureMyBandRow,
@@ -58,6 +66,8 @@ import {
   unbanMember,
   updateMyProfile,
 } from '../api/bandsApi';
+import { leaveMyBackingTracksWithin, removeMemberBackingTracks } from '../api/backingTracksCleanup';
+import { hasBackingTrackModel } from '../api/bandReads';
 import { archiveSetList, createSetList, deleteMyContent, renameSetList, reorderSetLists, setSetListShared } from '../api/setListsApi';
 
 const ME = 'sub-me';
@@ -245,8 +255,9 @@ describe('BandPage as a member', () => {
     await openLeaveDialog();
     expect(dismissBand).not.toHaveBeenCalled(); // confirm first
     confirmLeave();
-    await waitFor(() => expect(dismissBand).toHaveBeenCalledWith('band-1'));
+    await waitFor(() => expect(dismissBand).toHaveBeenCalledWith('band-1', { filesCleaned: true }));
     expect(deleteMyContent).toHaveBeenCalledWith(expect.objectContaining({ id: 'band-1' }), true);
+    expect(leaveMyBackingTracksWithin).toHaveBeenCalledWith('band-1');
     expect(vi.mocked(deleteMyContent).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(dismissBand).mock.invocationCallOrder[0]);
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/bands'));
   });
@@ -277,7 +288,8 @@ describe('BandPage as a member', () => {
     expect(screen.getByTestId('where')).toHaveTextContent('/bands/band-1');
 
     confirmLeave('Leave anyway');
-    await waitFor(() => expect(dismissBand).toHaveBeenCalledWith('band-1'));
+    // The first pass failed, so dismissBand keeps its own best-effort file cleanup as another attempt.
+    await waitFor(() => expect(dismissBand).toHaveBeenCalledWith('band-1', { filesCleaned: false }));
     expect(deleteMyContent).toHaveBeenCalledTimes(1); // the retry skipped the cleanup
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/bands'));
   });
@@ -409,14 +421,14 @@ describe('BandPage profile', () => {
 describe('BandPage as the owner', () => {
   it('can remove a member after confirming, then reloads', async () => {
     load(ownerView());
-    vi.mocked(banMember).mockResolvedValue(band());
+    vi.mocked(banMemberAndRemoveFiles).mockResolvedValue(undefined);
     renderPage();
     await screen.findByRole('heading', { name: 'The Band' });
     expect(screen.queryByRole('button', { name: 'Remove Olivia' })).not.toBeInTheDocument(); // never the owner
     fireEvent.click(screen.getByRole('button', { name: 'Remove Bob' }));
-    expect(banMember).not.toHaveBeenCalled();
+    expect(banMemberAndRemoveFiles).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
-    await waitFor(() => expect(banMember).toHaveBeenCalledWith('band-1', BOB));
+    await waitFor(() => expect(banMemberAndRemoveFiles).toHaveBeenCalledWith('band-1', BOB, 'Bob'));
     await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
   });
 
@@ -426,6 +438,21 @@ describe('BandPage as the owner', () => {
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Restore Carl' }));
     await waitFor(() => expect(unbanMember).toHaveBeenCalledWith('band-1', 'sub-carl'));
+  });
+
+  it('the owner can retry deleting a removed member\'s backing track files from the Removed list', async () => {
+    load(ownerView({ removedMembers: [{ sub: 'sub-carl', name: 'Carl' }] }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete backing track files of Carl' }));
+    await waitFor(() => expect(removeMemberBackingTracks).toHaveBeenCalledWith('band-1', { memberSub: 'sub-carl' }));
+  });
+
+  it('hides "Delete files" on a backend without backing tracks', async () => {
+    vi.mocked(hasBackingTrackModel).mockReturnValueOnce(false);
+    load(ownerView({ removedMembers: [{ sub: 'sub-carl', name: 'Carl' }] }));
+    renderPage();
+    await screen.findByRole('button', { name: 'Restore Carl' });
+    expect(screen.queryByRole('button', { name: /Delete backing track files/ })).not.toBeInTheDocument();
   });
 
   it('members never see the Removed section', async () => {

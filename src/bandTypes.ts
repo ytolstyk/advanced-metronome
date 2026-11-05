@@ -1,3 +1,5 @@
+import type { AudioExt } from './backingTrackFormat';
+import type { InstrumentKey } from './bandInstruments';
 import { MAX_BPM, MIN_BPM } from './constants';
 
 export type VoteValue = 'up' | 'down';
@@ -191,6 +193,23 @@ export interface SongTrackMetaRecord {
   updatedAt?: string;
 }
 
+/** A `BackingTrack` row as the server returns it. Written only by the backing-track Lambda; still untrusted when read. */
+export interface BackingTrackRecord {
+  id: string;
+  owner: string;
+  bandId: string;
+  setListId: string;
+  songId: string;
+  label: string;
+  forTags?: (string | null)[] | null;
+  key: string;
+  contentType: string;
+  bytes: number;
+  format: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 /** The click track a song shows: the newest valid member row. The payload is fetched on demand. */
 export interface SongTrackSummary {
   owner: string;
@@ -265,6 +284,10 @@ export type ValidMember = Validated<MemberRecord>;
 export type ValidSetList = Validated<SetListRecord>;
 export type ValidSong = Validated<SongRecord>;
 export type ValidVote = Validated<Omit<VoteRecord, 'value'> & { value: VoteValue }>;
+/** A backing track whose key, owner, song and text all check out (built by `resolveBackingTracks`). */
+export type ValidBackingTrack = Validated<
+  Omit<BackingTrackRecord, 'forTags'> & { forTags: InstrumentKey[]; ext: AudioExt; createdAt: string }
+>;
 
 export interface SongTally {
   up: number;
@@ -330,6 +353,8 @@ export interface SetListRows {
   labels?: ListAllResult<ColorLabelRecord>;
   /** Members' click track metadata. Absent on the public page, which doesn't show click tracks. */
   clicks?: ListAllResult<SongTrackMetaRecord>;
+  /** Members' backing tracks for the set list. Absent on the public page, which doesn't show them. */
+  backingTracks?: ListAllResult<BackingTrackRecord>;
 }
 
 export interface SetListView {
@@ -349,6 +374,8 @@ export interface SetListView {
   tracks: Map<string, SongTrackSummary>;
   /** Songs the caller has their own click track row for (even a cleared one): it picks create vs update. */
   myTrackSongIds: Set<string>;
+  /** Valid backing tracks per song, oldest first (songs without any are absent). */
+  backingTracks: Map<string, ValidBackingTrack[]>;
   /** The band's label per palette color (colors without a label are absent). */
   colorLabels: Map<SongColorKey, string>;
   /** Colors the caller has their own label row for (even an empty one): it picks create vs update. */

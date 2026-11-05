@@ -5,8 +5,9 @@ import type { BandRecord } from '../../bandTypes';
 vi.mock('../../api/setListsApi', () => ({ archiveSetList: vi.fn(), deleteMyContent: vi.fn() }));
 vi.mock('../../api/availabilityApi', () => ({ deleteMyAvailabilityWithin: vi.fn() }));
 vi.mock('../../api/rigApi', () => ({ deleteMyRigWithin: vi.fn() }));
+vi.mock('../../api/backingTracksCleanup', () => ({ leaveMyBackingTracksWithin: vi.fn() }));
 vi.mock('../../api/bandsApi', () => ({
-  banMember: vi.fn(),
+  banMemberAndRemoveFiles: vi.fn(),
   deleteBand: vi.fn(),
   dismissBand: vi.fn(),
   resetInviteCode: vi.fn(),
@@ -15,7 +16,8 @@ vi.mock('../../api/bandsApi', () => ({
 import { archiveSetList, deleteMyContent } from '../../api/setListsApi';
 import { deleteMyAvailabilityWithin } from '../../api/availabilityApi';
 import { deleteMyRigWithin } from '../../api/rigApi';
-import { banMember, deleteBand, dismissBand, resetInviteCode } from '../../api/bandsApi';
+import { leaveMyBackingTracksWithin } from '../../api/backingTracksCleanup';
+import { banMemberAndRemoveFiles, deleteBand, dismissBand, resetInviteCode } from '../../api/bandsApi';
 import {
   ArchiveSetListDialog,
   DeleteBandDialog,
@@ -40,26 +42,48 @@ const band: BandRecord = {
 };
 
 beforeEach(() => {
-  for (const fn of [archiveSetList, deleteMyContent, deleteMyAvailabilityWithin, deleteMyRigWithin, banMember, deleteBand, dismissBand, resetInviteCode]) {
+  for (const fn of [archiveSetList, deleteMyContent, deleteMyAvailabilityWithin, deleteMyRigWithin, leaveMyBackingTracksWithin, banMemberAndRemoveFiles, deleteBand, dismissBand, resetInviteCode]) {
     vi.mocked(fn as (...a: never[]) => unknown).mockReset();
     vi.mocked(fn as (...a: never[]) => unknown).mockResolvedValue(undefined as never);
   }
 });
 
 describe('RemoveMemberDialog', () => {
-  it('names the member, bans them by sub, settles, then closes', async () => {
+  it('names the member, removes them (and their files) by sub and name, settles, then closes', async () => {
     const onClose = vi.fn();
     const onSettled = vi.fn();
     render(<RemoveMemberDialog bandId="band-1" sub="sub-bob" name="Bob" onClose={onClose} onSettled={onSettled} />);
     expect(screen.getByRole('heading', { name: 'Remove Bob?' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-    expect(banMember).toHaveBeenCalledWith('band-1', 'sub-bob');
+    expect(banMemberAndRemoveFiles).toHaveBeenCalledTimes(1);
+    expect(banMemberAndRemoveFiles).toHaveBeenCalledWith('band-1', 'sub-bob', 'Bob');
     expect(onSettled).toHaveBeenCalledTimes(1);
   });
 
+  it('says their backing track files are deleted', () => {
+    render(<RemoveMemberDialog bandId="band-1" sub="sub-bob" name="Bob" onClose={() => {}} />);
+    expect(screen.getByText(/their backing track files are deleted/)).toBeInTheDocument();
+  });
+
+  it('a failure (the ban, or the "files may remain" message) stays open, shows the text, settles, and a second press tries again', async () => {
+    vi.mocked(banMemberAndRemoveFiles).mockRejectedValueOnce(
+      new Error('Bob was removed, but some of their backing track files may remain. Press Remove again to retry.'),
+    );
+    const onClose = vi.fn();
+    const onSettled = vi.fn();
+    render(<RemoveMemberDialog bandId="band-1" sub="sub-bob" name="Bob" onClose={onClose} onSettled={onSettled} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Bob was removed, but some of their backing track files may remain');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onSettled).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(banMemberAndRemoveFiles).toHaveBeenCalledTimes(2);
+  });
+
   it('a failed ban stays open, shows the error, and still settles so the page reloads', async () => {
-    vi.mocked(banMember).mockRejectedValue(new Error('The band changed while you were editing. Please retry.'));
+    vi.mocked(banMemberAndRemoveFiles).mockRejectedValue(new Error('The band changed while you were editing. Please retry.'));
     const onClose = vi.fn();
     const onSettled = vi.fn();
     render(<RemoveMemberDialog bandId="band-1" sub="sub-bob" name="Bob" onClose={onClose} onSettled={onSettled} />);
@@ -69,12 +93,12 @@ describe('RemoveMemberDialog', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('cancel calls onClose without banning', () => {
+  it('cancel calls onClose without removing anyone', () => {
     const onClose = vi.fn();
     render(<RemoveMemberDialog bandId="band-1" sub="sub-bob" name="Bob" onClose={onClose} />);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(banMember).not.toHaveBeenCalled();
+    expect(banMemberAndRemoveFiles).not.toHaveBeenCalled();
   });
 });
 
@@ -104,15 +128,18 @@ describe('LeaveBandDialog', () => {
     const order: string[] = [];
     vi.mocked(deleteMyContent).mockImplementation(async (_b, withSongs) => void order.push(`cleanup:${withSongs}`));
     vi.mocked(deleteMyAvailabilityWithin).mockImplementation(async () => void order.push('availability'));
+    vi.mocked(leaveMyBackingTracksWithin).mockImplementation(async () => void order.push('files'));
     vi.mocked(dismissBand).mockImplementation(async () => void order.push('dismiss'));
     const onLeft = vi.fn(() => void order.push('left'));
     render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={onLeft} />);
     expect(screen.getByLabelText('Also delete the songs I suggested')).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Leave band' }));
     await waitFor(() => expect(onLeft).toHaveBeenCalled());
-    expect(order).toEqual(['cleanup:true', 'availability', 'dismiss', 'left']);
+    // Files are cleared with the rest, and once more after the membership is gone (a commit may have raced the first pass).
+    expect(order).toEqual(['cleanup:true', 'availability', 'files', 'dismiss', 'files', 'left']);
     expect(deleteMyAvailabilityWithin).toHaveBeenCalledWith('band-1');
-    expect(dismissBand).toHaveBeenCalledWith('band-1');
+    expect(leaveMyBackingTracksWithin).toHaveBeenCalledWith('band-1');
+    expect(dismissBand).toHaveBeenCalledWith('band-1', { filesCleaned: true });
   });
 
   it('a failure to drop the band row after a successful cleanup is shown, and nothing is reported as left', async () => {
@@ -136,7 +163,8 @@ describe('LeaveBandDialog', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Leave anyway' }));
     await waitFor(() => expect(onLeft).toHaveBeenCalledTimes(1));
     expect(deleteMyContent).toHaveBeenCalledTimes(1);
-    expect(dismissBand).toHaveBeenCalledWith('band-1');
+    // The dialog's own cleanup failed, so dismissBand keeps its best-effort file cleanup as another attempt.
+    expect(dismissBand).toHaveBeenCalledWith('band-1', { filesCleaned: false });
   });
 });
 
@@ -163,9 +191,14 @@ describe('LeaveBandDialog availability cleanup', () => {
     expect(deleteMyAvailabilityWithin).toHaveBeenCalledWith('band-1');
   });
 
+  it('warns that deleting a song also deletes the backing tracks on it, including other members\u2019', () => {
+    render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={() => {}} />);
+    expect(screen.getByText(/Deleting a song also deletes the backing tracks attached to it, including other members/)).toBeInTheDocument();
+  });
+
   it('says availability, gear and rigs are removed', () => {
     render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={() => {}} />);
-    expect(screen.getByText(/Your votes, availability, gear, rig diagrams and click tracks are removed/)).toBeInTheDocument();
+    expect(screen.getByText(/Your votes, availability, gear, rig diagrams, click tracks and backing tracks are removed/)).toBeInTheDocument();
   });
 
   it('deletes the gear and rig row along with the rest', async () => {
@@ -174,6 +207,26 @@ describe('LeaveBandDialog availability cleanup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leave band' }));
     await waitFor(() => expect(onLeft).toHaveBeenCalledTimes(1));
     expect(deleteMyRigWithin).toHaveBeenCalledWith('band-1');
+  });
+
+  it('a failed backing track cleanup offers "Leave anyway" and does not retry it', async () => {
+    vi.mocked(leaveMyBackingTracksWithin).mockRejectedValueOnce(new Error('busy'));
+    const onLeft = vi.fn();
+    render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={onLeft} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave band' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t remove all of your content');
+    expect(dismissBand).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave anyway' }));
+    await waitFor(() => expect(onLeft).toHaveBeenCalledTimes(1));
+    expect(leaveMyBackingTracksWithin).toHaveBeenCalledTimes(2); // the failed first pass, then the final sweep after dismissing
+  });
+
+  it('leaving still succeeds when the final file sweep after dismissing fails', async () => {
+    vi.mocked(leaveMyBackingTracksWithin).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('late'));
+    const onLeft = vi.fn();
+    render(<LeaveBandDialog band={band} onClose={() => {}} onLeft={onLeft} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave band' }));
+    await waitFor(() => expect(onLeft).toHaveBeenCalledTimes(1));
   });
 
   it('a failed rig cleanup offers "Leave anyway" and does not retry it', async () => {

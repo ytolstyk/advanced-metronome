@@ -1,6 +1,7 @@
 import {
   BAND_LIMITS,
   BAND_TEXT,
+  type BackingTrackRecord,
   type BandRecord,
   type ListAllResult,
   type SongColorRecord,
@@ -22,9 +23,10 @@ import {
   unwrap,
   updateBand,
 } from './bandsShared';
+import { removeSongBackingTracks, removeSongBackingTracksIfAny } from './backingTracksCleanup';
 import { PartialCopyError } from './partialCopyError';
 import { runPool } from './paginate';
-import { listSongColors, listSongs, listSongTrackMeta } from './bandReads';
+import { listBackingTracks, listSongColors, listSongs, listSongTrackMeta } from './bandReads';
 import { deleteMyLabelRows } from './colorLabelsApi';
 import { deleteMyColorRows } from './songColorsApi';
 import { deleteMyTrackRows } from './songTracksApi';
@@ -34,6 +36,8 @@ import { deleteVoteRow, listVotesByOwner, listVotesForSetList } from './songVote
 /** Parallelism for leave-band cleanup: a few set lists at a time, a few deletes per list. */
 const CLEANUP_LISTS_AT_ONCE = 3;
 const CLEANUP_DELETES_AT_ONCE = 6;
+/** Each song's track removal is a Lambda call, so fewer at a time than plain row deletes. */
+const CLEANUP_BACKING_AT_ONCE = 3;
 
 /**
  * Raw (unvalidated) songs and votes for a set list. Independent of the band view, so pages fetch
@@ -41,7 +45,7 @@ const CLEANUP_DELETES_AT_ONCE = 6;
  */
 export async function fetchSetListRows(setListId: string): Promise<SetListRows> {
   await requireAuth();
-  const [songs, votes, colors, clicks] = await Promise.all([
+  const [songs, votes, colors, clicks, backingTracks] = await Promise.all([
     listSongs(setListId),
     listVotesForSetList(setListId),
     // Colors are cosmetic: if they can't be read, show the songs without them (flagged incomplete).
@@ -54,8 +58,13 @@ export async function fetchSetListRows(setListId: string): Promise<SetListRows> 
       console.warn('Could not load song click tracks', e);
       return { items: [], incomplete: true };
     }),
+    // Backing tracks are an extra too: a failed read shows the songs without them (flagged incomplete).
+    listBackingTracks(setListId).catch((e): ListAllResult<BackingTrackRecord> => {
+      console.warn('Could not load backing tracks', e);
+      return { items: [], incomplete: true };
+    }),
   ]);
-  return { songs, votes, colors, clicks };
+  return { songs, votes, colors, clicks, backingTracks };
 }
 
 /**
@@ -234,6 +243,8 @@ export async function updateSong(songId: string, raw: RawSongInput): Promise<voi
 /** Deletes the caller's own song. An already-deleted song reads as Unauthorized, so that is only success once re-read shows it gone. */
 export async function deleteSong(songId: string): Promise<void> {
   await requireAuth();
+  // The tracks go first and a failure stops here: the Song row is what proves who may still clear them.
+  await removeSongBackingTracksIfAny(songId);
   await deleteConfirmed(
     () => client.models.Song.delete({ id: songId }),
     async () => {
@@ -242,6 +253,40 @@ export async function deleteSong(songId: string): Promise<void> {
     },
     'deleteSong',
   );
+}
+
+/**
+ * Ids of the songs in a set list that visibly have backing tracks: ONE read per list instead of one per song.
+ * `null` = not known (the read failed or was partial), in which case each song is probed on its own. The index
+ * is eventually consistent, so a track committed in the last moment can be missed (the quota reconcile and the
+ * operator sweep collect such a leftover).
+ */
+async function songIdsWithBackingTracks(setListId: string): Promise<Set<string> | null> {
+  try {
+    const rows = await listBackingTracks(setListId);
+    return rows.incomplete ? null : new Set(rows.items.map((row) => row.songId));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Deletes the caller's songs, tracks first. Songs without tracks (when that is known) are plain row deletes at
+ * full speed; the ones with tracks make a Lambda call, so fewer at a time. A song whose tracks could not be
+ * removed is kept and reported, never orphaned; every song is still attempted.
+ */
+async function deleteOwnSongs(songs: SongRecord[], withTracks: Set<string> | null): Promise<void> {
+  const deleteRow = (song: SongRecord) => deleteQuietly(() => client.models.Song.delete({ id: song.id }), 'deleteSong');
+  const needsTracksFirst = (song: SongRecord) => withTracks === null || withTracks.has(song.id);
+  const results = await Promise.allSettled([
+    runPool(CLEANUP_DELETES_AT_ONCE, songs.filter((s) => !needsTracksFirst(s)), deleteRow),
+    runPool(CLEANUP_BACKING_AT_ONCE, songs.filter(needsTracksFirst), async (song) => {
+      await (withTracks === null ? removeSongBackingTracksIfAny(song.id) : removeSongBackingTracks(song.id));
+      await deleteRow(song);
+    }),
+  ]);
+  const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+  if (failed) throw failed.reason;
 }
 
 /**
@@ -265,11 +310,10 @@ export async function deleteMyContent(band: BandRecord, includeSongs: boolean): 
       const votes = await listVotesByOwner(setListId, owner);
       await runPool(CLEANUP_DELETES_AT_ONCE, votes.items, (v) => deleteVoteRow(v.songId, owner));
       if (includeSongs) {
-        const songs = await listSongs(setListId);
-        await runPool(
-          CLEANUP_DELETES_AT_ONCE,
+        const [songs, withTracks] = await Promise.all([listSongs(setListId), songIdsWithBackingTracks(setListId)]);
+        await deleteOwnSongs(
           songs.items.filter((s) => s.owner === owner),
-          (s) => deleteQuietly(() => client.models.Song.delete({ id: s.id }), 'deleteSong'),
+          withTracks,
         );
       }
       // Last, so a failing colors read can't skip the votes and songs above.

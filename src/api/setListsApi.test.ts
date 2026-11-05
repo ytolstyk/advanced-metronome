@@ -2,7 +2,8 @@ import { PartialCopyError } from './partialCopyError';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BAND_LIMITS, PUBLIC_READ_PAGES, type BandRecord, type BandView, type ValidMember, type ValidSetList, type ValidSong } from '../bandTypes';
 
-const { m } = vi.hoisted(() => {
+const { m, mutations } = vi.hoisted(() => {
+  const mutations: Record<string, unknown> = {};
   const m = {
     Band: { get: vi.fn() },
     SetList: { create: vi.fn(), update: vi.fn() },
@@ -12,11 +13,15 @@ const { m } = vi.hoisted(() => {
     ColorLabel: { listColorLabelByBand: vi.fn(), delete: vi.fn() },
     graphql: vi.fn(),
   };
-  return { m };
+  return { m, mutations };
 });
 
 vi.mock('aws-amplify/data', () => ({
-  generateClient: vi.fn(() => ({ models: m, graphql: m.graphql })),
+  generateClient: vi.fn(() => ({ models: m, graphql: m.graphql, mutations })),
+}));
+vi.mock('./backingTracksCleanup', () => ({
+  removeSongBackingTracksIfAny: vi.fn(async () => undefined),
+  removeSongBackingTracks: vi.fn(async () => undefined),
 }));
 vi.mock('./authUtils', () => ({
   isAuthenticated: vi.fn(async () => true),
@@ -41,6 +46,7 @@ import {
 } from './setListsApi';
 import { fetchPublicSetListRows } from './bandReads';
 import { isAuthenticated } from './authUtils';
+import { removeSongBackingTracks, removeSongBackingTracksIfAny } from './backingTracksCleanup';
 import { NotSignedInError } from './bandsShared';
 
 const CONFLICT = [{ errorType: 'DynamoDB:ConditionalCheckFailedException', message: 'conditional' }];
@@ -1222,5 +1228,227 @@ describe('addSongsFromOtherLists', () => {
     expect(m.Song.create).toHaveBeenCalledTimes(20);
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(6);
+  });
+});
+
+describe('backing tracks in fetchSetListRows', () => {
+  const backingModel = { listBackingTrackBySetList: vi.fn() };
+  const models = m as unknown as Record<string, unknown>;
+  const row = (id: string) => ({
+    id,
+    owner: 'sub-bob',
+    bandId: 'band-1',
+    setListId: 'sl-1',
+    songId: 'a',
+    label: 'No drums',
+    forTags: ['drums'],
+    key: `bt/${id}`,
+    contentType: 'audio/mpeg',
+    bytes: 100,
+    format: 1,
+    createdAt: 'c',
+    updatedAt: 'u',
+  });
+
+  beforeEach(() => {
+    backingModel.listBackingTrackBySetList.mockReset();
+    models.BackingTrack = backingModel;
+    mutations.requestBackingTrackUpload = () => undefined;
+  });
+  afterEach(() => {
+    delete models.BackingTrack;
+    delete mutations.requestBackingTrackUpload;
+  });
+
+  it('includes the set list\'s backing track rows', async () => {
+    backingModel.listBackingTrackBySetList.mockResolvedValue({ data: [row('t1')], nextToken: null });
+    const rows = await fetchSetListRows('sl-1');
+    expect(backingModel.listBackingTrackBySetList).toHaveBeenCalledWith({ setListId: 'sl-1' }, { limit: 250, nextToken: undefined });
+    expect(rows.backingTracks?.incomplete).toBe(false);
+    expect(rows.backingTracks?.items.map((r) => r.id)).toEqual(['t1']);
+  });
+
+  it('is empty and complete (no query) when the backend predates the model', async () => {
+    delete mutations.requestBackingTrackUpload;
+    const rows = await fetchSetListRows('sl-1');
+    expect(rows.backingTracks).toEqual({ items: [], incomplete: false });
+    expect(backingModel.listBackingTrackBySetList).not.toHaveBeenCalled();
+  });
+
+  it('degrades a failed read to an empty, incomplete result instead of failing the page', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    m.Song.listSongBySetList.mockResolvedValue({ data: [songRow('a', 'sub-bob')], nextToken: null });
+    backingModel.listBackingTrackBySetList.mockResolvedValue({ data: null, errors: [{ errorType: 'InternalFailure', message: 'boom' }] });
+    const rows = await fetchSetListRows('sl-1');
+    expect(rows.backingTracks).toEqual({ items: [], incomplete: true });
+    expect(rows.songs.items.map((s) => s.id)).toEqual(['a']);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('degrades a thrown (network) failure the same way', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    backingModel.listBackingTrackBySetList.mockRejectedValue(new Error('network down'));
+    const rows = await fetchSetListRows('sl-1');
+    expect(rows.backingTracks).toEqual({ items: [], incomplete: true });
+    warn.mockRestore();
+  });
+
+  it('a failed songs read still fails the page even when the tracks are fine', async () => {
+    backingModel.listBackingTrackBySetList.mockResolvedValue({ data: [], nextToken: null });
+    m.Song.listSongBySetList.mockResolvedValue({ data: null, errors: [{ message: 'gsi down' }] });
+    await expect(fetchSetListRows('sl-1')).rejects.toThrow('gsi down');
+  });
+});
+
+describe('backing tracks when songs are deleted', () => {
+  beforeEach(() => {
+    vi.mocked(removeSongBackingTracksIfAny).mockReset().mockResolvedValue(undefined);
+  });
+
+  describe('deleteSong', () => {
+    it('removes the song\'s backing tracks BEFORE deleting the song', async () => {
+      const order: string[] = [];
+      vi.mocked(removeSongBackingTracksIfAny).mockImplementation(async () => {
+        order.push('tracks');
+      });
+      m.Song.delete.mockImplementation(async () => {
+        order.push('song');
+        return { data: {} };
+      });
+      await deleteSong('s1');
+      expect(order).toEqual(['tracks', 'song']);
+      expect(removeSongBackingTracksIfAny).toHaveBeenCalledWith('s1');
+    });
+
+    it('aborts without deleting the song when the tracks could not be removed', async () => {
+      vi.mocked(removeSongBackingTracksIfAny).mockRejectedValue(new Error("That didn't go through. Please try again in a moment."));
+      await expect(deleteSong('s1')).rejects.toThrow("That didn't go through");
+      expect(m.Song.delete).not.toHaveBeenCalled();
+      expect(m.Song.get).not.toHaveBeenCalled();
+    });
+
+    it('checks sign-in before touching tracks', async () => {
+      vi.mocked(isAuthenticated).mockResolvedValue(false);
+      await expect(deleteSong('s1')).rejects.toBeInstanceOf(NotSignedInError);
+      expect(removeSongBackingTracksIfAny).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteMyContent', () => {
+    const backingModel = { listBackingTrackBySetList: vi.fn() };
+    const models = m as unknown as Record<string, unknown>;
+    const trackRow = (songId: string) => ({ id: `t-${songId}`, songId, owner: 'sub-bob', setListId: 'sl-1' });
+    /** The songs of the set list that visibly have tracks. */
+    const tracksOn = (...songIds: string[]) =>
+      backingModel.listBackingTrackBySetList.mockResolvedValue({ data: songIds.map(trackRow), nextToken: null });
+
+    beforeEach(() => {
+      vi.mocked(removeSongBackingTracks).mockReset().mockResolvedValue(undefined);
+      backingModel.listBackingTrackBySetList.mockReset();
+      models.BackingTrack = backingModel;
+      mutations.requestBackingTrackUpload = () => undefined;
+      m.Vote.listVoteBySetList.mockResolvedValue({ data: [], nextToken: null });
+      m.Song.listSongBySetList.mockResolvedValue({
+        data: [songRow('mine-1', 'sub-me'), songRow('theirs', 'sub-bob'), songRow('mine-2', 'sub-me')],
+        nextToken: null,
+      });
+      m.Song.delete.mockResolvedValue({ data: {} });
+    });
+    afterEach(() => {
+      delete models.BackingTrack;
+      delete mutations.requestBackingTrackUpload;
+    });
+
+    it('reads the set list\'s tracks ONCE, not once per song', async () => {
+      tracksOn();
+      await deleteMyContent(band(), true);
+      expect(backingModel.listBackingTrackBySetList).toHaveBeenCalledTimes(1);
+      expect(removeSongBackingTracksIfAny).not.toHaveBeenCalled();
+    });
+
+    it('only songs that have tracks call the Lambda; the others are plain deletes', async () => {
+      tracksOn('mine-1');
+      await deleteMyContent(band(), true);
+      expect(vi.mocked(removeSongBackingTracks).mock.calls.map((c) => c[0])).toEqual(['mine-1']);
+      expect(m.Song.delete).toHaveBeenCalledWith({ id: 'mine-1' });
+      expect(m.Song.delete).toHaveBeenCalledWith({ id: 'mine-2' });
+    });
+
+    it('clears an owned song\'s tracks before the song, and never touches other people\'s songs', async () => {
+      tracksOn('mine-1', 'mine-2', 'theirs');
+      const order: string[] = [];
+      vi.mocked(removeSongBackingTracks).mockImplementation(async (id) => {
+        order.push(`tracks:${id}`);
+      });
+      m.Song.delete.mockImplementation(async ({ id }: { id: string }) => {
+        order.push(`song:${id}`);
+        return { data: {} };
+      });
+      await deleteMyContent(band(), true);
+      expect(order.indexOf('tracks:mine-1')).toBeLessThan(order.indexOf('song:mine-1'));
+      expect(order.indexOf('tracks:mine-2')).toBeLessThan(order.indexOf('song:mine-2'));
+      expect(order.some((o) => o.includes('theirs'))).toBe(false);
+    });
+
+    it('when the tracks read fails, falls back to probing every owned song itself', async () => {
+      backingModel.listBackingTrackBySetList.mockRejectedValue(new Error('index down'));
+      await deleteMyContent(band(), true);
+      expect(vi.mocked(removeSongBackingTracksIfAny).mock.calls.map((c) => c[0]).sort()).toEqual(['mine-1', 'mine-2']);
+      expect(removeSongBackingTracks).not.toHaveBeenCalled();
+      expect(m.Song.delete).toHaveBeenCalledTimes(2);
+    });
+
+    it('treats a partial tracks read as unknown, not as "no tracks"', async () => {
+      // 250 rows per page and a page cap: a nextToken on the last allowed page means the read was cut short.
+      backingModel.listBackingTrackBySetList.mockResolvedValue({ data: [], nextToken: 'more' });
+      await deleteMyContent(band(), true);
+      expect(removeSongBackingTracksIfAny).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not read tracks or touch songs when songs are not included', async () => {
+      await deleteMyContent(band(), false);
+      expect(backingModel.listBackingTrackBySetList).not.toHaveBeenCalled();
+      expect(removeSongBackingTracks).not.toHaveBeenCalled();
+      expect(m.Song.delete).not.toHaveBeenCalled();
+    });
+
+    it('keeps a song whose tracks could not be removed, still handles the others, and reports the failure', async () => {
+      tracksOn('mine-1', 'mine-2');
+      vi.mocked(removeSongBackingTracks).mockImplementation(async (id) => {
+        if (id === 'mine-1') throw new Error('tracks stuck');
+      });
+      await expect(deleteMyContent(band(), true)).rejects.toThrow('tracks stuck');
+      expect(m.Song.delete).not.toHaveBeenCalledWith({ id: 'mine-1' });
+      expect(m.Song.delete).toHaveBeenCalledWith({ id: 'mine-2' });
+    });
+
+    it('a failed track removal does not stop the label and click track cleanup', async () => {
+      tracksOn('mine-1');
+      vi.mocked(removeSongBackingTracks).mockRejectedValue(new Error('tracks stuck'));
+      m.ColorLabel.listColorLabelByBand.mockResolvedValue({ data: [{ bandId: 'band-1', color: 'red', owner: 'sub-me', label: 'x' }], nextToken: null });
+      m.ColorLabel.delete.mockResolvedValue({ data: {} });
+      await expect(deleteMyContent(band(), true)).rejects.toThrow('tracks stuck');
+      expect(m.ColorLabel.delete).toHaveBeenCalledTimes(1);
+    });
+
+    it('songs with tracks are removed at most 3 at a time', async () => {
+      m.Song.listSongBySetList.mockResolvedValue({
+        data: Array.from({ length: 9 }, (_, i) => songRow(`s${i}`, 'sub-me')),
+        nextToken: null,
+      });
+      tracksOn(...Array.from({ length: 9 }, (_, i) => `s${i}`));
+      let inFlight = 0;
+      let peak = 0;
+      vi.mocked(removeSongBackingTracks).mockImplementation(async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+      });
+      await deleteMyContent(band(), true);
+      expect(peak).toBeGreaterThan(1);
+      expect(peak).toBeLessThanOrEqual(3);
+    });
   });
 });

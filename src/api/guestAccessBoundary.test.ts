@@ -36,4 +36,16 @@ describe('guest read boundary', () => {
     expect(filesUsing('listSongTrackMeta')).toEqual(['api/bandReads.ts', 'api/setListsApi.ts']);
     expect(filesUsing('songTracksApi')).toEqual(['api/setListsApi.ts', 'components/ClickTrack/SaveToBandDialog.tsx', 'hooks/useSongTracks.ts']);
   });
+
+  it('backing tracks are signed-in only: the public loader and its row fetch never touch them', () => {
+    // No guest rule exists on the model; this keeps a later edit from wiring tracks (or their signed audio links) into the public page.
+    // The model is read in exactly one module (the set list read and the per-song probe both live there).
+    expect(filesUsing('models.BackingTrack')).toEqual(['api/bandReads.ts']);
+    expect(filesUsing('listBackingTracks')).toEqual(['api/bandReads.ts', 'api/setListsApi.ts']);
+    expect(filesUsing('ackingTrack')).not.toContain('api/sharedSetListApi.ts');
+    const reads = Object.entries(sources).find(([path]) => path.endsWith('/bandReads.ts'))?.[1] ?? '';
+    const publicFetch = reads.slice(reads.indexOf('export async function fetchPublicSetListRows'));
+    expect(publicFetch.length).toBeGreaterThan(0);
+    expect(publicFetch).not.toMatch(/backingTracks|BackingTrack/);
+  });
 });

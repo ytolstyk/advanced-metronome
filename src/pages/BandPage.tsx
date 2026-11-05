@@ -30,6 +30,8 @@ import {
   renameBand,
   unbanMember,
 } from '../api/bandsApi';
+import { removeMemberBackingTracks } from '../api/backingTracksCleanup';
+import { hasBackingTrackModel } from '../api/bandReads';
 import { createSetList, renameSetList, reorderSetLists, setSetListShared } from '../api/setListsApi';
 import { BAND_GONE_TITLES, BAND_LIMITS, type BandLoadResult, type BandView } from '../bandTypes';
 import { useActionThenReload, useAsyncAction } from '../hooks/useAsyncAction';
@@ -200,6 +202,9 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
         view={view}
         onRemove={(sub, name) => setDialog({ kind: 'remove-member', sub, name })}
         onRestore={(sub) => void act(() => unbanMember(band.id, sub))}
+        onDeleteFiles={
+          hasBackingTrackModel() ? (sub) => void act(() => removeMemberBackingTracks(band.id, { memberSub: sub })) : undefined
+        }
         onEditProfile={() => setDialog({ kind: 'edit-profile' })}
       />
       <InviteSection view={view} onReset={() => setDialog({ kind: 'reset-code' })} onChanged={settled} />
@@ -254,7 +259,7 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
               Anyone with the link can view this list without signing in. Because of how the backend is secured,
               anyone with the link can also read the rest of this band’s data: the invite code, members’ display
               names, instruments and account IDs, votes, your other set lists, each member’s availability (the times they
-              marked free, which can show when they’re away) and each member’s gear and rig diagrams and the click tracks attached to songs. “Stop sharing” hides the list in the app but
+              marked free, which can show when they’re away) and each member’s gear and rig diagrams, the click tracks attached to songs and, once they sign in, the backing track audio files attached to songs. “Stop sharing” hides the list in the app but
               can’t take that access back from people who already have the link. Links and notes on the page come
               from band members and aren’t checked.
             </>

@@ -1,4 +1,5 @@
 import { FLAC_DOWNLOAD_HINT } from '@/audio/clickExportSinks';
+import type { ReactNode } from 'react';
 import { Download, ExternalLink, EyeOff, Music, Pencil, Play, Square, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -43,6 +44,8 @@ interface SongRowProps {
   isOwner: boolean;
   isVoting: boolean;
   clickTrack?: SongClickTrackControls;
+  /** The song's backing tracks panel, when this backend and the viewer support it. */
+  backingTracks?: ReactNode;
   onVote: (value: VoteValue) => void;
   onColor: (color: SongColorKey | null) => void;
   onEdit: () => void;
@@ -62,6 +65,7 @@ export function SongRow({
   isOwner,
   isVoting,
   clickTrack,
+  backingTracks,
   onVote,
   onColor,
   onEdit,
@@ -92,6 +96,7 @@ export function SongRow({
         <VoteButtons songTitle={song.title} myVote={myVote} tally={tally} disabled={isVoting} onVote={onVote} />
       </div>
       {clickTrack && <SongClickTrackStrip songTitle={song.title} track={clickTrack} />}
+      {backingTracks}
       <div className="mt-2 flex flex-wrap gap-1 pl-9">
         <SongColorPicker songTitle={song.title} color={color} labels={colorLabels} onChange={onColor} />
         {isAuthor && (

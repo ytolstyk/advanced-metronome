@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup as cleanupAll, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { BAND_LIMITS } from '../bandTypes';
-import type { BandRecord, BandView, ValidSong, ColorLabelRecord, SongColorRecord, SongRecord, SongTrackMetaRecord, VoteRecord, ValidMember, ValidSetList } from '../bandTypes';
+import type { BackingTrackRecord, BandRecord, BandView, ValidSong, ColorLabelRecord, SongColorRecord, SongRecord, SongTrackMetaRecord, VoteRecord, ValidMember, ValidSetList } from '../bandTypes';
 import type { TrackPiece } from '../audio/ClickTrackEngine';
 import { SONG_COLOR_STYLES } from '../bandSongColors';
 import userEvent from '@testing-library/user-event';
+import { committedKey } from '../backingTrackFormat';
 
 vi.mock('@aws-amplify/ui-react', () => ({
   useAuthenticator: () => ({ authStatus: 'authenticated' }),
@@ -33,6 +34,15 @@ vi.mock('../audio/ClickTrackEngine', async (importOriginal) => ({
   }),
 }));
 vi.mock('../audio/exportClickTrack', () => ({ exportClickTrack: vi.fn() }));
+vi.mock('../api/backingTracksApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api/backingTracksApi')>()),
+  isBackingTracksReady: vi.fn(() => false),
+  areBackingTrackUploadsOn: vi.fn(() => false),
+  addBackingTrack: vi.fn(),
+  editBackingTrack: vi.fn(),
+  removeBackingTracks: vi.fn(),
+  getBackingTrackUrl: vi.fn(),
+}));
 vi.mock('../api/colorLabelsApi', () => ({ fetchColorLabelRows: vi.fn(), setColorLabel: vi.fn() }));
 vi.mock('../api/setListsApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/setListsApi')>()),
@@ -53,6 +63,14 @@ import { setSongColor } from '../api/songColorsApi';
 import { clearSongTrack, getSongTrack, type SongTrackRead } from '../api/songTracksApi';
 import { exportClickTrack } from '../audio/exportClickTrack';
 import { fetchColorLabelRows, setColorLabel } from '../api/colorLabelsApi';
+import {
+  addBackingTrack,
+  areBackingTrackUploadsOn,
+  editBackingTrack,
+  getBackingTrackUrl,
+  isBackingTracksReady,
+  removeBackingTracks,
+} from '../api/backingTracksApi';
 
 const ME = 'sub-me';
 const BOB = 'sub-bob';
@@ -146,6 +164,7 @@ function setup(
   colors: SongColorRecord[] = [],
   labels: ColorLabelRecord[] = [],
   clicks: SongTrackMetaRecord[] = [],
+  backing?: { items: BackingTrackRecord[]; incomplete?: boolean },
 ) {
   vi.mocked(loadBandView).mockResolvedValue({ status: 'ok', view });
   vi.mocked(fetchColorLabelRows).mockResolvedValue(emptyPage(labels));
@@ -154,6 +173,7 @@ function setup(
     votes: emptyPage(votes),
     colors: emptyPage(colors),
     clicks: emptyPage(clicks),
+    ...(backing ? { backingTracks: { items: backing.items, incomplete: backing.incomplete ?? false } } : {}),
   });
   return render(
     <MemoryRouter initialEntries={['/bands/band-1/setlists/sl-1']}>
@@ -171,6 +191,7 @@ const score = (title: string) => within(row(title)).getByLabelText(/^Score/);
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchColorLabelRows).mockResolvedValue(emptyPage([]));
+  vi.mocked(isBackingTracksReady).mockReturnValue(false);
 });
 
 describe('SetListPage', () => {
@@ -338,7 +359,7 @@ describe('SetListPage', () => {
   it('warns when the member roster was too long to load (members, songs or votes may be missing)', async () => {
     setup(makeView({ incomplete: true }));
     await screen.findByText('Song a');
-    expect(screen.getByText(/some members, songs, votes, colors or click tracks may be missing/)).toBeInTheDocument();
+    expect(screen.getByText(/some members, songs, votes, colors, click tracks or backing tracks may be missing/)).toBeInTheDocument();
   });
 
   it('a failed hide shows the error and STILL reloads, so nothing half-applied stays on screen', async () => {
@@ -577,7 +598,7 @@ describe('SetListPage', () => {
       );
       await screen.findByText('Song a');
       expect(
-        screen.getByText('This list was too long to load completely, so some members, songs, votes, colors or click tracks may be missing.'),
+        screen.getByText('This list was too long to load completely, so some members, songs, votes, colors, click tracks or backing tracks may be missing.'),
       ).toBeInTheDocument();
     });
 
@@ -655,7 +676,7 @@ describe('SetListPage', () => {
       );
       expect(await screen.findByText('Song a')).toBeInTheDocument();
       expect(
-        screen.getByText('This list was too long to load completely, so some members, songs, votes, colors or click tracks may be missing.'),
+        screen.getByText('This list was too long to load completely, so some members, songs, votes, colors, click tracks or backing tracks may be missing.'),
       ).toBeInTheDocument();
     });
 
@@ -1437,5 +1458,353 @@ describe('add songs from another set list', () => {
     expect(await screen.findByText('Added 0 of 1 songs. write failed')).toBeInTheDocument();
     await waitFor(() => expect(loadBandView).toHaveBeenCalledTimes(2));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('SetListPage backing tracks', () => {
+  const trackId = (n: number) => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const backingRow = (n: number, songId: string, over: Partial<BackingTrackRecord> = {}): BackingTrackRecord => {
+    const owner = over.owner ?? BOB;
+    return {
+      id: trackId(n),
+      owner,
+      bandId: 'band-1',
+      setListId: 'sl-1',
+      songId,
+      label: `Track ${n}`,
+      forTags: [],
+      key: committedKey({ sub: owner, bandId: 'band-1', songId, trackId: trackId(n), ext: 'mp3' }),
+      contentType: 'audio/mpeg',
+      bytes: 480 * 1024,
+      format: 1,
+      createdAt: `2026-02-01T00:00:0${n}Z`,
+      updatedAt: '2026-02-01T00:00:00Z',
+      ...over,
+    };
+  };
+  const songs = () => [song('a', BOB, '2026-01-02T00:00:00Z'), song('b', ME, '2026-01-02T00:00:01Z')];
+  const withBacking = (items: BackingTrackRecord[], view: BandView = makeView(), incomplete = false) =>
+    setup(view, songs(), [], [], [], [], { items, incomplete });
+
+  beforeEach(() => {
+    vi.mocked(isBackingTracksReady).mockReturnValue(true);
+    vi.mocked(areBackingTrackUploadsOn).mockReturnValue(true);
+    vi.mocked(addBackingTrack).mockResolvedValue(undefined);
+    vi.mocked(editBackingTrack).mockResolvedValue(undefined);
+    vi.mocked(removeBackingTracks).mockResolvedValue(undefined);
+  });
+
+  const panelToggle = (song: string, count: number) =>
+    within(row(`Song ${song}`)).getByRole('button', { name: `Backing tracks for Song ${song} (${count})` });
+  const openPanel = async (song: string, count: number) => {
+    fireEvent.click(panelToggle(song, count));
+    await within(row(`Song ${song}`)).findByRole('list');
+  };
+
+  describe('uploads switched off on the backend', () => {
+    beforeEach(() => {
+      vi.mocked(areBackingTrackUploadsOn).mockReturnValue(false);
+    });
+
+    it('still shows and plays the tracks that exist, but offers no Add button', async () => {
+      withBacking([backingRow(1, 'a')]);
+      await screen.findByText('Song a');
+      await openPanel('a', 1);
+      expect(within(row('Song a')).getByText('Track 1')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Add a backing track/ })).not.toBeInTheDocument();
+    });
+
+    it('shows nothing at all on a song with no tracks, instead of an Add button that cannot work', async () => {
+      withBacking([backingRow(1, 'a')]);
+      await screen.findByText('Song b');
+      expect(within(row('Song b')).queryByRole('button', { name: /Backing tracks for/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('visibility', () => {
+    it('renders nothing when the backend or storage is not ready, even if rows exist', async () => {
+      vi.mocked(isBackingTracksReady).mockReturnValue(false);
+      withBacking([backingRow(1, 'a')]);
+      await screen.findByText('Song a');
+      expect(screen.queryByRole('button', { name: /Backing tracks for/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Add a backing track/ })).not.toBeInTheDocument();
+    });
+
+    it('shows each song a collapsed panel with the count and an Add button for a member', async () => {
+      withBacking([backingRow(1, 'a'), backingRow(2, 'a')]);
+      await screen.findByText('Song a');
+      expect(panelToggle('a', 2)).toHaveAttribute('aria-expanded', 'false');
+      expect(panelToggle('b', 0)).toBeInTheDocument();
+      expect(within(row('Song a')).getByRole('button', { name: 'Add a backing track to Song a' })).toBeEnabled();
+      expect(within(row('Song b')).getByRole('button', { name: 'Add a backing track to Song b' })).toBeEnabled();
+    });
+
+    it('lists the tracks with their author when expanded', async () => {
+      withBacking([backingRow(1, 'a', { label: 'No drums', forTags: ['drums'] })]);
+      await screen.findByText('Song a');
+      await openPanel('a', 1);
+      const item = within(row('Song a')).getByRole('listitem');
+      expect(item).toHaveTextContent('No drums');
+      expect(item).toHaveTextContent('by Bob');
+      expect(item).toHaveTextContent('MP3 480 KB');
+    });
+
+    it('hides tracks of a banned or non-member author', async () => {
+      withBacking([backingRow(1, 'a', { owner: 'sub-mallory' }), backingRow(2, 'a')]);
+      await screen.findByText('Song a');
+      expect(panelToggle('a', 1)).toBeInTheDocument();
+    });
+
+    it('a non-member never reaches the panels (the page asks them to join first)', async () => {
+      withBacking([backingRow(1, 'a')], makeView({ isMember: false }));
+      expect(await screen.findByText('Join this band to see its set lists')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Backing tracks for/ })).not.toBeInTheDocument();
+    });
+
+    it('warns that the list may be partial when the backing track read was incomplete', async () => {
+      withBacking([], makeView(), true);
+      expect(await screen.findByText(/backing tracks may be missing/)).toBeInTheDocument();
+    });
+  });
+
+  describe('adding', () => {
+    const file = () => new File(['audio'], 'no_drums.mp3', { type: 'audio/mpeg' });
+    async function openAdd(songTitle = 'Song a') {
+      fireEvent.click(within(row(songTitle)).getByRole('button', { name: `Add a backing track to ${songTitle}` }));
+      return screen.findByRole('heading', { name: 'Add a backing track' });
+    }
+    const submitAdd = async () => {
+      fireEvent.change(screen.getByLabelText('Audio file'), { target: { files: [file()] } });
+      fireEvent.click(screen.getByRole('button', { name: 'Add track' }));
+    };
+
+    it('opens the add dialog for the right song, with no network call yet', async () => {
+      withBacking([]);
+      await screen.findByText('Song a');
+      await openAdd('Song b');
+      expect(screen.getByText(/For “Song b”/)).toBeInTheDocument();
+      expect(addBackingTrack).not.toHaveBeenCalled();
+    });
+
+    it('uploads for that song with the cleaned name, then reloads the list and closes', async () => {
+      withBacking([]);
+      await screen.findByText('Song a');
+      await openAdd();
+      await submitAdd();
+      await waitFor(() => expect(addBackingTrack).toHaveBeenCalledTimes(1));
+      const arg = vi.mocked(addBackingTrack).mock.calls[0][0];
+      expect(arg.song).toEqual(expect.objectContaining({ id: 'a', bandId: 'band-1' }));
+      expect(arg.file.name).toBe('no_drums.mp3');
+      expect(arg.label).toBe('no drums');
+      expect(arg.tags).toEqual([]);
+      expect(typeof arg.onProgress).toBe('function');
+      expect(arg.signal).toBeInstanceOf(AbortSignal);
+      await waitFor(() => expect(fetchSetListRows).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(screen.queryByRole('heading', { name: 'Add a backing track' })).not.toBeInTheDocument());
+    });
+
+    // The catch-up read a moment later is covered with fake timers in hooks/useBackingTrackSection.test.tsx.
+
+    it('reloads even when the upload fails (the file may have landed), and keeps the dialog with the message', async () => {
+      vi.mocked(addBackingTrack).mockRejectedValue(new Error('The connection dropped. Check it and try again.'));
+      withBacking([]);
+      await screen.findByText('Song a');
+      await openAdd();
+      await submitAdd();
+      expect(await screen.findByRole('alert')).toHaveTextContent('The connection dropped. Check it and try again.');
+      await waitFor(() => expect(fetchSetListRows).toHaveBeenCalledTimes(2));
+      expect(screen.getByRole('heading', { name: 'Add a backing track' })).toBeInTheDocument();
+    });
+
+    it('passes the progress callback through so the dialog can show it', async () => {
+      let report!: (fraction: number) => void;
+      let finish!: () => void;
+      vi.mocked(addBackingTrack).mockImplementation(async ({ onProgress }) => {
+        report = onProgress!;
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+      });
+      withBacking([]);
+      await screen.findByText('Song a');
+      await openAdd();
+      await submitAdd();
+      await screen.findByText('Uploading… 0%');
+      report(0.5);
+      expect(await screen.findByText('Uploading… 50%')).toBeInTheDocument();
+      finish();
+    });
+
+    it('is disabled for a song that already has 10 tracks', async () => {
+      withBacking(Array.from({ length: 10 }, (_, i) => backingRow(i, 'a')));
+      await screen.findByText('Song a');
+      expect(within(row('Song a')).getByRole('button', { name: 'Add a backing track to Song a' })).toBeDisabled();
+      expect(within(row('Song b')).getByRole('button', { name: 'Add a backing track to Song b' })).toBeEnabled();
+    });
+  });
+
+  describe('editing', () => {
+    it('Edit opens the dialog prefilled, saves through the hook and reloads', async () => {
+      withBacking([backingRow(1, 'b', { owner: ME, label: 'Click only', forTags: ['guitar'] })]);
+      await screen.findByText('Song b');
+      await openPanel('b', 1);
+      fireEvent.click(within(row('Song b')).getByRole('button', { name: 'Edit Click only' }));
+      expect(await screen.findByRole('heading', { name: 'Edit backing track' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Name')).toHaveValue('Click only');
+      expect(screen.getByRole('button', { name: 'Guitar' })).toHaveAttribute('aria-pressed', 'true');
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Click + guide' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(editBackingTrack).toHaveBeenCalledWith(trackId(1), 'Click + guide', ['guitar']));
+      await waitFor(() => expect(fetchSetListRows).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(screen.queryByRole('heading', { name: 'Edit backing track' })).not.toBeInTheDocument());
+    });
+
+    it('a failed edit shows the message, still reloads and keeps the dialog', async () => {
+      vi.mocked(editBackingTrack).mockRejectedValue(new Error("You can't change that track."));
+      withBacking([backingRow(1, 'b', { owner: ME })]);
+      await screen.findByText('Song b');
+      await openPanel('b', 1);
+      fireEvent.click(within(row('Song b')).getByRole('button', { name: 'Edit Track 1' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent("You can't change that track.");
+      await waitFor(() => expect(fetchSetListRows).toHaveBeenCalledTimes(2));
+    });
+
+    it('does not offer Edit on someone else\'s track, even to the band owner', async () => {
+      withBacking([backingRow(1, 'a')], makeView({ isOwner: true, sub: OWNER }));
+      await screen.findByText('Song a');
+      await openPanel('a', 1);
+      expect(within(row('Song a')).queryByRole('button', { name: /^Edit Track/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('removing', () => {
+    const removeButton = (title: string, label: string) => within(row(title)).getByRole('button', { name: `Remove ${label}` });
+
+    it('confirms first, for your own track says the file goes for everyone, then removes and reloads', async () => {
+      withBacking([backingRow(1, 'b', { owner: ME, label: 'Mine' })]);
+      await screen.findByText('Song b');
+      await openPanel('b', 1);
+      fireEvent.click(removeButton('Song b', 'Mine'));
+      expect(await screen.findByText('Remove “Mine”?')).toBeInTheDocument();
+      expect(screen.getByText('The audio file is deleted for everyone in the band.')).toBeInTheDocument();
+      expect(removeBackingTracks).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+      await waitFor(() => expect(removeBackingTracks).toHaveBeenCalledWith([trackId(1)]));
+      await waitFor(() => expect(fetchSetListRows).toHaveBeenCalledTimes(2));
+    });
+
+    it('for someone else\'s track (band owner) names who added it', async () => {
+      withBacking([backingRow(1, 'a', { owner: BOB, label: 'Bob\'s mix' })], makeView({ isOwner: true, sub: OWNER }));
+      await screen.findByText('Song a');
+      await openPanel('a', 1);
+      fireEvent.click(removeButton('Song a', 'Bob\'s mix'));
+      expect(await screen.findByText('The audio file Bob added is deleted for everyone in the band.')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+      await waitFor(() => expect(removeBackingTracks).toHaveBeenCalledWith([trackId(1)]));
+    });
+
+    it('Cancel removes nothing', async () => {
+      withBacking([backingRow(1, 'b', { owner: ME })]);
+      await screen.findByText('Song b');
+      await openPanel('b', 1);
+      fireEvent.click(removeButton('Song b', 'Track 1'));
+      fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+      expect(removeBackingTracks).not.toHaveBeenCalled();
+    });
+
+    it('a failed removal shows the message in the dialog and still reloads', async () => {
+      vi.mocked(removeBackingTracks).mockRejectedValue(new Error("That didn't go through. Please try again in a moment."));
+      withBacking([backingRow(1, 'b', { owner: ME })]);
+      await screen.findByText('Song b');
+      await openPanel('b', 1);
+      fireEvent.click(removeButton('Song b', 'Track 1'));
+      fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+      expect(await screen.findByText("That didn't go through. Please try again in a moment.")).toBeInTheDocument();
+      await waitFor(() => expect(fetchSetListRows).toHaveBeenCalledTimes(2));
+    });
+
+    it('a plain member cannot remove someone else\'s track', async () => {
+      withBacking([backingRow(1, 'a')]);
+      await screen.findByText('Song a');
+      await openPanel('a', 1);
+      expect(within(row('Song a')).queryByRole('button', { name: /^Remove Track/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('deleting a song', () => {
+    it('warns that its backing tracks (including other members\') go with it', async () => {
+      withBacking([backingRow(1, 'b', { owner: BOB })]);
+      await screen.findByText('Song b');
+      fireEvent.click(within(row('Song b')).getByRole('button', { name: 'Delete Song b' }));
+      expect(
+        await screen.findByText('The song and its votes disappear from the set list, and so do the backing tracks attached to it (including other members’).'),
+      ).toBeInTheDocument();
+    });
+
+    it('keeps the short description for a song with no backing tracks', async () => {
+      withBacking([backingRow(1, 'a')]);
+      await screen.findByText('Song b');
+      fireEvent.click(within(row('Song b')).getByRole('button', { name: 'Delete Song b' }));
+      expect(await screen.findByText('The song and its votes disappear from the set list.')).toBeInTheDocument();
+    });
+
+    it('still warns when the feature is switched off but the song has tracks (their files go too)', async () => {
+      vi.mocked(isBackingTracksReady).mockReturnValue(false);
+      withBacking([backingRow(1, 'b')]);
+      await screen.findByText('Song b');
+      fireEvent.click(within(row('Song b')).getByRole('button', { name: 'Delete Song b' }));
+      expect(await screen.findByText(/so do the backing tracks attached to it/)).toBeInTheDocument();
+    });
+  });
+
+  describe('playing and downloading', () => {
+    class FakeAudio {
+      src = '';
+      currentTime = 0;
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      pause = vi.fn();
+      play = vi.fn(() => Promise.resolve());
+      onplaying: (() => void) | null = null;
+      removeAttribute = vi.fn();
+      load = vi.fn();
+    }
+    beforeEach(() => {
+      vi.stubGlobal('Audio', FakeAudio);
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('Play fetches the link for that track and flips to Stop', async () => {
+      vi.mocked(getBackingTrackUrl).mockResolvedValue('https://signed.example/1');
+      withBacking([backingRow(1, 'a', { label: 'No drums' })]);
+      await screen.findByText('Song a');
+      await openPanel('a', 1);
+      fireEvent.click(within(row('Song a')).getByRole('button', { name: 'Play No drums' }));
+      expect(await within(row('Song a')).findByRole('button', { name: 'Stop No drums' })).toBeInTheDocument();
+      expect(getBackingTrackUrl).toHaveBeenCalledWith(expect.objectContaining({ id: trackId(1), key: expect.stringContaining('bt/') }));
+    });
+
+    it('a failed Play shows the message above the list', async () => {
+      vi.mocked(getBackingTrackUrl).mockRejectedValue(new Error("That file isn't available. It may have been removed."));
+      withBacking([backingRow(1, 'a', { label: 'No drums' })]);
+      await screen.findByText('Song a');
+      await openPanel('a', 1);
+      fireEvent.click(within(row('Song a')).getByRole('button', { name: 'Play No drums' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent("That file isn't available. It may have been removed.");
+      expect(within(row('Song a')).getByRole('button', { name: 'Play No drums' })).toBeEnabled();
+    });
+
+    it('Download asks for an attachment link', async () => {
+      vi.mocked(getBackingTrackUrl).mockResolvedValue('https://signed.example/dl');
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+      withBacking([backingRow(1, 'a', { label: 'No drums' })]);
+      await screen.findByText('Song a');
+      await openPanel('a', 1);
+      fireEvent.click(within(row('Song a')).getByRole('button', { name: 'Download No drums' }));
+      await waitFor(() => expect(getBackingTrackUrl).toHaveBeenCalledWith(expect.objectContaining({ id: trackId(1) }), { download: true }));
+    });
   });
 });

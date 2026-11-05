@@ -2,6 +2,7 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
 import {
   BAND_LIMITS,
+  type BackingTrackRecord,
   type BandRecord,
   type ColorLabelRecord,
   type MemberRecord,
@@ -273,6 +274,24 @@ export function toSongTrackMeta(r: SongTrackIndexRow): SongTrackMetaRecord {
     setListId: r.setListId,
     format: r.format,
     bytes: r.bytes,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  };
+}
+
+export function toBackingTrack(r: Row<'BackingTrack'>): BackingTrackRecord {
+  return {
+    id: r.id,
+    owner: r.owner,
+    bandId: r.bandId,
+    setListId: r.setListId,
+    songId: r.songId,
+    label: r.label,
+    forTags: r.forTags,
+    key: r.key,
+    contentType: r.contentType,
+    bytes: r.bytes,
+    format: r.format,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };

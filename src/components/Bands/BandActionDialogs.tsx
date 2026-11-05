@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { leaveMyBackingTracksWithin } from '../../api/backingTracksCleanup';
 import { archiveSetList, deleteMyContent } from '../../api/setListsApi';
 import { deleteMyAvailabilityWithin } from '../../api/availabilityApi';
 import { deleteMyRigWithin } from '../../api/rigApi';
-import { banMember, deleteBand, dismissBand, resetInviteCode, type DeleteStep } from '../../api/bandsApi';
+import { banMemberAndRemoveFiles, deleteBand, dismissBand, resetInviteCode, type DeleteStep } from '../../api/bandsApi';
 import type { BandRecord } from '../../bandTypes';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -23,10 +24,10 @@ export function RemoveMemberDialog({ bandId, sub, name, onClose, onSettled }: Ba
       open
       onOpenChange={(open) => !open && onClose()}
       title={`Remove ${name}?`}
-      description="They disappear from the band and their songs and votes stop showing. You can restore them later. Someone who already has the band link could still read it."
+      description="They disappear from the band, their songs and votes stop showing, and their backing track files are deleted. You can restore them later. Someone who already has the band link could still read it."
       confirmLabel="Remove"
       destructive
-      onConfirm={async () => void (await banMember(bandId, sub))}
+      onConfirm={() => banMemberAndRemoveFiles(bandId, sub, name)}
       onSettled={onSettled}
     />
   );
@@ -69,7 +70,7 @@ export function LeaveBandDialog({ band, onClose, onLeft }: Pick<BaseProps, 'onCl
       open
       onOpenChange={(open) => !open && onClose()}
       title="Leave this band?"
-      description="Your votes, availability, gear, rig diagrams and click tracks are removed. You can rejoin later with an invite code."
+      description="Your votes, availability, gear, rig diagrams, click tracks and backing tracks are removed. You can rejoin later with an invite code."
       confirmLabel={cleanupFailed ? 'Leave anyway' : 'Leave band'}
       destructive
       onConfirm={async () => {
@@ -79,6 +80,7 @@ export function LeaveBandDialog({ band, onClose, onLeft }: Pick<BaseProps, 'onCl
             deleteMyContent(band, alsoDeleteSongs),
             deleteMyAvailabilityWithin(band.id),
             deleteMyRigWithin(band.id),
+            leaveMyBackingTracksWithin(band.id),
           ]);
           if (results.some((r) => r.status === 'rejected')) {
             // Offer to leave without the cleanup instead of silently leaving data behind.
@@ -86,7 +88,11 @@ export function LeaveBandDialog({ band, onClose, onLeft }: Pick<BaseProps, 'onCl
             throw new Error('Couldn’t remove all of your content. Leave anyway, or cancel and try again later.');
           }
         }
-        await dismissBand(band.id);
+        // After a failed first pass ("Leave anyway") let dismissBand's own best-effort cleanup have another go.
+        await dismissBand(band.id, { filesCleaned: !cleanupFailed });
+        // Once more now the membership is gone: closes the window where a commit raced the first pass.
+        // Bounded and never blocking: leaving has already worked.
+        await leaveMyBackingTracksWithin(band.id).catch(() => undefined);
         onLeft();
       }}
     >
@@ -99,6 +105,9 @@ export function LeaveBandDialog({ band, onClose, onLeft }: Pick<BaseProps, 'onCl
         />
         Also delete the songs I suggested
       </label>
+      <p className="text-xs text-muted-foreground">
+        Deleting a song also deletes the backing tracks attached to it, including other members’.
+      </p>
     </ConfirmDialog>
   );
 }

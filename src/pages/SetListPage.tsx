@@ -19,10 +19,18 @@ import { SuggestSongDialog } from '../components/Bands/SuggestSongDialog';
 import { hideSong, loadBandView, unhideSong } from '../api/bandsApi';
 import { fetchColorLabelRows } from '../api/colorLabelsApi';
 import { addSongsFromOtherLists, deleteSong, fetchSetListRows, reorderSongs, suggestSong, updateSong } from '../api/setListsApi';
-import { BAND_GONE_TITLES, BAND_LIMITS, type BandLoadResult, type BandView, type SetListView, type ValidSong } from '../bandTypes';
+import {
+  BAND_GONE_TITLES,
+  BAND_LIMITS,
+  type BandLoadResult,
+  type BandView,
+  type SetListView,
+  type ValidSong,
+} from '../bandTypes';
 import { bandPath } from '../bandRoutes';
 import { applySongOrder, songToRawInput } from '../bandUtils';
 import { assembleSetListView } from '../bandViews';
+import { useBackingTrackSection } from '../hooks/useBackingTrackSection';
 import { useColorLabels } from '../hooks/useColorLabels';
 import { useActionThenReload } from '../hooks/useAsyncAction';
 import { useLoader } from '../hooks/useLoader';
@@ -173,6 +181,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
   const listFull = list.songs.length >= BAND_LIMITS.maxSongsPerSetList;
 
   const nameOf = (sub: string) => view.displayNames.get(sub) ?? 'a member';
+  const backing = useBackingTrackSection({ list, view, fetchedAt, reload, nameOf });
 
   const clickTrackControls = (song: ValidSong): SongClickTrackControls | undefined => {
     const shown = tracks.trackFor(song.id);
@@ -243,10 +252,11 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
       {votes.error && <InlineAlert tone="error" className="mb-4">{votes.error}</InlineAlert>}
       {colors.error && <InlineAlert tone="error" className="mb-4">{colors.error}</InlineAlert>}
       {tracks.error && <InlineAlert tone="error" className="mb-4">{tracks.error}</InlineAlert>}
+      {backing.error && <InlineAlert tone="error" className="mb-4">{backing.error}</InlineAlert>}
       {actionError && <InlineAlert tone="error" className="mb-4">{actionError}</InlineAlert>}
       {(list.incomplete || view.incomplete) && (
         <InlineAlert tone="warning" className="mb-4">
-          This list was too long to load completely, so some members, songs, votes, colors or click tracks may be missing.
+          This list was too long to load completely, so some members, songs, votes, colors, click tracks or backing tracks may be missing.
         </InlineAlert>
       )}
 
@@ -285,6 +295,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
               isOwner={isOwner}
               isVoting={votes.isVoting(song.id)}
               clickTrack={clickTrackControls(song)}
+              backingTracks={backing.panelFor(song)}
               onVote={(value) => void votes.vote(song, value)}
               onColor={(color) => void colors.setColor(song, color)}
               onEdit={() => setEditing(song)}
@@ -377,6 +388,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
           }}
         />
       )}
+      {backing.dialogs}
       {removingTrack && (
         <ConfirmDialog
           open
@@ -394,7 +406,11 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
           open
           onOpenChange={(open) => !open && setDeleting(null)}
           title={`Delete “${deleting.title}”?`}
-          description="The song and its votes disappear from the set list."
+          description={
+            (list.backingTracks.get(deleting.id)?.length ?? 0) > 0
+              ? 'The song and its votes disappear from the set list, and so do the backing tracks attached to it (including other members’).'
+              : 'The song and its votes disappear from the set list.'
+          }
           confirmLabel="Delete"
           destructive
           onConfirm={() => deleteSong(deleting.id)}

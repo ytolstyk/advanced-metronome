@@ -1,8 +1,10 @@
+import { BACKING_TRACK_LIMITS } from '../backingTrackFormat';
 import {
   BAND_LIMITS,
   LIST_PAGE_SIZE,
   PUBLIC_READ_PAGES,
   SONG_COLOR_KEYS,
+  type BackingTrackRecord,
   type ColorLabelRecord,
   type ListAllResult,
   type ReadAuthMode,
@@ -15,6 +17,7 @@ import {
 import {
   bandsClient as client,
   SONG_TRACK_INDEX_FIELDS,
+  toBackingTrack,
   toColorLabel,
   toSong,
   toSongColor,
@@ -88,6 +91,41 @@ export async function listSongTrackMeta(setListId: string): Promise<ListAllResul
     );
     return { items: unwrap(res, 'listSongTrackMeta').map(toSongTrackMeta), nextToken: res.nextToken };
   }, TRACK_READ_PAGES);
+}
+
+/** The Lambda caps a band at 100 tracks, so a set list has at most that many; one page more is slack. */
+const BACKING_TRACK_READ_PAGES = Math.ceil(BACKING_TRACK_LIMITS.maxPerBand / LIST_PAGE_SIZE) + 1;
+
+/** Whether this backend has the backing-track model and mutations yet (the frontend can go live first). */
+export const hasBackingTrackModel = (): boolean =>
+  (client.models as { BackingTrack?: unknown }).BackingTrack !== undefined &&
+  typeof (client.mutations as { requestBackingTrackUpload?: unknown } | undefined)?.requestBackingTrackUpload === 'function';
+
+/**
+ * Raw (unvalidated) backing track rows by set list; pass them to `resolveBackingTracks`. Signed in
+ * only (no guest read rule). Empty (and complete) when the backend predates the model.
+ */
+export async function listBackingTracks(setListId: string): Promise<ListAllResult<BackingTrackRecord>> {
+  if (!hasBackingTrackModel()) return { items: [], incomplete: false };
+  return listAll(async (token) => {
+    const res = await client.models.BackingTrack.listBackingTrackBySetList({ setListId }, pageOpts(token));
+    return { items: unwrap(res, 'listBackingTracks').map(toBackingTrack), nextToken: res.nextToken };
+  }, BACKING_TRACK_READ_PAGES);
+}
+
+/**
+ * Whether a song visibly has backing tracks: true / false, or null when it could not be read. One cheap
+ * index read (limit 1) so ordinary song deletes need not call the Lambda. The index is eventually
+ * consistent: a track committed in the last moment can read as "none".
+ */
+export async function songHasBackingTracks(songId: string): Promise<boolean | null> {
+  try {
+    const res = await client.models.BackingTrack.listBackingTrackBySong({ songId }, { limit: 1 });
+    if (res.errors?.length) return null;
+    return res.data.length > 0;
+  } catch {
+    return null;
+  }
 }
 
 /** A valid band has at most members x palette colors label rows; one page more is slack, beyond that is a junk flood. */

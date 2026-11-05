@@ -20,6 +20,7 @@ function makeList(serverVote?: VoteValue, tally: SongTally = { up: serverVote ==
     colors: new Map(),
     myColorSongIds: new Set(),
     tracks: new Map(),
+    backingTracks: new Map(),
     myTrackSongIds: new Set(),
     colorLabels: new Map(),
     myLabelColors: new Set(),

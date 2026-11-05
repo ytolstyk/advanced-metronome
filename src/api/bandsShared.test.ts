@@ -42,6 +42,7 @@ import {
   toMember,
   toSetList,
   toSong,
+  toBackingTrack,
   toColorLabel,
   toSongColor,
   toVote,
@@ -396,6 +397,53 @@ describe('toSongColor', () => {
     const row = { songId: 's', bandId: 'b', setListId: 'sl', color: 'none' } as unknown as Parameters<typeof toSongColor>[0];
     expect(toSongColor(row).color).toBe('none');
     expect(toSongColor({ ...row, color: 'not-a-color' } as unknown as Parameters<typeof toSongColor>[0]).color).toBe('not-a-color');
+  });
+});
+
+describe('toBackingTrack', () => {
+  type Row = Parameters<typeof toBackingTrack>[0];
+  const row = {
+    id: 't-1',
+    owner: 'sub-x',
+    bandId: 'b',
+    setListId: 'sl',
+    songId: 's',
+    label: 'No drums',
+    forTags: ['drums', null],
+    key: 'bt/k',
+    contentType: 'audio/mpeg',
+    bytes: 1024,
+    format: 1,
+    createdAt: 'c',
+    updatedAt: 'u',
+    extra: 1,
+  } as unknown as Row;
+
+  it('copies exactly the fields the client reads and drops the rest', () => {
+    const out = toBackingTrack(row);
+    expect(out).toEqual({
+      id: 't-1',
+      owner: 'sub-x',
+      bandId: 'b',
+      setListId: 'sl',
+      songId: 's',
+      label: 'No drums',
+      forTags: ['drums', null],
+      key: 'bt/k',
+      contentType: 'audio/mpeg',
+      bytes: 1024,
+      format: 1,
+      createdAt: 'c',
+      updatedAt: 'u',
+    });
+    expect(out).not.toHaveProperty('extra');
+  });
+
+  it('passes stray values through untouched (resolveBackingTracks judges them)', () => {
+    const out = toBackingTrack({ ...row, contentType: 'text/html', label: 'a\u200bb', bytes: -5 } as unknown as Row);
+    expect(out.contentType).toBe('text/html');
+    expect(out.label).toBe('a\u200bb');
+    expect(out.bytes).toBe(-5);
   });
 });
 

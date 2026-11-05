@@ -28,9 +28,14 @@ vi.mock('./authUtils', () => ({
   isAuthenticated: vi.fn(async () => true),
   getCurrentUserSub: vi.fn(async () => 'sub-me'),
 }));
+vi.mock('./backingTracksCleanup', () => ({
+  cleanupMyBackingTracks: vi.fn(async () => undefined),
+  removeMemberBackingTracks: vi.fn(async () => undefined),
+}));
 
 import {
   banMember,
+  banMemberAndRemoveFiles,
   createBand,
   deleteBand,
   dismissBand,
@@ -54,6 +59,7 @@ import {
 } from './bandsApi';
 import { BandConflictError } from './bandsShared';
 import { isAuthenticated } from './authUtils';
+import { cleanupMyBackingTracks, removeMemberBackingTracks } from './backingTracksCleanup';
 
 const CONFLICT = [{ errorType: 'DynamoDB:ConditionalCheckFailedException', message: 'conditional' }];
 const UNAUTH = [{ errorType: 'Unauthorized', message: 'Not Authorized' }];
@@ -705,6 +711,50 @@ describe('dismissBand / leave', () => {
     m.Member.delete.mockResolvedValue({ data: null, errors: [{ message: 'throttled' }] });
     await expect(dismissBand('band-1')).rejects.toThrow('throttled');
   });
+
+  describe('backing track cleanup', () => {
+    beforeEach(() => {
+      vi.mocked(cleanupMyBackingTracks).mockReset().mockResolvedValue(undefined);
+    });
+
+    it('starts the best-effort cleanup for the band', async () => {
+      m.Member.delete.mockResolvedValue({ data: {} });
+      m.MyBand.delete.mockResolvedValue({ data: {} });
+      await dismissBand('band-1');
+      expect(cleanupMyBackingTracks).toHaveBeenCalledTimes(1);
+      expect(cleanupMyBackingTracks).toHaveBeenCalledWith('band-1');
+    });
+
+    it('does not wait for the cleanup: a hanging one cannot block the dismiss', async () => {
+      vi.mocked(cleanupMyBackingTracks).mockReturnValue(new Promise(() => undefined));
+      m.Member.delete.mockResolvedValue({ data: {} });
+      m.MyBand.delete.mockResolvedValue({ data: {} });
+      await expect(dismissBand('band-1')).resolves.toBeUndefined();
+      expect(m.Member.delete).toHaveBeenCalled();
+    });
+
+    it('skips the cleanup when the caller has already cleared the files (filesCleaned)', async () => {
+      m.Member.delete.mockResolvedValue({ data: {} });
+      m.MyBand.delete.mockResolvedValue({ data: {} });
+      await dismissBand('band-1', { filesCleaned: true });
+      expect(cleanupMyBackingTracks).not.toHaveBeenCalled();
+      expect(m.Member.delete).toHaveBeenCalledWith({ bandId: 'band-1', owner: ME });
+      expect(m.MyBand.delete).toHaveBeenCalledWith({ owner: ME, bandId: 'band-1' });
+    });
+
+    it.each([{}, { filesCleaned: false }])('still runs the cleanup with options %j', async (options) => {
+      m.Member.delete.mockResolvedValue({ data: {} });
+      m.MyBand.delete.mockResolvedValue({ data: {} });
+      await dismissBand('band-1', options);
+      expect(cleanupMyBackingTracks).toHaveBeenCalledWith('band-1');
+    });
+
+    it('does not run when signed out', async () => {
+      vi.mocked(isAuthenticated).mockResolvedValue(false);
+      await expect(dismissBand('band-1')).rejects.toThrow('Not authenticated');
+      expect(cleanupMyBackingTracks).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('owner moderation (version-locked partial updates)', () => {
@@ -938,6 +988,103 @@ describe('setInviteTtlDays', () => {
     for (const bad of [0, 8, 2.5, NaN]) await expect(setInviteTtlDays('band-1', bad)).rejects.toThrow('1 to 7 days');
     expect(m.graphql).not.toHaveBeenCalled();
     expect(m.Band.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('banMemberAndRemoveFiles', () => {
+  beforeEach(() => {
+    vi.mocked(removeMemberBackingTracks).mockReset().mockResolvedValue(undefined);
+  });
+
+  it('bans FIRST (a version-locked band write), then removes that member\'s files', async () => {
+    const order: string[] = [];
+    echoBandUpdates(bandRow({ version: 4 }));
+    const baseGraphql = m.graphql.getMockImplementation()!;
+    m.graphql.mockImplementation(async (arg: never) => {
+      order.push('ban');
+      return baseGraphql(arg);
+    });
+    vi.mocked(removeMemberBackingTracks).mockImplementation(async () => {
+      order.push('files');
+    });
+    await banMemberAndRemoveFiles('band-1', 'sub-bob', 'Bob');
+    expect(order).toEqual(['ban', 'files']);
+    expect(m.graphql.mock.calls[0][0].variables.input).toEqual({ id: 'band-1', version: 5, bannedSubs: ['sub-bob'] });
+    expect(removeMemberBackingTracks).toHaveBeenCalledWith('band-1', { memberSub: 'sub-bob' });
+  });
+
+  it('does not touch files when the ban itself fails', async () => {
+    echoBandUpdates();
+    await expect(banMemberAndRemoveFiles('band-1', 'sub-owner', 'Olivia')).rejects.toThrow('owner cannot be removed');
+    expect(removeMemberBackingTracks).not.toHaveBeenCalled();
+  });
+
+  it('keeps the ban and says the files may remain when the cleanup fails', async () => {
+    echoBandUpdates();
+    vi.mocked(removeMemberBackingTracks).mockRejectedValue(new Error("That didn't go through."));
+    await expect(banMemberAndRemoveFiles('band-1', 'sub-bob', 'Bob')).rejects.toThrow(
+      'Bob was removed, but some of their backing track files may remain. Press Remove again to retry, or use “Delete files” under Removed.',
+    );
+    expect(m.graphql).toHaveBeenCalledTimes(1); // the ban went through
+  });
+
+  it('pressing Remove again only retries the cleanup (an already-banned member changes nothing)', async () => {
+    echoBandUpdates(bandRow({ bannedSubs: ['sub-bob'] }));
+    await banMemberAndRemoveFiles('band-1', 'sub-bob', 'Bob');
+    expect(m.graphql).not.toHaveBeenCalled();
+    expect(removeMemberBackingTracks).toHaveBeenCalledWith('band-1', { memberSub: 'sub-bob' });
+  });
+});
+
+describe('deleteBand backing tracks', () => {
+  beforeEach(() => {
+    vi.mocked(removeMemberBackingTracks).mockReset().mockResolvedValue(undefined);
+    m.SetList.update.mockResolvedValue({ data: {} });
+    m.BandInvite.update.mockResolvedValue({ data: {} });
+  });
+
+  it('removes every file of the band AFTER the tombstone write and the invite retirement', async () => {
+    const order: string[] = [];
+    echoBandUpdates(bandRow({ setListIds: ['sl-1'] }));
+    const baseGraphql = m.graphql.getMockImplementation()!;
+    m.graphql.mockImplementation(async (arg: never) => {
+      order.push('band-write');
+      return baseGraphql(arg);
+    });
+    m.BandInvite.update.mockImplementation(async () => {
+      order.push('revoke-invite');
+      return { data: {} };
+    });
+    vi.mocked(removeMemberBackingTracks).mockImplementation(async () => {
+      order.push('files');
+    });
+    await deleteBand('band-1');
+    expect(removeMemberBackingTracks).toHaveBeenCalledWith('band-1', 'all');
+    expect(order).toEqual(['band-write', 'revoke-invite', 'files']);
+  });
+
+  it('does not fail the delete (or skip the done step) when the file cleanup rejects', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    echoBandUpdates(bandRow({ setListIds: ['sl-1'] }));
+    vi.mocked(removeMemberBackingTracks).mockRejectedValue(new Error('lambda down'));
+    const steps: string[] = [];
+    await expect(deleteBand('band-1', (step) => steps.push(step))).resolves.toBeUndefined();
+    expect(steps.at(-1)).toBe('done');
+    expect(warn).toHaveBeenCalledWith('Could not remove the band backing tracks', expect.any(Error));
+    warn.mockRestore();
+  });
+
+  it('does not run when an earlier step aborts the delete', async () => {
+    echoBandUpdates(bandRow({ setListIds: ['sl-1'] }));
+    m.SetList.update.mockResolvedValue({ data: null, errors: [{ message: 'throttled' }] });
+    await expect(deleteBand('band-1')).rejects.toThrow('throttled');
+    expect(removeMemberBackingTracks).not.toHaveBeenCalled();
+  });
+
+  it('still runs on a re-run of an already scrubbed band (so a failed first cleanup can be finished)', async () => {
+    echoBandUpdates(bandRow({ deletedAt: '2026-02-01T00:00:00Z', name: 'Deleted', inviteCode: '', setListIds: ['sl-1'] }));
+    await deleteBand('band-1');
+    expect(removeMemberBackingTracks).toHaveBeenCalledWith('band-1', 'all');
   });
 });
 

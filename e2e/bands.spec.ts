@@ -65,6 +65,20 @@ test.describe('Band detail routes (signed out)', () => {
     expect(appsyncCalls).toEqual([]);
   });
 
+  test('shows no backing track controls and makes no storage requests while signed out', async ({ page }) => {
+    // Backing tracks need a real account and an uploaded file (covered by the sandbox check, gate G8, and
+    // manual testing); signed out, the set list page must neither show them nor reach S3.
+    const storageCalls: string[] = [];
+    page.on('request', (req) => {
+      if (/\.s3[.-][a-z0-9-]*\.?amazonaws\.com|\/bt\//.test(req.url())) storageCalls.push(req.url());
+    });
+    await page.goto('/bands/band-1/setlists/list-1');
+    await expect(page.getByText('Sign in to view this set list')).toBeVisible();
+    await expect(page.getByRole('button', { name: /backing track/i })).toHaveCount(0);
+    await expect(page.locator('audio')).toHaveCount(0);
+    expect(storageCalls).toEqual([]);
+  });
+
   test('/bands/:bandId/availability shows a sign-in gate and links back to the band', async ({ page }) => {
     await page.goto('/bands/band-1/availability');
     await expect(page.getByRole('main', { name: 'Availability' })).toBeVisible();
