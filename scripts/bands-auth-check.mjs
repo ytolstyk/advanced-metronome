@@ -172,7 +172,7 @@ for (const q of ['listMemberByBandId', 'listSongBySetList', 'listVoteBySetList',
 
 // ---------- helpers ----------
 const FIELDS = {
-  Band: 'id owner name inviteCode deletedAt version setListIds archivedSetListIds bannedSubs hiddenSongIds sharedSetListIds inviteTtlDays createdAt updatedAt',
+  Band: 'id owner name inviteCode deletedAt version setListIds archivedSetListIds bannedSubs hiddenSongIds sharedSetListIds uploaderSubs inviteTtlDays createdAt updatedAt',
   BandInvite: 'code bandId revokedAt owner createdAt',
   MyBand: 'owner bandId',
   Member: 'bandId owner displayName createdAt',
@@ -727,6 +727,13 @@ if (!ticket.ok && ticket.code === 'uploads-disabled') {
     check('G8', 'a valid upload is accepted by S3', (await postForm(t4, fakeMp3(3000))) === 204, '', true);
     const outsider = await fn(C, 'commitBackingTrack', COMMIT, commitVars(t4, bt));
     check('G8', 'an outsider cannot commit B\'s upload (no pending object under their own id)', !outsider.ok, JSON.stringify(outsider), true);
+    // Members add only after the band owner allows it (Band.uploaderSubs, written by the owner alone).
+    const notAllowed = await fn(B, 'commitBackingTrack', COMMIT, commitVars(t4, bt));
+    check('G8', 'a member the owner has not allowed to upload is refused', !notAllowed.ok && notAllowed.code === 'not-allowed', JSON.stringify(notAllowed), true);
+    r = await update(B, 'Band', { id: bt.bandId, uploaderSubs: [B.sub] });
+    check('G8', 'a member cannot give themselves upload permission (Band is owner-written)', !r.data?.updateBand, errType(r), true);
+    r = await update(A, 'Band', { id: bt.bandId, uploaderSubs: [B.sub] });
+    check('G8', 'the band owner can allow a member to upload', !!r.data?.updateBand, errType(r), true);
     const committed = await fn(B, 'commitBackingTrack', COMMIT, commitVars(t4, bt));
     check('G8', 'a member commits their upload', committed.ok === true && committed.track?.owner === B.sub, JSON.stringify(committed).slice(0, 200), true);
     const replay = await fn(B, 'commitBackingTrack', COMMIT, commitVars(t4, bt));

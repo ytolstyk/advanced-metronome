@@ -20,6 +20,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  uploaderSubs: [],
   inviteTtlDays: 1,
   ...over,
 });
@@ -124,6 +125,13 @@ describe('assembleBandView', () => {
     const asOwner = bandView({ sub: OWNER, ownRow: null, rosterRows: [] });
     expect(asOwner.isOwner).toBe(true);
     expect(asOwner.isMember).toBe(true);
+  });
+
+  it('may upload only as the owner or as a member the owner allowed', () => {
+    expect(bandView().canUpload).toBe(false);
+    expect(bandView({ band: band({ uploaderSubs: [ME] }) }).canUpload).toBe(true);
+    expect(bandView({ sub: OWNER, ownRow: null, rosterRows: [] }).canUpload).toBe(true);
+    expect(bandView({ ownRow: null, band: band({ uploaderSubs: [ME] }) }).canUpload).toBe(false); // not a member
   });
 
   it('lists removed members by the name they used, or a placeholder when it is unknown', () => {

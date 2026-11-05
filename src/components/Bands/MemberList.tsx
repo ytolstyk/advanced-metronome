@@ -6,6 +6,10 @@ import { INSTRUMENT_ICONS } from './instrumentIcons';
 interface MemberListProps {
   view: BandView;
   onRemove?: (sub: string, name: string) => void;
+  /** Owner only, and only while the backend offers backing tracks: allow or stop a member adding them. */
+  onSetUploads?: (sub: string, allowed: boolean) => void;
+  /** Disables the upload switches while a write is in flight. */
+  busy?: boolean;
   /** Shown on the caller's own row. */
   onEditProfile?: () => void;
 }
@@ -23,7 +27,7 @@ function rosterRows(view: BandView): { sub: string; name: string }[] {
 }
 
 /** Roster with display names and instruments (never email). The owner gets a Remove action on other members. */
-export function MemberList({ view, onRemove, onEditProfile }: MemberListProps) {
+export function MemberList({ view, onRemove, onSetUploads, busy, onEditProfile }: MemberListProps) {
   const owner = view.band.owner;
   const played = new Map(view.members.map((m) => [m.owner, instrumentOptionsFor(m.instruments)]));
   return (
@@ -62,6 +66,19 @@ export function MemberList({ view, onRemove, onEditProfile }: MemberListProps) {
               >
                 {instruments.length > 0 ? 'Edit' : 'Add instruments'}
               </Button>
+            )}
+            {onSetUploads && sub !== owner && (
+              <label className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="size-4"
+                  checked={view.band.uploaderSubs.includes(sub)}
+                  disabled={busy}
+                  onChange={(e) => onSetUploads(sub, e.target.checked)}
+                  aria-label={`Allow ${name} to add backing tracks`}
+                />
+                Can upload
+              </label>
             )}
             {onRemove && sub !== owner && (
               <Button variant="ghost" size="sm" onClick={() => onRemove(sub, name)} aria-label={`Remove ${name}`}>

@@ -20,6 +20,7 @@ export const CODE_MESSAGES: Record<BackingTrackCode, string> = {
   'bad-file': "That doesn't look like a valid MP3, M4A, WAV or FLAC file.",
   'not-member': 'Only band members can add backing tracks.',
   banned: "You can't add backing tracks to this band.",
+  'not-allowed': "The band owner hasn't turned on uploads for you. Ask them to allow it.",
   'over-quota': `You've used up your backing track storage (${BACKING_TRACK_LIMITS.maxUserFiles} files). Remove some of yours first.`,
   'song-full': `This song already has ${BACKING_TRACK_LIMITS.maxPerSong} backing tracks.`,
   'band-full': `This band already has ${BACKING_TRACK_LIMITS.maxPerBand} backing tracks.`,

@@ -334,6 +334,7 @@ const schema = a.schema({
     bannedSubs: a.string().array(),
     hiddenSongIds: a.string().array(),
     sharedSetListIds: a.string().array(), // owner-written: set lists anyone with the link may read
+    uploaderSubs: a.string().array(),   // owner-written: members allowed to add backing tracks (the owner always may)
     inviteTtlDays: a.integer(),         // owner-written: days an invite link works (1-7; empty = 1)
   })
     .disableOperations(['delete', 'list', 'subscriptions'])

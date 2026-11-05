@@ -89,6 +89,7 @@ export class FakeDb implements DbPort {
     setListIds: [LIST],
     archivedSetListIds: [],
     bannedSubs: [],
+    uploaderSubs: [SUB],
     hiddenSongIds: [],
   };
   members = new Map<string, MemberItem>([[`${BAND}/${SUB}`, { bandId: BAND, owner: SUB }]]);

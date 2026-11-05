@@ -189,6 +189,8 @@ export function MembersSection({
   onRemove,
   onRestore,
   onDeleteFiles,
+  onSetUploads,
+  busy,
   onEditProfile,
 }: {
   view: BandView;
@@ -196,13 +198,23 @@ export function MembersSection({
   onRestore: (sub: string) => void;
   /** Present when the backend has backing tracks: retries deleting a removed member's audio files (a ban can succeed while that cleanup fails). */
   onDeleteFiles?: (sub: string, name: string) => void;
+  /** Present when the backend has backing tracks: the owner's per-member "can upload" switch. */
+  onSetUploads?: (sub: string, allowed: boolean) => void;
+  /** True while a band write is running (disables the upload switches). */
+  busy?: boolean;
   onEditProfile: () => void;
 }) {
   const { isOwner } = view;
   return (
     <section aria-labelledby="members-heading" className="mb-8">
       <h2 id="members-heading" className="mb-2 text-lg font-semibold text-foreground">Members</h2>
-      <MemberList view={view} onRemove={isOwner ? onRemove : undefined} onEditProfile={onEditProfile} />
+      <MemberList
+        view={view}
+        onRemove={isOwner ? onRemove : undefined}
+        onSetUploads={isOwner ? onSetUploads : undefined}
+        busy={busy}
+        onEditProfile={onEditProfile}
+      />
       {isOwner && view.removedMembers.length > 0 && (
         <div className="mt-4">
           <h3 className="mb-1 text-sm font-medium text-muted-foreground">Removed</h3>

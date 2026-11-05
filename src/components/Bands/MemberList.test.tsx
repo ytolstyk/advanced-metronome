@@ -15,6 +15,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  uploaderSubs: [],
   inviteTtlDays: 1,
   ...over,
 });
@@ -34,6 +35,7 @@ function makeView(opts: {
     sub: opts.me ?? 'sub-me',
     isOwner: (opts.me ?? 'sub-me') === owner,
     isMember: true,
+    canUpload: true,
     members: opts.members.map((sub) => member(sub, opts.instruments?.[sub])),
     memberSubs: new Set(opts.members),
     displayNames: new Map(Object.entries(opts.names)),
@@ -111,6 +113,43 @@ describe('MemberList', () => {
     expect(screen.queryByRole('button', { name: 'Remove Olga' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Remove Amy' }));
     expect(onRemove).toHaveBeenCalledWith('sub-amy', 'Amy');
+  });
+
+  it('shows a "Can upload" switch on every row except the owner, reflecting and reporting the choice', () => {
+    const onSetUploads = vi.fn();
+    const view = makeView({
+      members: ['sub-owner', 'sub-amy', 'sub-bo'],
+      names: { 'sub-owner': 'Olga', 'sub-amy': 'Amy', 'sub-bo': 'Bo' },
+      me: 'sub-owner',
+    });
+    view.band.uploaderSubs = ['sub-bo'];
+    render(<MemberList view={view} onSetUploads={onSetUploads} />);
+    expect(screen.queryByRole('checkbox', { name: /Olga/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Allow Amy to add backing tracks' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Allow Bo to add backing tracks' })).toBeChecked();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Allow Amy to add backing tracks' }));
+    expect(onSetUploads).toHaveBeenCalledWith('sub-amy', true);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Allow Bo to add backing tracks' }));
+    expect(onSetUploads).toHaveBeenCalledWith('sub-bo', false);
+  });
+
+  it('disables the switches while a write is running', () => {
+    const view = makeView({ members: ['sub-owner', 'sub-amy'], names: { 'sub-owner': 'Olga', 'sub-amy': 'Amy' }, me: 'sub-owner' });
+    render(<MemberList view={view} onSetUploads={vi.fn()} busy />);
+    expect(screen.getByRole('checkbox', { name: 'Allow Amy to add backing tracks' })).toBeDisabled();
+  });
+
+  it('disables the upload switches while a write is in flight', () => {
+    const view = makeView({ members: ['sub-owner', 'sub-amy'], names: { 'sub-owner': 'Olga', 'sub-amy': 'Amy' }, me: 'sub-owner' });
+    const { rerender } = render(<MemberList view={view} onSetUploads={() => {}} />);
+    expect(screen.getByRole('checkbox', { name: 'Allow Amy to add backing tracks' })).toBeEnabled();
+    rerender(<MemberList view={view} onSetUploads={() => {}} busy />);
+    expect(screen.getByRole('checkbox', { name: 'Allow Amy to add backing tracks' })).toBeDisabled();
+  });
+
+  it('shows no switch without the handler', () => {
+    render(<MemberList view={makeView({ members: ['sub-owner', 'sub-amy'], names: { 'sub-owner': 'Olga', 'sub-amy': 'Amy' } })} />);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
   it('falls back to the "Owner" name for a member whose display name is unknown', () => {

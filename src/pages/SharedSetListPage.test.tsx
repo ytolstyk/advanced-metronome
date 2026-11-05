@@ -24,6 +24,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: ['sl-1'],
+  uploaderSubs: [],
   inviteTtlDays: 1,
   ...over,
 });

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { BAND_LIMITS } from '../bandTypes';
 
 const ME = 'sub-me';
 
@@ -35,6 +36,7 @@ vi.mock('./backingTracksCleanup', () => ({
 
 import {
   banMember,
+  setMemberUploads,
   banMemberAndRemoveFiles,
   createBand,
   deleteBand,
@@ -182,6 +184,17 @@ describe('createBand', () => {
     expect(m.Band.create.mock.calls[0][0]).toHaveProperty('sharedSetListIds', []);
     expect(m.Band.create.mock.calls[0][0]).toHaveProperty('inviteTtlDays', 1);
     expect(band.sharedSetListIds).toEqual([]);
+  });
+
+  it('creates the Band with nobody allowed to upload backing tracks yet (the owner always may)', async () => {
+    m.SetList.create.mockResolvedValue({ data: setListRow() });
+    m.BandInvite.create.mockResolvedValue({ data: {} });
+    m.MyBand.create.mockResolvedValue({ data: {} });
+    m.Member.create.mockResolvedValue({ data: {} });
+    m.Band.create.mockImplementation(async (i: Record<string, unknown>) => ({ data: bandRow({ ...i, owner: ME }) }));
+    const band = await createBand('The Band', 'Alice');
+    expect(m.Band.create.mock.calls[0][0]).toHaveProperty('uploaderSubs', []);
+    expect(band.uploaderSubs).toEqual([]);
   });
 
   it('removes its own member rows again if the final Band write fails (no inert leftovers)', async () => {
@@ -757,6 +770,61 @@ describe('dismissBand / leave', () => {
   });
 });
 
+describe('setMemberUploads', () => {
+  const LIVE = new Set(['sub-owner', 'sub-bob', 'sub-amy']);
+
+  it('allows a member with a version-locked partial write of only the list', async () => {
+    echoBandUpdates(bandRow({ version: 2 }));
+    await setMemberUploads('band-1', 'sub-bob', true, LIVE);
+    const { variables } = m.graphql.mock.calls[0][0];
+    expect(variables.input).toEqual({ id: 'band-1', version: 3, uploaderSubs: ['sub-bob'] });
+    expect(variables.condition).toEqual({ version: { eq: 2 } });
+  });
+
+  it('takes it back, and writes nothing when there is nothing to change', async () => {
+    echoBandUpdates(bandRow({ uploaderSubs: ['sub-bob', 'sub-amy'] }));
+    await setMemberUploads('band-1', 'sub-bob', false, LIVE);
+    expect(m.graphql.mock.calls[0][0].variables.input).toMatchObject({ uploaderSubs: ['sub-amy'] });
+    m.graphql.mockClear();
+    echoBandUpdates(bandRow({ uploaderSubs: ['sub-bob'] }));
+    await setMemberUploads('band-1', 'sub-bob', true, LIVE);
+    await setMemberUploads('band-1', 'sub-amy', false, LIVE);
+    await setMemberUploads('band-1', 'sub-owner', true, LIVE); // the owner always may: never listed
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('refuses to allow a removed member', async () => {
+    echoBandUpdates(bandRow({ bannedSubs: ['sub-bob'] }));
+    await expect(setMemberUploads('band-1', 'sub-bob', true, LIVE)).rejects.toThrow('Restore');
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('refuses to allow someone who is not a current member', async () => {
+    echoBandUpdates(bandRow());
+    await expect(setMemberUploads('band-1', 'sub-stranger', true, LIVE)).rejects.toThrow('not a current member');
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+
+  it('drops listed people who left or were removed in the same write', async () => {
+    echoBandUpdates(bandRow({ uploaderSubs: ['sub-gone', 'sub-banned', 'sub-amy'], bannedSubs: ['sub-banned'] }));
+    await setMemberUploads('band-1', 'sub-bob', true, LIVE);
+    expect(m.graphql.mock.calls[0][0].variables.input).toMatchObject({ uploaderSubs: ['sub-amy', 'sub-bob'] });
+  });
+
+  it('prunes stale entries when taking a permission back too', async () => {
+    echoBandUpdates(bandRow({ uploaderSubs: ['sub-gone', 'sub-bob'] }));
+    await setMemberUploads('band-1', 'sub-bob', false, LIVE);
+    expect(m.graphql.mock.calls[0][0].variables.input).toMatchObject({ uploaderSubs: [] });
+  });
+
+  it('enforces the list cap', async () => {
+    const subs = Array.from({ length: BAND_LIMITS.maxUploaders }, (_, i) => `s${i}`);
+    echoBandUpdates(bandRow({ uploaderSubs: subs }));
+    await expect(setMemberUploads('band-1', 'sub-new', true, new Set([...subs, 'sub-new']))).rejects.toThrow(`At most ${BAND_LIMITS.maxUploaders}`);
+    expect(m.graphql).not.toHaveBeenCalled();
+  });
+});
+
 describe('owner moderation (version-locked partial updates)', () => {
   it('sends only the patched field, version+1 and a version condition', async () => {
     echoBandUpdates(bandRow({ version: 4 }));
@@ -765,6 +833,23 @@ describe('owner moderation (version-locked partial updates)', () => {
     const { variables } = m.graphql.mock.calls[0][0];
     expect(variables.input).toEqual({ id: 'band-1', version: 5, bannedSubs: ['sub-bob'] });
     expect(variables.condition).toEqual({ version: { eq: 4 } });
+  });
+
+  it('banning also takes away the upload permission, in the same write', async () => {
+    echoBandUpdates(bandRow({ version: 4, uploaderSubs: ['sub-bob', 'sub-amy'] }));
+    await banMember('band-1', 'sub-bob');
+    expect(m.graphql.mock.calls[0][0].variables.input).toEqual({
+      id: 'band-1',
+      version: 5,
+      bannedSubs: ['sub-bob'],
+      uploaderSubs: ['sub-amy'],
+    });
+  });
+
+  it('banning someone who was never an uploader writes only the ban', async () => {
+    echoBandUpdates(bandRow({ version: 4, uploaderSubs: ['sub-amy'] }));
+    await banMember('band-1', 'sub-bob');
+    expect(m.graphql.mock.calls[0][0].variables.input).toEqual({ id: 'band-1', version: 5, bannedSubs: ['sub-bob'] });
   });
 
   it('is a no-op (no write) when already applied', async () => {
@@ -1131,6 +1216,29 @@ describe('deleteBand (tombstone)', () => {
     expect(m.graphql.mock.calls[0][0].variables.input).toMatchObject({ sharedSetListIds: [] });
     const band = await m.Band.get.getMockImplementation()!({ id: 'band-1' });
     expect(band.data.sharedSetListIds).toEqual([]);
+  });
+
+  it('the scrub clears uploaderSubs along with the other owner-written lists', async () => {
+    echoBandUpdates(bandRow({ uploaderSubs: ['sub-bob'] }));
+    m.SetList.update.mockResolvedValue({ data: {} });
+    m.BandInvite.update.mockResolvedValue({ data: {} });
+    await deleteBand('band-1');
+    expect(m.graphql.mock.calls[0][0].variables.input).toMatchObject({ uploaderSubs: [] });
+    const band = await m.Band.get.getMockImplementation()!({ id: 'band-1' });
+    expect(band.data.uploaderSubs).toEqual([]);
+  });
+
+  it('a tombstoned band that still lists uploaders is NOT considered scrubbed, so a re-run finishes the scrub', async () => {
+    echoBandUpdates(
+      bandRow({ deletedAt: '2026-02-01T00:00:00Z', name: 'Deleted', inviteCode: '', uploaderSubs: ['sub-bob'] }),
+    );
+    m.SetList.update.mockResolvedValue({ data: {} });
+    m.BandInvite.update.mockResolvedValue({ data: {} });
+    await deleteBand('band-1');
+    expect(m.graphql).toHaveBeenCalledTimes(1);
+    const input = m.graphql.mock.calls[0][0].variables.input;
+    expect(input).toMatchObject({ uploaderSubs: [] });
+    expect(input).not.toHaveProperty('deletedAt');
   });
 
   it('a tombstoned band that still lists shared ids is NOT considered scrubbed, so a re-run finishes the scrub', async () => {

@@ -30,6 +30,7 @@ const viewOf = (over: Partial<BandView> & { memberSubs?: string[] } = {}): BandV
     sub: ME,
     isOwner: false,
     isMember: true,
+    canUpload: true,
     members,
     memberSubs: new Set([OWNER, ...members.map((x) => x.owner)]),
     displayNames: new Map(),

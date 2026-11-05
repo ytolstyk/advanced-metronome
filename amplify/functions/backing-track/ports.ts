@@ -44,7 +44,7 @@ type Loosely<T> = { [K in keyof T]?: T[K] | null | undefined };
 
 /** `owner` is server-populated on Band/Song (undeclared in the model, so absent from its type). */
 export type BandItem = Pick<Row<'Band'>, 'id'> &
-  Loosely<Pick<Row<'Band'>, 'deletedAt' | 'setListIds' | 'archivedSetListIds' | 'bannedSubs' | 'hiddenSongIds'>> & {
+  Loosely<Pick<Row<'Band'>, 'deletedAt' | 'setListIds' | 'archivedSetListIds' | 'bannedSubs' | 'hiddenSongIds' | 'uploaderSubs'>> & {
     owner?: string;
   };
 export type MemberItem = Pick<Row<'Member'>, 'bandId' | 'owner'>;

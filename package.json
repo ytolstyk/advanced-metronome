@@ -15,7 +15,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
-    "test:auth": "node scripts/bands-auth-check.mjs"
+    "test:auth": "node scripts/bands-auth-check.mjs",
+    "sandbox:uploads": "BACKING_TRACKS_ENABLED=true ampx sandbox"
   },
   "dependencies": {
     "@aws-amplify/ui-react": "^6.15.7",

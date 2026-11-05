@@ -58,7 +58,7 @@ export function useBackingTrackSection({ list, view, fetchedAt, reload, nameOf }
   const panelFor = (song: ValidSong): ReactNode => {
     if (!ready) return undefined;
     const tracks = list.backingTracks.get(song.id) ?? [];
-    const canAdd = uploadsOn && view.isMember;
+    const canAdd = uploadsOn && view.canUpload;
     if (tracks.length === 0 && !canAdd) return undefined;
     return (
       <BackingTracksPanel

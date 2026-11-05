@@ -25,7 +25,7 @@ const ME = 'sub-me';
 const BOB = 'sub-bob';
 
 const band = (setListIds: string[]): BandRecord =>
-  ({ id: 'band-1', owner: 'sub-owner', name: 'The Band', inviteCode: 'ABCDEFGHJK', deletedAt: null, version: 1, setListIds, archivedSetListIds: [], bannedSubs: [], hiddenSongIds: [], sharedSetListIds: [], inviteTtlDays: 1 }) as BandRecord;
+  ({ id: 'band-1', owner: 'sub-owner', name: 'The Band', inviteCode: 'ABCDEFGHJK', deletedAt: null, version: 1, setListIds, archivedSetListIds: [], bannedSubs: [], hiddenSongIds: [], sharedSetListIds: [], uploaderSubs: [], inviteTtlDays: 1 }) as BandRecord;
 
 const listRow = (id: string, name: string) => ({ id, owner: 'sub-owner', bandId: 'band-1', name, archivedAt: null });
 
@@ -35,6 +35,7 @@ const view = (lists: Array<[string, string]>): BandView =>
     sub: ME,
     isOwner: false,
     isMember: true,
+    canUpload: true,
     members: [],
     memberSubs: new Set([ME, BOB]),
     displayNames: new Map(),

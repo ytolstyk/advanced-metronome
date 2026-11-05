@@ -16,6 +16,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  uploaderSubs: [],
   inviteTtlDays: 1,
   ...over,
 });
@@ -27,6 +28,7 @@ const view = (over: Partial<BandView> = {}): BandView => ({
   sub: 'sub-me',
   isOwner: false,
   isMember: true,
+  canUpload: true,
   members: [],
   memberSubs: new Set(),
   displayNames: new Map(),
@@ -458,6 +460,54 @@ describe('MembersSection', () => {
     expect(screen.getByRole('list', { name: 'Me plays' })).toHaveTextContent('Guitar');
     fireEvent.click(screen.getByRole('button', { name: 'Edit your name and instruments' }));
     expect(onEditProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it('only wires the "Can upload" switch for the owner, and passes sub, name and the new value', () => {
+    const onSetUploads = vi.fn();
+    const base = {
+      band: band(),
+      members: [{ bandId: 'b1', owner: 'sub-amy', displayName: 'Amy', createdAt: 'c' }] as BandView['members'],
+      displayNames: new Map([['sub-amy', 'Amy']]),
+    };
+    const { unmount } = render(
+      <MembersSection view={view({ ...base, isOwner: false })} onRemove={() => {}} onRestore={() => {}} onSetUploads={onSetUploads} onEditProfile={() => {}} />,
+    );
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    unmount();
+    render(
+      <MembersSection view={view({ ...base, isOwner: true })} onRemove={() => {}} onRestore={() => {}} onSetUploads={onSetUploads} onEditProfile={() => {}} />,
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Allow Amy to add backing tracks' }));
+    expect(onSetUploads).toHaveBeenCalledWith('sub-amy', true);
+  });
+
+  it('disables the upload switches while busy', () => {
+    const members = [{ bandId: 'b1', owner: 'sub-amy', displayName: 'Amy', createdAt: 'c' }] as BandView['members'];
+    render(
+      <MembersSection
+        view={view({ isOwner: true, band: band(), members, displayNames: new Map([['sub-amy', 'Amy']]) })}
+        onRemove={() => {}}
+        onRestore={() => {}}
+        onSetUploads={() => {}}
+        busy
+        onEditProfile={() => {}}
+      />,
+    );
+    expect(screen.getByRole('checkbox', { name: 'Allow Amy to add backing tracks' })).toBeDisabled();
+  });
+
+  it('shows no "Can upload" switch for the owner without the handler (backend without backing tracks)', () => {
+    const members = [{ bandId: 'b1', owner: 'sub-amy', displayName: 'Amy', createdAt: 'c' }] as BandView['members'];
+    render(
+      <MembersSection
+        view={view({ isOwner: true, band: band(), members, displayNames: new Map([['sub-amy', 'Amy']]) })}
+        onRemove={() => {}}
+        onRestore={() => {}}
+        onEditProfile={() => {}}
+      />,
+    );
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove Amy' })).toBeInTheDocument();
   });
 
   it('omits the removed section when nobody was removed', () => {

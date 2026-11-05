@@ -16,6 +16,7 @@ import {
   extForContentType,
   isSlot,
   isUuid,
+  mayAttachBackingTracks,
   pendingKey,
   sanitizeLabel,
   userPrefix,
@@ -112,8 +113,9 @@ function parseCommit(args: CommitArgs): CommitInput {
 type AuthorizeMode = 'attach' | 'recheck';
 
 /**
- * The authorization chain. It proves only that the caller knows the ids (Member, Song and SetList
- * rows are self-written), so it is product validation, not abuse control; the structural caps are.
+ * The authorization chain. Membership, song and set list checks prove only that the caller knows the ids
+ * (those rows are self-written), so they are product validation; the real gates are the owner-written
+ * `Band` fields (ban list, upload permission) and the structural caps.
  * Returns the song's set list. Every read is strongly consistent. A song being hidden or its list
  * archived stops NEW attachments but never destroys a finished upload (hence `recheck` skips those).
  */
@@ -125,7 +127,10 @@ async function authorize(deps: Deps, sub: string, bandId: string, songId: string
   const [member, song] = await Promise.all([deps.db.getMember(bandId, sub), deps.db.getSong(songId)]);
   if (!member) throw new BackingTrackError('not-member');
   if (!song || song.bandId !== bandId) throw new BackingTrackError('not-found');
-  if (mode === 'recheck') return song.setListId;
+  if (mode === 'recheck') return song.setListId; // taking the permission away never destroys a finished upload
+
+  // The band owner decides who may add (owner-written `uploaderSubs`); the owner always may.
+  if (!mayAttachBackingTracks(band, sub)) throw new BackingTrackError('not-allowed');
 
   const { setListId } = song;
   if (band.hiddenSongIds?.includes(songId)) throw new BackingTrackError('not-found');

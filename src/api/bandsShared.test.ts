@@ -230,8 +230,15 @@ describe('row mappers', () => {
       bannedSubs: [],
       hiddenSongIds: [],
       sharedSetListIds: [],
+      uploaderSubs: [],
       inviteTtlDays: 1,
     });
+  });
+
+  it('toBand maps a null, undefined or absent uploaderSubs to [], drops non-strings and keeps real subs', () => {
+    expect(toBand({ ...bandRow(), uploaderSubs: null } as unknown as BandRow).uploaderSubs).toEqual([]);
+    expect(toBand({ ...bandRow(), uploaderSubs: undefined } as unknown as BandRow).uploaderSubs).toEqual([]);
+    expect(toBand({ ...bandRow(), uploaderSubs: ['sub-a', null, 'sub-b'] } as unknown as BandRow).uploaderSubs).toEqual(['sub-a', 'sub-b']);
   });
 
   it('toBand maps a null, undefined or absent sharedSetListIds to [] and keeps real ids', () => {

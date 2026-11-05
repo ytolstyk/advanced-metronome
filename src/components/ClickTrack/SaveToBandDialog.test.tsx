@@ -40,7 +40,7 @@ const ME = 'sub-me';
 const BOB = 'sub-bob';
 
 const band = (id: string, name: string): BandRecord =>
-  ({ id, owner: 'sub-owner', name, inviteCode: 'ABCDEFGHJK', deletedAt: null, version: 1, setListIds: ['sl-1'], archivedSetListIds: [], bannedSubs: [], hiddenSongIds: [], sharedSetListIds: [], inviteTtlDays: 1 }) as BandRecord;
+  ({ id, owner: 'sub-owner', name, inviteCode: 'ABCDEFGHJK', deletedAt: null, version: 1, setListIds: ['sl-1'], archivedSetListIds: [], bannedSubs: [], hiddenSongIds: [], sharedSetListIds: [], uploaderSubs: [], inviteTtlDays: 1 }) as BandRecord;
 const entry = (id: string, name: string, status: MyBandEntry['status'] = 'active'): MyBandEntry => ({ band: band(id, name), status, isOwner: false });
 
 const setLists = [{ id: 'sl-1', owner: 'sub-owner', bandId: 'band-1', name: 'Main Set', archivedAt: null }] as unknown as ValidSetList[];
@@ -50,6 +50,7 @@ const view = (over: Partial<BandView> = {}): BandView =>
     sub: ME,
     isOwner: false,
     isMember: true,
+    canUpload: true,
     members: [],
     memberSubs: new Set([ME, BOB]),
     displayNames: new Map([[ME, 'Me'], [BOB, 'Bob']]),

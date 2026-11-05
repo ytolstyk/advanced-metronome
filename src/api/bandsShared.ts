@@ -184,6 +184,7 @@ const BAND_FIELDS = [
   'bannedSubs',
   'hiddenSongIds',
   'sharedSetListIds',
+  'uploaderSubs',
   'inviteTtlDays',
 ] as const;
 
@@ -204,6 +205,7 @@ export function toBand(r: BandRow): BandRecord {
     bannedSubs: strings(r.bannedSubs),
     hiddenSongIds: strings(r.hiddenSongIds),
     sharedSetListIds: strings(r.sharedSetListIds),
+    uploaderSubs: strings(r.uploaderSubs),
     inviteTtlDays: normalizeInviteTtlDays(r.inviteTtlDays),
   };
 }
@@ -376,6 +378,7 @@ export type BandPatch = Partial<
     | 'bannedSubs'
     | 'hiddenSongIds'
     | 'sharedSetListIds'
+    | 'uploaderSubs'
     | 'inviteTtlDays'
   >
 >;

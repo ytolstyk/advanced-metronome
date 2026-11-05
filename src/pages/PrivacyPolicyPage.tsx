@@ -4,7 +4,7 @@ import { TAKEDOWN_CONTACT, isTakedownContactSet } from '../legalContact';
 
 export function PrivacyPolicyPage() {
   return (
-    <LegalPage title="Privacy Policy" lastUpdated="November 4, 2026">
+    <LegalPage title="Privacy Policy" lastUpdated="November 5, 2026">
       <p>
         This Privacy Policy explains what information Advanced Metronome (the &ldquo;Service&rdquo;)
         collects, how it is used, and the choices you have.
@@ -80,7 +80,7 @@ export function PrivacyPolicyPage() {
           <strong>Band backing tracks:</strong> if you add a backing track (an MP3, M4A, WAV or FLAC audio
           file of up to {BACKING_TRACK_LIMITS.maxBytes / (1024 * 1024)} MB) to a song in a band&rsquo;s set list, the file is stored in Amazon S3 in our AWS account under
           your account&rsquo;s internal user ID, and its name, who you say it is for, its size and type are
-          stored in the cloud database. Our server checks that you belong to the band and applies limits
+          stored in the cloud database. Only the band&rsquo;s owner and members the owner has allowed to upload can add tracks; the owner&rsquo;s list of allowed members is stored on the band (as account IDs) and is readable like the rest of the band&rsquo;s data. Our server checks this and that you belong to the band, and applies limits
           ({BACKING_TRACK_LIMITS.maxUserFiles} files per person, {BACKING_TRACK_LIMITS.maxPerSong} per song,
           {' '}{BACKING_TRACK_LIMITS.maxPerBand} per band) before it keeps a file. Anyone with an account who has the
           band&rsquo;s link can play and download it, because member and song IDs are visible to anyone with

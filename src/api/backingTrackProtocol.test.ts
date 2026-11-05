@@ -20,6 +20,12 @@ describe('CODE_MESSAGES', () => {
     expect(CODE_MESSAGES['too-big']).toBe('Files can be up to 50 MB. Try an MP3, M4A or FLAC.');
   });
 
+  it('tells a member the owner has not allowed uploads, as a BackingTrackError message', () => {
+    expect(CODE_MESSAGES['not-allowed']).toMatch(/owner/);
+    expect(new BackingTrackError('not-allowed').message).toBe(CODE_MESSAGES['not-allowed']);
+    expect(isBackingTrackErrorCode('not-allowed')).toBe(true);
+  });
+
   it('mentions the real limits', () => {
     expect(CODE_MESSAGES['song-full']).toContain('10');
     expect(CODE_MESSAGES['band-full']).toContain('100');

@@ -28,6 +28,7 @@ import {
   loadBandView,
   previewBand,
   renameBand,
+  setMemberUploads,
   unbanMember,
 } from '../api/bandsApi';
 import { removeMemberBackingTracks } from '../api/backingTracksCleanup';
@@ -205,6 +206,12 @@ function BandDetails({ view, refreshing, reload }: { view: BandView; refreshing:
         onDeleteFiles={
           hasBackingTrackModel() ? (sub) => void act(() => removeMemberBackingTracks(band.id, { memberSub: sub })) : undefined
         }
+        onSetUploads={
+          hasBackingTrackModel()
+            ? (sub, allowed) => void act(() => setMemberUploads(band.id, sub, allowed, new Set(view.members.map((m) => m.owner))))
+            : undefined
+        }
+        busy={actionBusy}
         onEditProfile={() => setDialog({ kind: 'edit-profile' })}
       />
       <InviteSection view={view} onReset={() => setDialog({ kind: 'reset-code' })} onChanged={settled} />

@@ -3,7 +3,7 @@ import { TAKEDOWN_CONTACT, isTakedownContactSet } from '../legalContact';
 
 export function TermsOfServicePage() {
   return (
-    <LegalPage title="Terms of Service" lastUpdated="November 4, 2026">
+    <LegalPage title="Terms of Service" lastUpdated="November 5, 2026">
       <p>
         By using Advanced Metronome (the &ldquo;Service&rdquo;) you agree to these Terms. If you do not
         agree, please do not use the Service.
@@ -31,7 +31,7 @@ export function TermsOfServicePage() {
 
       <h2>Backing tracks</h2>
       <p>
-        Band members can upload audio files (backing tracks) for the band to play along with. Only upload
+        Band members the band owner has allowed can upload audio files (backing tracks) for the band to play along with. Only upload
         audio you made or have permission to share with your band; you are responsible for what you
         upload. Anyone with an account who has a band&rsquo;s link can play and download its backing
         tracks. We and a band&rsquo;s owner may remove any backing track at any time, and may limit or

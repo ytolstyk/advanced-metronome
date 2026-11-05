@@ -24,6 +24,7 @@ export const BAND_LIMITS = {
   maxArchivedSetLists: 50,
   maxSongsPerSetList: 100,
   maxBannedSubs: 200,
+  maxUploaders: 15, // the member cap: only current members can hold the permission
   maxHiddenSongs: 1000,
   maxOwnedBands: 10,
   inviteCodeLength: 10,
@@ -127,6 +128,8 @@ export interface BandRecord {
   hiddenSongIds: string[];
   /** Set lists anyone with the link may read, signed in or not (owner-written; a subset of `setListIds`). */
   sharedSetListIds: string[];
+  /** Members the owner has allowed to add backing tracks (owner-written; the owner always may). */
+  uploaderSubs: string[];
   /** Days an invite link works after it is issued (owner-written, always 1-7: bad stored values read as the default). */
   inviteTtlDays: number;
 }
@@ -327,6 +330,8 @@ export interface BandView {
   isOwner: boolean;
   /** Owner, or has a valid Member row. */
   isMember: boolean;
+  /** May add backing tracks: the owner, or a member the owner has allowed. */
+  canUpload: boolean;
   members: ValidMember[];
   memberSubs: Set<string>;
   displayNames: Map<string, string>;

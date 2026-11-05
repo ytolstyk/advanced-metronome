@@ -38,6 +38,7 @@ const band: BandRecord = {
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  uploaderSubs: [],
   inviteTtlDays: 1,
 };
 

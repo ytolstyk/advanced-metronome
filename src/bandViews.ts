@@ -12,6 +12,7 @@ import {
   type SongTrackSummary,
   type ValidSong,
 } from './bandTypes';
+import { mayAttachBackingTracks } from './backingTrackFormat';
 import { resolveBackingTracks } from './backingTrackUtils';
 import {
   buildDisplayNames,
@@ -78,6 +79,7 @@ export function assembleBandView({
     sub,
     isOwner: isBandOwner(band, sub),
     isMember: memberSubs.has(sub),
+    canUpload: memberSubs.has(sub) && mayAttachBackingTracks(band, sub),
     members,
     memberSubs,
     displayNames: buildDisplayNames(members),

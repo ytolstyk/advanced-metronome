@@ -64,6 +64,7 @@ const band = (over: Partial<BandRecord> = {}): BandRecord => ({
   bannedSubs: [],
   hiddenSongIds: [],
   sharedSetListIds: [],
+  uploaderSubs: [],
   inviteTtlDays: 1,
   ...over,
 });
@@ -106,6 +107,7 @@ function makeView(over: Partial<BandView> = {}, b = band()): BandView {
     sub: 'sub-me',
     isOwner: false,
     isMember: true,
+    canUpload: true,
     members,
     memberSubs: new Set(['sub-owner', 'sub-me', 'sub-bob']),
     displayNames: new Map(),

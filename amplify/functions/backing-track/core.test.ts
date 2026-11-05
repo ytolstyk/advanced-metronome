@@ -228,6 +228,8 @@ describe('commitTrack: authorization chain', () => {
     ['a deleted band', () => { db.band!.deletedAt = '2026-01-01T00:00:00Z'; }, 'not-found'],
     ['a banned caller', () => { db.band!.bannedSubs = [SUB]; }, 'banned'],
     ['a caller with no Member row', () => { db.members.clear(); }, 'not-member'],
+    ['a member the owner has not allowed to upload', () => { db.band!.uploaderSubs = []; }, 'not-allowed'],
+    ['a band row from before uploader permissions existed', () => { delete db.band!.uploaderSubs; }, 'not-allowed'],
     ['a missing song', () => { db.song = null; }, 'not-found'],
     ['a song of another band', () => { db.song!.bandId = OTHER; }, 'not-found'],
     ['a hidden song', () => { db.band!.hiddenSongIds = [SONG]; }, 'not-found'],
@@ -240,6 +242,24 @@ describe('commitTrack: authorization chain', () => {
     await expect(commit()).rejects.toMatchObject({ code });
     expect(db.tracks.size).toBe(0);
     expect(s3.objects.has(KEY)).toBe(false);
+  });
+});
+
+describe('commitTrack: who may upload', () => {
+  beforeEach(() => upload());
+
+  it('lets the band owner upload without being on the list', async () => {
+    db.band!.uploaderSubs = [];
+    db.band!.owner = SUB;
+    await expect(commit()).resolves.toBeDefined();
+    expect(db.tracks.size).toBe(1);
+  });
+
+  it('taking the permission away after the upload does not remove a finished track', async () => {
+    db.onCreate = () => { db.band!.uploaderSubs = []; };
+    await expect(commit()).resolves.toBeDefined();
+    expect(db.tracks.size).toBe(1);
+    expect(s3.objects.has(KEY)).toBe(true);
   });
 });
 

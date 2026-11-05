@@ -122,6 +122,7 @@ The app shows plain language, but logs and the sandbox check show the code:
 | `uploads-disabled` | The kill switch is off |
 | `bad-input`, `too-big`, `bad-file` | Bad request, over 50 MB, or the file's first bytes are not audio |
 | `not-member`, `banned` | The caller is not in the band or was removed |
+| `not-allowed` | The band owner has not allowed this member to upload |
 | `over-quota`, `song-full`, `band-full` | A cap was hit |
 | `not-found`, `gone` | The song, set list or band is gone, hidden or archived |
 | `replaced`, `conflict` | Another upload took the slot, or the track id belongs to someone else |
@@ -129,13 +130,7 @@ The app shows plain language, but logs and the sandbox check show the code:
 
 ## Known limits
 
-- **A shared set list makes your bucket writable by strangers.** The public page exposes the ids the Lambda's
-  membership check relies on, and `Member`, `Song` and `SetList` rows are written by users themselves, so
-  anyone who can sign up can post audio into a band they have seen a link for. The caps (10 per song, 100 per
-  band, 600 MB per account) bound it, and the band owner can ban them, but the files sit in your account until
-  then. Decide before launch whether to build the per-band opt-in described in CLAUDE.md; until then keep the
-  spend alarm and the takedown address live, and treat "owner shares a set list" as "owner lets the internet
-  upload".
+- **Who can upload:** only the band owner and members the owner ticks "Can upload" for (`Band.uploaderSubs`, owner-written; leavers and removed members are dropped from it on the next change). A stranger who learns a band's ids from a shared set list cannot upload into it. **Not closed:** anyone with an account can create their own band, become its owner and upload within the per-account quota (20 files / 600 MB), and any signed-in user can stage up to 3 x 50 MB in `pending/` (expires after a day; a refused commit leaves it there) because `requestBackingTrackUpload` has no band argument. Keep the spend alarm and the takedown address live; treat open sign-up as "anyone may host up to 600 MB". Existing bands start with nobody allowed but the owner.
 
 - The membership check proves a caller knows the ids, because `Member`, `Song` and `SetList` rows are
   written by users themselves. The real controls are the structural ones: 3 pending slots, S3-enforced

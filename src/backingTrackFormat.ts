@@ -178,6 +178,7 @@ export const BACKING_TRACK_ERROR_CODES = [
   'bad-file',
   'not-member',
   'banned',
+  'not-allowed',
   'over-quota',
   'song-full',
   'band-full',
@@ -188,6 +189,18 @@ export const BACKING_TRACK_ERROR_CODES = [
   'gone',
   'retry',
 ] as const;
+
+/**
+ * Who may add backing tracks to a band: its owner, and members the owner listed in `Band.uploaderSubs`
+ * (owner-written). The one rule, used by the Lambda's authorization and by the app to decide whether to
+ * offer Add, so the two cannot drift. (Membership and bans are checked separately by each caller.)
+ */
+export function mayAttachBackingTracks(
+  band: { owner?: string | null; uploaderSubs?: readonly (string | null)[] | null },
+  sub: string,
+): boolean {
+  return band.owner === sub || (Array.isArray(band.uploaderSubs) && band.uploaderSubs.includes(sub));
+}
 
 export type BackingTrackErrorCode = (typeof BACKING_TRACK_ERROR_CODES)[number];
 

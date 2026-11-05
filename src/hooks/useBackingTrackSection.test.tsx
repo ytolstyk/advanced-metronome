@@ -52,7 +52,7 @@ const makeList = (...tracks: ValidBackingTrack[]): SetListView => {
   return { songs: [SONG_A, SONG_B], backingTracks: bySong, incomplete: false } as unknown as SetListView;
 };
 
-const makeView = (over: Partial<BandView> = {}): BandView => ({ sub: ME, isMember: true, isOwner: false, ...over }) as unknown as BandView;
+const makeView = (over: Partial<BandView> = {}): BandView => ({ sub: ME, isMember: true, canUpload: true, isOwner: false, ...over }) as unknown as BandView;
 
 interface HarnessProps {
   list: SetListView;
@@ -128,7 +128,14 @@ describe('useBackingTrackSection panelFor', () => {
   });
 
   it('offers Add only to a member: a non-member sees a panel only where tracks exist, without Add', () => {
-    setup({ list: makeList(track('t1', 'a')), view: makeView({ isMember: false }) });
+    setup({ list: makeList(track('t1', 'a')), view: makeView({ isMember: false, canUpload: false }) });
+    expect(songSection('Song a').getByRole('button', { name: 'Backing tracks for Song a (1)' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add a backing track/ })).not.toBeInTheDocument();
+    expect(songSection('Song b').queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('hides Add from a member the owner has not allowed to upload, but still lists the tracks', () => {
+    setup({ list: makeList(track('t1', 'a')), view: makeView({ canUpload: false }) });
     expect(songSection('Song a').getByRole('button', { name: 'Backing tracks for Song a (1)' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add a backing track/ })).not.toBeInTheDocument();
     expect(songSection('Song b').queryByRole('button')).not.toBeInTheDocument();

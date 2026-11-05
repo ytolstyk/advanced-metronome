@@ -32,15 +32,16 @@ describe('TermsOfServicePage', () => {
     expect(screen.getByText(/^Last updated: .+/)).toBeInTheDocument();
   });
 
-  it('shows the November 4, 2026 last-updated date', () => {
+  it('shows the November 5, 2026 last-updated date', () => {
     render(<TermsOfServicePage />);
-    expect(screen.getByText('Last updated: November 4, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Last updated: November 5, 2026')).toBeInTheDocument();
   });
 
   it('has a Backing tracks section: upload only what you may share, anyone with the link can play it, owners can remove it, where to report', () => {
     render(<TermsOfServicePage />);
     const heading = screen.getByRole('heading', { level: 2, name: 'Backing tracks' });
     const text = heading.nextElementSibling!;
+    expect(text).toHaveTextContent(/members the band owner has allowed can upload audio files/);
     expect(text).toHaveTextContent(/Only upload audio you made or have permission to share/);
     expect(text).toHaveTextContent(/Anyone with an account who has a band.s link can play and download/);
     expect(text).toHaveTextContent(/band.s owner may remove any backing track/);

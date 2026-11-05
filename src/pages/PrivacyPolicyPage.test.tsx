@@ -61,6 +61,7 @@ describe('PrivacyPolicyPage', () => {
     expect(item).toHaveTextContent(/MP3, M4A, WAV or FLAC/);
     expect(item).toHaveTextContent(/up to 50 MB/);
     expect(item).toHaveTextContent(/stored in Amazon S3/);
+    expect(item).toHaveTextContent(/members the owner has allowed to upload can add tracks/);
     expect(item).toHaveTextContent(/20 files per person, 10 per song, 100 per band/);
     expect(item).toHaveTextContent(/Anyone with an account who has the band.s link can play and download it/);
     expect(item).toHaveTextContent(/not someone who is signed out/);
@@ -92,9 +93,9 @@ describe('PrivacyPolicyPage', () => {
     expect(item).toHaveTextContent(/saved click tracks \(not attached to a band\) stay private/);
   });
 
-  it('shows the November 4, 2026 last-updated date', () => {
+  it('shows the November 5, 2026 last-updated date', () => {
     render(<PrivacyPolicyPage />);
-    expect(screen.getByText('Last updated: November 4, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Last updated: November 5, 2026')).toBeInTheDocument();
   });
 
   it('says playing or downloading a click track as WAV or FLAC happens in the browser and is not uploaded', () => {

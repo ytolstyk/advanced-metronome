@@ -242,6 +242,7 @@ export async function createBand(
         bannedSubs: [],
         hiddenSongIds: [],
         sharedSetListIds: [], // nothing is public until the owner shares it
+        uploaderSubs: [], // members add backing tracks only after the owner allows it
         inviteTtlDays: BAND_LIMITS.inviteTtlDaysDefault,
       }),
       'createBand',
@@ -377,7 +378,37 @@ export function banMember(bandId: string, memberSub: string): Promise<BandRecord
     if (next && next.length > BAND_LIMITS.maxBannedSubs) {
       throw new Error('Removed-member limit reached');
     }
-    return next ? { bannedSubs: next } : null;
+    // A removed member loses the upload permission too (even when already banned but still listed);
+    // restoring them does not bring it back.
+    const uploaders = removeValue(band.uploaderSubs, memberSub);
+    if (!next && !uploaders) return null;
+    return { ...(next ? { bannedSubs: next } : {}), ...(uploaders ? { uploaderSubs: uploaders } : {}) };
+  });
+}
+
+/**
+ * Owner: lets a member add backing tracks (`allowed`), or takes that back. Tracks they already added stay.
+ * `liveSubs` are the band's current members: every write also drops entries for anyone who is no longer one
+ * (they left or were removed), so the list cannot fill with strangers or hand a permission back to someone
+ * who rejoins.
+ */
+export function setMemberUploads(
+  bandId: string,
+  memberSub: string,
+  allowed: boolean,
+  liveSubs: ReadonlySet<string>,
+): Promise<BandRecord> {
+  return updateBand(bandId, (band) => {
+    if (isBandOwner(band, memberSub)) return null; // the owner always may
+    if (allowed && band.bannedSubs.includes(memberSub)) throw new Error('Restore this member first');
+    if (allowed && !liveSubs.has(memberSub)) throw new Error('That person is not a current member');
+    const kept = band.uploaderSubs.filter((s) => liveSubs.has(s) && !band.bannedSubs.includes(s) && s !== memberSub);
+    const next = allowed ? [...kept, memberSub] : kept;
+    if (next.length > BAND_LIMITS.maxUploaders) {
+      throw new Error(`At most ${BAND_LIMITS.maxUploaders} members can be allowed to upload. Untick someone first.`);
+    }
+    const unchanged = next.length === band.uploaderSubs.length && next.every((s) => band.uploaderSubs.includes(s));
+    return unchanged ? null : { uploaderSubs: next };
   });
 }
 
@@ -522,7 +553,8 @@ export async function deleteBand(bandId: string, onProgress?: (step: DeleteStep)
         !b.inviteCode &&
         b.bannedSubs.length === 0 &&
         b.hiddenSongIds.length === 0 &&
-        b.sharedSetListIds.length === 0;
+        b.sharedSetListIds.length === 0 &&
+        b.uploaderSubs.length === 0;
       if (b.deletedAt && scrubbed) return null;
       return {
         ...(b.deletedAt ? {} : { deletedAt: new Date().toISOString() }),
@@ -531,6 +563,7 @@ export async function deleteBand(bandId: string, onProgress?: (step: DeleteStep)
         bannedSubs: [],
         hiddenSongIds: [],
         sharedSetListIds: [],
+        uploaderSubs: [],
       };
     },
     { allowDeleted: true },
