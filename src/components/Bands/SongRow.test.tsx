@@ -3,6 +3,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FLAC_DOWNLOAD_HINT } from '../../audio/clickExportSinks';
 import { SONG_COLOR_STYLES, SONG_COLOR_TINT_PERCENT } from '../../bandSongColors';
+import type { TrackPiece } from '../../audio/ClickTrackEngine';
+import { createPositionStore } from '../../utils/playbackPosition';
 import { SongRow, type SongClickTrackControls } from './SongRow';
 import type { SongColorKey, ValidSong } from '../../bandTypes';
 
@@ -496,4 +498,92 @@ describe('SongRow backing tracks slot', () => {
     expect(screen.getByText('Click track · by Alice, Jan 5')).toBeInTheDocument();
     expect(screen.getByTestId('backing-panel')).toBeInTheDocument();
   });
+});
+
+describe('SongRow click track runway', () => {
+  const runwayPiece: TrackPiece = {
+    id: 'p1',
+    label: 'Verse',
+    color: '#8b5cf6',
+    groupId: null,
+    timeSignature: { numerator: 4, denominator: 4 },
+    subdivision: 'quarter',
+    bpm: 120,
+    repeats: 4,
+  };
+  const controls = (over: Partial<SongClickTrackControls> = {}): SongClickTrackControls => ({
+    by: 'Alice',
+    date: 'Jan 5',
+    playing: false,
+    busy: false,
+    runway: { pieces: [runwayPiece], groups: [], position: createPositionStore() },
+    onPlay: vi.fn(),
+    onDownload: vi.fn(),
+    onDownloadCompressed: vi.fn(),
+    onOpen: vi.fn(),
+    onRemove: vi.fn(),
+    ...over,
+  });
+  const runway = () => screen.queryByRole('group', { name: 'Click track position' });
+
+  it('shows the runway under the strip while the track plays', () => {
+    setup({}, { clickTrack: controls({ playing: true }) });
+    expect(runway()).toBeInTheDocument();
+    expect(runway()).toHaveTextContent('120 BPM');
+  });
+
+  it('shows no runway when the track is not playing, even if runway controls are present', () => {
+    setup({}, { clickTrack: controls({ playing: false }) });
+    expect(runway()).not.toBeInTheDocument();
+  });
+
+  it('shows no runway while playing when there are no runway controls', () => {
+    setup({}, { clickTrack: controls({ playing: true, runway: undefined }) });
+    expect(runway()).not.toBeInTheDocument();
+  });
+
+  it('shows no runway for a song without a click track', () => {
+    setup();
+    expect(runway()).not.toBeInTheDocument();
+  });
+
+  it('removes the runway when playback stops', () => {
+    const c = controls({ playing: true });
+    const { rerender } = render(
+      <ul>
+        <SongRow {...baseProps()} clickTrack={c} />
+      </ul>,
+    );
+    expect(runway()).toBeInTheDocument();
+    rerender(
+      <ul>
+        <SongRow {...baseProps()} clickTrack={{ ...c, playing: false }} />
+      </ul>,
+    );
+    expect(runway()).not.toBeInTheDocument();
+  });
+
+  it('keeps the strip buttons next to the runway', () => {
+    setup({}, { clickTrack: controls({ playing: true }) });
+    expect(screen.getByRole('button', { name: /Stop click track for Wonderwall/ })).toBeInTheDocument();
+  });
+
+  function baseProps(): React.ComponentProps<typeof SongRow> {
+    return {
+      song: song(),
+      rank: 1,
+      tally: { up: 0, down: 0, score: 0 },
+      myVote: undefined,
+      suggestedBy: 'Alice',
+      color: undefined,
+      isAuthor: false,
+      isOwner: false,
+      isVoting: false,
+      onVote: vi.fn(),
+      onColor: vi.fn(),
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+      onHide: vi.fn(),
+    };
+  }
 });

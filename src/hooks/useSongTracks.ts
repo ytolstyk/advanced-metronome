@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearSongTrack, getSongTrack, type SongTrackRead } from '../api/songTracksApi';
-import { ClickTrackEngine } from '../audio/ClickTrackEngine';
+import { ClickTrackEngine, type TrackPiece } from '../audio/ClickTrackEngine';
+import type { SegmentGroup } from '../clickTrackTypes';
+import { createPositionStore } from '../utils/playbackPosition';
+import type { RunwayControls } from '../utils/trackRunway';
 import { CLICK_EXPORT_EXTENSION, type ClickExportFormat } from '../audio/clickExportSinks';
 import { exportClickTrack } from '../audio/exportClickTrack';
 import { BAND_TRACK_FORMAT, BAND_TRACK_HANDOFF_KEY, serializeBandTrackHandoff } from '../clickTrackBand';
@@ -32,7 +35,13 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
   const choices = useOptimisticChoice<'removed'>(fetchedAt);
   const engineRef = useRef<ClickTrackEngine | null>(null);
   const mounted = useRef(true);
-  const [playingId, setPlayingId] = useState<string | null>(null);
+  /** The song that is playing and its track (kept for the runway). One value, so "playing" and "what is on the runway" can't disagree. */
+  const [playing, setPlaying] = useState<{ songId: string; pieces: TrackPiece[]; groups: SegmentGroup[] } | null>(null);
+  const playingId = playing?.songId ?? null;
+  /** Where the click is. Outside React state, so a click doesn't re-render the page. */
+  const [position] = useState(() => createPositionStore());
+  /** Identifies the current start. The engine's beat timers can fire after `stop()` / a newer `start()`; those are ignored. */
+  const runId = useRef(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   /** Re-entrancy guard: state lags a render, so two quick clicks would both start a fetch (or a WAV render). */
   const busyRef = useRef(false);
@@ -70,8 +79,9 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
   const playingGone = playingId !== null && trackFor(playingId) === undefined;
   useEffect(() => {
     if (!playingGone) return;
+    runId.current++;
     engineRef.current?.stop();
-    setPlayingId(null);
+    setPlaying(null);
   }, [playingGone]);
 
   const problemFor = (song: Pick<SongRecord, 'id'>): string | undefined => {
@@ -134,8 +144,9 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
   }
 
   const stop = () => {
+    runId.current++;
     engineRef.current?.stop();
-    setPlayingId(null);
+    setPlaying(null);
   };
 
   const play = (song: ValidSong): Promise<void> => {
@@ -146,13 +157,21 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
     // Unlock audio inside the click, before the fetch below awaits (iOS Safari only allows it in the gesture).
     engineRef.current ??= new ClickTrackEngine();
     engineRef.current.prime();
-    return withTrack(song, 'Could not play the click track', ({ pieces }) => {
+    return withTrack(song, 'Could not play the click track', ({ pieces, groups }) => {
       const engine = engineRef.current;
       if (!engine) return;
-      engine.start(pieces, 0, 1, false, () => undefined, () => undefined, () => {
-        if (mounted.current) setPlayingId(null);
-      });
-      setPlayingId(song.id);
+      const run = ++runId.current;
+      position.set({ pieceIndex: 0, rep: 0, subTick: -1 });
+      engine.start(
+        pieces, 0, 1, false, () => undefined, () => undefined,
+        () => {
+          if (mounted.current && run === runId.current) setPlaying(null);
+        },
+        (pieceIndex, rep, subTick) => {
+          if (run === runId.current) position.set({ pieceIndex, rep, subTick });
+        },
+      );
+      setPlaying({ songId: song.id, pieces, groups });
     });
   };
 
@@ -179,5 +198,9 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
     await choices.run(song.id, 'removed', () => clearSongTrack(song, hasOwnRow));
   };
 
-  return { trackFor, problemFor, isPlaying: (id: string) => playingId === id, busy: busyId !== null, play, download, open, remove, error };
+  /** What to draw under a song while its track plays; undefined for every other song. */
+  const runwayFor = (songId: string): RunwayControls | undefined =>
+    playing?.songId === songId ? { pieces: playing.pieces, groups: playing.groups, position } : undefined;
+
+  return { trackFor, problemFor, runwayFor, isPlaying: (id: string) => playingId === id, busy: busyId !== null, play, download, open, remove, error };
 }

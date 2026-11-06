@@ -44,6 +44,12 @@ export class ClickTrackEngine {
   private timer: ReturnType<typeof setInterval> | null = null;
   /** The pending "track finished" callback; cleared by stop()/start() so a late one can't stop a newer run. */
   private endTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Bumped by every stop()/start(). The bar-start and beat notifications are queued with setTimeout up to the
+   * lookahead ahead of the click; one queued before a stop or a newer start must not reach the callbacks of the
+   * run that replaced it (it would report the old track's position as the new one's).
+   */
+  private runToken = 0;
 
   // Playback cursor
   private pieces: TrackPiece[] = [];
@@ -159,6 +165,7 @@ export class ClickTrackEngine {
   }
 
   stop(): void {
+    this.runToken++;
     if (this.timer !== null) { clearInterval(this.timer); this.timer = null; }
     if (this.endTimer !== null) { clearTimeout(this.endTimer); this.endTimer = null; }
     this.isRunning = false;
@@ -255,8 +262,9 @@ export class ClickTrackEngine {
     const delay = (t - ctx.currentTime) * 1000;
 
     // Notify new measure start
+    const token = this.runToken;
     if (subTickInMeasure === 0) {
-      setTimeout(() => { this.onProgress?.(pi, rep); }, Math.max(0, delay));
+      setTimeout(() => { if (token === this.runToken) this.onProgress?.(pi, rep); }, Math.max(0, delay));
     }
 
     // Derive beat index and accent level for this sub-tick
@@ -276,7 +284,7 @@ export class ClickTrackEngine {
     }
     // Notify beat position for visual highlighting
     const beatSubTick = subTickInMeasure;
-    setTimeout(() => { this.onBeat?.(pi, rep, beatSubTick); }, Math.max(0, delay));
+    setTimeout(() => { if (token === this.runToken) this.onBeat?.(pi, rep, beatSubTick); }, Math.max(0, delay));
 
     // Advance sub-tick
     this.subIndex++;

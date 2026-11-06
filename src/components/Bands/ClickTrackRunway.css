@@ -1,0 +1,191 @@
+/*
+ * The runway: a window of four bars (previous, current, next, next+1) that slides left one bar at a time.
+ * The bars are absolutely placed by slot; the soft edges are a static mask on the viewport, so a bar
+ * fades out as it slides off the left and fades in as it arrives from the right.
+ */
+.ct-runway {
+  --runway-gap: 0.5rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ct-runway-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  min-width: 0;
+}
+
+.ct-runway-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--runway-color, var(--color-foreground));
+}
+
+.ct-runway-section {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-surface-muted-foreground);
+}
+
+.ct-runway-bpm {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+.ct-runway-bpm small {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--color-surface-muted-foreground);
+}
+
+.ct-runway-viewport {
+  /* The two outer bars of the four visible ones fade; --runway-bars and --runway-slide are set by the component. */
+  --runway-fade: linear-gradient(to right, transparent 0, rgb(0 0 0 / 0.35) 10%, #000 25%, #000 75%, rgb(0 0 0 / 0.35) 90%, transparent 100%);
+  position: relative;
+  height: 5.5rem;
+  overflow: hidden;
+  -webkit-mask-image: var(--runway-fade);
+  mask-image: var(--runway-fade);
+}
+
+.ct-runway-bar {
+  position: absolute;
+  /* Inset so the current bar's ring and glow aren't cut off by the viewport. */
+  top: 6px;
+  bottom: 6px;
+  left: 0;
+  /* The visible bars and the gaps between them fill the viewport. */
+  width: calc((100% - (var(--runway-bars) - 1) * var(--runway-gap)) / var(--runway-bars));
+  /* A percentage translate is relative to the bar's own width, so one slot = a bar plus a gap. */
+  transform: translateX(calc(var(--slot) * (100% + var(--runway-gap))));
+  transition: transform var(--runway-slide, 280ms) ease-out;
+  will-change: transform;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.4rem 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--piece-color) 45%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--piece-color) 10%, var(--color-background));
+}
+
+.ct-runway-bar.is-current {
+  border-color: var(--piece-color);
+  box-shadow: 0 0 0 2px var(--piece-color), 0 0 8px color-mix(in srgb, var(--piece-color) 30%, transparent);
+}
+
+.ct-runway-number {
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-surface-muted-foreground);
+}
+
+.ct-runway-dots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.ct-runway-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--piece-color);
+}
+
+.ct-runway-dot--accent {
+  width: 12px;
+  height: 12px;
+}
+
+.ct-runway-dot--beat {
+  width: 9px;
+  height: 9px;
+  opacity: 0.6;
+}
+
+.ct-runway-dot--sub {
+  width: 5px;
+  height: 5px;
+  opacity: 0.35;
+}
+
+.ct-runway-dot--clicking {
+  opacity: 1;
+  background: var(--color-foreground);
+  box-shadow: 0 0 8px var(--color-foreground), 0 0 16px var(--piece-color);
+  transform: scale(1.35);
+}
+
+/* Bars with many dots (4/4 sixteenths and up) shrink them so the rows still fit the bar. */
+.ct-runway-dots.is-packed {
+  gap: 2px;
+}
+
+.ct-runway-dots.is-packed .ct-runway-dot--accent {
+  width: 7px;
+  height: 7px;
+}
+
+.ct-runway-dots.is-packed .ct-runway-dot--beat {
+  width: 5px;
+  height: 5px;
+}
+
+.ct-runway-dots.is-packed .ct-runway-dot--sub {
+  width: 3px;
+  height: 3px;
+}
+
+.ct-runway-dots.is-tiny {
+  gap: 1px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.ct-runway-dots.is-tiny .ct-runway-dot--accent {
+  width: 4px;
+  height: 4px;
+}
+
+.ct-runway-dots.is-tiny .ct-runway-dot--beat {
+  width: 3px;
+  height: 3px;
+}
+
+.ct-runway-dots.is-tiny .ct-runway-dot--sub {
+  width: 2px;
+  height: 2px;
+}
+
+.ct-runway-meter {
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--color-surface-muted-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-runway-bar {
+    transition: none;
+  }
+}

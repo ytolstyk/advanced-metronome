@@ -194,6 +194,7 @@ function SetListDetails({ view, list, fetchedAt, setListId, refreshing, reload }
       playing: tracks.isPlaying(song.id),
       busy: tracks.busy,
       problem: tracks.problemFor(song),
+      runway: tracks.runwayFor(song.id),
       onPlay: () => void tracks.play(song),
       onDownload: () => void tracks.download(song),
       onDownloadCompressed: () => void tracks.download(song, 'flac'),

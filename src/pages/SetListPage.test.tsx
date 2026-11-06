@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup as cleanupAll, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup as cleanupAll, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { BAND_LIMITS } from '../bandTypes';
 import type { BackingTrackRecord, BandRecord, BandView, ValidSong, ColorLabelRecord, SongColorRecord, SongRecord, SongTrackMetaRecord, VoteRecord, ValidMember, ValidSetList } from '../bandTypes';
 import type { TrackPiece } from '../audio/ClickTrackEngine';
+import type { SegmentGroup } from '../clickTrackTypes';
 import { SONG_COLOR_STYLES } from '../bandSongColors';
 import userEvent from '@testing-library/user-event';
 import { committedKey } from '../backingTrackFormat';
@@ -1164,6 +1165,105 @@ describe('song click tracks', () => {
     const onStop = engine.start.mock.calls[0]![6] as () => void;
     onStop();
     expect(await strip('Song a').findByRole('button', { name: /Play click track for Song a/ })).toBeInTheDocument();
+  });
+
+  describe('runway', () => {
+    const runwayOf = (title: string) => strip(title).queryByRole('group', { name: 'Click track position' });
+    const onBeat = () => engine.start.mock.calls[0]![7] as (pieceIndex: number, rep: number, subTick: number) => void;
+    const playSongA = async (pieces: TrackPiece[] = [piece()], groups: SegmentGroup[] = []) => {
+      vi.mocked(getSongTrack).mockResolvedValue({ status: 'ok', pieces, groups, stale: false });
+      withTrack();
+      await screen.findByText('Song a');
+      fireEvent.click(strip('Song a').getByRole('button', { name: /Play click track for Song a/ }));
+      await waitFor(() => expect(engine.start).toHaveBeenCalledTimes(1));
+      await strip('Song a').findByRole('button', { name: /Stop click track/ });
+    };
+
+    it('shows no runway until the track plays', async () => {
+      vi.mocked(getSongTrack).mockResolvedValue(okRead());
+      withTrack();
+      await screen.findByText('Song a');
+      expect(runwayOf('Song a')).not.toBeInTheDocument();
+    });
+
+    it('subscribes to the engine beat callback and shows the runway under the playing song only', async () => {
+      await playSongA([piece({ bpm: 90, label: 'Verse' })]);
+      expect(typeof onBeat()).toBe('function');
+      expect(runwayOf('Song a')).toBeInTheDocument();
+      expect(runwayOf('Song a')).toHaveTextContent('90 BPM');
+      expect(runwayOf('Song a')).toHaveTextContent('Verse');
+      expect(runwayOf('Song b')).not.toBeInTheDocument();
+    });
+
+    it('follows the beats the engine reports', async () => {
+      await playSongA([piece({ bpm: 100, repeats: 3 }), piece({ id: 'p2', bpm: 140, repeats: 2 })]);
+      const region = runwayOf('Song a')!;
+      expect(region.querySelector('.ct-runway-dot--clicking')).toBeNull();
+
+      act(() => onBeat()(0, 1, 2));
+      expect(region.querySelector('.ct-runway-bar.is-current .ct-runway-number')).toHaveTextContent('2');
+      const dots = Array.from(region.querySelectorAll('.ct-runway-bar.is-current .ct-runway-dot'));
+      expect(dots.findIndex((d) => d.classList.contains('ct-runway-dot--clicking'))).toBe(2);
+
+      act(() => onBeat()(1, 0, 0));
+      expect(region).toHaveTextContent('140 BPM');
+      expect(region.querySelector('.ct-runway-bar.is-current .ct-runway-number')).toHaveTextContent('4');
+    });
+
+    it('uses the group names stored with the track', async () => {
+      await playSongA([piece({ groupId: 'g1', label: 'Lift' })], [{ id: 'g1', name: 'Chorus', color: '#ef4444' }]);
+      expect(runwayOf('Song a')).toHaveTextContent('Chorus · Lift');
+    });
+
+    it('starts each play from the first bar even if an earlier run ended mid-track', async () => {
+      await playSongA([piece({ repeats: 6 })]);
+      act(() => onBeat()(0, 4, 1));
+      fireEvent.click(strip('Song a').getByRole('button', { name: /Stop click track for Song a/ }));
+      await strip('Song a').findByRole('button', { name: /Play click track for Song a/ });
+
+      engine.start.mockClear();
+      fireEvent.click(strip('Song a').getByRole('button', { name: /Play click track for Song a/ }));
+      await waitFor(() => expect(engine.start).toHaveBeenCalledTimes(1));
+      const region = await strip('Song a').findByRole('group', { name: 'Click track position' });
+      expect(region.querySelector('.ct-runway-bar.is-current .ct-runway-number')).toHaveTextContent('1');
+      expect(region.querySelector('.ct-runway-dot--clicking')).toBeNull();
+    });
+
+    it('ignores beats and the end callback of an earlier run once a new run has started', async () => {
+      await playSongA([piece({ repeats: 6 })]);
+      const oldBeat = onBeat();
+      const oldEnd = engine.start.mock.calls[0]![6] as () => void;
+      fireEvent.click(strip('Song a').getByRole('button', { name: /Stop click track for Song a/ }));
+      await strip('Song a').findByRole('button', { name: /Play click track for Song a/ });
+
+      engine.start.mockClear();
+      fireEvent.click(strip('Song a').getByRole('button', { name: /Play click track for Song a/ }));
+      await waitFor(() => expect(engine.start).toHaveBeenCalledTimes(1));
+      const region = await strip('Song a').findByRole('group', { name: 'Click track position' });
+
+      act(() => oldBeat(0, 4, 3)); // a late callback from the run that was stopped
+      expect(region.querySelector('.ct-runway-bar.is-current .ct-runway-number')).toHaveTextContent('1');
+      act(() => oldEnd());
+      expect(runwayOf('Song a')).toBeInTheDocument();
+      expect(strip('Song a').getByRole('button', { name: /Stop click track for Song a/ })).toBeInTheDocument();
+
+      act(() => (engine.start.mock.calls[0]![7] as (p: number, r: number, s: number) => void)(0, 2, 1));
+      expect(region.querySelector('.ct-runway-bar.is-current .ct-runway-number')).toHaveTextContent('3');
+    });
+
+    it('removes the runway on Stop', async () => {
+      await playSongA();
+      fireEvent.click(strip('Song a').getByRole('button', { name: /Stop click track for Song a/ }));
+      await strip('Song a').findByRole('button', { name: /Play click track for Song a/ });
+      expect(runwayOf('Song a')).not.toBeInTheDocument();
+    });
+
+    it('removes the runway when the track ends by itself', async () => {
+      await playSongA();
+      act(() => (engine.start.mock.calls[0]![6] as () => void)());
+      await strip('Song a').findByRole('button', { name: /Play click track for Song a/ });
+      expect(runwayOf('Song a')).not.toBeInTheDocument();
+    });
   });
 
   it('Download renders the track at 100% into a WAV named after the song', async () => {

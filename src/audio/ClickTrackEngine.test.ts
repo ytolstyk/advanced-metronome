@@ -339,3 +339,57 @@ describe('ClickTrackEngine end-of-track callback', () => {
   });
 });
 
+
+describe('ClickTrackEngine queued beat notifications', () => {
+  function startedEngine() {
+    vi.useFakeTimers();
+    const ctx = makeFakeCtx({ state: 'running', currentTime: 0 });
+    vi.stubGlobal('AudioContext', vi.fn(function () { return ctx; }));
+    return new ClickTrackEngine();
+  }
+  const internals = (e: ClickTrackEngine) => e as unknown as { scheduleNext(): void };
+  const cleanup = (e: ClickTrackEngine) => {
+    e.stop();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  };
+
+  it('delivers a beat to the callback of the run that scheduled it', () => {
+    const engine = startedEngine();
+    const onBeat = vi.fn();
+    const onProgress = vi.fn();
+    engine.start([makeSimplePiece()], 0, 1, false, onProgress, vi.fn(), vi.fn(), onBeat);
+    internals(engine).scheduleNext();
+    vi.advanceTimersByTime(1000);
+    expect(onBeat).toHaveBeenCalledWith(0, 0, 0);
+    expect(onProgress).toHaveBeenCalledWith(0, 0);
+    cleanup(engine);
+  });
+
+  it('drops beats queued before a newer start, so they never reach the new run\'s callbacks', () => {
+    const engine = startedEngine();
+    const firstBeat = vi.fn();
+    const secondBeat = vi.fn();
+    const secondProgress = vi.fn();
+    engine.start([makeSimplePiece({ id: 'a' })], 0, 1, false, vi.fn(), vi.fn(), vi.fn(), firstBeat);
+    internals(engine).scheduleNext(); // queued, not yet fired
+    engine.start([makeSimplePiece({ id: 'b' })], 0, 1, false, secondProgress, vi.fn(), vi.fn(), secondBeat);
+    // The first run's queued beat is due at 50 ms; the second run's own first beat is not due until 75 ms.
+    vi.advanceTimersByTime(60);
+    expect(firstBeat).not.toHaveBeenCalled();
+    expect(secondBeat).not.toHaveBeenCalled();
+    expect(secondProgress).not.toHaveBeenCalled();
+    cleanup(engine);
+  });
+
+  it('drops beats queued before stop()', () => {
+    const engine = startedEngine();
+    const onBeat = vi.fn();
+    engine.start([makeSimplePiece()], 0, 1, false, vi.fn(), vi.fn(), vi.fn(), onBeat);
+    internals(engine).scheduleNext();
+    engine.stop();
+    vi.advanceTimersByTime(1000);
+    expect(onBeat).not.toHaveBeenCalled();
+    cleanup(engine);
+  });
+});

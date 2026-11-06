@@ -4,8 +4,10 @@ import { Download, ExternalLink, EyeOff, Music, Pencil, Play, Square, Trash2 } f
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { SONG_COLOR_STYLES, SONG_COLOR_TINT_PERCENT, type ColorLabels } from '../../bandSongColors';
+import type { RunwayControls } from '../../utils/trackRunway';
 import type { SongColorKey, SongTally, ValidSong, VoteValue } from '../../bandTypes';
 import { CARD_SURFACE } from './cardStyles';
+import { ClickTrackRunway } from './ClickTrackRunway';
 import { SongColorPicker } from './SongColorPicker';
 import { SongDetails } from './SongDetails';
 import { VoteButtons } from './VoteButtons';
@@ -21,6 +23,8 @@ export interface SongClickTrackControls {
   busy: boolean;
   /** Why the track can't be played (unreadable / newer app); Play, Download and Open are then disabled. */
   problem?: string;
+  /** Set while this song's track plays: the unrolled view of the bars around the current one. */
+  runway?: RunwayControls;
   onPlay: () => void;
   onDownload: () => void;
   /** The much smaller lossless FLAC download. */
@@ -174,6 +178,11 @@ function SongClickTrackStrip({ songTitle, track }: { songTitle: string; track: S
         </Button>
       </div>
       {track.problem && <p className="mt-1 text-xs text-destructive">{track.problem}</p>}
+      {track.runway && track.playing && (
+        <div className="mt-2">
+          <ClickTrackRunway {...track.runway} />
+        </div>
+      )}
     </div>
   );
 }

@@ -25,6 +25,7 @@ import { SaveToBandDialog } from '@/components/ClickTrack/SaveToBandDialog';
 import { ShareTooLargeNotice } from '@/components/ClickTrack/ShareTooLargeNotice';
 import { clearBandTrackHandoff, isShareTooLarge, readBandTrackHandoff, saveClickTrackState } from '../utils/clickTrackPage';
 import { newPieceId } from '../utils/barRuns';
+import { getMeasureDots, subTickToDotIndex } from '../utils/measureDots';
 import { clickTrackToDrumMeasures } from '../utils/clickTrackToDrum';
 import { clickTrackToTabTrack } from '../utils/clickTrackToTab';
 import './ClickTrackPage.css';
@@ -149,33 +150,6 @@ function flatToPieceRep(pieces: TrackPiece[], flat: number): { pi: number; r: nu
   }
   const last = pieces.length - 1;
   return { pi: last, r: pieces[last].repeats - 1 };
-}
-
-// ── Map engine sub-tick → dot index in getMeasureDots ──────────────────────
-function subTickToDotIndex(piece: TrackPiece, subTick: number): number {
-  // Triplets: engine fires 3x per "dot slot" but dots only show beats
-  if (piece.subdivision === 'quarter-triplet' || piece.subdivision === 'eighth-triplet') {
-    return Math.floor(subTick / 3);
-  }
-  return subTick; // 1:1 for whole/half/quarter/eighth/sixteenth
-}
-
-// ── Score view dot computation ──────────────────────────────────────────────
-function getMeasureDots(piece: TrackPiece): Array<'accent' | 'beat' | 'sub'> {
-  const { numerator } = piece.timeSignature;
-  const sub = piece.subdivision;
-  if (sub === 'whole') return ['accent'];
-  if (sub === 'half') {
-    const count = Math.ceil(numerator / 2);
-    return Array.from({ length: count }, (_, i) => (i === 0 ? 'accent' : 'beat') as 'accent' | 'beat');
-  }
-  const subsPerBeat = sub === 'eighth' || sub === 'eighth-triplet' ? 1 : sub === 'sixteenth' ? 3 : 0;
-  const result: Array<'accent' | 'beat' | 'sub'> = [];
-  for (let b = 0; b < numerator; b++) {
-    result.push(b === 0 ? 'accent' : 'beat');
-    for (let s = 0; s < subsPerBeat; s++) result.push('sub');
-  }
-  return result;
 }
 
 // ── BPM display label for segment cards ───────────────────────────────────
