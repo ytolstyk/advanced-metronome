@@ -530,3 +530,111 @@ describe('SaveToBandDialog pre-selection of a sole option', () => {
     expect(loadMyBands).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('SaveToBandDialog saved-tracks copy', () => {
+  function setupWithCopy(saveCopy: (song: ValidSong) => Promise<boolean>) {
+    const onOpenChange = vi.fn();
+    render(
+      <MemoryRouter>
+        <SaveToBandDialog open onOpenChange={onOpenChange} pieces={[piece()]} groups={[]} saveCopy={saveCopy} />
+      </MemoryRouter>,
+    );
+    return { user: userEvent.setup() };
+  }
+
+  async function saveKashmir(user: User) {
+    await choose(user, 'Band', 'The Band');
+    await choose(user, 'Set list', 'Main Set');
+    await choose(user, 'Song', 'Kashmir');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+  }
+
+  it('shows no note about saved tracks when the page offers no copy', async () => {
+    const { user } = setup();
+    await saveKashmir(user);
+    const message = await screen.findByText(/Saved to “Kashmir”/);
+    expect(message).not.toHaveTextContent(/saved tracks/);
+  });
+
+  it('calls saveCopy with the chosen song, after the band save', async () => {
+    const order: string[] = [];
+    vi.mocked(saveSongTrack).mockImplementation(async () => { order.push('band'); });
+    const saveCopy = vi.fn<(song: ValidSong) => Promise<boolean>>(async () => { order.push('copy'); return true; });
+    const { user } = setupWithCopy(saveCopy);
+    await saveKashmir(user);
+    await waitFor(() => expect(saveCopy).toHaveBeenCalledTimes(1));
+    expect(saveCopy.mock.calls[0]![0]).toMatchObject({ id: 's2', title: 'Kashmir' });
+    expect(order).toEqual(['band', 'copy']);
+  });
+
+  it('shows the band success at once with a pending note while the copy is being made', async () => {
+    let finish!: (ok: boolean) => void;
+    const saveCopy = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
+    const { user } = setupWithCopy(saveCopy);
+    await saveKashmir(user);
+    const message = await screen.findByText(/Saved to “Kashmir”/);
+    expect(message).toHaveTextContent('Copying it to your saved tracks…');
+    expect(screen.getByRole('link', { name: 'Open the set list' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Saving/ })).not.toBeInTheDocument();
+    finish(true);
+    await waitFor(() => expect(message).toHaveTextContent('A copy is also in your saved tracks (Load).'));
+    expect(message).not.toHaveTextContent('Copying it');
+  });
+
+  it('says a copy is also in the saved tracks when it worked', async () => {
+    const { user } = setupWithCopy(async () => true);
+    await saveKashmir(user);
+    expect(await screen.findByText(/A copy is also in your saved tracks/)).toBeInTheDocument();
+  });
+
+  it('keeps the band success and notes the problem when the copy returns false', async () => {
+    const { user } = setupWithCopy(async () => false);
+    await saveKashmir(user);
+    const message = await screen.findByText(/couldn’t be copied to your saved tracks/);
+    expect(message).toHaveTextContent('Saved to “Kashmir”');
+    expect(message).not.toHaveTextContent('A copy is also in your saved tracks');
+    expect(screen.getByRole('link', { name: 'Open the set list' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('treats a rejected copy like a failed one', async () => {
+    const { user } = setupWithCopy(async () => { throw new Error('network'); });
+    await saveKashmir(user);
+    expect(await screen.findByText(/couldn’t be copied to your saved tracks/)).toHaveTextContent('Saved to “Kashmir”');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('does not call saveCopy when the band save throws, and shows the error', async () => {
+    vi.mocked(saveSongTrack).mockRejectedValueOnce(new Error('Could not save the click track. Please try again.'));
+    const saveCopy = vi.fn<(song: ValidSong) => Promise<boolean>>(async () => true);
+    const { user } = setupWithCopy(saveCopy);
+    await saveKashmir(user);
+    expect(await screen.findByText('Could not save the click track. Please try again.')).toBeInTheDocument();
+    expect(saveCopy).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Saved to/)).not.toBeInTheDocument();
+  });
+
+  it('drops a late copy result when the dialog was closed and reopened meanwhile', async () => {
+    let finish!: (ok: boolean) => void;
+    const saveCopy = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <MemoryRouter>
+          <button onClick={() => setOpen(true)}>reopen</button>
+          <SaveToBandDialog open={open} onOpenChange={setOpen} pieces={[piece()]} groups={[]} saveCopy={saveCopy} />
+        </MemoryRouter>
+      );
+    }
+    const user = userEvent.setup();
+    render(<Harness />);
+    await saveKashmir(user);
+    await screen.findByText(/Copying it to your saved tracks/);
+    await user.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!);
+    await user.click(screen.getByRole('button', { name: 'reopen' }));
+    finish(true);
+    expect(await screen.findByRole('combobox', { name: 'Band' })).toHaveTextContent('Choose a band');
+    expect(screen.queryByText(/Saved to/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/saved tracks/)).not.toBeInTheDocument();
+  });
+});

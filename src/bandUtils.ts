@@ -707,16 +707,19 @@ export function songIdentity(song: Pick<SongRecord, 'title' | 'artist'>): string
   return `${song.title.trim().toLowerCase()}\u0000${(song.artist ?? '').trim().toLowerCase()}`;
 }
 
+/** "Title - Artist", or just "Title" when the song has no artist. */
+export function songLabel(song: Pick<ValidSong, 'title' | 'artist'>): string {
+  const artist = song.artist?.trim();
+  return artist ? `${song.title} - ${artist}` : song.title;
+}
+
 /**
  * "1. Title - Artist" per line, in the given order; a song with no artist is just "1. Title".
  * Takes validated songs only: their text has no newlines or bidi characters, so a title can't forge extra lines.
  */
 export function formatSongList(songs: ReadonlyArray<Pick<ValidSong, 'title' | 'artist'>>): string {
   return songs
-    .map((song, index) => {
-      const artist = song.artist?.trim();
-      return `${index + 1}. ${song.title}${artist ? ` - ${artist}` : ''}`;
-    })
+    .map((song, index) => `${index + 1}. ${songLabel(song)}`)
     .join('\n');
 }
 

@@ -26,6 +26,7 @@ import {
   filterValidSongs,
   formatInviteCode,
   formatSongList,
+  songLabel,
   generateInviteCode,
   isBanned,
   inviteStatus,
@@ -2060,6 +2061,22 @@ describe('songIdentity', () => {
   it('cannot be forged by moving text across the title/artist boundary', () => {
     expect(songIdentity({ title: 'a b', artist: 'c' })).not.toBe(songIdentity({ title: 'a', artist: 'b c' }));
     expect(songIdentity({ title: 'ab', artist: null })).not.toBe(songIdentity({ title: 'a', artist: 'b' }));
+  });
+});
+
+describe('songLabel', () => {
+  it('joins title and artist as "Title - Artist"', () => {
+    expect(songLabel({ title: 'Kashmir', artist: 'Led Zeppelin' })).toBe('Kashmir - Led Zeppelin');
+  });
+
+  it('is just the title when the artist is null, empty or blank', () => {
+    expect(songLabel({ title: 'Kashmir', artist: null })).toBe('Kashmir');
+    expect(songLabel({ title: 'Kashmir', artist: '' })).toBe('Kashmir');
+    expect(songLabel({ title: 'Kashmir', artist: '   ' })).toBe('Kashmir');
+  });
+
+  it('trims the artist but keeps the title as given', () => {
+    expect(songLabel({ title: ' Kashmir ', artist: '  Led Zeppelin  ' })).toBe(' Kashmir  - Led Zeppelin');
   });
 });
 

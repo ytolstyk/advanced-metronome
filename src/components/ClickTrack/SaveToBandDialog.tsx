@@ -10,7 +10,7 @@ import { loadMemberBandView, loadMyBands } from '@/api/bandsApi';
 import { fetchSongTargets } from '@/api/setListsApi';
 import { saveSongTrack } from '@/api/songTracksApi';
 import { bandPath, setListPath } from '@/bandRoutes';
-import { BAND_LIMITS, type BandView, type MyBandEntry } from '@/bandTypes';
+import { BAND_LIMITS, type BandView, type MyBandEntry, type ValidSong } from '@/bandTypes';
 import type { SongTargets } from '@/bandViews';
 import { encodeBandTrack } from '@/clickTrackBand';
 import { errorMessage } from '@/lib/errors';
@@ -26,15 +26,36 @@ function soleSetListId(view: BandView): string | null {
   return known.length === 1 && view.setLists.length === 1 && only!.id === known[0] ? only!.id : null;
 }
 
+/** What the person was told it saved to, and how the optional copy for their own account went. */
+interface SavedTarget {
+  bandId: string;
+  setListId: string;
+  title: string;
+  /** `pending` while the copy is still being made; `none` when the page offers no copy. */
+  copy: 'none' | 'pending' | 'saved' | 'failed';
+}
+
+const COPY_NOTES: Record<SavedTarget['copy'], string> = {
+  none: '',
+  pending: ' Copying it to your saved tracks…',
+  saved: ' A copy is also in your saved tracks (Load).',
+  failed: ' It couldn’t be copied to your saved tracks; use Save to Cloud if you want one.',
+};
+
 interface SaveToBandDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pieces: TrackPiece[];
   groups: SegmentGroup[];
+  /**
+   * Also keeps a copy in the person's own saved tracks, called after the band save succeeds. Owned by the page
+   * (which owns personal tracks) so this dialog stays about bands; a rejection or `false` shows as "couldn't be copied".
+   */
+  saveCopy?: (song: ValidSong) => Promise<boolean>;
 }
 
 /** Picks band -> set list -> song and attaches the current track to that song for the whole band. */
-export function SaveToBandDialog({ open, onOpenChange, pieces, groups }: SaveToBandDialogProps) {
+export function SaveToBandDialog({ open, onOpenChange, pieces, groups, saveCopy }: SaveToBandDialogProps) {
   // What the person picked. The shown choice falls back to the only option when there is just one
   // (`bandId` etc. below), so the common case of one band, set list and song needs no clicks.
   const [pickedBandId, setPickedBandId] = useState<string | null>(null);
@@ -42,7 +63,7 @@ export function SaveToBandDialog({ open, onOpenChange, pieces, groups }: SaveToB
   const [pickedSongId, setPickedSongId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [savedTo, setSavedTo] = useState<{ bandId: string; setListId: string; title: string } | null>(null);
+  const [savedTo, setSavedTo] = useState<SavedTarget | null>(null);
   /** Bumped on every close: remote answers are keyed by it, so a reopened dialog never shows the last session's data. */
   const [epoch, setEpoch] = useState(0);
   /** Same idea for an in-flight save: its result is dropped if the dialog was closed (and maybe reopened) meanwhile. */
@@ -104,7 +125,15 @@ export function SaveToBandDialog({ open, onOpenChange, pieces, groups }: SaveToB
     setSaveError(null);
     try {
       await saveSongTrack(view, song, pieces, groups, songs.myTrackSongIds.has(song.id));
-      if (session.current === mine) setSavedTo({ bandId: view.band.id, setListId: song.setListId, title: song.title });
+      if (session.current !== mine) return;
+      const target = { bandId: view.band.id, setListId: song.setListId, title: song.title };
+      setSavedTo({ ...target, copy: saveCopy ? 'pending' : 'none' });
+      setSaving(false);
+      if (saveCopy) {
+        // Best effort and off the critical path: the band save above is what matters.
+        const copied = await saveCopy(song).catch(() => false);
+        if (session.current === mine) setSavedTo({ ...target, copy: copied ? 'saved' : 'failed' });
+      }
     } catch (e) {
       if (session.current === mine) setSaveError(errorMessage(e, 'Could not save the click track'));
     } finally {
@@ -131,6 +160,7 @@ export function SaveToBandDialog({ open, onOpenChange, pieces, groups }: SaveToB
           <div className="grid gap-3">
             <p role="status" className="rounded-md border border-emerald-900/50 bg-emerald-950/20 p-3 text-sm text-emerald-300">
               Saved to “{savedTo.title}”. Everyone in the band can now use it from the set list.
+              {COPY_NOTES[savedTo.copy]}
             </p>
             <Link to={setListPath(savedTo.bandId, savedTo.setListId)} className="text-sm text-primary">
               Open the set list

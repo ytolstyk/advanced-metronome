@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
+import { Fragment, useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GripVertical, Play, Pause, Square, Pencil, Trash2, Copy, Plus, Download, RotateCcw, Cloud, ChevronDown, FolderOpen, Share2, FileUp, Users } from 'lucide-react';
 import { AuthGate } from '@/components/AuthGate/AuthGate';
@@ -13,8 +13,10 @@ import { ClickTrackEngine, getBpmAtRepetition } from '@/audio/ClickTrackEngine';
 import type { TrackPiece, SubdivisionLabel, LoopRampConfig } from '@/audio/ClickTrackEngine';
 import { FLAC_DOWNLOAD_HINT, type ClickExportFormat } from '@/audio/clickExportSinks';
 import { exportClickTrack } from '@/audio/exportClickTrack';
-import { saveCloudClickTrack, loadCloudClickTracks, deleteCloudClickTrack } from '@/api/clickTrackApi';
+import { saveCloudClickTrack, saveCloudCopyForSong, loadCloudClickTracks, deleteCloudClickTrack } from '@/api/clickTrackApi';
 import type { SegmentGroup, CloudClickTrack } from '@/api/clickTrackApi';
+import { songLabel } from '@/bandUtils';
+import type { ValidSong } from '@/bandTypes';
 import { CLICK_BPM_MIN, CLICK_BPM_MAX } from '@/constants';
 import { SongImportDialog } from '@/components/ClickTrack/SongImportDialog';
 import { ImportTempoMapIntroDialog } from '@/components/ClickTrack/ImportTempoMapIntroDialog';
@@ -90,6 +92,8 @@ interface PersistedState {
   groups: SegmentGroup[];
   speedPercent: number;
   expandView: boolean;
+  /** Score view: start each group on a new row. Absent in states saved before the option existed (reads as on). */
+  groupRows?: boolean;
   countdownEnabled: boolean;
 }
 
@@ -381,6 +385,7 @@ export function ClickTrackPage() {
   const [groups, setGroups] = useState<SegmentGroup[]>(loadHandoffNow ? bandHandoff.groups : saved.groups);
   const [speedPercent, setSpeedPercent] = useState(saved.speedPercent);
   const [expandView, setExpandView] = useState(saved.expandView);
+  const [groupRows, setGroupRows] = useState(saved.groupRows !== false);
   const [countdownEnabled, setCountdownEnabled] = useState(saved.countdownEnabled);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -472,9 +477,9 @@ export function ClickTrackPage() {
 
   // Persist to localStorage
   useEffect(() => {
-    const s: PersistedState = { pieces, groups, speedPercent, expandView, countdownEnabled };
+    const s: PersistedState = { pieces, groups, speedPercent, expandView, groupRows, countdownEnabled };
     setPersistFailed(!saveClickTrackState(STORAGE_KEY, s));
-  }, [pieces, groups, speedPercent, expandView, countdownEnabled]);
+  }, [pieces, groups, speedPercent, expandView, groupRows, countdownEnabled]);
 
   // Live speed update
   useEffect(() => {
@@ -961,6 +966,11 @@ export function ClickTrackPage() {
     setTimeout(() => { setSaveStatus('idle'); setSaveDialogOpen(false); }, 1500);
   }
 
+  /** After Save to Band: keep a copy in the person's own saved tracks, named after the song. */
+  function saveBandSongCopy(song: ValidSong): Promise<boolean> {
+    return saveCloudCopyForSong(song.id, songLabel(song), pieces, groups);
+  }
+
   // ── Export ─────────────────────────────────────────────────────────────
   async function doExport(format: ClickExportFormat = 'wav') {
     exportAbort.current ??= new AbortController();
@@ -1208,6 +1218,18 @@ export function ClickTrackPage() {
           Expand
         </label>
 
+        {expandView && pieces.length > 1 && (
+          <label className="ct-toggle-row" title="Start each segment on a new row in the expanded view">
+            <button
+              type="button"
+              className={cn('ct-toggle', groupRows && 'on')}
+              onClick={() => setGroupRows(v => !v)}
+              aria-label="Toggle row per segment"
+            />
+            Row per segment
+          </label>
+        )}
+
         <label className="ct-toggle-row">
           <button
             type="button"
@@ -1295,7 +1317,10 @@ export function ClickTrackPage() {
             <div className="ct-score-view">
               {pieces.map((piece, pi) => {
                 const color = getEffectiveColor(piece);
-                return Array.from({ length: piece.repeats }, (_, r) => {
+                // Each segment starts on a fresh row (so a segment repeated 16 times never shares its last row with the next one):
+                // a full-width, zero-height item forces the wrap.
+                const startsSegmentRow = groupRows && pi > 0;
+                const bars = Array.from({ length: piece.repeats }, (_, r) => {
                   const flatIdx = measureOffsets[pi] + r;
                   const isActive = currentPieceIndex === pi && currentRepetition === r;
                   return (
@@ -1320,6 +1345,12 @@ export function ClickTrackPage() {
                     />
                   );
                 });
+                return (
+                  <Fragment key={piece.id}>
+                    {startsSegmentRow && <div className="ct-row-break" data-testid="segment-row-break" />}
+                    {bars}
+                  </Fragment>
+                );
               })}
             </div>
           </>
@@ -1381,9 +1412,6 @@ export function ClickTrackPage() {
                         {gName}
                       </span>
                     )}
-                    {isActive && currentRepetition !== null && !expandView && (
-                      <span className="ct-rep-badge">Rep {currentRepetition + 1}/{piece.repeats}</span>
-                    )}
                   </div>
                   <div className="ct-piece-meta">
                     <span>{sigLabel(piece.timeSignature)}</span>
@@ -1395,6 +1423,13 @@ export function ClickTrackPage() {
                     <span>×{piece.repeats}</span>
                   </div>
                 </div>
+
+                {isActive && currentRepetition !== null && (
+                  <div className="ct-rep-badge" role="img" aria-label={`Repetition ${currentRepetition + 1} of ${piece.repeats}`}>
+                    <span className="ct-rep-current">{currentRepetition + 1}</span>
+                    <span className="ct-rep-total">/{piece.repeats}</span>
+                  </div>
+                )}
 
                 <div className="ct-piece-actions">
                   <Button
@@ -1532,7 +1567,13 @@ export function ClickTrackPage() {
         </DialogContent>
       </Dialog>
 
-      <SaveToBandDialog open={saveToBandOpen} onOpenChange={setSaveToBandOpen} pieces={pieces} groups={groups} />
+      <SaveToBandDialog
+        open={saveToBandOpen}
+        onOpenChange={setSaveToBandOpen}
+        pieces={pieces}
+        groups={groups}
+        saveCopy={saveBandSongCopy}
+      />
 
       {/* Save to Cloud dialog */}
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
