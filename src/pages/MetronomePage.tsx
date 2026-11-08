@@ -182,23 +182,23 @@ const PolyrhythmRings = memo(function PolyrhythmRings({
 
   return (
     <svg viewBox="0 0 220 220" width="100%" style={{ maxWidth: '220px', display: 'block' }} aria-hidden="true">
-      <circle cx={cx} cy={cy} r={r1} fill="none" stroke="#1e1e1e" strokeWidth="1.5" />
-      <circle cx={cx} cy={cy} r={r2} fill="none" stroke="#1e1e1e" strokeWidth="1.5" />
+      <circle cx={cx} cy={cy} r={r1} fill="none" stroke="#5a5a5a" strokeWidth="1.5" />
+      <circle cx={cx} cy={cy} r={r2} fill="none" stroke="#5a5a5a" strokeWidth="1.5" />
       {dots2.map((d, i) => (
         <circle key={i} cx={d.x} cy={d.y} r={8}
-          fill={d.active ? '#f0f0f0' : '#2a2a2a'}
-          stroke={d.active ? '#f0f0f0' : '#333'}
+          fill={d.active ? '#ffffff' : '#3a3a40'}
+          stroke={d.active ? '#ffffff' : '#8a8a8a'}
           strokeWidth="1"
         />
       ))}
       {dots1.map((d, i) => (
         <circle key={i} cx={d.x} cy={d.y} r={7}
-          fill={d.active ? '#6ee7b7' : '#2a2a2a'}
-          stroke={d.active ? '#6ee7b7' : '#3a3a3a'}
+          fill={d.active ? '#6ee7b7' : '#3a3a40'}
+          stroke={d.active ? '#6ee7b7' : '#8a8a8a'}
           strokeWidth="1"
         />
       ))}
-      <circle cx={cx} cy={cy} r={6} fill="#1a1a1a" stroke="#2a2a2a" strokeWidth="1" />
+      <circle cx={cx} cy={cy} r={6} fill="#34343a" stroke="#8a8a8a" strokeWidth="1" />
     </svg>
   );
 });
@@ -227,20 +227,20 @@ const Pendulum = memo(function Pendulum({
     <div className="metronome-viz-card">
       <div className="pendulum-wrap">
         <svg viewBox="0 0 220 260" width="100%" aria-hidden="true" style={{ display: 'block' }}>
-          <polygon points="110,240 55,240 110,80 165,240" fill="#1a1a1a" stroke="#2a2a2a" strokeWidth="1.5" />
+          <polygon points="110,240 55,240 110,80 165,240" fill="#2c2c32" stroke="#8a8a8a" strokeWidth="2" />
           <g
             key={animKey}
             className="pendulum-arm"
             style={{ '--swing-period': swingPeriod, '--swing-state': swingState } as React.CSSProperties}
           >
-            <line x1="110" y1="80" x2="110" y2="215" stroke="#3a3a3a" strokeWidth="2.5" strokeLinecap="round" />
-            <rect x="100" y="135" width="20" height="8" rx="2" fill="#2a2a2a" stroke="#444" strokeWidth="1" />
-            <circle cx="110" cy="80" r="5" fill="#444" />
+            <line x1="110" y1="80" x2="110" y2="215" stroke="#d4d4d4" strokeWidth="3" strokeLinecap="round" />
+            <rect x="100" y="135" width="20" height="8" rx="2" fill="#55555c" stroke="#c4c4c4" strokeWidth="1.2" />
+            <circle cx="110" cy="80" r="5" fill="#e0e0e0" />
             <circle
               cx="110" cy="215" r="16"
               fill={color}
               className={`pendulum-weight${accentLevel === 'accent' ? ' accent' : ''}`}
-              opacity="0.92"
+              opacity="1"
             />
             <circle cx="110" cy="215" r="7" fill="#0a0a0a" opacity="0.5" />
           </g>
@@ -249,7 +249,7 @@ const Pendulum = memo(function Pendulum({
               key={offset}
               x1={110 + offset * 0.9} y1={238}
               x2={110 + offset * 0.9} y2={offset === 0 ? 230 : 234}
-              stroke="#333" strokeWidth="1"
+              stroke="#9a9a9a" strokeWidth="1.2"
             />
           ))}
         </svg>
