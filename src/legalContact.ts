@@ -6,6 +6,8 @@
  * `amplify/backend.ts` refuses to build with `BACKING_TRACKS_ENABLED=true` while this still starts with
  * `TODO`, so uploads cannot go live pointing at nothing.
  */
-export const TAKEDOWN_CONTACT = 'TODO-set-before-launch';
+export const TAKEDOWN_CONTACT = "admin@eataburrita.com";
 
-export const isTakedownContactSet = (contact: string = TAKEDOWN_CONTACT): boolean => !contact.startsWith('TODO');
+export const isTakedownContactSet = (
+  contact: string = TAKEDOWN_CONTACT,
+): boolean => !contact.startsWith("TODO");
