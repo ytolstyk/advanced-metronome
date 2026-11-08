@@ -19,12 +19,24 @@ class FakeAudio {
   static playResults: Promise<void>[] = [];
   src = '';
   currentTime = 0;
+  duration = NaN;
+  paused = true;
+  ontimeupdate: (() => void) | null = null;
+  onloadedmetadata: (() => void) | null = null;
+  ondurationchange: (() => void) | null = null;
+  onseeked: (() => void) | null = null;
+  onpause: (() => void) | null = null;
   onended: (() => void) | null = null;
   onerror: (() => void) | null = null;
   onplaying: (() => void) | null = null;
-  pause = vi.fn();
+  pause = vi.fn(() => {
+    this.paused = true;
+  });
   load = vi.fn();
-  play = vi.fn((): Promise<void> => FakeAudio.playResults.shift() ?? Promise.resolve());
+  play = vi.fn((): Promise<void> => {
+    this.paused = false;
+    return FakeAudio.playResults.shift() ?? Promise.resolve();
+  });
   removeAttribute = vi.fn((name: string) => {
     if (name === 'src') this.src = '';
   });
@@ -473,6 +485,60 @@ describe('useBackingTracks link expiry', () => {
     expect(result.current.error).toBe('Gone for good');
   });
 
+  it('clears the position when the re-link fails, so no ghost bar is left behind', async () => {
+    const { result } = await playing();
+    act(() => {
+      audio().duration = 100;
+      audio().currentTime = 40;
+      audio().ontimeupdate?.();
+    });
+    vi.mocked(getBackingTrackUrl).mockRejectedValue(new Error('Gone for good'));
+    await act(async () => {
+      audio().onerror?.();
+    });
+    expect(result.current.progress.getSnapshot().currentTime).toBe(0);
+    expect(audio().src).toBe('');
+  });
+
+  it('keeps a paused track paused after the re-link', async () => {
+    await playing();
+    vi.mocked(getBackingTrackUrl).mockResolvedValue(FRESH);
+    audio().paused = true;
+    audio().play.mockClear();
+    await act(async () => {
+      audio().onerror?.();
+    });
+    expect(audio().src).toBe(FRESH);
+    expect(audio().play).not.toHaveBeenCalled();
+  });
+
+  it('does not bring a track back when it was stopped while the new link was being fetched', async () => {
+    const { result } = await playing();
+    const link = deferred<string>();
+    vi.mocked(getBackingTrackUrl).mockReturnValue(link.promise);
+    act(() => {
+      audio().onerror?.();
+    });
+    await act(async () => {
+      await result.current.play(A); // pressing the playing track stops it
+    });
+    audio().play.mockClear();
+    await act(async () => {
+      link.resolve(FRESH);
+    });
+    expect(audio().src).toBe('');
+    expect(audio().play).not.toHaveBeenCalled();
+    expect(result.current.playingId).toBeNull();
+  });
+
+  it('resuming that is interrupted by a pause is not an error', async () => {
+    const { result } = await playing();
+    audio().paused = true;
+    FakeAudio.playResults = [Promise.reject(new DOMException('interrupted', 'AbortError'))];
+    await act(async () => result.current.togglePause());
+    expect(result.current.error).toBeNull();
+  });
+
   it('ignores an error after unmount', async () => {
     const { unmount } = await playing();
     const el = audio();
@@ -665,5 +731,194 @@ describe('useBackingTracks remove / edit', () => {
       caught = await result.current.edit(A, 'x', []).catch((e: unknown) => e);
     });
     expect((caught as Error).message).toBe('rename failed');
+  });
+});
+
+describe('useBackingTracks progress', () => {
+  it('mirrors the element position into the progress store', async () => {
+    const { result } = setup();
+    await press(result, 'play', A);
+    act(() => {
+      audio().duration = 245;
+      audio().currentTime = 83;
+      audio().ontimeupdate?.();
+    });
+    expect(result.current.progress.getSnapshot()).toEqual({ currentTime: 83, duration: 245, paused: false });
+  });
+
+  it('reports no length while the element has none (NaN or Infinity)', async () => {
+    const { result } = setup();
+    await press(result, 'play', A);
+    act(() => {
+      audio().duration = Infinity;
+      audio().ontimeupdate?.();
+    });
+    expect(result.current.progress.getSnapshot().duration).toBeNull();
+  });
+
+  it('ignores events from the silent unlock clip', async () => {
+    const { result } = setup();
+    await press(result, 'play', A);
+    act(() => {
+      audio().src = SILENT_WAV_DATA_URI;
+      audio().currentTime = 9;
+      audio().ontimeupdate?.();
+    });
+    expect(result.current.progress.getSnapshot().currentTime).toBe(0);
+  });
+
+  it('resets when playback stops or ends', async () => {
+    const { result } = setup();
+    await press(result, 'play', A);
+    act(() => {
+      audio().duration = 100;
+      audio().currentTime = 50;
+      audio().ontimeupdate?.();
+    });
+    act(() => audio().onended?.());
+    expect(result.current.playingId).toBeNull();
+    expect(result.current.progress.getSnapshot().currentTime).toBe(0);
+
+    await press(result, 'play', A);
+    act(() => {
+      audio().duration = 100;
+      audio().currentTime = 20;
+      audio().ontimeupdate?.();
+    });
+    await act(async () => {
+      await result.current.play(A);
+    });
+    expect(result.current.progress.getSnapshot()).toEqual({ currentTime: 0, duration: null, paused: false });
+  });
+
+  describe('seek and skip', () => {
+    async function playing() {
+      const hook = setup();
+      await press(hook.result, 'play', A);
+      act(() => {
+        audio().duration = 100;
+        audio().currentTime = 50;
+        audio().ontimeupdate?.();
+      });
+      return hook;
+    }
+
+    const settle = () => act(() => void vi.advanceTimersByTime(200));
+
+    it('moves the bar at once and the element once the burst settles', async () => {
+      const { result } = await playing();
+      vi.useFakeTimers();
+      act(() => result.current.seek(70));
+      expect(result.current.progress.getSnapshot().currentTime).toBe(70);
+      expect(audio().currentTime).toBe(50);
+      settle();
+      expect(audio().currentTime).toBe(70);
+      vi.useRealTimers();
+    });
+
+    it('sends only the last seek of a burst to the element', async () => {
+      const { result } = await playing();
+      vi.useFakeTimers();
+      const writes: number[] = [];
+      let time = 50;
+      Object.defineProperty(audio(), 'currentTime', { get: () => time, set: (v: number) => (writes.push(v), (time = v)) });
+      act(() => {
+        result.current.seek(60);
+        result.current.skip(10);
+        result.current.skip(10);
+      });
+      expect(result.current.progress.getSnapshot().currentTime).toBe(80);
+      settle();
+      expect(writes).toEqual([80]);
+      vi.useRealTimers();
+    });
+
+    it('keeps the bar on the pending target when the element reports its old position', async () => {
+      const { result } = await playing();
+      vi.useFakeTimers();
+      act(() => result.current.seek(90));
+      act(() => audio().ontimeupdate?.());
+      expect(result.current.progress.getSnapshot().currentTime).toBe(90);
+      vi.useRealTimers();
+    });
+
+    it('stays a little short of the end and of the start', async () => {
+      const { result } = await playing();
+      vi.useFakeTimers();
+      act(() => result.current.seek(-5));
+      settle();
+      expect(audio().currentTime).toBe(0);
+      act(() => result.current.seek(500));
+      settle();
+      expect(audio().currentTime).toBe(99.75);
+      vi.useRealTimers();
+    });
+
+    it('drops a waiting seek when playback stops', async () => {
+      const { result } = await playing();
+      vi.useFakeTimers();
+      act(() => result.current.seek(70));
+      await act(async () => {
+        await result.current.play(A);
+      });
+      settle();
+      expect(audio().currentTime).toBe(50);
+      vi.useRealTimers();
+    });
+
+    it('skips relative to where the bar is', async () => {
+      const { result } = await playing();
+      act(() => result.current.skip(10));
+      expect(result.current.progress.getSnapshot().currentTime).toBe(60);
+      act(() => result.current.skip(-10));
+      expect(result.current.progress.getSnapshot().currentTime).toBe(50);
+    });
+
+    it('does nothing when the length is unknown or nothing plays', async () => {
+      const idle = setup();
+      act(() => idle.result.current.seek(5));
+      expect(FakeAudio.instances).toHaveLength(0);
+
+      const { result } = setup();
+      await press(result, 'play', A);
+      const before = audio().currentTime;
+      act(() => result.current.seek(5));
+      expect(audio().currentTime).toBe(before);
+    });
+  });
+
+  describe('togglePause', () => {
+    it('pauses, keeps the track selected, then resumes', async () => {
+      const { result } = setup();
+      await press(result, 'play', A);
+      act(() => {
+        audio().duration = 100;
+        audio().currentTime = 30;
+        audio().ontimeupdate?.();
+      });
+      act(() => result.current.togglePause());
+      expect(audio().pause).toHaveBeenCalled();
+      act(() => audio().onpause?.());
+      expect(result.current.playingId).toBe('a');
+      expect(result.current.progress.getSnapshot().paused).toBe(true);
+
+      await act(async () => result.current.togglePause());
+      expect(result.current.progress.getSnapshot()).toEqual({ currentTime: 30, duration: 100, paused: false });
+    });
+
+    it('shows an error and stays paused when the browser refuses to resume', async () => {
+      const { result } = setup();
+      await press(result, 'play', A);
+      act(() => {
+        audio().duration = 100;
+        audio().ontimeupdate?.();
+        audio().pause();
+        audio().onpause?.();
+      });
+      FakeAudio.playResults = [Promise.reject(new Error('blocked'))];
+      await act(async () => result.current.togglePause());
+      expect(result.current.error).toBe('blocked');
+      expect(result.current.progress.getSnapshot().paused).toBe(true);
+    });
   });
 });

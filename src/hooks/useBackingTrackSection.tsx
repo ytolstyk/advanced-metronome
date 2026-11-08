@@ -75,6 +75,12 @@ export function useBackingTrackSection({ list, view, fetchedAt, reload, nameOf }
           onEdit: setEditing,
           onRemove: setRemoving,
           onAdd: canAdd ? () => setAdding(song) : undefined,
+          player: {
+            progress: backing.progress,
+            onSeek: backing.seek,
+            onSkip: backing.skip,
+            onTogglePause: backing.togglePause,
+          },
         }}
       />
     );

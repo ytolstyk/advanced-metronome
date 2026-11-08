@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { BACKING_TRACK_LIMITS } from '../../backingTrackFormat';
 import { canRemoveBackingTrack, formatTrackSize } from '../../backingTrackUtils';
 import type { ValidBackingTrack } from '../../bandTypes';
+import { BackingTrackPlayer, type BackingTrackPlayerControls } from './BackingTrackPlayer';
 import { InstrumentLabels } from './InstrumentBadges';
 
 /** What the panel needs to drive one song's backing tracks. */
@@ -15,6 +16,8 @@ export interface BackingTrackControls {
   onDownload: (track: ValidBackingTrack) => void;
   onEdit: (track: ValidBackingTrack) => void;
   onRemove: (track: ValidBackingTrack) => void;
+  /** Seek bar, time and pause for the track that is playing. */
+  player: BackingTrackPlayerControls;
   /** Absent when the caller can't add (not a member). */
   onAdd?: () => void;
 }
@@ -122,6 +125,7 @@ export function BackingTracksPanel({ songTitle, tracks, viewerSub, isBandOwner, 
                     )}
                   </div>
                 </div>
+                {playing && <BackingTrackPlayer label={track.label} player={controls.player} />}
               </li>
             );
           })}

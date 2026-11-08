@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ValidBackingTrack } from '../../bandTypes';
 import { BackingTracksPanel, type BackingTrackControls } from './BackingTracksPanel';
+import { createProgressStore } from '../../utils/playerProgress';
 
 const ME = 'sub-me';
 const BOB = 'sub-bob';
@@ -40,6 +41,7 @@ function setup(
     onEdit: vi.fn(),
     onRemove: vi.fn(),
     onAdd: vi.fn(),
+    player: { progress: createProgressStore(), onSeek: vi.fn(), onSkip: vi.fn(), onTogglePause: vi.fn() },
     ...over.controls,
   };
   render(
@@ -154,6 +156,20 @@ describe('BackingTracksPanel list items', () => {
       const { user, controls } = await open([a], { controls: { playingId: 'a' } });
       await user.click(screen.getByRole('button', { name: 'Stop Track a' }));
       expect(controls.onPlay).toHaveBeenCalledWith(a);
+    });
+  });
+
+  describe('player bar', () => {
+    it('is shown only under the track that is playing', async () => {
+      const { controls } = await open([track('a'), track('b')], { controls: { playingId: 'b' } });
+      expect(controls.playingId).toBe('b');
+      expect(screen.getAllByRole('group', { name: /Playback controls/ })).toHaveLength(1);
+      expect(screen.getByRole('group', { name: 'Playback controls for Track b' })).toBeInTheDocument();
+    });
+
+    it('is absent when nothing plays', async () => {
+      await open([track('a')]);
+      expect(screen.queryByRole('group', { name: /Playback controls/ })).not.toBeInTheDocument();
     });
   });
 
