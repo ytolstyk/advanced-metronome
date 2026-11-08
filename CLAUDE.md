@@ -37,6 +37,12 @@ Backing track orphan sweep (operator script; dry run by default, see `docs/backi
 npx tsx scripts/backing-tracks-sweep.ts --bucket <bucket> --table <BackingTrack table> [--delete --limit 100]
 ```
 
+README screenshots (fake data only, seeded into localStorage; guest mode so no Bands/cloud pages; output in `docs/screenshots/`; needs the dev server running; optional third argument limits it to named shots, e.g. `drum-machine,scales`):
+
+```bash
+node scripts/take-screenshots.mjs http://localhost:5173
+```
+
 Standalone Jam Station wiring page (one self-contained HTML file built from the app's own router in `src/rigRouting.ts`; default output `~/Downloads/jam_station_architecture_v2.html`):
 
 ```bash

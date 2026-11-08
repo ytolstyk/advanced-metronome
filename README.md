@@ -10,6 +10,78 @@ Drumma Llama is a browser-based drum machine, step sequencer, metronome, click t
 
 ---
 
+## Screenshots
+
+All screenshots use made-up data. Bands, set lists, gear and rigs, and the availability calendar need a signed-in account, so they are not shown here.
+
+### Drum machine
+
+Step sequencer with per-measure time signatures, a chord row, humanize, WAV export and built-in presets (this is the Funk preset).
+
+![Drum machine with the Funk preset loaded](docs/screenshots/drum-machine.png)
+
+### Click track builder
+
+Build a tempo map out of colored, grouped segments with odd meters and speed ramps. Play it, download it as WAV or FLAC, or share it by link.
+
+![Click track builder with five segments, two groups and an accelerando](docs/screenshots/click-track.png)
+
+### Guitar tab editor
+
+Keyboard-driven tab editing with techniques, dynamics and repeats, rendered and played back through alphaTab.
+
+![Tab editor showing a short riff with a hammer-on, palm mute and chords](docs/screenshots/tab-editor.png)
+
+### Chord progression builder
+
+Pick chords for up to eight slots, hear them on guitar, piano or pad, and see Roman numerals and key detection.
+
+![Chord progression builder with C, Am, F and G7](docs/screenshots/chord-progression.png)
+
+### Scales
+
+Any key and scale across a 24-fret neck, with an optional CAGED overlay (A minor pentatonic here).
+
+![A minor pentatonic on the fretboard with the CAGED overlay](docs/screenshots/scales.png)
+
+### CAGED system
+
+The five CAGED shapes for any root, with white rings on the root notes.
+
+![CAGED shapes for G across the neck](docs/screenshots/caged.png)
+
+### Circle of fifths
+
+Click a key to see its relative minor, key signature and neighbors.
+
+![Circle of fifths with G major selected](docs/screenshots/circle-of-fifths.png)
+
+### Metronome
+
+Simple mode, an advanced multi-measure mode (shown) and polyrhythms, with tap tempo and per-beat accents.
+
+![Metronome in advanced mode](docs/screenshots/metronome.png)
+
+### Arpeggio library
+
+Arpeggio shapes by quality and CAGED shape, with sweep playback.
+
+![Arpeggio shape cards](docs/screenshots/arpeggios.png)
+
+### Fret memorizer
+
+Learn the neck: a note-colored fretboard, 6/7/8-string tunings and a quiz game you can answer by clicking or on your guitar.
+
+![Fret memorizer fretboard with colored notes](docs/screenshots/fret-memorizer.png)
+
+To regenerate them (with `npm run dev` running):
+
+```bash
+node scripts/take-screenshots.mjs http://localhost:5173
+```
+
+---
+
 ## Features
 
 ### The Beat Goes On
