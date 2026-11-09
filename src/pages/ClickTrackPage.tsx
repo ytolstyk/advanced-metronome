@@ -9,7 +9,7 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { ClickTrackEngine, getBpmAtRepetition } from '@/audio/ClickTrackEngine';
+import { ClickTrackEngine, COUNTDOWN_BEATS, getBpmAtRepetition } from '@/audio/ClickTrackEngine';
 import type { TrackPiece, SubdivisionLabel, LoopRampConfig } from '@/audio/ClickTrackEngine';
 import { FLAC_DOWNLOAD_HINT, type ClickExportFormat } from '@/audio/clickExportSinks';
 import { exportClickTrack } from '@/audio/exportClickTrack';
@@ -524,7 +524,7 @@ export function ClickTrackPage() {
       startRep,
     );
     setIsPlaying(true);
-    setCountdownDisplay(countdownEnabled ? 3 : null);
+    setCountdownDisplay(countdownEnabled ? COUNTDOWN_BEATS : null);
     setCurrentPieceIndex(startIdx);
     setCurrentRepetition(startRep);
   }
@@ -572,7 +572,7 @@ export function ClickTrackPage() {
       start.r, true, end.pi, end.r,
     );
     setIsPlaying(true);
-    setCountdownDisplay(countdownEnabled ? 3 : null);
+    setCountdownDisplay(countdownEnabled ? COUNTDOWN_BEATS : null);
     setCurrentPieceIndex(start.pi);
     setCurrentRepetition(start.r);
   }
@@ -603,7 +603,7 @@ export function ClickTrackPage() {
       ramp, handleLoopPass,
     );
     setIsPlaying(true);
-    setCountdownDisplay(countdownEnabled ? 3 : null);
+    setCountdownDisplay(countdownEnabled ? COUNTDOWN_BEATS : null);
     setCurrentPieceIndex(start.pi);
     setCurrentRepetition(start.r);
   }

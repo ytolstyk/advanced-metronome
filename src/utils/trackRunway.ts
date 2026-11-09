@@ -6,6 +6,8 @@ import type { PositionStore } from './playbackPosition';
 /** How many bars show on the runway: the one before, the current one, and the next two. */
 export const RUNWAY_BARS_BEFORE = 1;
 export const RUNWAY_BARS_AFTER = 2;
+/** Bars mounted before the current one: the visible one plus one waiting off-screen, so the bar that leaves still slides. */
+export const RUNWAY_MOUNTED_BEFORE = RUNWAY_BARS_BEFORE + 1;
 /** The CSS sizes each bar as a fraction of this (`--runway-bars`), so changing the two constants above keeps the layout right. */
 export const RUNWAY_VISIBLE_BARS = RUNWAY_BARS_BEFORE + 1 + RUNWAY_BARS_AFTER;
 
@@ -56,7 +58,7 @@ export function locateBar(index: BarIndex, flat: number): RunwayBar | null {
  */
 export function runwayWindow(index: BarIndex, currentFlat: number): RunwayBar[] {
   const bars: RunwayBar[] = [];
-  for (let flat = currentFlat - RUNWAY_BARS_BEFORE - 1; flat <= currentFlat + RUNWAY_BARS_AFTER + 1; flat++) {
+  for (let flat = currentFlat - RUNWAY_MOUNTED_BEFORE; flat <= currentFlat + RUNWAY_BARS_AFTER + 1; flat++) {
     const bar = locateBar(index, flat);
     if (bar) bars.push(bar);
   }
@@ -95,9 +97,34 @@ export function runwayHeading(piece: TrackPiece, rep: number, groups: readonly S
   };
 }
 
+/** The count-in card that leads the track when the run started with the countdown on. */
+export interface RunwayCountIn {
+  /** The number being counted (3, 2, 1), or null once the first bar has begun. */
+  beat: number | null;
+}
+
 /** What a song row needs to draw the runway for the track that is playing. */
 export interface RunwayControls {
   pieces: TrackPiece[];
   groups: SegmentGroup[];
   position: PositionStore;
+  /** Present when this run began with a countdown: a card before bar 1 that shows the number. */
+  countIn?: RunwayCountIn;
+}
+
+/** The slot the runway treats as "current": the count-in card sits just before bar 1, as a virtual bar -1. */
+export const COUNT_IN_FLAT = -1;
+
+/** The flat position the row is anchored on: the count-in card while counting, else the bar playing now. */
+export function anchorFlat(currentFlat: number, counting: boolean): number {
+  return counting ? COUNT_IN_FLAT : currentFlat;
+}
+
+/**
+ * Where the count-in card sits relative to the anchor, or null once it has slid out of the mounted range.
+ * It is the anchor itself while counting, then drifts left as the bars play (one bar further each bar).
+ */
+export function countInOffset(currentFlat: number, counting: boolean): number | null {
+  const offset = COUNT_IN_FLAT - anchorFlat(currentFlat, counting);
+  return offset >= -RUNWAY_MOUNTED_BEFORE ? offset : null;
 }

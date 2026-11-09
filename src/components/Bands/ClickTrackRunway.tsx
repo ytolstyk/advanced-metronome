@@ -5,7 +5,9 @@ import { getMeasureDots, subTickToDotIndex, type MeasureDot } from '../../utils/
 import {
   RUNWAY_BARS_BEFORE,
   RUNWAY_VISIBLE_BARS,
+  anchorFlat,
   barSeconds,
+  countInOffset,
   effectiveColor,
   type RunwayControls,
   buildBarIndex,
@@ -56,12 +58,28 @@ const RunwayBar = memo(function RunwayBar({ flat, offset, color, dots, numerator
   );
 });
 
+/** The count-in card: the number being counted, in the slot just before bar 1. */
+const CountInCard = memo(function CountInCard({ offset, color, beat }: { offset: number; color: string; beat: number | null }) {
+  return (
+    <div
+      className={cn('ct-runway-bar ct-runway-count', offset === 0 && 'is-current')}
+      style={{ '--piece-color': color, '--slot': offset + RUNWAY_BARS_BEFORE } as CSSProperties}
+      aria-hidden="true"
+    >
+      <span className="ct-runway-number">Count in</span>
+      <span className={cn('ct-runway-count-number', beat !== null && 'is-counting')} key={beat ?? 'go'}>
+        {beat ?? 'Go'}
+      </span>
+    </div>
+  );
+});
+
 /**
  * The unrolled view of a playing click track: the previous bar (fading out), the current bar, and the next
  * two (the last fading in), with the current tempo and the group / section name above. When the current
  * bar completes the row slides one bar to the left.
  */
-export function ClickTrackRunway({ pieces, groups, position }: RunwayControls) {
+export function ClickTrackRunway({ pieces, groups, position, countIn }: RunwayControls) {
   const { pieceIndex, rep, subTick } = useSyncExternalStore(position.subscribe, position.getSnapshot);
   const index = useMemo(() => buildBarIndex(pieces), [pieces]);
   const dotsByPiece = useMemo(() => pieces.map(getMeasureDots), [pieces]);
@@ -70,6 +88,9 @@ export function ClickTrackRunway({ pieces, groups, position }: RunwayControls) {
   if (!piece) return null;
 
   const currentFlat = flatIndexOf(index, pieceIndex, rep);
+  const counting = countIn?.beat != null;
+  const anchor = anchorFlat(currentFlat, counting);
+  const countInSlot = countIn ? countInOffset(currentFlat, counting) : null;
   const slideMs = Math.round(Math.min(MAX_SLIDE_MS, barSeconds(piece, rep) * 1000 * MAX_SLIDE_SHARE_OF_BAR));
   const heading = runwayHeading(piece, rep, groups);
   const title = heading.group || heading.section;
@@ -93,9 +114,12 @@ export function ClickTrackRunway({ pieces, groups, position }: RunwayControls) {
         className="ct-runway-viewport"
         style={{ '--runway-bars': RUNWAY_VISIBLE_BARS, '--runway-slide': `${slideMs}ms` } as CSSProperties}
       >
-        {runwayWindow(index, currentFlat).map((bar) => {
+        {countIn && countInSlot !== null && (
+          <CountInCard key="count-in" offset={countInSlot} color={effectiveColor(pieces[0], groups)} beat={countIn.beat} />
+        )}
+        {runwayWindow(index, anchor).map((bar) => {
           const barPiece = pieces[bar.pieceIndex];
-          const offset = bar.flat - currentFlat;
+          const offset = bar.flat - anchor;
           return (
             <RunwayBar
               key={bar.flat}

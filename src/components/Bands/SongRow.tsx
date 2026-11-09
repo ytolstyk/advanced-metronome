@@ -2,6 +2,7 @@ import { FLAC_DOWNLOAD_HINT } from '@/audio/clickExportSinks';
 import type { ReactNode } from 'react';
 import { Download, ExternalLink, EyeOff, Music, Pencil, Play, Square, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { SONG_COLOR_STYLES, SONG_COLOR_TINT_PERCENT, type ColorLabels } from '../../bandSongColors';
 import type { RunwayControls } from '../../utils/trackRunway';
@@ -25,6 +26,11 @@ export interface SongClickTrackControls {
   problem?: string;
   /** Set while this song's track plays: the unrolled view of the bars around the current one. */
   runway?: RunwayControls;
+  /** Whether Play starts with a 3-beat countdown (one setting for every song). Takes effect on the next Play. */
+  countdownEnabled: boolean;
+  onCountdownChange: (enabled: boolean) => void;
+  /** The count-in number (3, 2, 1) while this song's countdown runs; null/absent otherwise. */
+  countdown?: number | null;
   onPlay: () => void;
   onDownload: () => void;
   /** The much smaller lossless FLAC download. */
@@ -123,6 +129,19 @@ export function SongRow({
   );
 }
 
+/** One switch for every song's click track (the setting is shared), so its name stays plain "Countdown"; the tooltip says what it covers. */
+function CountdownSwitch({ enabled, onChange }: { enabled: boolean; onChange: (enabled: boolean) => void }) {
+  return (
+    <label
+      title="Count in 3 beats before any click track starts (applies to every song, from the next Play)"
+      className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+    >
+      <Switch checked={enabled} onCheckedChange={onChange} />
+      Countdown
+    </label>
+  );
+}
+
 function SongClickTrackStrip({ songTitle, track }: { songTitle: string; track: SongClickTrackControls }) {
   const usable = !track.problem;
   return (
@@ -176,7 +195,12 @@ function SongClickTrackStrip({ songTitle, track }: { songTitle: string; track: S
         <Button variant="ghost" size="sm" onClick={track.onRemove} disabled={track.busy} aria-label={`Remove click track for ${songTitle}`}>
           <Trash2 size={14} className="mr-1" /> Remove
         </Button>
+        <CountdownSwitch enabled={track.countdownEnabled} onChange={track.onCountdownChange} />
       </div>
+      {/* Always mounted (a live region that appears with its text is often not announced); says it once, the clicks carry each beat. */}
+      <p role="status" className="sr-only">
+        {track.playing && track.countdown != null ? 'Counting in' : ''}
+      </p>
       {track.problem && <p className="mt-1 text-xs text-destructive">{track.problem}</p>}
       {track.runway && track.playing && (
         <div className="mt-2">

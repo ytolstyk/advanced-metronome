@@ -393,3 +393,80 @@ describe('ClickTrackEngine queued beat notifications', () => {
     cleanup(engine);
   });
 });
+
+describe('ClickTrackEngine countdown', () => {
+  function startedEngine() {
+    vi.useFakeTimers();
+    mockCountdownClick.mockClear();
+    const ctx = makeFakeCtx({ state: 'running', currentTime: 0 });
+    vi.stubGlobal('AudioContext', vi.fn(function () { return ctx; }));
+    return new ClickTrackEngine();
+  }
+  const internals = (e: ClickTrackEngine) => e as unknown as { scheduleNext(): void };
+  const cleanup = (e: ClickTrackEngine) => {
+    e.stop();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  };
+
+  it('reports 3, 2, 1 in order and plays a countdown click for each when enabled', () => {
+    const engine = startedEngine();
+    const onCountdown = vi.fn();
+    engine.start([makeSimplePiece()], 0, 1, true, vi.fn(), onCountdown, vi.fn());
+    internals(engine).scheduleNext();
+    internals(engine).scheduleNext();
+    internals(engine).scheduleNext();
+    expect(mockCountdownClick).toHaveBeenCalledTimes(3);
+    vi.advanceTimersByTime(2000);
+    expect(onCountdown.mock.calls.map((c) => c[0])).toEqual([3, 2, 1]);
+    cleanup(engine);
+  });
+
+  it('never calls the countdown callback when the countdown is disabled', () => {
+    const engine = startedEngine();
+    const onCountdown = vi.fn();
+    engine.start([makeSimplePiece()], 0, 1, false, vi.fn(), onCountdown, vi.fn());
+    internals(engine).scheduleNext();
+    vi.advanceTimersByTime(2000);
+    expect(onCountdown).not.toHaveBeenCalled();
+    expect(mockCountdownClick).not.toHaveBeenCalled();
+    cleanup(engine);
+  });
+
+  it('drops a countdown number queued before stop()', () => {
+    const engine = startedEngine();
+    const onCountdown = vi.fn();
+    engine.start([makeSimplePiece()], 0, 1, true, vi.fn(), onCountdown, vi.fn());
+    internals(engine).scheduleNext(); // number 3 queued, due in 50 ms
+    engine.stop();
+    vi.advanceTimersByTime(2000);
+    expect(onCountdown).not.toHaveBeenCalled();
+    cleanup(engine);
+  });
+
+  it('drops countdown numbers queued by an earlier run once a newer start() begins', () => {
+    const engine = startedEngine();
+    const firstCountdown = vi.fn();
+    const secondCountdown = vi.fn();
+    engine.start([makeSimplePiece({ id: 'a' })], 0, 1, true, vi.fn(), firstCountdown, vi.fn());
+    internals(engine).scheduleNext(); // run 1: number 3 queued at 50 ms
+    engine.start([makeSimplePiece({ id: 'b' })], 0, 1, true, vi.fn(), secondCountdown, vi.fn());
+    vi.advanceTimersByTime(60); // run 1's timer is due; run 2's own first number is not scheduled until its scheduler ticks
+    expect(firstCountdown).not.toHaveBeenCalled();
+    cleanup(engine);
+  });
+
+  it('still delivers the numbers of the current run after an earlier run was stopped', () => {
+    const engine = startedEngine();
+    const firstCountdown = vi.fn();
+    const secondCountdown = vi.fn();
+    engine.start([makeSimplePiece({ id: 'a' })], 0, 1, true, vi.fn(), firstCountdown, vi.fn());
+    internals(engine).scheduleNext();
+    engine.start([makeSimplePiece({ id: 'b' })], 0, 1, true, vi.fn(), secondCountdown, vi.fn());
+    internals(engine).scheduleNext();
+    vi.advanceTimersByTime(2000);
+    expect(firstCountdown).not.toHaveBeenCalled();
+    expect(secondCountdown).toHaveBeenCalledWith(3);
+    cleanup(engine);
+  });
+});

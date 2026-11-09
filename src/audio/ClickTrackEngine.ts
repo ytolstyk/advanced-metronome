@@ -38,6 +38,9 @@ export interface LoopRampConfig {
 const SCHEDULE_AHEAD_TIME = 0.1;
 const SCHEDULER_INTERVAL = 25;
 
+/** How many count-in clicks `start(..., countdown = true)` plays before the first bar (the numbers shown are COUNTDOWN_BEATS..1). */
+export const COUNTDOWN_BEATS = 3;
+
 export class ClickTrackEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -65,7 +68,7 @@ export class ClickTrackEngine {
   private loopPassCount = 0;
   private loopRampDone = false;
   // Cursor within sequence
-  private countdownStep = 0;   // 3..1 when in countdown, 0 when done
+  private countdownStep = 0;   // COUNTDOWN_BEATS..1 when in countdown, 0 when done
   private pieceIndex = 0;
   private repetition = 0;
   private subIndex = 0;        // 0-based sub index within current beat
@@ -140,7 +143,7 @@ export class ClickTrackEngine {
     this.pieceIndex = startPieceIndex;
     this.repetition = startRepetition;
     this.subIndex = 0;
-    this.countdownStep = countdown ? 3 : 0;
+    this.countdownStep = countdown ? COUNTDOWN_BEATS : 0;
     this.nextBeatTime = ctx.currentTime + 0.05;
     this.isRunning = true;
     this.isPaused = false;
@@ -219,7 +222,8 @@ export class ClickTrackEngine {
       countdownClick(ctx, dest, t);
       const n = this.countdownStep;
       const delay = (t - ctx.currentTime) * 1000;
-      setTimeout(() => { this.onCountdown?.(n); }, Math.max(0, delay));
+      const token = this.runToken;
+      setTimeout(() => { if (token === this.runToken) this.onCountdown?.(n); }, Math.max(0, delay));
       this.countdownStep--;
       this.nextBeatTime += this.countdownBeatDuration();
       return;

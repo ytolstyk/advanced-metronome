@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearSongTrack, getSongTrack, type SongTrackRead } from '../api/songTracksApi';
-import { ClickTrackEngine, type TrackPiece } from '../audio/ClickTrackEngine';
+import { ClickTrackEngine, COUNTDOWN_BEATS, type TrackPiece } from '../audio/ClickTrackEngine';
 import type { SegmentGroup } from '../clickTrackTypes';
 import { createPositionStore } from '../utils/playbackPosition';
 import type { RunwayControls } from '../utils/trackRunway';
@@ -12,6 +12,10 @@ import type { SetListView, SongRecord, SongTrackSummary, ValidSong } from '../ba
 import { errorMessage } from '../lib/errors';
 import { sanitizeText } from '../utils/sanitizeText';
 import { useOptimisticChoice } from './useOptimisticChoice';
+import { usePersistedState } from './usePersistedState';
+
+/** localStorage key for the "count in before the click starts" preference (one switch for every song, per browser). */
+export const COUNTDOWN_PREF_KEY = 'band-click-countdown';
 
 type OkRead = Extract<SongTrackRead, { status: 'ok' }>;
 
@@ -28,7 +32,9 @@ const identity = (song: Pick<SongRecord, 'id'>, shown: SongTrackSummary) => `${s
 /**
  * Click tracks on a loaded set list: which song shows one, plus Play / Download / Open / Remove. The
  * set list only carries metadata, so every action fetches the payload by exact key first. Playing
- * goes through one lazily created `ClickTrackEngine` (once through, 100% speed, no count-in).
+ * goes through one lazily created `ClickTrackEngine` (once through, 100% speed). The person can switch
+ * on a 3-beat countdown first (same as the click track builder; quarter notes at the first bar's BPM); the choice is
+ * remembered in localStorage and applies from the next Play.
  */
 export function useSongTracks(list: SetListView, fetchedAt: number, reload: () => Promise<void>) {
   const navigate = useNavigate();
@@ -36,10 +42,13 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
   const engineRef = useRef<ClickTrackEngine | null>(null);
   const mounted = useRef(true);
   /** The song that is playing and its track (kept for the runway). One value, so "playing" and "what is on the runway" can't disagree. */
-  const [playing, setPlaying] = useState<{ songId: string; pieces: TrackPiece[]; groups: SegmentGroup[] } | null>(null);
+  const [playing, setPlaying] = useState<{ songId: string; pieces: TrackPiece[]; groups: SegmentGroup[]; countIn: boolean } | null>(null);
   const playingId = playing?.songId ?? null;
   /** Where the click is. Outside React state, so a click doesn't re-render the page. */
   const [position] = useState(() => createPositionStore());
+  const [countdownEnabled, setCountdownEnabled] = usePersistedState(COUNTDOWN_PREF_KEY, (stored) => stored === true);
+  /** The countdown number being shown (3, 2, 1) while the count-in runs, else null. */
+  const [countdown, setCountdown] = useState<number | null>(null);
   /** Identifies the current start. The engine's beat timers can fire after `stop()` / a newer `start()`; those are ignored. */
   const runId = useRef(0);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -82,6 +91,7 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
     runId.current++;
     engineRef.current?.stop();
     setPlaying(null);
+    setCountdown(null);
   }, [playingGone]);
 
   const problemFor = (song: Pick<SongRecord, 'id'>): string | undefined => {
@@ -147,6 +157,7 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
     runId.current++;
     engineRef.current?.stop();
     setPlaying(null);
+    setCountdown(null);
   };
 
   const play = (song: ValidSong): Promise<void> => {
@@ -163,15 +174,25 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
       const run = ++runId.current;
       position.set({ pieceIndex: 0, rep: 0, subTick: -1 });
       engine.start(
-        pieces, 0, 1, false, () => undefined, () => undefined,
+        pieces, 0, 1, countdownEnabled,
         () => {
-          if (mounted.current && run === runId.current) setPlaying(null);
+          if (run === runId.current) setCountdown(null); // any bar start means the count-in is over (a no-op after the first)
+        },
+        (n) => {
+          if (run === runId.current) setCountdown(n);
+        },
+        () => {
+          if (mounted.current && run === runId.current) {
+            setPlaying(null);
+            setCountdown(null);
+          }
         },
         (pieceIndex, rep, subTick) => {
           if (run === runId.current) position.set({ pieceIndex, rep, subTick });
         },
       );
-      setPlaying({ songId: song.id, pieces, groups });
+      setPlaying({ songId: song.id, pieces, groups, countIn: countdownEnabled });
+      setCountdown(countdownEnabled ? COUNTDOWN_BEATS : null);
     });
   };
 
@@ -200,7 +221,9 @@ export function useSongTracks(list: SetListView, fetchedAt: number, reload: () =
 
   /** What to draw under a song while its track plays; undefined for every other song. */
   const runwayFor = (songId: string): RunwayControls | undefined =>
-    playing?.songId === songId ? { pieces: playing.pieces, groups: playing.groups, position } : undefined;
+    playing?.songId === songId
+      ? { pieces: playing.pieces, groups: playing.groups, position, countIn: playing.countIn ? { beat: countdown } : undefined }
+      : undefined;
 
-  return { trackFor, problemFor, runwayFor, isPlaying: (id: string) => playingId === id, busy: busyId !== null, play, download, open, remove, error };
+  return { trackFor, problemFor, runwayFor, countdownEnabled, setCountdownEnabled, countdown, isPlaying: (id: string) => playingId === id, busy: busyId !== null, play, download, open, remove, error };
 }

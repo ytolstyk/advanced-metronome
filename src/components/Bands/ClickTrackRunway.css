@@ -184,7 +184,33 @@
   color: var(--color-surface-muted-foreground);
 }
 
+.ct-runway-count-number {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-foreground);
+}
+
+/* Pops on each number, not on the "Go" that shows while the card is already sliding out. */
+.ct-runway-count-number.is-counting {
+  animation: ct-runway-count-pop 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ct-runway-count .ct-runway-number {
+  white-space: nowrap;
+}
+
+@keyframes ct-runway-count-pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ct-runway-count-number.is-counting {
+    animation: none;
+  }
+
   .ct-runway-bar {
     transition: none;
   }

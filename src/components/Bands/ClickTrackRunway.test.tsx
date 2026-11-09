@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import type { TrackPiece } from '../../audio/ClickTrackEngine';
 import type { SegmentGroup } from '../../clickTrackTypes';
 import { createPositionStore, type PlaybackPosition } from '../../utils/playbackPosition';
+import type { RunwayCountIn } from '../../utils/trackRunway';
 import { ClickTrackRunway } from './ClickTrackRunway';
 
 const piece = (over: Partial<TrackPiece> = {}): TrackPiece => ({
@@ -19,9 +20,18 @@ const piece = (over: Partial<TrackPiece> = {}): TrackPiece => ({
 
 const group = (over: Partial<SegmentGroup> = {}): SegmentGroup => ({ id: 'g1', name: 'Chorus', color: '#ef4444', ...over });
 
-function setup(pieces: TrackPiece[], groups: SegmentGroup[] = [], at: PlaybackPosition = { pieceIndex: 0, rep: 0, subTick: -1 }) {
+function setup(
+  pieces: TrackPiece[],
+  groups: SegmentGroup[] = [],
+  at: PlaybackPosition = { pieceIndex: 0, rep: 0, subTick: -1 },
+  countIn?: RunwayCountIn,
+) {
   const position = createPositionStore(at);
-  const utils = render(<ClickTrackRunway pieces={pieces} groups={groups} position={position} />);
+  const utils = render(<ClickTrackRunway pieces={pieces} groups={groups} position={position} countIn={countIn} />);
+  const setCountIn = (next: RunwayCountIn | undefined) =>
+    utils.rerender(<ClickTrackRunway pieces={pieces} groups={groups} position={position} countIn={next} />);
+  const card = () => utils.container.querySelector<HTMLElement>('.ct-runway-count');
+  const cardNumber = () => card()?.querySelector('.ct-runway-count-number')?.textContent;
   const move = (next: PlaybackPosition) => act(() => position.set(next));
   const bars = () => Array.from(utils.container.querySelectorAll<HTMLElement>('.ct-runway-bar'));
   const current = () => utils.container.querySelector<HTMLElement>('.ct-runway-bar.is-current');
@@ -33,7 +43,7 @@ function setup(pieces: TrackPiece[], groups: SegmentGroup[] = [], at: PlaybackPo
     );
   const bpm = () => utils.container.querySelector('.ct-runway-bpm')?.textContent;
   const title = () => utils.container.querySelector('.ct-runway-title')?.textContent;
-  return { ...utils, position, move, bars, current, numbers, slot, clicking, bpm, title };
+  return { ...utils, position, move, bars, current, numbers, slot, clicking, bpm, title, setCountIn, card, cardNumber };
 }
 
 describe('ClickTrackRunway', () => {
@@ -270,6 +280,124 @@ describe('ClickTrackRunway', () => {
       const r = setup([piece()]);
       r.unmount();
       expect(() => r.move({ pieceIndex: 0, rep: 1, subTick: 0 })).not.toThrow();
+    });
+  });
+
+  describe('count-in card', () => {
+    const track = () => [piece({ repeats: 6, bpm: 90 })];
+
+    it('is absent when there is no countIn', () => {
+      const r = setup(track());
+      expect(r.card()).toBeNull();
+      expect(r.container.textContent).not.toContain('Count in');
+    });
+
+    it('is the current card, with the number, while counting', () => {
+      const r = setup(track(), [], undefined, { beat: 3 });
+      expect(r.card()).not.toBeNull();
+      expect(r.current()).toBe(r.card());
+      expect(r.card()).toHaveTextContent('Count in');
+      expect(r.cardNumber()).toBe('3');
+      expect(r.slot(r.card()!)).toBe('1');
+    });
+
+    it('has exactly one current card while counting (bar 1 is not current)', () => {
+      const r = setup(track(), [], undefined, { beat: 2 });
+      expect(r.container.querySelectorAll('.is-current')).toHaveLength(1);
+    });
+
+    it('puts bar 1 in the slot after the card, followed by the later bars', () => {
+      const r = setup(track(), [], undefined, { beat: 3 });
+      const realBars = r.bars().filter((b) => b !== r.card());
+      expect(realBars.map((b) => b.querySelector('.ct-runway-number')?.textContent)).toEqual(['1', '2', '3']);
+      expect(realBars.map(r.slot)).toEqual(['2', '3', '4']);
+    });
+
+    it('follows the beat as it counts down, in the same element', () => {
+      const r = setup(track(), [], undefined, { beat: 3 });
+      const card = r.card();
+      r.setCountIn({ beat: 2 });
+      expect(r.cardNumber()).toBe('2');
+      r.setCountIn({ beat: 1 });
+      expect(r.cardNumber()).toBe('1');
+      expect(r.card()).toBe(card);
+    });
+
+    it('keeps the heading on the first piece tempo while counting', () => {
+      const r = setup([piece({ bpm: 90, repeats: 2 }), piece({ id: 'p2', bpm: 150, repeats: 2 })], [], undefined, { beat: 3 });
+      expect(r.bpm()).toBe('90 BPM');
+    });
+
+    it('keeps the card in the first piece colour (group colour when grouped)', () => {
+      const r = setup([piece({ groupId: 'g1', repeats: 2 })], [group({ color: '#ef4444' })], undefined, { beat: 3 });
+      expect(r.card()!.style.getPropertyValue('--piece-color')).toBe('#ef4444');
+    });
+
+    it('hides the card from assistive technology', () => {
+      const r = setup(track(), [], undefined, { beat: 3 });
+      expect(r.card()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('lights no dot on any bar while counting', () => {
+      const r = setup(track(), [], undefined, { beat: 1 });
+      expect(r.container.querySelectorAll('.ct-runway-dot--clicking')).toHaveLength(0);
+    });
+
+    it('when counting ends, the card slides to slot 0 (previous), bar 1 becomes current and the card says Go', () => {
+      const r = setup(track(), [], undefined, { beat: 1 });
+      const card = r.card();
+      const barOne = r.bars().find((b) => b.querySelector('.ct-runway-number')?.textContent === '1')!;
+      r.setCountIn({ beat: null });
+      expect(r.card()).toBe(card);
+      expect(r.slot(card!)).toBe('0');
+      expect(card!.classList.contains('is-current')).toBe(false);
+      expect(r.cardNumber()).toBe('Go');
+      expect(r.current()).toBe(barOne);
+      expect(r.slot(barOne)).toBe('1');
+      expect(r.current()).toHaveTextContent('1');
+    });
+
+    it('shows Go when the run starts with the first bar already playing', () => {
+      const r = setup(track(), [], { pieceIndex: 0, rep: 0, subTick: 0 }, { beat: null });
+      expect(r.cardNumber()).toBe('Go');
+      expect(r.slot(r.card()!)).toBe('0');
+      expect(r.clicking()).toEqual([0]);
+    });
+
+    it('drifts one slot left per bar and stays mounted while the second bar plays', () => {
+      const r = setup(track(), [], { pieceIndex: 0, rep: 0, subTick: 0 }, { beat: null });
+      r.move({ pieceIndex: 0, rep: 1, subTick: -1 });
+      expect(r.card()).not.toBeNull();
+      expect(r.slot(r.card()!)).toBe('-1');
+    });
+
+    it('is gone once it is further left than the mounted range (third bar on)', () => {
+      const r = setup(track(), [], { pieceIndex: 0, rep: 0, subTick: 0 }, { beat: null });
+      r.move({ pieceIndex: 0, rep: 1, subTick: -1 });
+      r.move({ pieceIndex: 0, rep: 2, subTick: -1 });
+      expect(r.card()).toBeNull();
+      r.move({ pieceIndex: 0, rep: 4, subTick: -1 });
+      expect(r.card()).toBeNull();
+    });
+
+    it('is not drawn when the run is already past the mounted range', () => {
+      const r = setup(track(), [], { pieceIndex: 0, rep: 3, subTick: 0 }, { beat: null });
+      expect(r.card()).toBeNull();
+    });
+
+    it('still renders a one-bar track while counting', () => {
+      const r = setup([piece({ repeats: 1 })], [], undefined, { beat: 3 });
+      const realBars = r.bars().filter((b) => b !== r.card());
+      expect(realBars).toHaveLength(1);
+      expect(r.slot(realBars[0])).toBe('2');
+    });
+
+    it('removes the card when the countIn prop goes away', () => {
+      const r = setup(track(), [], undefined, { beat: 3 });
+      r.setCountIn(undefined);
+      expect(r.card()).toBeNull();
+      expect(r.current()).toHaveTextContent('1');
+      expect(r.slot(r.current()!)).toBe('1');
     });
   });
 });

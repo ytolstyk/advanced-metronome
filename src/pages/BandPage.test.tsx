@@ -455,21 +455,21 @@ describe('BandPage as the owner', () => {
     load(ownerView());
     vi.mocked(setMemberUploads).mockResolvedValue(band());
     const { unmount } = renderPage();
-    const [first] = await screen.findAllByRole('checkbox', { name: /to add backing tracks$/ });
+    const [first] = await screen.findAllByRole('switch', { name: /to add backing tracks$/ });
     fireEvent.click(first);
     await waitFor(() => expect(setMemberUploads).toHaveBeenCalledWith('band-1', expect.any(String), true, expect.any(Set)));
     unmount();
     load(makeView());
     renderPage();
     await screen.findByRole('heading', { name: 'The Band' });
-    expect(screen.queryByRole('checkbox', { name: /to add backing tracks$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: /to add backing tracks$/ })).not.toBeInTheDocument();
   });
 
   it('passes the current member subs so the write can drop people who left', async () => {
     load(ownerView());
     vi.mocked(setMemberUploads).mockResolvedValue(band());
     renderPage();
-    fireEvent.click((await screen.findAllByRole('checkbox', { name: /to add backing tracks$/ }))[0]);
+    fireEvent.click((await screen.findAllByRole('switch', { name: /to add backing tracks$/ }))[0]);
     await waitFor(() => expect(setMemberUploads).toHaveBeenCalled());
     const live = vi.mocked(setMemberUploads).mock.calls.at(-1)![3];
     expect([...live].sort()).toEqual(ownerView().members.map((m) => m.owner).sort());
@@ -481,7 +481,7 @@ describe('BandPage as the owner', () => {
       load(ownerView());
       renderPage();
       await screen.findByRole('heading', { name: 'The Band' });
-      expect(screen.queryByRole('checkbox', { name: /to add backing tracks$/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('switch', { name: /to add backing tracks$/ })).not.toBeInTheDocument();
     } finally {
       vi.mocked(hasBackingTrackModel).mockReturnValue(true);
     }

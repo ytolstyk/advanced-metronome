@@ -359,6 +359,8 @@ describe('SongRow click track strip', () => {
     date: 'Jan 5',
     playing: false,
     busy: false,
+    countdownEnabled: false,
+    onCountdownChange: vi.fn(),
     onPlay: vi.fn(),
     onDownload: vi.fn(),
     onDownloadCompressed: vi.fn(),
@@ -452,6 +454,72 @@ describe('SongRow click track strip', () => {
     await userEvent.setup().click(btn(/^Download compressed click track/));
     expect(c.onDownloadCompressed).not.toHaveBeenCalled();
   });
+
+  describe('countdown option', () => {
+    const countdownSwitch = () => screen.getByRole('switch', { name: 'Countdown' });
+
+    it('shows an off Countdown switch, with a tooltip saying it covers every song, when the countdown is off', () => {
+      setup({}, { clickTrack: controls({ countdownEnabled: false }) });
+      expect(countdownSwitch()).not.toBeChecked();
+      expect(countdownSwitch().closest('label')).toHaveAttribute('title', expect.stringMatching(/every song/));
+    });
+
+    it('shows the switch on when the countdown is on', () => {
+      setup({}, { clickTrack: controls({ countdownEnabled: true }) });
+      expect(countdownSwitch()).toBeChecked();
+    });
+
+    it('reports the new value when ticked', async () => {
+      const c = controls({ countdownEnabled: false });
+      setup({}, { clickTrack: c });
+      await userEvent.setup().click(countdownSwitch());
+      expect(c.onCountdownChange).toHaveBeenCalledTimes(1);
+      expect(c.onCountdownChange).toHaveBeenCalledWith(true);
+    });
+
+    it('reports false when unticked', async () => {
+      const c = controls({ countdownEnabled: true });
+      setup({}, { clickTrack: c });
+      await userEvent.setup().click(countdownSwitch());
+      expect(c.onCountdownChange).toHaveBeenCalledWith(false);
+    });
+
+    it('can be changed while the track is playing or another fetch is busy', () => {
+      setup({}, { clickTrack: controls({ playing: true, busy: true }) });
+      expect(countdownSwitch()).toBeEnabled();
+    });
+
+    it('does not run Play when the switch is clicked', async () => {
+      const c = controls();
+      setup({}, { clickTrack: c });
+      await userEvent.setup().click(countdownSwitch());
+      expect(c.onPlay).not.toHaveBeenCalled();
+    });
+
+    const countingIn = () => screen.queryByText('Counting in');
+
+    it.each([3, 2, 1])('announces "Counting in" once, in a status region, while the number is %i', (n) => {
+      setup({}, { clickTrack: controls({ playing: true, countdown: n }) });
+      expect(countingIn()).toHaveAttribute('role', 'status');
+      expect(screen.queryByText(/Get ready/)).not.toBeInTheDocument(); // the card on the runway shows the number
+    });
+
+    it('keeps the status region mounted (empty) when there is no countdown number, so the next announcement is spoken', () => {
+      setup({}, { clickTrack: controls({ playing: true, countdown: null }) });
+      expect(countingIn()).not.toBeInTheDocument();
+      expect(document.querySelector('p.sr-only[role="status"]')).toBeInTheDocument();
+    });
+
+    it('announces nothing when the countdown number is absent', () => {
+      setup({}, { clickTrack: controls({ playing: true }) });
+      expect(countingIn()).not.toBeInTheDocument();
+    });
+
+    it('announces nothing when a number is given but the track is not playing', () => {
+      setup({}, { clickTrack: controls({ playing: false, countdown: 2 }) });
+      expect(countingIn()).not.toBeInTheDocument();
+    });
+  });
 });
 
 describe('SongRow backing tracks slot', () => {
@@ -460,6 +528,8 @@ describe('SongRow backing tracks slot', () => {
     date: 'Jan 5',
     playing: false,
     busy: false,
+    countdownEnabled: false,
+    onCountdownChange: vi.fn(),
     onPlay: vi.fn(),
     onDownload: vi.fn(),
     onDownloadCompressed: vi.fn(),
@@ -517,6 +587,8 @@ describe('SongRow click track runway', () => {
     playing: false,
     busy: false,
     runway: { pieces: [runwayPiece], groups: [], position: createPositionStore() },
+    countdownEnabled: false,
+    onCountdownChange: vi.fn(),
     onPlay: vi.fn(),
     onDownload: vi.fn(),
     onDownloadCompressed: vi.fn(),

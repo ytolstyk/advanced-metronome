@@ -472,12 +472,12 @@ describe('MembersSection', () => {
     const { unmount } = render(
       <MembersSection view={view({ ...base, isOwner: false })} onRemove={() => {}} onRestore={() => {}} onSetUploads={onSetUploads} onEditProfile={() => {}} />,
     );
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
     unmount();
     render(
       <MembersSection view={view({ ...base, isOwner: true })} onRemove={() => {}} onRestore={() => {}} onSetUploads={onSetUploads} onEditProfile={() => {}} />,
     );
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Allow Amy to add backing tracks' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Allow Amy to add backing tracks' }));
     expect(onSetUploads).toHaveBeenCalledWith('sub-amy', true);
   });
 
@@ -493,7 +493,7 @@ describe('MembersSection', () => {
         onEditProfile={() => {}}
       />,
     );
-    expect(screen.getByRole('checkbox', { name: 'Allow Amy to add backing tracks' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Allow Amy to add backing tracks' })).toBeDisabled();
   });
 
   it('shows no "Can upload" switch for the owner without the handler (backend without backing tracks)', () => {
@@ -506,7 +506,7 @@ describe('MembersSection', () => {
         onEditProfile={() => {}}
       />,
     );
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove Amy' })).toBeInTheDocument();
   });
 

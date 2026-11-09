@@ -3,8 +3,11 @@ import type { TrackPiece } from '../audio/ClickTrackEngine';
 import type { SegmentGroup } from '../clickTrackTypes';
 import {
   RUNWAY_BARS_AFTER,
+  COUNT_IN_FLAT,
   RUNWAY_BARS_BEFORE,
+  anchorFlat,
   buildBarIndex,
+  countInOffset,
   flatIndexOf,
   locateBar,
   runwayHeading,
@@ -196,5 +199,56 @@ describe('runwayHeading', () => {
 
   it('keeps a single-bar ramp at its start tempo', () => {
     expect(runwayHeading(piece({ bpm: 80, rampEndBpm: 160, rampMode: 'linear', repeats: 1 }), 0, []).bpm).toBe(80);
+  });
+});
+
+describe('COUNT_IN_FLAT', () => {
+  it('is the virtual bar just before bar 1', () => {
+    expect(COUNT_IN_FLAT).toBe(-1);
+  });
+});
+
+describe('anchorFlat', () => {
+  it('anchors on the count-in card while counting, whatever the current bar', () => {
+    expect(anchorFlat(0, true)).toBe(COUNT_IN_FLAT);
+    expect(anchorFlat(7, true)).toBe(COUNT_IN_FLAT);
+  });
+
+  it('anchors on the current bar when not counting', () => {
+    expect(anchorFlat(0, false)).toBe(0);
+    expect(anchorFlat(7, false)).toBe(7);
+  });
+
+  it('puts bar 1 one slot after the anchor while counting', () => {
+    expect(0 - anchorFlat(0, true)).toBe(1);
+  });
+
+  it('makes the mounted window while counting start at bar 1', () => {
+    const index = buildBarIndex([piece({ repeats: 10 })]);
+    expect(runwayWindow(index, anchorFlat(0, true)).map((b) => b.flat)).toEqual([0, 1, 2]);
+  });
+});
+
+describe('countInOffset', () => {
+  it('is 0 while counting (the card is the anchor)', () => {
+    expect(countInOffset(0, true)).toBe(0);
+  });
+
+  it('is -1 once bar 1 plays (previous slot)', () => {
+    expect(countInOffset(0, false)).toBe(-1);
+  });
+
+  it('drifts one slot further left each bar', () => {
+    expect(countInOffset(1, false)).toBe(-2);
+  });
+
+  it('is null once it is further left than RUNWAY_BARS_BEFORE + 1 slots', () => {
+    expect(-(RUNWAY_BARS_BEFORE + 1)).toBe(-2);
+    expect(countInOffset(2, false)).toBeNull();
+    expect(countInOffset(50, false)).toBeNull();
+  });
+
+  it('ignores the current bar while counting', () => {
+    expect(countInOffset(30, true)).toBe(0);
   });
 });

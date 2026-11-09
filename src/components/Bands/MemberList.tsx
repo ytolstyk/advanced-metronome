@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { instrumentOptionsFor } from '../../bandInstruments';
 import type { BandView } from '../../bandTypes';
 import { INSTRUMENT_ICONS } from './instrumentIcons';
@@ -57,34 +58,35 @@ export function MemberList({ view, onRemove, onSetUploads, busy, onEditProfile }
                 </ul>
               )}
             </div>
-            {onEditProfile && isSelf && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onEditProfile}
-                aria-label={instruments.length > 0 ? 'Edit your name and instruments' : 'Add instruments to your profile'}
-              >
-                {instruments.length > 0 ? 'Edit' : 'Add instruments'}
-              </Button>
-            )}
-            {onSetUploads && sub !== owner && (
-              <label className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
-                <input
-                  type="checkbox"
-                  className="size-4"
-                  checked={view.band.uploaderSubs.includes(sub)}
-                  disabled={busy}
-                  onChange={(e) => onSetUploads(sub, e.target.checked)}
-                  aria-label={`Allow ${name} to add backing tracks`}
-                />
-                Can upload
-              </label>
-            )}
-            {onRemove && sub !== owner && (
-              <Button variant="ghost" size="sm" onClick={() => onRemove(sub, name)} aria-label={`Remove ${name}`}>
-                Remove
-              </Button>
-            )}
+            {/* Controls sit together at the right edge, away from the name. */}
+            <div className="ml-auto flex shrink-0 items-center gap-3">
+              {onEditProfile && isSelf && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onEditProfile}
+                  aria-label={instruments.length > 0 ? 'Edit your name and instruments' : 'Add instruments to your profile'}
+                >
+                  {instruments.length > 0 ? 'Edit' : 'Add instruments'}
+                </Button>
+              )}
+              {onSetUploads && sub !== owner && (
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+                  <Switch
+                    checked={view.band.uploaderSubs.includes(sub)}
+                    disabled={busy}
+                    onCheckedChange={(allowed) => onSetUploads(sub, allowed)}
+                    aria-label={`Allow ${name} to add backing tracks`}
+                  />
+                  Can upload
+                </label>
+              )}
+              {onRemove && sub !== owner && (
+                <Button variant="ghost" size="sm" onClick={() => onRemove(sub, name)} aria-label={`Remove ${name}`}>
+                  Remove
+                </Button>
+              )}
+            </div>
           </li>
         );
       })}
